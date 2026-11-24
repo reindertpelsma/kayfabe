@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # ★ Build QEMU with the v3 kf3-gpu device: the Rust archive (crates/kf-qemu → libkf_qemu.a) + the C
-# overlay (qemu/hw/misc/kf3) laid into a QEMU source tree with two one-line hunks and the S3-wake hunk, built in its OWN
+# overlay (qemu/hw/misc/kf3) laid into a QEMU source tree with two one-line hunks, built in its OWN
 # build dir (the old nvkvm build is untouched).
 #
 #   usage: bash scripts/bench/build_kf3.sh <qemu-source-tree> [<build-dir>]
+#
+# QEMU's own source is not changed: nothing but the device and its two hunks is built in. The one optional QEMU patch is built
+# by scripts/bench/build_kf3_patched.py, into a copy of the tree, never through this script's tree.
 #
 # ⊘ The archive is REFUSED if cargo did not just produce it (the bench once served a binary built
 # from a stale revision for weeks); the result line names the revision and the binary's mtime.
@@ -39,9 +42,6 @@ cp "$REPO"/qemu/hw/misc/kf3/*.c "$REPO"/qemu/hw/misc/kf3/*.h "$REPO"/qemu/hw/mis
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
 grep -q "subdir('kf3')" "$QEMU/hw/misc/meson.build" || printf "\nsubdir('kf3')\n" >> "$QEMU/hw/misc/meson.build"
 grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n' >> "$QEMU/hw/misc/Kconfig"
-# The third hunk: QEMU's S3 wake keeps each vCPU's Hyper-V MSR block, or a Windows guest with hv-time hangs in HLT after
-# a wake on a stable-TSC host. The release kit holds the one implementation (build_qemu.py WAKE_NEW).
-python3 -I "$REPO/scripts/release/build_qemu.py" wake-hunk "$QEMU"
 # One build at a time in the shared build dir (a second waits, it does not interleave).
 mkdir -p "$BUILD"
 exec 9>"$BUILD.lock"

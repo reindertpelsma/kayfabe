@@ -22,6 +22,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import unittest.mock
 
 import yaml
 
@@ -52,9 +53,18 @@ def write(path, text, mode=None):
     return path
 
 
-# the neighbourhood of QEMU 10.2.4's pc_machine_wakeup (hw/i386/pc.c), enough to place the S3-wake hunk
-PC_HEAD = "static void pc_machine_reset(MachineState *machine, ResetType type)\n{\n    qemu_devices_reset(type);\n}\n\n"
+# the neighbourhood of QEMU 10.2.4's pc_machine_wakeup (hw/i386/pc.c), exactly the lines the optional hyperv-wake patch matches
+PC_HEAD = ("static void pc_machine_reset(MachineState *machine, ResetType type)\n{\n    CPU_FOREACH(cs) {\n        cpu = X86_CPU(cs);\n\n"
+           "        x86_cpu_after_reset(cpu);\n    }\n}\n\n")
+PC_WAKE_OLD = """static void pc_machine_wakeup(MachineState *machine)
+{
+    cpu_synchronize_all_states();
+    pc_machine_reset(machine, RESET_TYPE_WAKEUP);
+    cpu_synchronize_all_post_reset();
+}
+"""
 PC_TAIL = "\nstatic void pc_machine_class_init(ObjectClass *oc, const void *data)\n{\n}\n"
+PATCH_REL = "tools/qemu-patches/hyperv-wake.patch"
 
 
 def qemu_tree(root, version="10.2.4"):
@@ -63,7 +73,7 @@ def qemu_tree(root, version="10.2.4"):
     write(root / "hw/misc/meson.build", "system_ss.add(files('edu.c'))\n")
     write(root / "hw/misc/Kconfig", "config EDU\n    bool\n")
     write(root / "configure", "#!/bin/sh\n", 0o755)
-    write(root / "hw/i386/pc.c", PC_HEAD + kit.WAKE_OLD + PC_TAIL)
+    write(root / "hw/i386/pc.c", PC_HEAD + PC_WAKE_OLD + PC_TAIL)
     return root
 
 
@@ -74,6 +84,7 @@ def kayfabe_tree(root):
     write(root / "qemu/hw/misc/kf3/kf3_gop.h", "/* gop */\n")
     write(root / "qemu/hw/misc/kf3/meson.build", "kf3_archive = 1\n")
     write(root / "qemu/hw/misc/kf3/tests/test_x.py", "x = 1\n")
+    write(root / PATCH_REL, (ROOT / PATCH_REL).read_bytes())
     return root
 
 
@@ -177,8 +188,8 @@ class Overlay(Tmp):
         self.q = qemu_tree(self.tmp / "q")
         self.a = archive_file(self.tmp / "libkf_qemu.a")
 
-    def apply(self):
-        return kit.apply_overlay(self.q, self.k, self.a)
+    def apply(self, *with_patches):
+        return kit.apply_overlay(self.q, self.k, self.a, with_patches)
 
     def test_device_sources_and_archive_land_in_hw_misc_kf3(self):
         self.apply()
@@ -214,9 +225,9 @@ class Overlay(Tmp):
         self.assertEqual(by_path["hw/misc/kf3/libkf_qemu.a"]["sha256"], sha(self.a.read_bytes()))
         self.assertEqual(by_path["hw/misc/meson.build"]["kind"], "append-line")
         self.assertEqual(by_path["hw/misc/Kconfig"]["kind"], "append-stanza")
-        self.assertEqual(by_path["hw/i386/pc.c"]["kind"], "replace-function")
+        self.assertNotIn("hw/i386/pc.c", by_path)
         self.assertEqual([r["path"] for r in records], sorted(r["path"] for r in records if r["kind"] == "add-file")
-                         + ["hw/misc/Kconfig", "hw/misc/meson.build", "hw/i386/pc.c"])
+                         + ["hw/misc/Kconfig", "hw/misc/meson.build"])
 
     def test_a_foreign_file_in_the_device_directory_is_refused(self):
         write(self.q / "hw/misc/kf3/notes.txt", "mine")
@@ -239,12 +250,24 @@ class Overlay(Tmp):
         with self.assertRaises(kit.KitRefused):
             self.apply()
 
-    # The S3-wake hunk (traces/win11_s3_wake_20261123). Falsifier named first: a kit or build_kf3.sh that leaves QEMU's
-    # pc_machine_wakeup as it is, or saves the Hyper-V block without putting it back after the reset, fails these.
-    def test_the_wake_hunk_keeps_the_hyperv_block_across_the_wake_reset(self):
+    # The optional hyperv-wake patch: a QEMU patch is applied only if really needed and only if it stays optional.
+    # Falsifier named first: a default build whose pc.c differs from QEMU's, an option that changes nothing, a patch applied
+    # twice or over a tree it does not fit, or one that saves the Hyper-V block without putting it back after the reset.
+    def pc(self):
+        return (self.q / "hw/i386/pc.c").read_text()
+
+    def test_the_default_overlay_leaves_pc_c_exactly_as_qemu_has_it(self):
         self.apply()
-        pc = (self.q / "hw/i386/pc.c").read_text()
-        self.assertNotIn(kit.WAKE_OLD, pc)
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_no_patches_is_the_same_as_the_default(self):
+        self.apply(*())
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_the_option_keeps_the_hyperv_block_across_the_wake_reset(self):
+        self.apply("hyperv-wake")
+        pc = self.pc()
+        self.assertNotIn(PC_WAKE_OLD, pc)
         self.assertEqual(pc.count("static void pc_machine_wakeup(MachineState *machine)"), 1)
         body = pc[pc.index("static void pc_machine_wakeup"):pc.index("static void pc_machine_class_init")]
         sync = body.index("cpu_synchronize_all_states();")
@@ -261,25 +284,201 @@ class Overlay(Tmp):
         self.assertIn("offsetof(CPUX86State, msr_hv_tsc_emulation_status) + sizeof(uint64_t)", pc)
         self.assertTrue(pc.startswith(PC_HEAD) and pc.endswith(PC_TAIL))
 
-    def test_the_wake_hunk_is_applied_once(self):
-        self.apply()
-        once = (self.q / "hw/i386/pc.c").read_text()
-        self.apply()
-        self.assertEqual((self.q / "hw/i386/pc.c").read_text(), once)
-        self.assertEqual(kit.apply_wake_hunk(self.q), "present")
+    def test_the_option_is_applied_once(self):
+        self.apply("hyperv-wake")
+        once = self.pc()
+        self.apply("hyperv-wake")
+        self.assertEqual(self.pc(), once)
+        self.assertEqual(once.count("static void pc_machine_wakeup(MachineState *machine)"), 1)
+        self.assertEqual(once.count("save = g_malloc"), 1)
+
+    def test_naming_the_option_twice_applies_it_once_and_records_it_once(self):
+        records = self.apply("hyperv-wake", "hyperv-wake")
+        self.assertEqual(self.pc().count("save = g_malloc"), 1)
+        self.assertEqual([r["patch"] for r in records if r["kind"] == "optional-patch"], ["hyperv-wake"])
+
+    def test_an_unknown_patch_name_is_refused_before_anything_is_written(self):
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.apply("no-such-patch")
+        self.assertIn("hyperv-wake", str(cm.exception))
+        self.assertFalse((self.q / "hw/misc/kf3").exists())
+
+    def test_the_option_adds_one_record_after_the_overlay_records(self):
+        records = self.apply("hyperv-wake")
+        self.assertEqual([r["path"] for r in records],
+                         sorted(r["path"] for r in records if r["kind"] == "add-file") + ["hw/misc/Kconfig", "hw/misc/meson.build", PATCH_REL])
+        last = records[-1]
+        self.assertEqual((last["kind"], last["patch"], last["sha256"]), ("optional-patch", "hyperv-wake", sha((self.k / PATCH_REL).read_bytes())))
+
+    def test_patches_follow_the_registry_order_not_the_order_asked_for(self):
+        write(self.k / "tools/qemu-patches/aaa.patch", (ROOT / PATCH_REL).read_bytes().replace(b"hyperv", b"aaa"))
+        registry = {"hyperv-wake": PATCH_REL, "aaa": "tools/qemu-patches/aaa.patch"}
+        with unittest.mock.patch.object(kit, "OPTIONAL_PATCHES", registry):
+            self.assertEqual(kit.patch_names(["aaa", "hyperv-wake"]), ["hyperv-wake", "aaa"])
+            self.assertEqual(kit.patch_names(["hyperv-wake", "aaa", "aaa"]), ["hyperv-wake", "aaa"])
+            records = [r["patch"] for r in kit.patch_records(self.k, kit.patch_names(["aaa", "hyperv-wake"]))]
+        self.assertEqual(records, ["hyperv-wake", "aaa"])
 
     def test_a_pc_c_without_the_known_wakeup_is_refused_before_anything_is_written(self):
         write(self.q / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
         with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
+        self.assertFalse((self.q / "hw/misc/kf3").exists())
+        self.apply()  # without the option the same tree is fine: the patch is not needed
+        self.assertTrue((self.q / "hw/misc/kf3/kf3.c").exists())
+
+    def test_a_tree_that_lacks_pc_c_is_refused_only_when_the_patch_is_asked_for(self):
+        (self.q / "hw/i386/pc.c").unlink()
+        self.apply()
+        shutil.rmtree(self.q / "hw/misc/kf3")
+        with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
+
+    def test_a_tree_that_already_holds_an_unrequested_patch_is_refused(self):
+        self.apply("hyperv-wake")
+        with self.assertRaises(kit.KitRefused) as cm:
             self.apply()
+        self.assertIn("--with-patch hyperv-wake", str(cm.exception))
+
+    def refused_patch(self, bad):
+        write(self.k / PATCH_REL, bad)
+        with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
         self.assertFalse((self.q / "hw/misc/kf3").exists())
         with self.assertRaises(kit.KitRefused):
-            kit.apply_wake_hunk(self.q)
+            kit.parse_patch(bad)
 
-    def test_build_kf3_applies_the_wake_hunk_before_it_builds(self):
+    def test_a_truncated_patch_file_is_refused(self):
+        self.refused_patch((ROOT / PATCH_REL).read_text()[:-60])
+
+    def test_a_hunk_that_does_not_match_its_header_counts_is_refused(self):
+        self.refused_patch((ROOT / PATCH_REL).read_text().replace("@@ -1720,10 +1720,33 @@", "@@ -1720,10 +1720,34 @@"))
+        self.refused_patch((ROOT / PATCH_REL).read_text().replace("@@ -1720,10 +1720,33 @@", "@@ -1720,10 +1720,32 @@"))
+
+    def test_a_stray_line_after_the_hunks_is_refused(self):
+        self.refused_patch((ROOT / PATCH_REL).read_text() + "stray line\n")
+
+    def test_a_stray_line_before_the_first_hunk_is_refused(self):
+        self.refused_patch((ROOT / PATCH_REL).read_text().replace("+++ b/hw/i386/pc.c\n", "+++ b/hw/i386/pc.c\nindex 1..2 100644\n"))
+
+    def test_a_patch_that_creates_or_renames_a_file_is_refused(self):
+        self.refused_patch((ROOT / PATCH_REL).read_text().replace("--- a/hw/i386/pc.c", "new file mode 100644\n--- a/hw/i386/pc.c"))
+
+    def test_a_patch_file_with_only_prose_is_refused(self):
+        self.refused_patch("header only\n")
+
+    def test_a_patch_file_with_file_headers_and_no_hunks_is_refused(self):
+        self.refused_patch("diff --git a/hw/i386/pc.c b/hw/i386/pc.c\n--- a/hw/i386/pc.c\n+++ b/hw/i386/pc.c\n")
+
+    def test_a_first_hunk_that_is_too_short_is_refused_even_when_a_second_one_follows(self):
+        two = ("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,3 +1,3 @@\n a\n-b\n+c\n@@ -9,1 +9,1 @@\n-d\n+e\n")
+        with self.assertRaises(kit.KitRefused):
+            kit.parse_patch(two)
+        ok = two.replace("@@ -1,3 +1,3 @@\n a\n-b\n+c\n", "@@ -1,2 +1,2 @@\n a\n-b\n+c\n")
+        self.assertEqual(kit.parse_patch(ok), {"x": [(["a", "b"], ["a", "c"]), (["d"], ["e"])]})
+
+    def test_a_hunk_with_more_old_lines_than_its_header_says_is_refused_even_when_a_second_one_follows(self):
+        two = ("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,1 +1,2 @@\n-a\n-b\n+c\n+d\n@@ -9,1 +9,1 @@\n-d\n+e\n")
+        with self.assertRaises(kit.KitRefused):
+            kit.parse_patch(two)
+
+    def test_text_that_ends_in_the_middle_of_a_line_is_not_a_match(self):
+        pc = PC_HEAD.replace("    }\n}\n\n", "        }\n}\n\n") + PC_WAKE_OLD + PC_TAIL
+        write(self.q / "hw/i386/pc.c", pc)
+        with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
+        with self.assertRaises(kit.KitRefused):
+            kit.set_tree_patches(self.q, ["hyperv-wake"], self.k)
+        self.assertEqual(self.pc(), pc)
+
+    def test_a_foreign_file_in_the_device_directory_leaves_pc_c_alone_even_with_the_option(self):
+        write(self.q / "hw/misc/kf3/notes.txt", "mine")
+        with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_a_missing_device_source_leaves_pc_c_alone_even_with_the_option(self):
+        (self.k / "qemu/hw/misc/kf3/kf3.c").unlink()
+        with self.assertRaises(kit.KitRefused):
+            self.apply("hyperv-wake")
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_two_patches_apply_in_registry_order_and_are_recorded_in_it(self):
+        write(self.k / "tools/qemu-patches/aaa.patch", "diff --git a/hw/i386/pc.c b/hw/i386/pc.c\n--- a/hw/i386/pc.c\n+++ b/hw/i386/pc.c\n"
+              "@@ -1,1 +1,2 @@\n+/* aaa */\n static void pc_machine_reset(MachineState *machine, ResetType type)\n")
+        registry = {"hyperv-wake": PATCH_REL, "aaa": "tools/qemu-patches/aaa.patch"}
+        with unittest.mock.patch.object(kit, "OPTIONAL_PATCHES", registry):
+            records = self.apply("aaa", "hyperv-wake", "aaa")
+        self.assertEqual([r["patch"] for r in records if r["kind"] == "optional-patch"], ["hyperv-wake", "aaa"])
+        self.assertTrue(self.pc().startswith("/* aaa */\nstatic void pc_machine_reset"))
+        self.assertEqual(self.pc().count("/* aaa */"), 1)
+        self.assertEqual(self.pc().count("save = g_malloc"), 1)
+
+    def test_a_patch_file_that_is_missing_is_refused_by_name(self):
+        (self.k / PATCH_REL).unlink()
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.apply("hyperv-wake")
+        self.assertIn("hyperv-wake", str(cm.exception))
+
+    def test_the_shipped_paths_include_every_optional_patch(self):
+        for name, rel in kit.OPTIONAL_PATCHES.items():
+            self.assertTrue(any(rel == p or rel.startswith(p.rstrip("/") + "/") for p in kit.SOURCE_PATHS), name)
+            self.assertTrue((ROOT / rel).is_file(), name)
+
+    def test_asset_names_carry_the_patch_names_and_only_then(self):
+        self.assertEqual(kit.asset_names("10.2.4", "ab" * 20, patches=["hyperv-wake"])["binary"],
+                         "kayfabe-qemu-10.2.4-abababab-with-hyperv-wake-linux-x86_64.tar.xz")
+        self.assertEqual(kit.asset_names("10.2.4", "ab" * 20, True, ["hyperv-wake"])["manifest"],
+                         "kayfabe-qemu-10.2.4-abababab-dirty-with-hyperv-wake-manifest.json")
+        self.assertEqual(kit.asset_names("10.2.4", "ab" * 20)["binary"], "kayfabe-qemu-10.2.4-abababab-linux-x86_64.tar.xz")
+
+    def test_the_patch_file_is_a_plain_unified_diff_the_standard_tools_read(self):
+        text = (ROOT / PATCH_REL).read_text()
+        self.assertTrue(text.index("diff --git a/hw/i386/pc.c") > 0)
+        self.assertEqual(text.count("\n@@ "), 1)
+        self.assertEqual(set(kit.parse_patch(text)), {"hw/i386/pc.c"})
+        if shutil.which("patch"):
+            dest = self.tmp / "p"
+            write(dest / "hw/i386/pc.c", PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+            # the fixture is short, so the hunk header's line numbers differ: patch(1) tolerates that with an offset
+            r = subprocess.run(["patch", "-p1", "-d", str(dest)], input=text, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual((dest / "hw/i386/pc.c").read_text(), self.q_patched())
+
+    def q_patched(self):
+        self.apply("hyperv-wake")
+        return self.pc()
+
+    def test_the_patch_header_says_who_needs_it_and_names_the_upstream_links(self):
+        head = (ROOT / PATCH_REL).read_text().split("diff --git", 1)[0]
+        for needle in ("OPTIONAL", "Who needs it", "stable for KVM", "hv-time", "https://lkml.iu.edu/2601.1/09282.html",
+                       "https://gitlab.com/qemu-project/qemu/-/issues/1152", "--with-patch hyperv-wake", "default: not applied"):
+            self.assertIn(needle, head)
+
+    def test_set_tree_patches_applies_keeps_and_reverts(self):
+        kit_root = self.k
+        self.assertEqual(kit.set_tree_patches(self.q, [], kit_root), {"hyperv-wake": "absent"})
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+        self.assertEqual(kit.set_tree_patches(self.q, ["hyperv-wake"], kit_root), {"hyperv-wake": "applied"})
+        patched = self.pc()
+        self.assertEqual(kit.set_tree_patches(self.q, ["hyperv-wake"], kit_root), {"hyperv-wake": "present"})
+        self.assertEqual(self.pc(), patched)
+        self.assertEqual(kit.set_tree_patches(self.q, [], kit_root), {"hyperv-wake": "reverted"})
+        self.assertEqual(self.pc(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_set_tree_patches_refuses_a_foreign_pc_c_without_writing(self):
+        write(self.q / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
+        before = self.pc()
+        for names in ([], ["hyperv-wake"]):
+            with self.assertRaises(kit.KitRefused):
+                kit.set_tree_patches(self.q, names, self.k)
+            self.assertEqual(self.pc(), before)
+
+    def test_build_kf3_sh_knows_nothing_of_patches(self):
         sh = (ROOT / "scripts/bench/build_kf3.sh").read_text()
-        hunk = sh.index("scripts/release/build_qemu.py\" wake-hunk \"$QEMU\"")
-        self.assertLess(hunk, sh.index("ninja -C"))
+        code = "\n".join(ln for ln in sh.splitlines() if not ln.lstrip().startswith("#"))
+        for word in ("build_qemu", "set-patches", "wake-hunk", "hyperv", "--with-patch", "patch"):
+            self.assertNotIn(word, code)
 
     def test_a_tree_that_already_has_the_hunks_keeps_exactly_one_each(self):
         write(self.q / "hw/misc/meson.build", "x\nsubdir('kf3')\n")
@@ -293,6 +492,127 @@ class Overlay(Tmp):
         write(self.k / "qemu/hw/misc/kf3/kf3.h", "no abi here\n")
         with self.assertRaises(kit.KitRefused):
             kit.kf3_abi(self.k)
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("flock"), "bash, flock")
+class BuildKf3Script(Tmp):
+    """scripts/bench/build_kf3.sh and scripts/bench/build_kf3_patched.py run for real against a fake QEMU tree, with cargo, ninja, git
+    and configure replaced by stubs. The "binary" a stub ninja makes is a copy of the pc.c it was built from."""
+
+    def setUp(self):
+        super().setUp()
+        self.q = qemu_tree(self.tmp / "bench/qemu-10.2.4")
+        self.bin = self.tmp / "bin"
+        write(self.bin / "cargo", "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\" && echo archive > \"$CARGO_TARGET_DIR/release/libkf_qemu.a\"\n", 0o755)
+        write(self.bin / "ninja", "#!/bin/sh\ncp \"$STUB_PC\" \"$2/qemu-system-x86_64\"\n", 0o755)
+        write(self.bin / "git", "#!/bin/sh\ncase \"$*\" in *rev-parse*) echo abcd1234;; esac\n", 0o755)
+        write(self.q / "configure", "#!/bin/sh\ntouch build.ninja\n", 0o755)
+
+    def launch(self, argv, built_tree):
+        env = {"PATH": "%s:%s" % (self.bin, os.environ["PATH"]), "HOME": str(self.tmp), "CARGO_TARGET_DIR": str(self.tmp / "target"),
+               "STUB_PC": str(built_tree / "hw/i386/pc.c")}
+        return subprocess.run(argv, capture_output=True, text=True, env=env, cwd=self.tmp)
+
+    def plain(self):
+        return self.launch(["bash", str(ROOT / "scripts/bench/build_kf3.sh"), str(self.q)], self.q)
+
+    def patched(self, *args):
+        return self.launch([sys.executable, "-I", str(ROOT / "scripts/bench/build_kf3_patched.py"), *args], self.tmp / self.COPY)
+
+    ORIGINAL = PC_HEAD + PC_WAKE_OLD + PC_TAIL
+    COPY = "bench/patched-hyperv-wake/qemu-10.2.4"
+
+    def test_the_plain_build_script_never_changes_qemus_text(self):
+        r = self.plain()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((self.q / "hw/i386/pc.c").read_text(), self.ORIGINAL)
+        self.assertEqual([p.name for p in (self.tmp / "bench/kf3-bins").iterdir()], ["abcd1234"])
+
+    def test_the_patched_build_works_on_a_copy_and_leaves_the_tree_and_the_plain_directories_alone(self):
+        before = kit.tree_digest(self.q)
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(kit.tree_digest(self.q), before)
+        self.assertIn("hyperv-wake=applied", r.stdout)
+        self.assertIn("save = g_malloc", (self.tmp / self.COPY / "hw/i386/pc.c").read_text())
+        binary = self.tmp / "bench/patched-hyperv-wake/kf3-bins/abcd1234/qemu-system-x86_64"
+        self.assertTrue(binary.is_file())
+        self.assertFalse((self.tmp / "bench/kf3-bins").exists())
+        self.assertFalse((self.tmp / "bench/qemu-build-kf3").exists())
+        self.assertTrue((self.tmp / "bench/patched-hyperv-wake/qemu-build-kf3/build.ninja").is_file())
+
+    def test_a_plain_build_after_a_patched_one_is_still_plain_and_both_binaries_exist(self):
+        self.assertEqual(self.patched("--with-patch", "hyperv-wake", str(self.q)).returncode, 0)
+        r = self.plain()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        plain = self.tmp / "bench/kf3-bins/abcd1234/qemu-system-x86_64"
+        self.assertEqual(plain.read_text(), self.ORIGINAL)
+        self.assertIn("save = g_malloc", (self.tmp / "bench/patched-hyperv-wake/kf3-bins/abcd1234/qemu-system-x86_64").read_text())
+
+    def test_a_second_patched_build_reuses_the_copy_and_applies_nothing_twice(self):
+        self.assertEqual(self.patched("--with-patch", "hyperv-wake", str(self.q)).returncode, 0)
+        r = self.patched("--with-patch", "hyperv-wake", "--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("hyperv-wake=present", r.stdout)
+        self.assertEqual((self.tmp / self.COPY / "hw/i386/pc.c").read_text().count("save = g_malloc"), 1)
+
+    def test_an_unknown_patch_name_is_a_usage_error_and_builds_nothing(self):
+        r = self.patched("--with-patch", "nope", str(self.q))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("hyperv-wake", r.stderr)
+        self.assertFalse((self.tmp / "bench/patched-hyperv-wake").exists())
+
+    def test_the_patched_build_needs_a_patch_name_and_takes_no_build_directory(self):
+        self.assertEqual(self.patched(str(self.q)).returncode, 2)
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q), str(self.tmp / "bench/qemu-build-kf3"))
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse((self.tmp / "bench/kf3-bins").exists())
+
+    def test_the_copy_is_kept_between_runs_so_the_build_is_incremental(self):
+        self.assertEqual(self.patched("--with-patch", "hyperv-wake", str(self.q)).returncode, 0)
+        write(self.tmp / self.COPY / "marker", "kept")
+        self.assertEqual(self.patched("--with-patch", "hyperv-wake", str(self.q)).returncode, 0)
+        self.assertEqual((self.tmp / self.COPY / "marker").read_text(), "kept")
+
+    def test_a_valid_name_together_with_an_unknown_one_is_a_usage_error(self):
+        r = self.patched("--with-patch", "hyperv-wake", "--with-patch", "nope", str(self.q))
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse((self.tmp / "bench/patched-hyperv-wake").exists())
+
+    def test_a_tree_without_a_patch_name_builds_nothing(self):
+        r = self.patched(str(self.q))
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse((self.tmp / "bench/patched-").exists())
+        self.assertFalse((self.tmp / "bench/kf3-bins").exists())
+
+    def test_no_arguments_at_all_is_a_usage_error(self):
+        self.assertEqual(self.patched().returncode, 2)
+
+    def test_a_reused_copy_that_was_edited_by_hand_is_refused(self):
+        self.assertEqual(self.patched("--with-patch", "hyperv-wake", str(self.q)).returncode, 0)
+        write(self.tmp / self.COPY / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("KIT_REFUSED", r.stderr)
+
+    def test_a_path_that_does_not_exist_is_refused(self):
+        r = self.patched("--with-patch", "hyperv-wake", str(self.tmp / "bench/nowhere"))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not a QEMU source tree", r.stderr)
+
+    def test_a_tree_the_patch_does_not_fit_is_refused_and_nothing_is_built(self):
+        write(self.q / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("KIT_REFUSED", r.stderr)
+        self.assertFalse((self.tmp / "bench/patched-hyperv-wake/kf3-bins").exists())
+
+    def test_a_directory_that_is_not_a_qemu_tree_is_refused(self):
+        (self.q / "VERSION").unlink()
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not a QEMU source tree", r.stderr)
+        self.assertFalse((self.tmp / "bench/patched-hyperv-wake").exists())
 
 
 class TreeDigest(Tmp):
@@ -1053,13 +1373,113 @@ class OrchestrationMore(OrchestrationBase):
         self.assertEqual([c[0][1] for c in runner.calls if c[0][0] == "cargo"], ["build"])
         self.assertNotIn("--config", runner.calls[0][0])
 
-    def test_the_manifest_lists_the_three_hunks(self):
+    def test_the_manifest_lists_the_two_hunks_and_no_optional_patch_by_default(self):
         m = self.manifest(self.build()[0])
         kinds = {p["path"]: p["kind"] for p in m["patches"]}
         self.assertEqual(kinds["hw/misc/Kconfig"], "append-stanza")
         self.assertEqual(kinds["hw/misc/meson.build"], "append-line")
-        self.assertEqual(kinds["hw/i386/pc.c"], "replace-function")
-        self.assertEqual(len(m["patches"]), 8)
+        self.assertNotIn("hw/i386/pc.c", kinds)
+        self.assertNotIn("optional-patch", kinds.values())
+        self.assertEqual(len(m["patches"]), 7)
+        self.assertEqual(m["optional_patches"], [])
+
+    def test_a_default_build_leaves_pc_c_unchanged_in_the_source_it_builds(self):
+        class Seeing(FakeRunner):
+            seen = None
+
+            def __call__(self, argv, cwd, env, log):
+                if Path(argv[0]).name == "configure":
+                    Seeing.seen = (Path(argv[0]).parent / "hw/i386/pc.c").read_text()
+                return super().__call__(argv, cwd, env, log)
+        self.build(runner=Seeing())
+        self.assertEqual(Seeing.seen, PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+
+    def test_the_option_is_in_the_source_before_configure_and_in_the_manifest(self):
+        class Seeing(FakeRunner):
+            seen = None
+
+            def __call__(self, argv, cwd, env, log):
+                if Path(argv[0]).name == "configure":
+                    Seeing.seen = (Path(argv[0]).parent / "hw/i386/pc.c").read_text()
+                return super().__call__(argv, cwd, env, log)
+        result, _ = self.build(runner=Seeing(), with_patches=["hyperv-wake"])
+        self.assertIn("save = g_malloc", Seeing.seen)
+        m = self.manifest(result)
+        self.assertEqual(m["optional_patches"], ["hyperv-wake"])
+        rec = [p for p in m["patches"] if p["kind"] == "optional-patch"]
+        self.assertEqual([(r["patch"], r["path"]) for r in rec], [("hyperv-wake", PATCH_REL)])
+        self.assertEqual(m["patches"][-1], rec[0])
+        self.assertEqual(rec[0]["sha256"], sha((self.k / PATCH_REL).read_bytes()))
+        self.assertEqual(self.q.joinpath("hw/i386/pc.c").read_text(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)  # the user's tree is a copy
+
+    def test_an_unknown_patch_name_stops_a_build_before_it_starts(self):
+        with self.assertRaises(kit.KitRefused):
+            self.build(with_patches=["nope"])
+        self.assertFalse((self.tmp / "w").exists())
+        self.assertFalse((self.tmp / "o").exists())
+
+    def test_a_build_of_a_tree_that_already_has_an_unrequested_patch_is_refused_and_says_so(self):
+        kit.set_tree_patches(self.q, ["hyperv-wake"], self.k)
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.build()
+        self.assertIn("not asked for", str(cm.exception))
+
+    def test_a_build_of_a_tree_that_already_has_the_asked_for_patch_has_it_once(self):
+        kit.set_tree_patches(self.q, ["hyperv-wake"], self.k)
+
+        class Seeing(FakeRunner):
+            seen = None
+
+            def __call__(self, argv, cwd, env, log):
+                if Path(argv[0]).name == "configure":
+                    Seeing.seen = (Path(argv[0]).parent / "hw/i386/pc.c").read_text()
+                return super().__call__(argv, cwd, env, log)
+        result, _ = self.build(runner=Seeing(), with_patches=["hyperv-wake"])
+        self.assertEqual(Seeing.seen.count("save = g_malloc"), 1)
+        self.assertEqual(self.manifest(result)["optional_patches"], ["hyperv-wake"])
+
+    def test_a_build_with_the_patch_of_a_tree_whose_text_only_ends_like_the_patch_context_is_refused(self):
+        write(self.q / "hw/i386/pc.c", PC_HEAD.replace("    }\n}\n\n", "        }\n}\n\n") + PC_WAKE_OLD + PC_TAIL)
+        with self.assertRaises(kit.KitRefused):
+            self.build(with_patches=["hyperv-wake"])
+
+    def test_a_build_with_the_patch_of_a_tree_without_pc_c_is_refused_and_without_it_is_not(self):
+        (self.q / "hw/i386/pc.c").unlink()
+        with self.assertRaises(kit.KitRefused):
+            self.build(with_patches=["hyperv-wake"])
+        self.build(work="w2", out="o2")
+
+    def test_a_build_with_the_patch_of_a_tree_it_does_not_fit_is_refused(self):
+        write(self.q / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
+        with self.assertRaises(kit.KitRefused):
+            self.build(with_patches=["hyperv-wake"])
+        self.build(work="w2", out="o2")  # the same tree builds without it
+
+    def test_a_patched_build_is_named_and_versioned_as_one(self):
+        plain, _ = self.build(work="w1", out="o1")
+        patched, runner = self.build(work="w2", out="o2", with_patches=["hyperv-wake"])
+        self.assertNotIn("hyperv-wake", plain["assets"]["binary"])
+        self.assertIn("-with-hyperv-wake-linux-x86_64.tar.xz", patched["assets"]["binary"])
+        self.assertIn("-with-hyperv-wake-manifest.json", patched["assets"]["manifest"])
+        self.assertIn("--with-pkgversion=kayfabe-abababab+hyperv-wake", [c for c in runner.calls if Path(c[0][0]).name == "configure"][0][0])
+        self.assertIn("+hyperv-wake", self.manifest(patched)["configure"]["line"])
+        self.assertNotIn("hyperv-wake", self.manifest(plain)["configure"]["line"])
+
+    def test_the_version_string_of_a_patched_build_says_so_and_a_plain_one_does_not(self):
+        _, plain = self.build(work="w1", out="o1")
+        _, patched = self.build(work="w2", out="o2", with_patches=["hyperv-wake"])
+        flags = lambda r: [a for c in r.calls if Path(c[0][0]).name == "configure" for a in c[0] if str(a).startswith("--with-pkgversion=")]
+        self.assertEqual(flags(plain), ["--with-pkgversion=kayfabe-abababab"])
+        self.assertEqual(flags(patched), ["--with-pkgversion=kayfabe-abababab+hyperv-wake"])
+
+    def test_the_readme_of_a_patched_build_names_the_patch_and_a_plain_one_does_not(self):
+        self.assertNotIn("hyperv-wake", self.readme())
+        self.assertIn("optional QEMU patch `hyperv-wake`", self.readme(work="w2", out="o2", with_patches=["hyperv-wake"]))
+
+    def test_the_readme_of_a_patched_build_points_at_the_patch_file(self):
+        text = self.readme(with_patches=["hyperv-wake"])
+        self.assertIn("tools/qemu-patches/hyperv-wake.patch", text)
+        self.assertIn("A build without `--with-patch` does not have it", text)
 
     def test_symlinks_stay_symlinks_in_the_binary_tarball(self):
         class Linking(FakeRunner):
@@ -1497,7 +1917,8 @@ class SourceTarballRoundTrip(Tmp):
         with tarfile.open(Path(result["out"]) / result["name"]) as tf:
             names = {n.split("/", 1)[1] for n in tf.getnames() if "/" in n}
         for expected in ("BUILDING.txt", "kayfabe/Cargo.toml", "kayfabe/SOURCE_INFO.json", "kayfabe/.cargo/config.toml", "kayfabe/vendor/libc/lib.rs",
-                         "qemu/qemu-10.2.4.tar.xz", "qemu/qemu-10.2.4.tar.xz.sig", "kayfabe/qemu/hw/misc/kf3/kf3.c"):
+                         "qemu/qemu-10.2.4.tar.xz", "qemu/qemu-10.2.4.tar.xz.sig", "kayfabe/qemu/hw/misc/kf3/kf3.c",
+                         "kayfabe/" + PATCH_REL):
             self.assertIn(expected, names)
         self.assertNotIn("kayfabe/docs/internal.md", names)
 
@@ -1515,6 +1936,14 @@ class SourceTarballRoundTrip(Tmp):
         self.assertEqual(qi.kind, "tarball")
         self.assertTrue(qi.sig.name.endswith(".sig"))
         self.assertEqual(record["sha256"], sha256_file(Path(result["out"]) / result["name"]))
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_the_optional_patch_can_be_applied_from_the_opened_source_tarball(self):
+        result = self.make()
+        kroot, _, _ = kit.open_source_tarball(Path(result["out"]) / result["name"], self.tmp / "open")
+        self.assertEqual(kit.patch_records(kroot, ["hyperv-wake"]), kit.patch_records(self.k, ["hyperv-wake"]))
+        q = qemu_tree(self.tmp / "q2")
+        self.assertEqual(kit.set_tree_patches(q, ["hyperv-wake"], kroot), {"hyperv-wake": "applied"})
 
     @unittest.skipUnless(HAVE_GIT, "git")
     def test_a_source_tarball_without_its_qemu_tarball_is_refused(self):
@@ -1687,6 +2116,79 @@ class CommandLine(Tmp):
         self.assertIn("--target-list=x86_64-softmmu", out)
         self.assertIn("tree_sha256", out)
         self.assertIn("kf3.c", out)
+
+    def test_plan_lists_the_optional_patch_only_when_it_is_asked_for(self):
+        qemu_tree(self.tmp / "q")
+        _, plain, _ = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"))
+        rc, asked, _ = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"), "--with-patch", "hyperv-wake")
+        self.assertEqual(rc, 0)
+        plain, asked = json.loads(plain), json.loads(asked)
+        self.assertEqual(plain["optional_patches"], {"requested": [], "available": ["hyperv-wake"]})
+        self.assertEqual(asked["optional_patches"]["requested"], ["hyperv-wake"])
+        self.assertNotIn("optional-patch", [p["kind"] for p in plain["patches"]])
+        self.assertEqual([p["patch"] for p in asked["patches"] if p["kind"] == "optional-patch"], ["hyperv-wake"])
+        self.assertIn("+hyperv-wake", asked["configure_line"])
+        self.assertNotIn("hyperv-wake", plain["configure_line"])
+
+    def test_plan_names_the_patched_version_string_and_the_patch_hash(self):
+        qemu_tree(self.tmp / "q")
+        _, plain, _ = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"))
+        _, asked, _ = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"), "--with-patch", "hyperv-wake")
+        self.assertEqual(json.loads(asked)["configure_line"].count("+hyperv-wake"), 1)
+        self.assertNotIn("+hyperv-wake", json.loads(plain)["configure_line"])
+        rec = [p for p in json.loads(asked)["patches"] if p["kind"] == "optional-patch"][0]
+        self.assertEqual(rec["sha256"], sha((ROOT / PATCH_REL).read_bytes()))
+
+    def test_an_unknown_patch_name_is_a_usage_error_that_lists_the_known_ones(self):
+        qemu_tree(self.tmp / "q")
+        rc, _, err = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"), "--with-patch", "nope")
+        self.assertEqual(rc, 2)
+        self.assertIn("hyperv-wake", err)
+
+    def test_the_patch_option_is_documented_in_the_help_of_every_command_that_builds(self):
+        for cmd in ("plan", "build", "reproduce", "set-patches"):
+            _, out, _ = self.run_cli(cmd, "--help")
+            self.assertIn("--with-patch", out, cmd)
+        _, out, _ = self.run_cli("--help")
+        self.assertIn("Optional patches", out)
+        self.assertIn("none by default", self.run_cli("build", "--help")[1])
+
+    def test_set_patches_reports_what_it_did_and_the_old_command_is_gone(self):
+        q = qemu_tree(self.tmp / "q")
+        rc, out, _ = self.run_cli("set-patches", str(q))
+        self.assertEqual((rc, out.strip()), (0, "KIT_PATCHES hyperv-wake=absent"))
+        rc, out, _ = self.run_cli("set-patches", str(q), "--with-patch", "hyperv-wake")
+        self.assertEqual((rc, out.strip()), (0, "KIT_PATCHES hyperv-wake=applied"))
+        rc, out, _ = self.run_cli("set-patches", str(q))
+        self.assertEqual((rc, out.strip()), (0, "KIT_PATCHES hyperv-wake=reverted"))
+        self.assertEqual((q / "hw/i386/pc.c").read_text(), PC_HEAD + PC_WAKE_OLD + PC_TAIL)
+        self.assertEqual(self.run_cli("wake-hunk", str(q))[0], 2)
+
+    def test_set_patches_refuses_a_foreign_tree_with_exit_one(self):
+        q = qemu_tree(self.tmp / "q")
+        write(q / "hw/i386/pc.c", "int x;\n")
+        rc, _, err = self.run_cli("set-patches", str(q), "--with-patch", "hyperv-wake")
+        self.assertEqual(rc, 1)
+        self.assertIn("KIT_REFUSED", err)
+
+    def cli_builds(self, *argvs):
+        qemu_tree(self.tmp / "q")
+        seen = []
+
+        def fake_build(**kw):
+            seen.append(kw["with_patches"])
+            Path(kw["out"]).mkdir(parents=True)
+            return {"assets": {"binary": "b", "manifest": "m"}}
+        with unittest.mock.patch.object(kit, "build", fake_build), unittest.mock.patch.object(kit, "compare_outputs", lambda *a: []):
+            for i, argv in enumerate(argvs):
+                self.run_cli(argv[0], "--qemu-tree", str(self.tmp / "q"), "--out", str(self.tmp / ("o%d" % i)), *argv[1:])
+        return seen
+
+    def test_the_command_line_hands_the_option_to_the_build(self):
+        self.assertEqual(self.cli_builds(("build", "--with-patch", "hyperv-wake"), ("build",)), [["hyperv-wake"], []])
+
+    def test_the_command_line_hands_the_option_to_both_reproduce_builds(self):
+        self.assertEqual(self.cli_builds(("reproduce", "--with-patch", "hyperv-wake")), [["hyperv-wake"], ["hyperv-wake"]])
 
     def test_the_help_names_the_three_ways_to_give_a_qemu(self):
         _, out, _ = self.run_cli("build", "--help")

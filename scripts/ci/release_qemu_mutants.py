@@ -21,7 +21,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-FILES = {"kit": "scripts/release/build_qemu.py", "wf": ".github/workflows/release-qemu.yml", "doc": "docs/howto/building.md"}
+FILES = {"kit": "scripts/release/build_qemu.py", "wf": ".github/workflows/release-qemu.yml", "doc": "docs/howto/building.md", "wrap": "scripts/bench/build_kf3_patched.py", "sh": "scripts/bench/build_kf3.sh"}
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_release_qemu"
 COLLECT = """import io, json, sys, unittest
@@ -61,6 +61,46 @@ MUTANTS = [
     M("overlay-meson-appended-twice", "kit", "    if MESON_HUNK not in text:", "    if True:"),
     M("overlay-over-foreign-files", "kit", "    if dest.is_dir() and any(p.name not in ours for p in dest.iterdir()):", "    if False:"),
     M("overlay-missing-archive-allowed", "kit", "    if not archive.is_file():\n        raise KitRefused", "    if False:\n        raise KitRefused"),
+    # the optional patch (hyperv-wake): off by default, on when asked, once, in registry order, only on text it fits
+    M("optional-patch-applied-by-default-in-a-build", "kit", "    optional = patch_names(with_patches)\n    work = _prepare_workdir(workdir)", "    optional = patch_names(list(with_patches) + [\"hyperv-wake\"])\n    work = _prepare_workdir(workdir)"),
+    M("optional-patch-applied-by-default-in-the-overlay", "kit", "    names = patch_names(with_patches)\n    patched = ", "    names = patch_names(list(with_patches) + [\"hyperv-wake\"])\n    patched = "),
+    M("optional-patch-option-ignored-by-the-build", "kit", "    patches = apply_overlay(srcdir, kroot, archive, optional)", "    patches = apply_overlay(srcdir, kroot, archive)"),
+    M("optional-patch-option-ignored-by-the-command-line", "kit", "                 with_patches=a.with_patch)", "                 with_patches=())"),
+    M("optional-patch-option-ignored-by-the-overlay", "kit", "    return records + patch_records(kroot, names)", "    return records"),
+    M("optional-patch-applied-twice-when-named-twice", "kit", "    return [n for n in OPTIONAL_PATCHES if n in set(requested)]", "    return sorted(requested, key=list(OPTIONAL_PATCHES).index)"),
+    M("optional-patch-order-is-the-order-asked", "kit", "    return [n for n in OPTIONAL_PATCHES if n in set(requested)]", "    return list(dict.fromkeys(requested))"),
+    M("optional-patch-applied-again-over-itself", "kit", "            if asked and state == \"absent\":\n                texts[rel]", "            if asked:\n                texts[rel]"),
+    M("optional-patch-records-before-the-overlay", "kit", "    return records + patch_records(kroot, names)", "    return patch_records(kroot, names) + records"),
+    M("optional-patch-unknown-name-ignored", "kit", "    if unknown:\n        raise KitRefused(\"unknown optional patch", "    if False:\n        raise KitRefused(\"unknown optional patch"),
+    M("optional-patch-unrequested-but-present-accepted", "kit", "            if state == \"present\" and not asked:", "            if False:"),
+    M("optional-patch-applied-to-text-it-does-not-fit", "kit", "            if asked and state == \"other\":", "            if False:"),
+    M("optional-patch-missing-tree-file-ignored", "kit", "                if asked:\n                    raise KitRefused(\"%s lacks %s: not the QEMU source tree the patch", "                if False:\n                    raise KitRefused(\"%s lacks %s: not the QEMU source tree the patch"),
+    M("optional-patch-not-in-the-manifest", "kit", '        "optional_patches": optional,\n', '        "optional_patches": [],\n'),
+    M("optional-patch-record-without-hash", "kit", '"patch": n, "sha256": sha256_file(Path(kroot) / path)}', '"patch": n, "sha256": "0" * 64}'),
+    M("optional-patch-build-named-as-a-plain-one", "kit", '"-dirty" if dirty else "", "".join("-with-" + n for n in patches))', '"-dirty" if dirty else "", "")'),
+    M("optional-patch-version-string-plain", "kit", '("-dirty" if ident["dirty"] else "") + "".join("+" + n for n in optional)', '("-dirty" if ident["dirty"] else "")'),
+    M("optional-patch-plan-version-string-plain", "kit", 'pkgversion="kayfabe-<revision>" + "".join("+" + n for n in optional))', 'pkgversion="kayfabe-<revision>")'),
+    M("optional-patch-readme-silent", "kit", '+ "".join(PATCHED_README % {"patch": n} for n in optional))', ')'),
+    M("optional-patch-not-in-the-source-tarball", "kit", ' "tools/qemu-patches",', ""),
+    M("optional-patch-hunk-counts-not-checked", "kit", "        if want != [0, 0]:\n            raise KitRefused(\"%s: a hunk does not have", "        if False:\n            raise KitRefused(\"%s: a hunk does not have"),
+    M("optional-patch-stray-text-accepted", "kit", "        elif line.strip():\n            raise KitRefused(\"%s: not a plain edit", "        elif False:\n            raise KitRefused(\"%s: not a plain edit"),
+    M("optional-patch-written-before-the-device-checks", "kit", "    names = patch_names(with_patches)\n    patched = _patched_files(qemu_tree, kroot, names)\n", "    names = patch_names(with_patches)\n    patched = _patched_files(qemu_tree, kroot, names)\n    for _rel, _text in patched.items():\n        (qemu_tree / _rel).write_text(_text)\n"),
+    M("optional-patch-empty-file-accepted", "kit", "    if not files or not all(files.values()):", "    if False:"),
+    M("optional-patch-match-inside-a-line", "kit", "        if at == 0 or text[at - 1] == \"\\n\":\n            out.append(at)", "        out.append(at)"),
+    M("set-patches-leaves-an-unrequested-patch-in", "kit", "                if state == \"present\":\n                    plan[rel] = _replace_hunks(text, hunks, reverse=True)", "                pass"),
+    M("set-patches-does-not-apply", "kit", "                if state == \"absent\":\n                    plan[rel] = _replace_hunks(text, hunks)", "                pass"),
+    M("set-patches-foreign-text-accepted", "kit", "            if state == \"other\":\n                raise KitRefused(\"%s: %s is not the QEMU %s text the optional patch %s changes or contains\"", "            if False:\n                raise KitRefused(\"%s: %s is not the QEMU %s text the optional patch %s changes or contains\""),
+    M("set-patches-command-gone", "kit", '    w = sub.add_parser("set-patches"', '    w = sub.add_parser("set-patches-x"'),
+    M("patched-bench-build-changes-the-plain-tree", "wrap", "    copy = work / tree.name\n", "    copy = tree\n"),
+    M("patched-bench-build-shares-the-plain-build-dir", "wrap", '    build = work / "qemu-build-kf3"', '    build = tree.parent / "qemu-build-kf3"'),
+    M("patched-bench-build-forgets-the-patch-names", "wrap", "        done = kit.set_tree_patches(copy, names)", "        done = kit.set_tree_patches(copy, [])"),
+    M("patched-bench-build-copy-not-named-by-patch", "wrap", '    work = tree.parent / ("patched-" + "+".join(names))', '    work = tree.parent / "patched"'),
+    M("patched-bench-build-recopies-over-the-copy", "wrap", "        if not copy.exists():", "        if True:"),
+    M("patched-bench-build-accepts-any-name", "wrap", "choices=sorted(kit.OPTIONAL_PATCHES), ", ""),
+    M("patched-bench-build-needs-no-name", "wrap", "required=True, ", "required=False, default=[], "),
+    M("patched-bench-build-refusal-ignored", "wrap", '        print("KIT_REFUSED: %s" % e, file=sys.stderr)\n        return 1', '        print("KIT_REFUSED: %s" % e, file=sys.stderr)\n        return 0'),
+    M("patched-bench-build-accepts-a-non-tree", "wrap", '    if not (tree / "VERSION").is_file():', "    if False:"),
+    M("plain-bench-build-knows-a-patch", "sh", "grep -q \"subdir('kf3')\"", "python3 -I \"$REPO/scripts/release/build_qemu.py\" set-patches \"$QEMU\" --with-patch hyperv-wake\ngrep -q \"subdir('kf3')\""),
     # archives
     M("tar-mtime-from-files", "kit", "info.mtime, info.uid, info.gid, info.uname, info.gname, info.mode = epoch, 0, 0, \"\", \"\", mode",
       "info.mtime, info.uid, info.gid, info.uname, info.gname, info.mode = (int(payload.stat().st_mtime) if isinstance(payload, Path) else epoch), 0, 0, \"\", \"\", mode"),
@@ -194,14 +234,19 @@ def sandbox(parent, name, key, text):
     for other in (ROOT / ".github/workflows").glob("*.yml"):
         if not (root / ".github/workflows" / other.name).exists():
             shutil.copyfile(other, root / ".github/workflows" / other.name)
-    (root / FILES[key]).write_text(text)
     # everything else the tests look at is read only: link it
     for rel in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates", "firmware", "cuda", "qemu", "tools", "LICENSE", "LICENSE-APACHE",
                 "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "README.md", "traces"):
         os.symlink(ROOT / rel, root / rel)
     for rel in ("scripts/ci/kf_trust.py", "scripts/ci/kf_fetch.py", "scripts/ci/qemu_source.py", "scripts/ci/trust_manifest.json"):
         os.symlink(ROOT / rel, root / rel)
-    os.symlink(ROOT / "scripts/bench", root / "scripts/bench")
+    (root / "scripts/bench").mkdir()
+    for child in (ROOT / "scripts/bench").iterdir():
+        if child.name not in ("build_kf3.sh", "build_kf3_patched.py"):
+            os.symlink(child, root / "scripts/bench" / child.name)
+    for own in ("build_kf3.sh", "build_kf3_patched.py"):
+        shutil.copyfile(ROOT / "scripts/bench" / own, root / "scripts/bench" / own)
+    (root / FILES[key]).write_text(text)
     return root
 
 

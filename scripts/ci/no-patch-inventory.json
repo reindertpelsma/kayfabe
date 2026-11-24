@@ -189,6 +189,11 @@
       "opt_in": "tools/host_patches/h5_userd_dma/README.md",
       "reason": "Explicit H5 source-copy build; build_h5.sh installs and loads nothing."
     },
+    "tools/qemu-patches/hyperv-wake.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/bench/build_kf3_patched.py",
+      "reason": "Optional QEMU source patch (owner ruling 2026-11-24): applied only by an explicit --with-patch of the release kit or of build_kf3_patched.py, into a copy of the tree; no default build and no stock entrypoint applies it; it changes QEMU's S3 wake path, not the NVIDIA driver."
+    },
     "tools/uvm_efs/patch/nvidia_uvm_efs_580.159.04.patch": {
       "kind": "opt-in",
       "opt_in": "tools/uvm_efs/box/build_efs.sh",
@@ -276,6 +281,7 @@
     }
   },
   "applicators": {
+    "scripts/bench/build_kf3_patched.py": "e571a9c450c25856b6f85d519985d50a4ee55f31414d07103d166567c25086e7",
     "scripts/bench/guest_ringtrace_build.sh": "d8a3230493653fd4cdb43e03f39be1d3179efe470978156e8ef7e396bb81fff3",
     "scripts/bench/windows/appmatrix/build_release_bundle.ps1": "d5d3fce6b1e27507e127d788f10bfd3efe6da2d915a2c7d3f3e38a2dced3ad51",
     "scripts/bench/windows/appmatrix/release_bundle.py": "d7fe73f9e43561967c28a9b4ed60d2d18286aa8bb3dd31fba66ab8ae6e753f07",
@@ -283,6 +289,7 @@
     "scripts/bench/windows/host_tools/misc/root_home/deploy.sh": "6f59791007b9d404098c4b0cb5646fe13636415d7381c43f584b82c3abdea85a",
     "scripts/bench/windows/host_tools/misc/root_home/deploy2.sh": "8cb52f3243928709fdab85c8590b4df076b4a19ad4a6db18a843d736ae11b4be",
     "scripts/kfml/kfml/pins.py": "ef0f9d8dfb0a268e0a0db3d996218ab913b51b3c5b5f41b35f8d9af825861e06",
+    "scripts/release/build_qemu.py": "5f37544496bfe40fd8e596b27f314d65a00f0b834679aec5d94469711391c8fd",
     "scripts/rpctrace/build_instrumented.sh": "5ced1351277b2fcfed0ed8c7d16fee05e9562af3f147128420af07058cc455e9",
     "tools/host_patches/h5_userd_dma/box/build_h5.sh": "98cf1c76eb20a59a556574be2ed390e97312d661989c6baf51817c65479fdc65",
     "tools/uvm_efs/box/build_efs.sh": "66ba1b08e0f5a73eb81cccb78eefb74d66f1117e18a720ad125276b089d3831a",
