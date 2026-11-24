@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — **bare-metal probe for the Blackwell private-ring marker** (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md`
+//! **Bare-metal probe for the Blackwell private-ring marker** (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md`
 //! §2.7). Native host client only: no VM, no guest memory. Each attempt is ONE child process with a fresh VA space, a
 //! fresh USER copy channel, owned memory and a read-only command mapping. The only GPU-writable mapping is one owned
 //! 64 KiB buffer whose first word the stream releases into.

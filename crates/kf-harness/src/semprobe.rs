@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — the pure part of `kf-semmarker-probe` (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md` §2.7): the
+//! The pure part of `kf-semmarker-probe` (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md` §2.7): the
 //! exact words each variant pushes, the host-dmesg Xid parser, and the verdict. Tested GPU-free; the binary only
 //! runs these words on a native USER channel and reports.
 //!
@@ -367,7 +367,7 @@ mod tests {
         );
     }
 
-    /// The 2026-11-18 GB203 attempt as measured: one Xid 32 `intr 00200000`, AND the witness landed.
+    /// The GB203 A attempt as recorded in `traces/semprobe_gb203_20261118/`: one Xid 32 `intr 00200000`, AND the witness landed.
     #[test]
     fn the_measured_gb203_a_attempt_is_method_refused() {
         let line = "[18942.341911] NVRM: Xid (PCI:0000:00:07): 32, pid=118554, name=kf-semmarker-pr, channel 0x00000002 intr 00200000";

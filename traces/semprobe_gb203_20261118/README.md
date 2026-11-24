@@ -22,7 +22,7 @@ directory, named with its file; INFERRED = reasoning.
 | B: the stage-1 semaphore marker cell | 5 (2 canary children in `window.log`, 3 formal children in `children_BC.txt`) | none in `dmesg_children.txt` | `0x4b460001` every time | `window.log`, `children_BC.txt` |
 | C: `NON_STALL_INTERRUPT 0`, then a witness release | 3 children | none | witness `0x57170043` every time | `children_BC.txt` |
 
-- **A was measured once.** The design asked for N=3 per variant, and the plan was one run of three attempts. The
+- **A was measured once (2026-11-18).** The design asked for N=3 per variant, and the plan was one run of three attempts. The
   probe stopped at A's first attempt (fail closed), so A has ONE attempt, on one die, on one driver. B and C were then
   run as separate child processes, outside the parent's fail-closed loop and its dmesg-delta check; their Xid
   evidence is the box dmesg window in `dmesg_children.txt` (the lines after the A attempt).

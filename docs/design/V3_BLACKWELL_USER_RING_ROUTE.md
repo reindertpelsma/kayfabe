@@ -8,10 +8,8 @@ after it landed. The verdict function that stopped the run was revised AFTER the
 the revised verdict has not been used on hardware: one run of three planned. B ran 5 times and C 3 times without a
 host Xid. The text outputs of that run are in `traces/semprobe_gb203_20261118/`. Nothing else in section 2 is
 implemented (stage 1 is a pure module that no production path calls) or measured on hardware, and the
-Windows user-work route is still declined on Blackwell.
-
-Section 1 is a root-cause analysis from on-disk evidence: each link is
-marked MEASURED or INFERRED. Section 2 is a design. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
+Windows user-work route is still declined on Blackwell. Section 1 is a root-cause analysis from on-disk evidence:
+each link is marked MEASURED or INFERRED. Section 2 is a design. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
 (fixture `crates/kf-qemu/tests/fixtures/creo04_gb203_xid32_replay.txt`); its invariant test is ignored as a
 known defect, and a pin test proves the replay still reproduces.
 
@@ -324,7 +322,7 @@ Safety:
 - It records the exact words and methods.
 - It STOPS at the first outcome that is neither `Clean` nor (A only) `MethodRefused`: exactly one Xid 32 with
   `intr 00200000`, whatever the witness (the first version of the verdict required the witness to be missing; the
-  measured run showed it lands, and the verdict was revised after that run).
+  2026-11-18 run showed it lands, and the verdict was revised after that run).
 - It refuses to start unless `--i-am-on-a-spec-box` is given, and refuses when the GPU's display connector is
   connected or enabled, when another process holds the GPU's device node, or when a `qemu` or kf3 process is alive
   (`kf_harness::semprobe_host`). Variant A raises a host Xid 32 on purpose, so the probe belongs on a dedicated
