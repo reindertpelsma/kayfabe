@@ -50,6 +50,7 @@ MEM_RISE_NEED_MIB = 16          # the census.py threshold of "memory.used rose" 
 UNEXPECTED = ("FAIL", "MISMATCH")
 
 DEVICE_RX = re.compile(r"^(\d+): (.+?) \([0-9a-fA-F]{8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\)")
+DEVICE_TEXT_RX = re.compile(r"^Device (\d+): (.+?) \([0-9a-fA-F]{8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\)", re.M)
 LIST_RX = re.compile(r"^\d+, ([a-z0-9_]+):\s*$", re.M)
 NVIDIA_RX = re.compile(r"nvidia|geforce|rtx|quadro|tesla", re.I)
 SOFT_RX = re.compile(r"llvmpipe|lavapipe|swiftshader|software|microsoft basic", re.I)
@@ -109,6 +110,12 @@ def device_names(body):
         m = DEVICE_RX.match(str(item))
         names.append(m.group(2) if m else str(item).split(":", 1)[-1].strip()[:80])
     return names
+
+
+def parse_text_devices(text):
+    """The device names of nvbandwidth's TEXT output (`Device N: <name> (<pci>)`). The JSON output of v0.9 cannot be asked: it records the device list while its
+    device count is still 0 and prints `"GPU Device list": null` (MEASURED 2026-11-23, traces/open_lanes_20261123/), so the row asks the text form once."""
+    return [name.strip() for _, name in DEVICE_TEXT_RX.findall(text or "")]
 
 
 def matrix_values(testcase):
@@ -214,6 +221,11 @@ def case_argv(binary, case_id, buffer_mib, samples):
     return [binary, "-j", "-t", case_id, "-b", str(int(buffer_mib)), "-i", str(int(samples))]
 
 
+def device_probe_argv(binary):
+    """One cheap case in text mode: its header lists the devices (a hidden GPU lists none, and the process fails at cuInit)."""
+    return [binary, "-t", "device_local_copy", "-b", "1", "-i", "1"]
+
+
 def find_binary(explicit, bundle):
     if explicit:
         return explicit if os.access(explicit, os.X_OK) else None
@@ -237,6 +249,11 @@ def cmd_run(a):
         (out / "logs" / "list.log").write_text(census.scrub(text[-4000:]))
     else:
         header_note = "binary_missing"
+    if binary:
+        rc, text, _, _ = run_cmd(device_probe_argv(binary), 120)
+        (out / "logs" / "devices.log").write_text(census.scrub(text[-3000:]))
+        names = parse_text_devices(text)
+        ngpus, device = len(names), (names[0] if names else "")
     untabled = [n for n in listed if n not in {c["id"] for c in table}]
     cases = table + [{"id": n, "class": "sm" if n.endswith("_sm") else "ce", "min_gpus": 2 if "device_to_device" in n else 1} for n in untabled]
     for case in cases:

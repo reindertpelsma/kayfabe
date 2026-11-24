@@ -117,6 +117,39 @@ class Parsing(unittest.TestCase):
         self.assertEqual(NV.matrix_values({}), [])
 
 
+class RealOutput(unittest.TestCase):
+    """Output captured from nvbandwidth v0.9 on a native RTX 4090 (scripts/ci/fixtures/open_lanes/README.md)."""
+
+    def real(self, name):
+        return NV.parse_json((FX / name).read_text())
+
+    def test_the_real_json_has_no_device_list_so_the_row_must_ask_the_text_form(self):
+        body = self.real("nvbandwidth_real_host_to_device_ce_rtx4090_575.json")
+        self.assertIsNone(body["GPU Device list"])
+        self.assertEqual(NV.device_names(body), [])
+        self.assertEqual(NV.parse_text_devices("nvbandwidth Version: v0.9\n\nhost\nDevice 0: NVIDIA GeForce RTX 4090 (00000000:01:00)\n\n"), ["NVIDIA GeForce RTX 4090"])
+        self.assertEqual(NV.parse_text_devices("[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected"), [])
+        self.assertEqual(NV.device_probe_argv("/x/nvbandwidth"), ["/x/nvbandwidth", "-t", "device_local_copy", "-b", "1", "-i", "1"])
+
+    def test_the_real_copy_engine_case_passes_with_its_figure(self):
+        body = self.real("nvbandwidth_real_host_to_device_ce_rtx4090_575.json")
+        r = NV.judge_case(BY_ID["host_to_device_memcpy_ce"], 1, 0, body)
+        self.assertEqual(r[:3], ("PASS", "ok", "Passed"))
+        self.assertAlmostEqual(r[3][0], 26.866)
+
+    def test_the_real_latency_case_passes_and_is_not_held_to_the_bandwidth_floor(self):
+        body = self.real("nvbandwidth_real_host_device_latency_rtx4090_575.json")
+        r = NV.judge_case(BY_ID["host_device_latency_sm"], 1, 0, body)
+        self.assertEqual(r[:2], ("PASS", "ok"))
+        self.assertAlmostEqual(r[3][0], 567.018)
+
+    def test_the_real_hidden_gpu_document_is_an_error_the_judge_fails(self):
+        body = self.real("nvbandwidth_real_no_device_error_575.json")
+        self.assertIn("CUDA_ERROR_NO_DEVICE", body["error"])
+        self.assertEqual(NV.judge_case(BY_ID["host_to_device_memcpy_ce"], 0, 0, body)[:2], ("FAIL", "binary_error"))
+        self.assertEqual(NV.judge_case(BY_ID["device_to_device_memcpy_read_ce"], 0, 0, body)[:2], ("FAIL", "binary_error"))
+
+
 class Judge(unittest.TestCase):
     def judge(self, cid, tc, ngpus=1, rc=0, timed_out=False, doc=None):
         body = doc if doc is not None else NV.parse_json(nvb_doc([tc] if tc else []))
@@ -311,9 +344,9 @@ if "-l" in a:
 if "-s" in a:
     sys.exit(2)                                   # the row must never skip nvbandwidth's own data verification
 name = a[a.index("-t") + 1]
-if mode == "crash" and name == "device_local_copy":
+if mode == "crash" and name == "device_local_copy" and "-j" in a:
     os.abort()
-if mode == "hang" and name == "device_local_copy":
+if mode == "hang" and name == "device_local_copy" and "-j" in a:
     import time
     time.sleep(60)
 tcs = []
@@ -333,8 +366,18 @@ else:
     if mode == "slow":
         cells = [["0.01"]] * ngpus
     tcs.append({"name": name, "status": "Passed", "bandwidth_matrix": cells, "sum": 1.0, "bandwidth_description": "d"})
-devs = ["%%d: NVIDIA GeForce RTX 4090 (00000000:%%02x:00): (fakehost)" %% (i, i + 1) for i in range(ngpus)]
-print(json.dumps({"nvbandwidth": {"version": "v0.9", "git_version": "v0.9", "GPU Device list": devs, "testcases": tcs}}, indent=4))
+if "-j" not in a:                                 # text mode: the header lists the devices (the JSON of v0.9 cannot: its device list is null)
+    if ngpus == 0 and hidden:
+        sys.stderr.write("[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected in expression cuInit(0)\\n")
+        sys.exit(1)
+    print("nvbandwidth Version: v0.9\\nBuilt from Git version: v0.9\\n\\nCUDA Runtime Version: 12090\\nDriver Version: 575.51.03\\n\\nfakehost")
+    for i in range(ngpus):
+        print("Device %%d: NVIDIA GeForce RTX 4090 (00000000:%%02x:00)" %% (i, i + 1))
+    sys.exit(0)
+if hidden:
+    print(json.dumps({"nvbandwidth": {"error": "[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected in expression cuInit(0)"}}, indent=4))
+    sys.exit(0)
+print(json.dumps({"nvbandwidth": {"version": "v0.9", "git_version": "v0.9", "GPU Device list": None, "testcases": tcs}}, indent=4))
 '''
 
 FAKE_LLAMA = '''#!/usr/bin/env python3
@@ -419,7 +462,7 @@ class RunnerEndToEnd(unittest.TestCase):
         self.assertRegex(out, r"NVBANDWIDTH_PROOF device=NVIDIA_GeForce_RTX_4090 gpus=1 passed=18 ce=8 sm=8 latency=1 local=1 ")
         self.assertIn("CASE device_to_device_memcpy_read_ce class=ce result=WAIVED reason=needs_2_gpus_has_1", out)
         self.assertTrue((self.dir / "out" / "results.tsv").is_file())
-        self.assertEqual(len(list((self.dir / "out" / "logs").glob("*.log"))), 36)       # one per case plus the listing
+        self.assertEqual(len(list((self.dir / "out" / "logs").glob("*.log"))), 37)       # one per case, the listing and the device probe
 
     def test_the_hidden_gpu_negative_control_fails_and_the_judge_agrees(self):
         os.environ["CUDA_VISIBLE_DEVICES"] = ""

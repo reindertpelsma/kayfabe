@@ -9,5 +9,7 @@ STATUS: LIVE, 2026-11-23.
 - `llama_vulkan_llvmpipe.log`, `llama_vulkan_no_device_cpu.log`, `llama_vulkan_nvidia_ngl0.log`: the three ways the row can fall back, written in the same format
   (a CPU Vulkan driver listed first, no Vulkan device and the CPU backend, `-ngl 0` on the real device). Constructed, not captured: the format is the real one above, the
   numbers are made up.
-- nvbandwidth outputs are built by the tests from the JSON writer of the pinned source (`json_output.cpp`, commit 4a49bdae82d69e69330a88746cb12b449796ee8b);
-  captured outputs of the native run are `nvbandwidth_*` here when the box run happened.
+- `nvbandwidth_real_*.json`: the output of nvbandwidth v0.9 (commit 4a49bdae82d69e69330a88746cb12b449796ee8b) captured on a native RTX 4090 Vast KVM box, driver 575.51.03, 2026-11-23, run at
+  revision ddbf01939 of the branch (`traces/open_lanes_20261123/`): a host-to-device copy-engine case, the latency case, and the same case with `CUDA_VISIBLE_DEVICES` empty (the `error` document).
+  Note `"GPU Device list" : null` in the first two: the JSON of v0.9 does not list devices.
+- other nvbandwidth outputs are built by the tests from the JSON writer of the pinned source (`json_output.cpp`).
