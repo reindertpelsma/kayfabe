@@ -1,0 +1,18 @@
+6.8.0-147-generic
+BOOT_IMAGE=/vmlinuz-6.8.0-147-generic root=UUID=59134bd0-a76f-4ea0-8e4a-770b2e1eafc2 ro console=ttyS0 mem=960M mem_sleep_default=deep no_console_suspend
+[    0.000000] Hypervisor detected: Microsoft Hyper-V
+[    0.000000] Hyper-V: privilege flags low 0x27e, high 0x30, hints 0x28, misc 0x408
+[    0.000000] Hyper-V: Host Build 10.0.14393.0-0-0
+[    0.000000] clocksource: hyperv_clocksource_tsc_page: mask: 0xffffffffffffffff max_cycles: 0x24e6a1710, max_idle_ns: 440795202120 ns
+[    0.000001] clocksource: hyperv_clocksource_msr: mask: 0xffffffffffffffff max_cycles: 0x24e6a1710, max_idle_ns: 440795202120 ns
+[    0.000003] tsc: Marking TSC unstable due to running on Hyper-V
+[    0.013912] Booting paravirtualized kernel on Hyper-V
+[    0.013915] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+[    0.014224] Hyper-V: PV spinlocks disabled
+[    0.636685] clocksource: hpet: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604467 ns
+[    0.649923] Hyper-V: enabling crash_kexec_post_notifiers
+[    0.652748] Hyper-V: Using enlightened APIC (x2apic mode)
+[    0.917769] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+[    2.201851] clocksource: Switched to clocksource hyperv_clocksource_tsc_page
+[    2.243333] clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+[    6.997664] Hyper-V: reenlightenment support is unavailable

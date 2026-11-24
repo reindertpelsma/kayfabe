@@ -1,0 +1,76 @@
+{
+ "variant": "K-stock",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash",
+ "seeded": true,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795480904.89551,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795480905.8981872,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 892.425330168,
+   "host_realtime_wake": 1795480910.90418,
+   "host_mono_wake": 897.430658615,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.287881374359131,
+   "host_realtime_after": 1795480917.4700556,
+   "host_mono_after": 903.996533715,
+   "trace_counts": {
+    "kvm_msr": 53,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "qmp_events": [
+    [
+     1795480904.89551,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795480905.8981872,
+     "SUSPEND"
+    ],
+    [
+     1795480910.9332974,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [
+    [
+     1795480931.9460602,
+     "RTC_CHANGE"
+    ]
+   ],
+   "verdict": "no suspend"
+  },
+  {
+   "n": 3,
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [],
+   "verdict": "no suspend"
+  }
+ ],
+ "boot_ssh_s": 19.195202589035034,
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 80,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

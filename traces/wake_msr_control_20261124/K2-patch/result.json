@@ -1,0 +1,198 @@
+{
+ "variant": "K2-patch",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash",
+ "seeded": true,
+ "no_os_id": true,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-patched)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482605.5030448,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482605.5030577,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482605.5030668,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795482606.5111365,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2593.038214405,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795482611.5184877,
+   "host_mono_wake": 2598.044966756,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.278120517730713,
+   "host_realtime_after": 1795482618.1060188,
+   "host_mono_after": 2604.63249638,
+   "trace_counts": {
+    "kvm_msr": 51,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795482605.5030448,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482605.5030577,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482605.5030668,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795482606.5111365,
+     "SUSPEND"
+    ],
+    [
+     1795482611.5775883,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482623.4303365,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2609.957433814,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795482628.4370108,
+   "host_mono_wake": 2614.963489091,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.247179269790649,
+   "host_realtime_after": 1795482634.9654238,
+   "host_mono_after": 2621.49190185,
+   "trace_counts": {
+    "kvm_msr": 51,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795482623.4303365,
+     "SUSPEND"
+    ],
+    [
+     1795482628.4725628,
+     "WAKEUP"
+    ],
+    [
+     1795482638.7358162,
+     "RTC_CHANGE"
+    ]
+   ]
+  },
+  {
+   "n": 3,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482640.3163338,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2626.843509875,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795482645.3227718,
+   "host_mono_wake": 2631.849250009,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.268798112869263,
+   "host_realtime_after": 1795482651.8649435,
+   "host_mono_after": 2638.391421538,
+   "trace_counts": {
+    "kvm_msr": 51,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795482640.3163338,
+     "SUSPEND"
+    ],
+    [
+     1795482645.3499622,
+     "WAKEUP"
+    ]
+   ]
+  }
+ ],
+ "boot_ssh_s": 20.569221019744873,
+ "tsc_page_gpa": "0x3d001000",
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 80,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

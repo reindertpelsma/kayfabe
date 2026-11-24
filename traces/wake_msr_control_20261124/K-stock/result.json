@@ -1,0 +1,197 @@
+{
+ "variant": "K-stock",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash",
+ "seeded": true,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481731.4993105,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481731.4993224,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481731.4993312,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481732.5068915,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1719.033899357,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795481737.5143318,
+   "host_mono_wake": 1724.04081078,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.27183985710144,
+   "host_realtime_after": 1795481744.0905106,
+   "host_mono_after": 1730.616989855,
+   "trace_counts": {
+    "kvm_msr": 53,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795481731.4993105,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481731.4993224,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481731.4993312,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481732.5068915,
+     "SUSPEND"
+    ],
+    [
+     1795481737.5696917,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481749.4791348,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1736.006372145,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795481754.4867668,
+   "host_mono_wake": 1741.0132458,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.2700676918029785,
+   "host_realtime_after": 1795481761.0418668,
+   "host_mono_after": 1747.568344851,
+   "trace_counts": {
+    "kvm_msr": 53,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795481749.4791348,
+     "SUSPEND"
+    ],
+    [
+     1795481754.5211287,
+     "WAKEUP"
+    ],
+    [
+     1795481764.812059,
+     "RTC_CHANGE"
+    ]
+   ]
+  },
+  {
+   "n": 3,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481766.3994725,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1752.926136058,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795481771.4063509,
+   "host_mono_wake": 1757.932829576,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.26883339881897,
+   "host_realtime_after": 1795481777.9642475,
+   "host_mono_after": 1764.490725678,
+   "trace_counts": {
+    "kvm_msr": 53,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795481766.3994725,
+     "SUSPEND"
+    ],
+    [
+     1795481771.4439037,
+     "WAKEUP"
+    ]
+   ]
+  }
+ ],
+ "boot_ssh_s": 19.73681330680847,
+ "tsc_page_gpa": "0x3d001000",
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 80,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

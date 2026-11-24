@@ -1,0 +1,39 @@
+{
+ "clocksource": "kvm-clock",
+ "clocksource_available": "kvm-clock hpet acpi_pm",
+ "msrs": {
+  "0": {
+   "GUEST_OS_ID": "0x0000000000000000",
+   "HYPERCALL": "0x000000003d000000",
+   "REFERENCE_TSC": "0x0000000000000000",
+   "SCONTROL": "0x0000000000000000",
+   "SIEFP": "0x0000000000000000",
+   "SIMP": "0x0000000000000000",
+   "SINT2": "0x0000000000010000",
+   "STIMER0_CONFIG": "0x0000000000000000",
+   "STIMER0_COUNT": "0x0000000000000000",
+   "TIME_REF_COUNT": "0x000000003b69fc7a"
+  },
+  "1": {
+   "GUEST_OS_ID": "0x0000000000000000",
+   "HYPERCALL": "0x000000003d000000",
+   "REFERENCE_TSC": "0x0000000000000000",
+   "SCONTROL": "0x0000000000000000",
+   "SIEFP": "0x0000000000000000",
+   "SIMP": "0x0000000000000000",
+   "SINT2": "0x0000000000010000",
+   "STIMER0_CONFIG": "0x0000000000000000",
+   "STIMER0_COUNT": "0x0000000000000000",
+   "TIME_REF_COUNT": "0x000000003b6a09bb"
+  }
+ },
+ "suspend_error": null,
+ "t_boottime": 95.677194418,
+ "t_monotonic": 90.222788599,
+ "t_realtime": 1795480770.2331588,
+ "tsc_page": {
+  "offset": -293016,
+  "scale": "0x00b60c0668f5c28f",
+  "sequence": 1
+ }
+}

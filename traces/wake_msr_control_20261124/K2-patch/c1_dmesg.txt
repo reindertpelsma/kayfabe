@@ -1,0 +1,62 @@
+[   13.920581] traps: python3[1282] trap invalid opcode ip:7b3480b88de2 sp:7fffec7dbb18 error:0 in libc.so.6[7b3480a28000+189000]
+[   14.239248] PM: suspend entry (deep)
+[   14.244574] Filesystems sync: 0.005 seconds
+[   14.248925] Freezing user space processes
+[   14.250662] Freezing user space processes completed (elapsed 0.001 seconds)
+[   14.250674] OOM killer disabled.
+[   14.250678] Freezing remaining freezable tasks
+[   14.251574] Freezing remaining freezable tasks completed (elapsed 0.000 seconds)
+[   14.258809] ata3.00: Check power mode failed (err_mask=0x1)
+[   14.281523] ACPI: PM: Preparing to enter system sleep state S3
+[   14.281786] ACPI: PM: Saving platform NVS memory
+[   14.282063] Disabling non-boot CPUs ...
+[   14.285713] smpboot: CPU 1 is now offline
+[   23.287174] unchecked MSR access error: WRMSR to 0xc0011029 (tried to write 0x0000000000000000) at rIP: 0xffffffffb0ac8c74 (native_write_msr+0x4/0x40)
+[   23.287367] Call Trace:
+[   23.287384]  <TASK>
+[   23.287391]  ? __restore_processor_state.constprop.0+0x1a8/0x220
+[   23.287526]  restore_processor_state+0x9/0x10
+[   23.287531]  x86_acpi_suspend_lowlevel+0xfc/0x180
+[   23.287542]  acpi_suspend_enter+0x57/0x200
+[   23.287566]  ? _raw_spin_unlock_irqrestore+0x11/0x60
+[   23.287591]  suspend_enter+0x345/0x440
+[   23.287711]  suspend_devices_and_enter+0x195/0x2f0
+[   23.287717]  enter_state+0x21b/0x5f0
+[   23.287722]  pm_suspend+0x44/0xe0
+[   23.287726]  state_store+0x2b/0x60
+[   23.287729]  kobj_attr_store+0x12/0x40
+[   23.287733]  sysfs_kf_write+0x3e/0x60
+[   23.287756]  kernfs_fop_write_iter+0x166/0x1f0
+[   23.287761]  vfs_write+0x2a4/0x470
+[   23.287773]  ksys_write+0x73/0x100
+[   23.287778]  __x64_sys_write+0x19/0x30
+[   23.287782]  x64_sys_call+0x7e/0x25a0
+[   23.287791]  do_syscall_64+0x87/0x180
+[   23.287795]  ? do_syscall_64+0x94/0x180
+[   23.287798]  ? srso_return_thunk+0x5/0x5f
+[   23.287802]  ? irqentry_exit+0x43/0x50
+[   23.287806]  ? srso_return_thunk+0x5/0x5f
+[   23.287810]  ? exc_page_fault+0x94/0x1b0
+[   23.287814]  entry_SYSCALL_64_after_hwframe+0x78/0x80
+[   23.287818] RIP: 0033:0x71c88c71c844
+[   23.287948] Code: c7 00 16 00 00 00 b8 ff ff ff ff c3 66 2e 0f 1f 84 00 00 00 00 00 f3 0f 1e fa 80 3d 05 f8 0e 00 00 74 13 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 54 c3 0f 1f 00 55 48 89 e5 48 83 ec 20 48 89
+[   23.287951] RSP: 002b:00007ffe3732c028 EFLAGS: 00000202 ORIG_RAX: 0000000000000001
+[   23.287960] RAX: ffffffffffffffda RBX: 000071c88c901ff8 RCX: 000071c88c71c844
+[   23.287962] RDX: 0000000000000003 RSI: 00000000091a22c0 RDI: 0000000000000003
+[   23.287965] RBP: 00007ffe3732c070 R08: 0000000000000000 R09: 0000000000000000
+[   23.287967] R10: 0000000000000003 R11: 0000000000000202 R12: 0000000000000003
+[   23.287969] R13: 0000000000000003 R14: 00000000091a22c0 R15: 0000000000ba6748
+[   23.287976]  </TASK>
+[   23.287996] ACPI: PM: Low-level resume complete
+[   23.288323] ACPI: PM: Restoring platform NVS memory
+[   23.293779] Enabling non-boot CPUs ...
+[   23.294202] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   23.301534] CPU1 is up
+[   23.302862] ACPI: PM: Waking up from system sleep state S3
+[   23.321835] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   23.324870] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   23.338674] OOM killer enabled.
+[   23.338677] Restarting tasks ... done.
+[   23.342290] random: crng reseeded on system resumption
+[   23.409779] PM: suspend exit
+[   23.463633] traps: python3[1286] trap invalid opcode ip:75c6b3988de2 sp:7ffe9b39c6d8 error:0 in libc.so.6[75c6b3828000+189000]

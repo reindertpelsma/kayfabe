@@ -1,0 +1,24 @@
+[   96.558381] PM: suspend entry (deep)
+[   96.560169] Filesystems sync: 0.001 seconds
+[   96.583520] Freezing user space processes
+[   96.585038] Freezing user space processes completed (elapsed 0.001 seconds)
+[   96.585046] OOM killer disabled.
+[   96.585049] Freezing remaining freezable tasks
+[   96.586195] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[   96.593613] ata3.00: Check power mode failed (err_mask=0x1)
+[   96.613329] ACPI: PM: Preparing to enter system sleep state S3
+[   96.613491] ACPI: PM: Saving platform NVS memory
+[   96.613506] Disabling non-boot CPUs ...
+[   96.616053] smpboot: CPU 1 is now offline
+[   96.622046] ACPI: PM: Low-level resume complete
+[   96.622438] ACPI: PM: Restoring platform NVS memory
+[   96.628408] Enabling non-boot CPUs ...
+[   96.628717] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   96.631916] CPU1 is up
+[   96.632736] ACPI: PM: Waking up from system sleep state S3
+[   96.642360] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   96.644892] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   96.652901] OOM killer enabled.
+[   96.652905] Restarting tasks ... done.
+[   96.653426] random: crng reseeded on system resumption
+[   96.672029] PM: suspend exit

@@ -1,0 +1,11 @@
+WAKEPROBE_DONE variant=K-stock cycles=3
+K-stock rc=0
+WAKEPROBE_DONE variant=K-patch cycles=3
+K-patch rc=0
+WAKEPROBE_DONE variant=A-stock cycles=3
+A-stock rc=0
+WAKEPROBE_DONE variant=H-stock cycles=3
+H-stock rc=0
+WAKEPROBE_DONE variant=H-patch cycles=3
+H-patch rc=0
+EXIT rc=0

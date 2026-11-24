@@ -1,0 +1,198 @@
+{
+ "variant": "H-patch",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash,kvm=off",
+ "seeded": false,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-patched)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffaf2c9",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482450.2090607,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482450.209074,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482450.2090845,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795482451.221446,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2437.748612841,
+   "tsc_page_suspended": "0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffaf2c9",
+   "host_realtime_wake": 1795482456.228891,
+   "host_mono_wake": 2442.755369593,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.270200490951538,
+   "host_realtime_after": 1795482462.7780702,
+   "host_mono_after": 2449.304548257,
+   "trace_counts": {
+    "kvm_msr": 399,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_synic_set_msr": 40,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610",
+   "qmp_events": [
+    [
+     1795482450.2090607,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482450.209074,
+     "RTC_CHANGE"
+    ],
+    [
+     1795482450.2090845,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795482451.221446,
+     "SUSPEND"
+    ],
+    [
+     1795482456.2768583,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482467.8187032,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2454.345761896,
+   "tsc_page_suspended": "0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610",
+   "host_realtime_wake": 1795482472.8257902,
+   "host_mono_wake": 2459.352268845,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.265311241149902,
+   "host_realtime_after": 1795482479.3702884,
+   "host_mono_after": 2465.896766565,
+   "trace_counts": {
+    "kvm_msr": 440,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_synic_set_msr": 40,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c",
+   "qmp_events": [
+    [
+     1795482467.8187032,
+     "SUSPEND"
+    ],
+    [
+     1795482472.8542926,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 3,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795482484.4517329,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 2470.978834512,
+   "tsc_page_suspended": "0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c",
+   "host_realtime_wake": 1795482489.4588165,
+   "host_mono_wake": 2475.985295344,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.277785778045654,
+   "host_realtime_after": 1795482496.0162961,
+   "host_mono_after": 2482.542774551,
+   "trace_counts": {
+    "kvm_msr": 428,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_synic_set_msr": 40,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "0000000004a04000: 0x0000000000000004 0x00b60c0668f5c28f 0000000004a04010: 0x000000002408aa83",
+   "qmp_events": [
+    [
+     1795482484.4517329,
+     "SUSPEND"
+    ],
+    [
+     1795482489.4872682,
+     "WAKEUP"
+    ],
+    [
+     1795482499.7981029,
+     "RTC_CHANGE"
+    ]
+   ]
+  }
+ ],
+ "boot_ssh_s": 20.250816583633423,
+ "tsc_page_gpa": "0x4a04000",
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 80,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16,
+  "kvm_msr": 2085
+ }
+}
