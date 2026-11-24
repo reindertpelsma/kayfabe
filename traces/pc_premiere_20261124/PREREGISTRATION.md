@@ -39,3 +39,16 @@ PR #588 (`traces/imgb_offline_features_20261124/`, Vast box, RTX 4090, kf3 at 35
 - GPU lock `/root/prov/pc_gpu.lock` held for each arm, PC_ACTIVE START/END lines. Restore and verify before releasing the lock and by 16:00Z at the latest: nvidia 595.91.07 on 01:00.0, `snd_hda_intel` on 01:00.1, gdm active with `card1-DP-3` connected, host `cuInit` 0, udev queue empty, no vfio module, no modprobe block file.
 - No `nvidia-smi` or any nvidia tool while a bind may be active. SysRq s,u,b only for a wedge.
 - Nothing on the pc is deleted except this session's own overlays and build scratch.
+
+# Addendum 1, 2026-11-24 06:10Z (after K1 attempts A1-A3, before any variant below)
+MEASURED so far: under kf3 ed41beea on the RTX 4070, action A gave PASS 3 of 3 (K1A1, K1A2 with 45 s hold, K1A3 with 120 s hold and a screenshot showing the sequence in the timeline and the Program monitor); no Premiere crash record, no Application 1000 for Premiere. The Vast crash is not reproduced by action A as specified. Differences between the Vast flow and action A, each a candidate:
+- the Vast harness (`lib.ps1` `Run-StartupScript`) sent keys to the foreground window while it waited for the marker: ENTER at every 15th poll offset 7 and ESC at every 15th poll (poll = dialog sweep + 3 s). ENTER on an active sequence renders the work area; ENTER on the "Premiere quit unexpectedly while a project was open" toast (present after any earlier crash) may press Reopen;
+- the guest clock: the Vast boot ran at the recorded clock (RTC base 2026-11-22T02:43:26Z); the pc runs at the real clock;
+- 2 of the 3 Vast crashes ran Scene Edit Detection; the first Vast crash came from opening the "Preview-Your-Clips" Learn project;
+- host and die: nested KVM on an AMD box with an RTX 4090 and host driver 580.159.04, kf3 3581ba07.
+Added hypotheses (kf3 arm on the 4070 first; any variant that gives CRASH >= 2 of 3 under kf3 becomes the action for the V arm, 3 attempts, and H1/H2/H3/H4 are then judged on that action):
+- H5 (harness keys): the crash needs the Vast harness key cadence. Variant K-keys = action A plus the exact `Run-StartupScript` key cadence from Premiere's start to the end of the hold. Prediction CRASH >= 2/3. Falsifier PASS >= 2/3.
+- H5b (Scene Edit Detection with the key cadence, the Vast 04:06 run): prediction CRASH >= 2/3; falsifier PASS >= 2/3 (or SED returns).
+- H6 (recorded clock): action A (and K-keys if it crashed) in a boot with `-rtc base=2026-11-22T02:43:26`. Prediction CRASH >= 2/3. Falsifier PASS >= 2/3.
+- H7 (Learn project): opening the Preview-Your-Clips Learn project through the script crashes. Prediction CRASH in 2 of 2. Falsifier PASS in 2 of 2.
+- If no variant crashes under kf3 on the 4070, the V arm still runs action A 3 times as the bare-metal reference, and the result is "Vast crash not reproduced on the pc (die/host/flow-specific)"; H2 is then falsified for the 4070 and H1/H3/H4 are NOT-EXERCISED.
