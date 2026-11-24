@@ -10291,6 +10291,103 @@ mod twin_defapi_tests {
     }
 }
 
+/// ★ Replay (docs/design/V3_REPLAY_TESTS.md), 2026-11-18: SPEC creo-04 on GB203 / 595.91.07 died with ONE host
+/// `Xid 32 ... channel 0x00000016 intr 00800000` on a Windows user-work Passthrough twin (fixture
+/// `tests/fixtures/creo04_gb203_xid32_replay.txt`).
+///
+/// Invariant (what a log line can falsify): **a declared Windows user-work twin never reaches a state where
+/// the guest's deferred-API `0x200` trigger finds nothing registered on the host.** Only the private-ring
+/// relay serves that trigger (userpump: the trigger segment published with the trigger as DMA_NOPs and the
+/// ring migration done in software). The other route, the USERD relay, runs the guest's own ring natively,
+/// and its twin's host `NV50_DEFERRED_API` is authored with nothing registered (`twin_defapi_act`), so the
+/// trigger fails closed in host RM: an RC of that twin (Xid 32, PBDMA `DEVICE`).
+///
+/// What the replay shows: the route and twin-object decisions for the logged family and class. What it
+/// cannot show: the trigger itself, its bundle (INFERRED `FIFO_UPDATE_CHANNEL_INFO`), or the GSP's answer.
+#[cfg(test)]
+mod replay_creo04_gb203_xid32 {
+    use super::userrelay::{ring_relay_route, ring_relay_serves, route_declined_line};
+    use super::{TwinDefapiPlan, twin_defapi_plan};
+
+    const FIXTURE: &str = include_str!("../tests/fixtures/creo04_gb203_xid32_replay.txt");
+
+    /// The value of the first fixture line that starts with `key`.
+    fn field(key: &str) -> &'static str {
+        FIXTURE
+            .lines()
+            .find_map(|l| l.strip_prefix(key))
+            .map(str::trim)
+            .unwrap_or_else(|| panic!("fixture has no `{key}` line"))
+    }
+
+    fn logged_family() -> kf_chip::Family {
+        let name = field("measured family:");
+        kf_chip::Family::ALL
+            .into_iter()
+            .find(|f| format!("{f:?}") == name)
+            .unwrap_or_else(|| panic!("fixture family {name} is not a kf_chip::Family"))
+    }
+
+    fn logged_class() -> u32 {
+        let c = field("measured class:");
+        u32::from_str_radix(c.trim_start_matches("0x"), 16).expect("fixture class is hex")
+    }
+
+    /// The replay starts from the logged state: the code's own decline line equals the logged one byte
+    /// for byte, and the logged alloc names the same class.
+    #[test]
+    fn the_replay_starts_from_the_logged_route_decline() {
+        let (family, class) = (logged_family(), logged_class());
+        let logged = field("logged-route line=2799:");
+        assert_eq!(route_declined_line(family, class).as_deref(), Some(logged));
+        assert!(field("logged-alloc line=16956:").contains(&format!("class={class:#x}")));
+        assert_eq!(
+            ring_relay_serves(family, class),
+            Err(field("measured decline:"))
+        );
+        // The logged twin is the one the route sends to the USERD relay, with a 5080 holding nothing.
+        assert!(
+            field("logged-birth line=16959:").contains("(USERD relay: doorbells go to a worker)")
+        );
+        assert!(field("logged-twin5080 line=16962:").contains("NOTHING registered"));
+        assert!(field("logged-registration line=17354:").contains("object=0xff1fe010"));
+        assert!(field("logged-twin5080 line=16962:").contains("0xc1d0009e:0xff1fe010"));
+        assert!(
+            field("logged-xid dmesg=8468.111405:").ends_with("channel 0x00000016 intr 00800000")
+        );
+        // Control: the same viewset passed on an RTX 4090 (Ada, 2026-11-16); Ada's Windows user-work class is
+        // routed to the private ring, and no decline line is printed for it.
+        let ada = kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A;
+        assert_eq!(route_declined_line(kf_chip::Family::Ada, ada), None);
+        assert!(ring_relay_route(true, true, kf_chip::Family::Ada, ada));
+    }
+
+    /// ⚠ KNOWN DEFECT pin (non-ignored, so CI proves the replay still reproduces): today a GB20x Windows
+    /// user-work channel is kept off the private ring AND its twin gets a host 5080 with nothing registered.
+    /// The fix deletes this pin and removes the `#[ignore]` below.
+    #[test]
+    fn known_defect_gb20x_windows_user_work_trigger_finds_nothing_registered() {
+        let (family, class) = (logged_family(), logged_class());
+        assert!(!ring_relay_route(true, true, family, class));
+        assert_eq!(
+            twin_defapi_plan(true, true),
+            TwinDefapiPlan::AuthorHostObject
+        );
+    }
+
+    /// The invariant, red today. A permitted Windows user-work channel of the logged family and class (the
+    /// relay enabled, its default) must be born on a route that serves its `0x200` trigger.
+    #[test]
+    #[ignore = "known defect: creo-04 GB203 Xid 32 (Blackwell private-ring route declined, USER_RING_FAMILY_WRITES_NO_USERD); fix tracked in docs/design/V3_BLACKWELL_USER_RING_ROUTE.md"]
+    fn a_windows_user_work_twin_never_meets_its_trigger_with_nothing_registered() {
+        let (family, class) = (logged_family(), logged_class());
+        assert!(
+            ring_relay_route(true, true, family, class),
+            "{family:?} {class:#x}: a Windows user-work twin on the USERD relay meets its deferred-API trigger with nothing registered on the host (Xid 32 DEVICE)"
+        );
+    }
+}
+
 /// ★ 2026-10-08 (after run84) — the async preempt's ordering and the disable list's resolution, with
 /// fake host completions (no GPU): a model drainer that holds replies until their acts settle,
 /// releases them in order, then posts queued preempt completions through [`preempt_posts_ready`] —

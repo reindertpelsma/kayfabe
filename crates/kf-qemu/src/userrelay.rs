@@ -476,13 +476,21 @@ pub(super) fn ring_relay_route(
 /// Once per VM, by name: a permitted Windows user-work channel was kept off the private ring.
 pub(super) fn note_route_declined(family: kf_chip::Family, class: u32) {
     static ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-    if let Err(why) = ring_relay_serves(family, class) {
+    if let Some(line) = route_declined_line(family, class) {
         ONCE.get_or_init(|| {
-            kf_arch::rate_eprintln!(
-                "kf3: USER_RING_ROUTE_DECLINED family={family:?} class={class:#x}: {why} — Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
-            );
+            kf_arch::rate_eprintln!("{line}");
         });
     }
+}
+
+/// Pure: the line [`note_route_declined`] prints, `None` when the private ring serves the channel.
+/// A replay fixture compares a logged line with it byte for byte.
+pub(super) fn route_declined_line(family: kf_chip::Family, class: u32) -> Option<String> {
+    ring_relay_serves(family, class).err().map(|why| {
+        format!(
+            "kf3: USER_RING_ROUTE_DECLINED family={family:?} class={class:#x}: {why} — Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
+        )
+    })
 }
 
 /// Validate class and bounded ring geometry before resolving own-VM USERD storage.
@@ -1318,6 +1326,30 @@ mod tests {
                 !ring_relay_route(true, true, kf_chip::Family::Blackwell, class),
                 "{what}: a Blackwell Windows user-work channel must not be born on the private ring"
             );
+        }
+    }
+
+    /// The decline line names the refusal and appears exactly when the route declines.
+    #[test]
+    fn the_route_declined_line_is_printed_only_for_a_declined_channel() {
+        assert_eq!(
+            route_declined_line(
+                kf_chip::Family::Ada,
+                kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+            ),
+            None
+        );
+        let line = route_declined_line(kf_chip::Family::Blackwell, 0xca6f).expect("declined");
+        assert!(line.starts_with("kf3: USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f: USER_RING_FAMILY_WRITES_NO_USERD — "));
+        assert!(line.ends_with("USER twin unchanged (logged once)"));
+        for family in kf_chip::Family::ALL {
+            for &class in family.classes().channel_gpfifo {
+                assert_eq!(
+                    route_declined_line(family, class).is_some(),
+                    !ring_relay_route(true, true, family, class),
+                    "{family:?} {class:#x}"
+                );
+            }
         }
     }
 
