@@ -129,3 +129,16 @@ headroom of a smaller card.
 
 The same P1 and P3 with about 2200 MiB left free (the fill-ON space alone takes about 2 GiB of pool reservation, so this
 is the tightest headroom where the space itself is expected to come up). Same predictions and falsifiers as Addendum 3.
+
+## Addendum 5, 2026-11-24, AFTER the gate and during D-on, before D-onF and A9/A10
+
+Seen so far (results in README): the real Windows guest on this box logs the #595 host `mmuWalkMap ... 0x51` at
+`0x120000000` with the display ON, in the gate's boot (fb-mb 8192, alias to `0x30f9fffff`) and in D-on (fb-mb 4096, alias to
+`0x20f9fffff`), each right after a `pool_alloc.c:605` reservation assertion, with about 19 GB of the die free. The host-only
+arms never failed. Two follow-ups:
+- **D-onF:** D-on with `unmapped-reads-zero=off` (the fill OFF), same image, binary and flags otherwise. Prediction (fill is
+  necessary for F1): no `mmuWalkMap` line. Falsifier: the `0x51` at `0x120000000` appears with the fill OFF.
+- **A9 (fill ON) / A10 (fill OFF):** A7/A8 with 4 x 131072 regions (2 GiB of kept page tables predicted for A9), then the
+  alias. Hypothesis (H1-cap, INFERRED from the 2038 MiB that every fill-ON space raised in A1-A8): RM's page-level pool has a
+  growth limit near 2 GiB, and the kept sparse page tables fill it. Prediction: A9's alias map fails with `0x51`; A10's
+  succeeds. Falsifier: A9 succeeds.

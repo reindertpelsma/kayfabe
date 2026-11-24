@@ -87,6 +87,7 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--watch", type=int, default=300)
     p.add_argument("--name", default="kfwin")
+    p.add_argument("--kf3-extra", default="", help="more kf3 device properties, e.g. unmapped-reads-zero=off")
     a = p.parse_args()
     OUT = Path(a.out)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -99,8 +100,8 @@ def main():
     d0 = len(sh(["dmesg"])[1].splitlines())
     env = dict(vm.env, WINVM_OVERLAY_BACKING=a.backing, WINVM_KF3_DISPLAY=a.display, WINVM_KF3_FB_MB="4096")
     rc, o, e = sh(["bash", str(WINVM), "run", "--detach", "--once", "--overlay", tag, "--arm", "B", "--guest-driver",
-                   "580.65.06", "--kf3-extra", f"gpu-uuid=GPU-{vmuuid}", "--tag", tag], timeout=120, env=env)
-    say(f"WINBOOT_START label={a.label} display={a.display} launch_rc={rc} {o.strip()[-160:]} {e.strip()[-160:]}")
+                   "580.65.06", "--kf3-extra", f"gpu-uuid=GPU-{vmuuid}" + (f",{a.kf3_extra}" if a.kf3_extra else ""), "--tag", tag], timeout=120, env=env)
+    say(f"WINBOOT_START label={a.label} display={a.display} kf3_extra={a.kf3_extra or '-'} launch_rc={rc} {o.strip()[-160:]} {e.strip()[-160:]}")
     t_launch = time.time()
     up = False
     while time.time() - t_launch < 1200:
