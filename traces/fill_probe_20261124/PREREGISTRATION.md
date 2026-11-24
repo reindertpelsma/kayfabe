@@ -142,3 +142,6 @@ arms never failed. Two follow-ups:
   alias. Hypothesis (H1-cap, INFERRED from the 2038 MiB that every fill-ON space raised in A1-A8): RM's page-level pool has a
   growth limit near 2 GiB, and the kept sparse page tables fill it. Prediction: A9's alias map fails with `0x51`; A10's
   succeeds. Falsifier: A9 succeeds.
+- Correction, before the rerun: 4 x 131072 regions exceed the 489472 2 MiB regions of the first range, so the probe refused
+  round 3 by its own bound (`FILL_PROBE_ERROR churn region 3/96000 beyond the first range`, `exp1/a9_first_try/`). A9/A10
+  rerun with 3 x 160000 = 480000 regions (1.83 GiB of kept page tables predicted for A9); predictions unchanged.
