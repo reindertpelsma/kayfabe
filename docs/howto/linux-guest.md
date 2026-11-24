@@ -1,5 +1,7 @@
 # Run a Linux guest
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device, and a Linux guest that runs NVIDIA's open kernel module driver.
+
 A Linux guest uses NVIDIA's stock driver, unmodified, and nothing has to be set in the guest: no registry-style settings, no guest patches, no custom kernel module. <!-- src: README.md "Linux guest", docs/WINDOWS_GUEST_SETUP.md "Linux guests" -->
 
 ## The steps

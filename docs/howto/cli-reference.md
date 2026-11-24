@@ -1,5 +1,7 @@
 # Command-line reference
 
+**Assumes:** QEMU 10.2.4 with the kayfabe device ([Install](installing.md)). The table describes the device of the source tree this manual was generated from.
+
 Everything you set for a kayfabe VM goes on the QEMU command line. A normal Windows or Linux run needs no environment variable.
 
 Kayfabe adds one QEMU device, `kf3-gpu`, to the QEMU binary you built ([Install](installing.md)). A VM without a `-device kf3-gpu` argument is plain QEMU.
@@ -76,7 +78,7 @@ nvkvm-display-broker --socket <path> [--backend auto|wayland|x11] [--persist] [-
 -device kf3-gpu,...,display=on,display-broker=<path>
 ```
 
-The broker's options today, from its own usage text: `--socket PATH`, `--socket-mode OCTAL` (default 0600), `--socket-group NAME`, `--socket-fd N`, `--no-peercred`, `--backend auto|wayland|x11|test`, `--size WxH` (default 1920x1080), `--title TEXT`, `--allow-user NAME`, `--allow-group NAME`, `--allow-uid UID`, `--wayland-display NAME`, `--runtime-dir DIR`, `--x11-display :N`, `--xauthority FILE`, `--drop-user WHO`, `--fullscreen`, `--scale aspect|stretch|none`, `--persist`, `--clipboard off|guest-to-host|consent`, `--clipboard-trigger LIST`, `--refresh auto|none|HZ`, `--resolution auto|none|WxH`, `--present-mode`, `--trace-frames`, `--linear-only`, `--stats-line`. `nvkvm-display-broker --help` prints them.
+The broker's options today, from its own usage text: `--socket PATH`, `--socket-mode OCTAL` (default 0600), `--socket-group NAME`, `--socket-fd N`, `--no-peercred`, `--backend auto|wayland|x11|test`, `--size WxH` (default 1920x1080), `--title TEXT`, `--allow-user NAME`, `--allow-group NAME`, `--allow-uid UID`, `--wayland-display NAME`, `--runtime-dir DIR`, `--x11-display :N`, `--xauthority FILE`, `--drop-user WHO`, `--fullscreen`, `--scale aspect|stretch|none`, `--persist`, `--clipboard off|guest-to-host|consent`, `--clipboard-trigger LIST`, `--refresh auto|none|HZ`, `--resolution auto|none|WxH`, `--present-mode`, `--trace-frames`, `--linear-only`, `--stats-line`, `--verbose`, `--help`. `nvkvm-display-broker --help` prints the full text.
 
 A broker started from outside your desktop session needs no environment variable: `--wayland-display NAME` (or an absolute path), `--runtime-dir DIR`, `--x11-display :N`, `--xauthority FILE` and `--allow-uid UID` replace `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `DISPLAY`, `XAUTHORITY` and `SUDO_UID`; the variables stay as the fallback. The broker creates a missing socket directory (mode 0700, one level). These flags were tested against stand-in sockets, not yet in a real Wayland or X11 session.
 

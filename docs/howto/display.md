@@ -1,5 +1,7 @@
 # Display and the broker
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device. The broker also needs a Wayland or X11 desktop session on the host.
+
 A guest can run headless (compute and offscreen rendering need no display), or kayfabe can give it a virtual monitor. This page covers the second case and the host program that puts the picture on your desktop. A headless VM needs no broker and none of this page.
 
 ## What the display feature is
@@ -46,7 +48,7 @@ The `broker/README.md` file in the repository comes from an earlier project and 
 
 ### Broker options
 
-From the program's own usage text: `--socket PATH`, `--socket-mode OCTAL` (default 0600), `--socket-group NAME`, `--socket-fd N`, `--no-peercred`, `--backend auto|wayland|x11|test`, `--size WxH` (default 1920x1080), `--title TEXT`, `--allow-user NAME`, `--allow-group NAME`, `--drop-user WHO`, `--fullscreen`, `--scale aspect|stretch|none`, `--persist` (keep the window when the VM disconnects), `--clipboard off|guest-to-host|consent`, `--clipboard-trigger LIST`, `--refresh auto|none|HZ`, `--resolution auto|none|WxH`, `--present-mode`, `--trace-frames`, `--linear-only`, `--stats-line`. Run it with `--help` for the full list. By default root and the invoking user may connect, and the socket is mode 0600. <!-- src: broker/nvkvm_broker.c (usage text), broker/README.md -->
+Every option, with its default, is in the [Command-line reference](cli-reference.md#the-display-broker); `nvkvm-display-broker --help` prints the full text. By default root and the invoking user may connect, and the socket is mode 0600. <!-- src: broker/nvkvm_broker.c (usage text), broker/README.md -->
 
 ### Grab, focus and hotkeys
 

@@ -7,12 +7,12 @@ This manual is in three parts. **Part 1** is for everyone who wants to install k
 ## Status: read this first
 
 <!-- src: README.md, "Status: research, 2026-11-08" -->
-- **Research stage.** It runs real applications, but there is no installer yet, no stable interface and no security audit.
+- **Research stage.** It runs real applications, but there is no installer yet, no stable interface and no security audit. No release exists yet.
 - **No public binary ships yet.** You build it from source ([Install](installing.md)). Whether and when one is published is the project owner's decision, not a licence limit of the source (see [Credits and notices](credits.md)). <!-- src: docs/OWNER_RULINGS.md section BC item 1, LICENSE exception 2 -->
 - **The security model is designed but not audited.** See [Security model](security.md). <!-- src: README.md "Not finished" -->
 - **Windows sleep/wake and Edge playback stability are unfinished.**
 
-Nothing is patched: no host or guest driver or kernel is modified, and the guest uses NVIDIA's own installer. Kayfabe ships no NVIDIA or Microsoft binaries. <!-- src: README.md "Nothing is patched"; docs/NOTICES.md -->
+Nothing is patched: no host or guest driver or kernel is modified, and the guest uses NVIDIA's own installer. The kayfabe QEMU is stock QEMU plus the device; one optional QEMU patch exists and is never applied unless you ask ([Building from source](building.md)). Kayfabe ships no NVIDIA or Microsoft binaries. <!-- src: README.md "Nothing is patched"; docs/NOTICES.md -->
 
 ## What has been run
 

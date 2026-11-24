@@ -12,7 +12,7 @@ src = "README.md What runs today; docs/howto/requirements.md GPU table"
 Windows 11 was tested in a matrix on 14 October 2026, at revision `eb9f2aa3`, on the author's RTX 4070 with NVIDIA's 580.88 driver. Seven of nine rows passed: Unigine Heaven in Direct3D 11 and OpenGL, windowed and fullscreen, GravityMark in Direct3D 12 and Vulkan, and Minecraft. A pass means the program finished with no host Xid and no GPU reset. Edge video failed after about 7.3 minutes, and the idle row was not run.
 
 <!-- src: README.md Windows table (CUDA, Blender and Edge rows); docs/howto/windows-guest.md -->
-The README also reports CUDA in the guest, Blender renders with CUDA and OptiX, and one 4K YouTube playback in Edge that ran to the end. Those are separate observations, not part of that matrix. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
+The Windows gate also runs a CUDA probe and a Direct3D 11 probe in the guest. Other Windows results have been reported: Blender with CUDA and OptiX, one 4K YouTube playback in Edge, SolidWorks, OBS, 3DMark, Minecraft editions and Office. They are separate observations, not part of that matrix. They have no committed evidence, and they are claims that wait for an evidence checklist, not promises. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
 
 <!-- src: README.md Linux guest; docs/howto/linux-guest.md -->
 Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. MEASURED on an RTX 4090 at `144557e43`, 2026-11-07: 70/70 runnable apps passed on the host and 66/70 in the guest. Passing apps met their own correctness predicates; the three digest-producing apps matched host digests. The four UVM apps are explicitly unsupported for now, listed in every report. <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
@@ -53,7 +53,7 @@ Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. Cards older t
 Windows is not stable. Sleep and wake do not survive, and Edge can make the driver reset after 7 to 16 minutes of video.
 
 <!-- src: README.md SolidWorks, OBS and 3DMark rows ('evidence not yet committed') -->
-SolidWorks, OBS recording and 3DMark runs are reported in the README. Their result files are not committed yet, so treat them as claims.
+SolidWorks, OBS recording and 3DMark runs have been reported, but their result files are not committed yet, so treat them as claims.
 
 <!-- src: branch claude/rootless-audit-20261016 commit 32d7319b2, traces/rootless_audit_20261016/REPORT.txt; docs/howto/security.md -->
 The launch scripts still use root; a [run without sudo](/@docs/security.html) is recorded on one host.

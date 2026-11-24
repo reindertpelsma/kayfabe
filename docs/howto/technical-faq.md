@@ -49,7 +49,7 @@ No. Nothing is patched. An optional research patch to the host's `nvidia-uvm` ex
 
 ## How does this differ from the alternatives?
 
-From the README's comparison: <!-- src: README.md "Why it is interesting" -->
+In short: <!-- src: docs/FAQ.md, site/content/how-it-differs.md -->
 
 | | host keeps the GPU | guest driver | needs |
 |---|---|---|---|

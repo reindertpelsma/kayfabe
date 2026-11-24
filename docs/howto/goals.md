@@ -48,7 +48,7 @@ These are **goals**, not promises. Kayfabe is a research project with no release
 
 **Goal:** an install path that is easier than VFIO (packaging first, then integration with common virtual-machine managers), and a stable interface for the device. The pre-release checks include a security audit before the first public binary. <!-- src: docs/PRODUCT_POSITIONING.md (status update 2026-10-01, "Conversion needs"); docs/design/V3_FEATURE_GAPS.md H19 -->
 
-**Status today:** none of these exist. There is no installer, no stable interface, no public binary and no security audit. You build from source with the repository's scripts. See [Running the QEMU device](installing.md). <!-- src: README.md status line and "Trying it"; docs/howto/installing.md; docs/howto/security.md -->
+**Status today:** none of these exist. There is no installer, no stable interface, no public binary and no security audit. You build from source with the repository's scripts. See [Install](installing.md). <!-- src: README.md status line and "Trying it"; docs/howto/installing.md; docs/howto/security.md -->
 
 ## Optional enhancements
 

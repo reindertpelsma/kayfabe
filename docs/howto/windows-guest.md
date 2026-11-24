@@ -1,5 +1,7 @@
 # Run a Windows guest
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device, and a Windows 11 guest (Pro build 26200 or Enterprise LTSC 2024 build 26100) with NVIDIA's 580.88 driver.
+
 A Windows 11 guest runs NVIDIA's stock driver on kayfabe. You install Windows and the driver yourself; kayfabe adds the emulated GPU and needs a few registry settings in the guest, which one script sets. <!-- src: docs/WINDOWS_GUEST_SETUP.md (STATUS: LIVE, 2026-10-17) -->
 
 ## The steps
@@ -17,7 +19,7 @@ You supply and license Windows yourself. Kayfabe ships no Windows and no NVIDIA 
 - **Windows 11 Pro, build 26200** (the retail edition): the desktop and the application matrix on an RTX 4070. <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
 - **Windows 11 Enterprise LTSC 2024, build 26100** (Microsoft's 90-day evaluation): the image the test harness builds, used on rented hosts. <!-- src: docs/WINDOWS_GUEST_SETUP.md, scripts/bench/windows/README.md -->
 - **Driver:** NVIDIA's stock Windows driver, version 580.88, installed with NVIDIA's own installer or INF, unmodified. No driver, kernel or Windows binary is patched. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-- Applications run unmodified from the vendors' complete installers; the project README lists the results (Minecraft, Unigine Heaven, GravityMark, Edge with hardware video decode, CUDA, Blender, OBS, Office, SolidWorks and 3DMark). <!-- src: README.md "What runs today" -->
+- Applications run unmodified from the vendors' complete installers; the recorded results are on [What works today](https://kayfabe.dev/works-today/) and in the repository README. <!-- src: site/content/works-today.md, README.md "What runs today" -->
 - GPU families: see [Requirements](requirements.md).
 
 ## The settings it needs (and why)
@@ -66,7 +68,7 @@ The Windows support set (the behaviours the Windows driver needs and Linux does 
 
 ## Known limits
 
-- **Windows sleep and wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
+- **Windows sleep and wake is not supported yet.** One optional QEMU patch addresses the wake hang of a guest that has Hyper-V enlightenments; it is applied only when you ask and is not part of any release binary ([Building from source](building.md#optional-qemu-patch-sleep-and-wake-of-a-windows-guest)). <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md, docs/howto/building.md -->
 - Edge can reset the display driver after 7 to 16 minutes of video playback. <!-- src: README.md "Not finished" -->
 - Windows 11 reached a passing Windows gate on these GPUs: TU106, TU116, GA102, GA104, GA106, AD102, AD104, GB205 and GB206. GB202 was intermittent: one failure, then two passes on one machine. On GB203 (RTX 5070 Ti) the gate passed once; the screen had stayed black before the display fixes. These are results of past runs, not a promise for the current source. See [Requirements](requirements.md). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md; traces/blackwell_win_20261103/ -->
 - Heavy scenes can reset the display driver (a TDR), and on some cards it loops. See [Troubleshooting](troubleshooting.md).
