@@ -1,0 +1,10 @@
+86,87c86,87
+<         Tx Throughput                                  : 582 KB/s
+<         Rx Throughput                                  : 462 KB/s
+---
+>         Tx Throughput                                  : 2279 KB/s
+>         Rx Throughput                                  : 401 KB/s
+155c155
+<         GPU Current Temp                               : 51 C
+---
+>         GPU Current Temp                               : 50 C

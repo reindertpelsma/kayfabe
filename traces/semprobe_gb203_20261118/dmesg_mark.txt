@@ -1,0 +1,1 @@
+[Wed Nov 18 03:49:33 2026] x86/PAT: kf3-vamgr:101444 freeing invalid memtype [mem 0x380000fc0000-0x3800011bffff]

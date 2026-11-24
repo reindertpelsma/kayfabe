@@ -1,0 +1,42 @@
+=== STAGE 0-precheck start 2026-11-18T05:30:50Z
+NVIDIA GeForce RTX 5070 Ti, 595.91.07, P8
+=== STAGE 1-checkout start 2026-11-18T05:30:51Z
+=== STAGE 2-build start 2026-11-18T05:30:51Z
+(compiler warnings of the build stage omitted)
+=== STAGE 3-probe start 2026-11-18T05:30:58Z
+SEMPROBE_START attempts=3 watchdog_s=20 poll_s=3 gpu_minor=0
+SEMPROBE_ATTEMPT variant=A attempt=1 methods=[(50, 1), (5c, 5)]
+kf-host: host tier: stock
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+  child: SEMPROBE_SETUP variant=A arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+  child: SEMPROBE_WORDS variant=A words=[20010014, 4b460001, 20050017, 20010000, 00000001, 57170041, 00000000, 00000001] methods=[(50, 1), (5c, 5)]
+  child: SEMPROBE_WORD value=0x57170041
+  child: SEMPROBE_USERD reference_0x48=0x0 elapsed_us=1082
+  child: SEMPROBE_CLEANUP result=Ok(())
+  dmesg: [18942.311166] NVRM:unknown NVRM ioctl command: 0xf0
+  dmesg: [18942.341911] NVRM: Xid (PCI:0000:00:07): 32, pid=118554, name=kf-semmarker-pr, channel 0x00000002 intr 00200000
+SEMPROBE_RESULT variant=A attempt=1 exited=true status=Some(ExitStatus(unix_wait_status(0))) word=Some(57170041) expected=0x57170041 xids=[Xid { code: 20, intr: Some(200000) }] elapsed_ms=556 verdict=Unexpected
+SEMPROBE_STOP variant=A attempt=1: unexpected outcome, run stopped (fail closed)
+probe_exit=1
+xid_lines_in_window=1
+=== STAGE 4-canary start 2026-11-18T05:30:58Z
+canary1: SEMPROBE_WORDS variant=B words=[20050017, 20010000, 00000001, 4b460001, 00000000, 00000001, 20010008, 00000000] methods=[(5c, 5), (20, 1)]
+canary1: SEMPROBE_WORD value=0x4b460001
+canary1: SEMPROBE_CLEANUP result=Ok(())
+canary2: SEMPROBE_WORDS variant=B words=[20050017, 20010000, 00000001, 4b460001, 00000000, 00000001, 20010008, 00000000] methods=[(5c, 5), (20, 1)]
+canary2: SEMPROBE_WORD value=0x4b460001
+canary2: SEMPROBE_CLEANUP result=Ok(())
+smi_diff_lines=10
+86,87c86,87
+<         Tx Throughput                                  : 582 KB/s
+<         Rx Throughput                                  : 462 KB/s
+---
+>         Tx Throughput                                  : 2279 KB/s
+>         Rx Throughput                                  : 401 KB/s
+155c155
+<         GPU Current Temp                               : 51 C
+---
+>         GPU Current Temp                               : 50 C
+=== STAGE 5-done start 2026-11-18T05:30:58Z
+WINDOW_DONE probe_exit=1
+WINDOW_EXIT rc=0 at 2026-11-18T05:30:58Z

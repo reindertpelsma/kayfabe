@@ -1,0 +1,36 @@
+=== child B 05:32:17
+SEMPROBE_SETUP variant=B arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=B words=[20050017, 20010000, 00000001, 4b460001, 00000000, 00000001, 20010008, 00000000] methods=[(5c, 5), (20, 1)]
+SEMPROBE_WORD value=0x4b460001
+SEMPROBE_CLEANUP result=Ok(())
+rc=0
+=== child B 05:32:17
+SEMPROBE_SETUP variant=B arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=B words=[20050017, 20010000, 00000001, 4b460001, 00000000, 00000001, 20010008, 00000000] methods=[(5c, 5), (20, 1)]
+SEMPROBE_WORD value=0x4b460001
+SEMPROBE_CLEANUP result=Ok(())
+rc=0
+=== child B 05:32:17
+SEMPROBE_SETUP variant=B arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=B words=[20050017, 20010000, 00000001, 4b460001, 00000000, 00000001, 20010008, 00000000] methods=[(5c, 5), (20, 1)]
+SEMPROBE_WORD value=0x4b460001
+SEMPROBE_CLEANUP result=Ok(())
+rc=0
+=== child C 05:32:17
+SEMPROBE_SETUP variant=C arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=C words=[20010008, 00000000, 20050017, 20010000, 00000001, 57170043, 00000000, 00000001] methods=[(20, 1), (5c, 5)]
+SEMPROBE_WORD value=0x57170043
+SEMPROBE_CLEANUP result=Ok(())
+rc=0
+=== child C 05:32:17
+SEMPROBE_SETUP variant=C arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=C words=[20010008, 00000000, 20050017, 20010000, 00000001, 57170043, 00000000, 00000001] methods=[(20, 1), (5c, 5)]
+SEMPROBE_WORD value=0x57170043
+SEMPROBE_CLEANUP result=Ok(())
+rc=0
+=== child C 05:32:17
+SEMPROBE_SETUP variant=C arch=0x1b0 impl=0x3 driver=595.91.07 channel_class=0xca6f user=true ring_gpu_read_only=true word_va=0x120010000
+SEMPROBE_WORDS variant=C words=[20010008, 00000000, 20050017, 20010000, 00000001, 57170043, 00000000, 00000001] methods=[(20, 1), (5c, 5)]
+SEMPROBE_WORD value=0x57170043
+SEMPROBE_CLEANUP result=Ok(())
+rc=0

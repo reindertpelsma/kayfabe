@@ -1,8 +1,15 @@
 # Blackwell Windows user-work route: the creo-04 Xid 32 and a Blackwell-capable private ring
 
-**STATUS: DESIGN-ONLY, 2026-11-18.** Section 1 is a root-cause analysis from on-disk evidence: each link is
-marked MEASURED or INFERRED. Section 2 is a design. Nothing in section 2 is implemented or measured on
-hardware yet. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
+**STATUS: DESIGN-ONLY, 2026-11-18. CORRECTION, 2026-11-24 (above the text it corrects):** one part of section 2 was
+measured on hardware after this status was written, in one run on 2026-11-18, and section 2.7 reports it. That run
+measured, on one GB203 die with host driver 595.91.07: variant A raised one `Xid 32 ... intr 00200000` on its single
+attempt (A has N=1, not the N=3 that was asked for; the run stopped there, fail closed), and the witness release
+after it landed. The verdict function that stopped the run was revised AFTER the run, to accept that result, and
+the revised verdict has not been used on hardware: one run of three planned. B ran 5 times and C 3 times without a
+host Xid. The text outputs of that run are in `traces/semprobe_gb203_20261118/`. Nothing else in section 2 is
+implemented (stage 1 is a pure module that no production path calls) or measured on hardware, and the
+Windows user-work route is still declined on Blackwell. Section 1 is a root-cause analysis from on-disk evidence:
+each link is marked MEASURED or INFERRED. Section 2 is a design. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
 (fixture `crates/kf-qemu/tests/fixtures/creo04_gb203_xid32_replay.txt`); its invariant test is ignored as a
 known defect, and a pin test proves the replay still reproduces.
 
@@ -267,7 +274,64 @@ first, the lift is not needed. OWNER_RULINGS.md is not edited by this change.
   ring (§1). The private ring is the route that serves Windows' ring-growth trigger, and on Blackwell its only
   progress proof needs a GPU-written word.
 
-### 2.7 Probe: is `SET_REFERENCE` the METHOD Xid on GB20x? (INFERRED today)
+### 2.7 Probe: is `SET_REFERENCE` the METHOD Xid on GB20x? (MEASURED once on GB203 for A, 2026-11-18; B and C 5 and 3 runs; nothing yet on GB205 or another driver)
+
+**Result, MEASURED 2026-11-18 05:30-05:32Z** (SPEC box, RTX 5070 Ti GB203, host 595.91.07, no kf3 guest running;
+probe `d360cd651`, binary sha256 `f0bdeb65...`; USER channel class `0xca6f`). The text outputs are committed in
+`traces/semprobe_gb203_20261118/` (its README says what each file shows and what was not kept). **One run of three
+planned:** A has ONE attempt, so the Xid 32 is a single observation on one die and one driver.
+
+| variant | attempts | host Xid | word |
+|---|---|---|---|
+| A `SET_REFERENCE` then witness | 1 (the run stopped after it, fail-closed) | `Xid 32 ... channel 0x00000002 intr 00200000` | witness `0x57170041` LANDED |
+| B stage-1 semaphore cell | 5 (2 as canary, then 3 children) | none | `0x4b460001` every time |
+| C `NON_STALL_INTERRUPT` then witness | 3 children | none | witness `0x57170043` every time |
+
+**Two intr bits, two causes:**
+- **`intr 00200000` (bit 21, METHOD in the GA100 meaning)** is what `SET_REFERENCE` (`0x50`) raises on GB203. So on GB203
+  the private ring's own `SET_REFERENCE` marker is refused, not only its progress words. INFERRED (B1n ran on a GB205,
+  not measured here): GB205 round B1n's "Xid 32 METHOD at the relay's first publication" is the same marker.
+  - The PBDMA raised the Xid AND executed the later witness release.
+  - The probe's first verdict expected the witness to be missing, so it stopped the run. The verdict is now
+    "exactly one Xid 32 with intr bit 21, whatever the witness".
+- **`intr 00800000` (bit 23, DEVICE)** is the creo-04 / enscape-01 event (§1): a software-subchannel method kicked
+  back to RM, the unserved ring-growth trigger. SET_REFERENCE is NOT that event.
+- **The stage-1 marker** (`SEM_*` release plus `NON_STALL_INTERRUPT`) processes cleanly on a USER ca6f channel, 5 of 5.
+  `NON_STALL_INTERRUPT` alone is clean too, 3 of 3.
+- The host stayed healthy after the deliberate A Xid: the later B/C runs raised no Xid, and `nvidia-smi -q` changed
+  only in throughput and temperature.
+
+**Built (2026-11-18):** `kf-harness` binary `kf-semmarker-probe`, pure part `kf_harness::semprobe` (unit-tested).
+It is a v3 tool. Nothing in the frozen `kayfabe-rm-ladder` is touched, and there is no unsafe code.
+
+How it differs from the sketch below:
+- The channel is a USER **copy-engine** channel. Host methods (`SET_REFERENCE`, `SEM_*`,
+  `NON_STALL_INTERRUPT`) are PBDMA methods whatever the engine, and B1n's METHOD Xids hit both its GR and CE
+  rings.
+- Instead of a non-stall event count, A and C end with a WITNESS release into the owned word. It lands only if
+  the PBDMA processed everything before it.
+
+Each attempt is one child process with:
+- a fresh VA space and USER channel;
+- a read-only command mapping;
+- one owned GPU-writable 64 KiB buffer;
+- USERD with no GPU mapping.
+
+Safety:
+- The parent kills a child after 20 s (10 s to reap) and reads the dmesg delta per attempt.
+- It records the exact words and methods.
+- It STOPS at the first outcome that is neither `Clean` nor (A only) `MethodRefused`: exactly one Xid 32 with
+  `intr 00200000`, whatever the witness (the first version of the verdict required the witness to be missing; the
+  2026-11-18 run showed it lands, and the verdict was revised after that run).
+- It refuses to start unless `--i-am-on-a-spec-box` is given, and refuses when the GPU's display connector is
+  connected or enabled, when another process holds the GPU's device node, or when a `qemu` or kf3 process is alive
+  (`kf_harness::semprobe_host`). Variant A raises a host Xid 32 on purpose, so the probe belongs on a dedicated
+  test box.
+
+Verdicts:
+- A: `MethodRefused` supports the inference; `Clean` falsifies it.
+- B: must be `Clean` with the word reading `0x4B460001`.
+- C: must be `Clean`.
 
 On a Blackwell box, bare metal first (the raw client, `kayfabe-rm-ladder` / `kf-rawclient`). A USER `0xca6f`
 channel on GR, three variants, each its own process with a fresh channel, N=3 each:
