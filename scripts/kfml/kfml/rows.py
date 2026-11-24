@@ -1,11 +1,13 @@
 """One JSON row per test."""
 from __future__ import annotations
 
+from .errors import SKIP_CODES
+
 STATUSES = ("PASS", "FAIL", "NOT_RUN")
 FIELDS = ("name", "status", "reason", "wall_s", "gpu_name", "compute_cap", "vram_gb", "driver",
           "driver_cuda", "flavor", "torch", "cuda", "metrics")
 EXTRA = ("cudnn", "triton", "lock_sha256", "upstream_commits", "patch_sha256", "dataset_sha256",
-         "tier", "launch_bound", "guest_estimate_s")
+         "tier", "launch_bound", "guest_estimate_s", "skip_code")
 
 
 def make_row(name, status, reason, wall_s, env, metrics=None, **extra):
@@ -36,5 +38,7 @@ def make_row(name, status, reason, wall_s, env, metrics=None, **extra):
     for k, v in extra.items():
         if k not in EXTRA:
             raise ValueError("unknown row field %r" % k)
+        if k == "skip_code" and (status != "NOT_RUN" or v not in SKIP_CODES):
+            raise ValueError("skip_code %r is only for a NOT_RUN row and must be one of %s" % (v, ", ".join(SKIP_CODES)))
         row[k] = v
     return row

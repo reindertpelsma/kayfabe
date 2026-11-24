@@ -30,6 +30,8 @@ import threading
 import time
 from pathlib import Path
 
+import kfml_skip_codes
+
 SCHEMA = 1
 TIERS = ("mid", "large")
 STEP_BUDGET_S = {"plan": 120, "setup": 3600, "fetch-data": 5400, "run": 7200}
@@ -37,7 +39,7 @@ STEP_NAMES = ("plan", "probe", "wheelhouse", "copy", "verify", "setup", "fetch-d
 TRANSFER_KEYS = ("wheelhouse_bytes", "wheelhouse_build_s", "src_bytes", "copy_bytes", "copy_s", "install_s")
 MAX_ROWS = 8
 FACT_KEYS = ("gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor")
-ROW_KEYS = {"name", "status", "reason", "wall_s", "metrics"}
+ROW_KEYS = {"name", "status", "reason", "wall_s", "metrics", "skip_code"}
 METRIC_LIMIT = 12
 
 
@@ -75,6 +77,16 @@ def scalar_metrics(metrics):
     return out
 
 
+def summary_row(r):
+    """One bounded row. `skip_code` is kept only on a NOT_RUN row and only when it is one of the fixed vocabulary's codes (kfml_skip_codes); the
+    free-text reason is scrubbed and kept for people, and is never turned into a code."""
+    out = {"name": scrub(r.get("name"), 48), "status": r.get("status"), "reason": scrub(r.get("reason", "")),
+           "wall_s": round(float(r.get("wall_s") or 0), 3), "metrics": scalar_metrics(r.get("metrics"))}
+    if kfml_skip_codes.permitted(r):
+        out["skip_code"] = r["skip_code"]
+    return out
+
+
 def summarize(rows, sha, tier, steps, run_id=None):
     """The bounded result document from `kfml run --json` rows."""
     verdict = "FAIL"
@@ -91,8 +103,7 @@ def summarize(rows, sha, tier, steps, run_id=None):
                 break
     return {
         "schema": SCHEMA, "verdict": verdict, "sha": sha, "tier": tier, "run_id": scrub(run_id or "", 48), "facts": facts, "steps": steps,
-        "rows": [{"name": scrub(r.get("name"), 48), "status": r.get("status"), "reason": scrub(r.get("reason", "")),
-                  "wall_s": round(float(r.get("wall_s") or 0), 3), "metrics": scalar_metrics(r.get("metrics"))} for r in rows[:MAX_ROWS]],
+        "rows": [summary_row(r) for r in rows[:MAX_ROWS]],
     }
 
 

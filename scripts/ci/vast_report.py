@@ -783,7 +783,7 @@ def validate_rootless(value):
 
 def validate_kfml(value):
     """The kfml stage's record (scripts/ci/kfml_stage.py): bounded, strictly read, not forwarded. Rows carry only a name, a status, a
-    printable reason, a wall time and scalar metrics; the die/driver facts are printable strings or numbers. A PASS verdict needs a PASS row
+    printable reason, a wall time and scalar metrics (and, on a NOT_RUN row, an optional `skip_code` of fixed shape); the die/driver facts are printable strings or numbers. A PASS verdict needs a PASS row
     and no FAIL row; NOT_RUN needs every row NOT_RUN; a FAIL verdict needs a reason or a FAIL row."""
     name = re.compile(r"[a-z][a-z0-9_.-]{0,47}")
     text = re.compile(r"[\x20-\x7e]{0,200}")
@@ -809,13 +809,15 @@ def validate_kfml(value):
     ok = ok and type(rows) is list and len(rows) <= 8
     if ok:
         for r in rows:
-            ok = ok and type(r) is dict and set(r) == {"name", "status", "reason", "wall_s", "metrics"}
+            ok = ok and type(r) is dict and {"name", "status", "reason", "wall_s", "metrics"} <= set(r) <= {"name", "status", "reason", "wall_s", "metrics", "skip_code"}
             ok = ok and type(r["name"]) is str and name.fullmatch(r["name"]) is not None
             ok = ok and r["status"] in ("PASS", "FAIL", "NOT_RUN") and type(r["reason"]) is str and text.fullmatch(r["reason"]) is not None
             ok = ok and type(r["wall_s"]) in (int, float) and 0 <= r["wall_s"] < 1e7
             ok = ok and type(r["metrics"]) is dict and len(r["metrics"]) <= 12 and all(
                 type(k) is str and len(k) <= 48 and (type(v) in (int, float, bool)) for k, v in r["metrics"].items())
             ok = ok and (r["status"] == "PASS" or r["reason"] != "")  # a NOT_RUN or FAIL row names its reason
+            if "skip_code" in r:  # the shape only: whether the code is in the vocabulary is graded by vast_payload.py (kfml_skip_codes)
+                ok = ok and r["status"] == "NOT_RUN" and type(r["skip_code"]) is str and re.fullmatch(r"[A-Z][A-Z0-9_]{0,39}", r["skip_code"]) is not None
     if ok:
         status = [r["status"] for r in rows]
         if value["verdict"] == "PASS":

@@ -64,7 +64,7 @@ citation: ask whether its reason still holds before relying on it.
 
 ## §BG. Skips: a row may end NOT_RUN only for a cause outside kayfabe; every other skip fails, 2026-11-24
 
-**STATUS: LIVE as a ruling, 2026-11-24; owner decision. It replaces the zero-skip acceptance rule where the two conflict. NOT YET IN CODE: the payload, the runner and the stages still implement the old strict rule (`kfml_not_run`, `STRICT_SKIP:...`, `apps_discovery_not_run`, `windows_open_rows_not_run`, `--strict-rows`) until a separate code change lands; the documents that describe them carry a dated note.**
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. It replaces the zero-skip acceptance rule where the two conflict. IN CODE for the kfml stage only, since 2026-11-24 (PR #579: `skip_code` vocabulary, `kfml_rows(..., strict=True)`; GPU-free tested, not yet run on a box). NOT YET IN CODE: the payload's other stages, the runner and the propimage stages still implement the old strict rule (`STRICT_SKIP:...`, `apps_discovery_not_run`, `windows_open_rows_not_run`, `--strict-rows`) until a separate code change lands; the documents that describe them carry a dated note.**
 
 <!-- src: owner, 2026-11-24 -->
 
