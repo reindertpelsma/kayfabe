@@ -10,7 +10,13 @@ two directories on the same machine, give the same bytes. It installs nothing an
   build_qemu.py build     [QEMU INPUT] --out DIR     binary tarball + manifest in DIR
   build_qemu.py source    [QEMU INPUT] --out DIR     the corresponding-source tarball of a build (GPL), vendored crates included
   build_qemu.py reproduce [QEMU INPUT] --out DIR     build twice into DIR/a and DIR/b and fail unless the outputs are identical
-  build_qemu.py wake-hunk QEMU_TREE                  only the S3-wake hunk of hw/i386/pc.c, in place (scripts/bench/build_kf3.sh)
+  build_qemu.py set-patches QEMU_TREE [--with-patch NAME ...]   make a QEMU tree hold exactly the named optional patches, in place
+                                                     (scripts/bench/build_kf3_patched.py works on a copy of a tree)
+
+Optional patches. Every build has the device and its two one-line hunks and nothing else. A QEMU patch that fixes a QEMU problem
+only some users have is a plain unified diff in tools/qemu-patches/ and is applied only when you ask: `--with-patch NAME`
+(plan, build, reproduce; repeatable). `hyperv-wake` keeps a guest's Hyper-V state across an ACPI S3 wake (the file's header says
+who needs it). A patched build records the names in the manifest, in its asset names and in `--version`.
 
 QEMU INPUT is one of (none = the pinned official release, downloaded, signature-verified):
   --qemu-tarball FILE   a QEMU release tarball you have (verified against FILE.sig when that exists)
@@ -54,7 +60,7 @@ PACKAGE_NAME = "qemu-system-x86_64"
 # What the source tarball carries. Every path is read by the build or is the kit itself; the licence texts travel with it.
 SOURCE_PATHS = (
     "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
-    "crates", "firmware", "cuda", "qemu", "tools/legal",
+    "crates", "firmware", "cuda", "qemu", "tools/legal", "tools/qemu-patches",
     "traces/driver_matrix/drmnv.tsv",
     "scripts/release", "scripts/ci/kf_trust.py", "scripts/ci/kf_fetch.py", "scripts/ci/qemu_source.py",
     "scripts/ci/trust_manifest.json", "scripts/bench/qemu.pin",
@@ -79,46 +85,9 @@ CARGO_ARGS = ("build", "--release", "--locked", "-p", "kf-qemu")
 MESON_HUNK = "subdir('kf3')"
 KCONFIG_STANZA = "\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n"
 DEVICE_DIR = "qemu/hw/misc/kf3"
-# The third hunk (2026-11-23, traces/win11_s3_wake_20261123/README.md): QEMU's S3 wake resets every vCPU with a cold CPU
-# reset, which zeroes the Hyper-V synthetic MSRs and writes them to KVM (HV_X64_MSR_REFERENCE_TSC = 0 among them) while the
-# guest TSC restarts near 0. A Windows guest with hv-time does not re-enable the TSC page on resume and keeps reading the
-# stale page, so its reference time goes negative, every synthetic-timer deadline it writes is "before zero", and KVM never
-# delivers it: all vCPUs idle in HLT forever. The hunk keeps the Hyper-V MSR block of every vCPU across the wake (a
-# hypervisor does not sleep with its guest); architectural CPU state is reset as before. No-op without hv-* flags.
-WAKE_FILE = "hw/i386/pc.c"
-WAKE_OLD = """static void pc_machine_wakeup(MachineState *machine)
-{
-    cpu_synchronize_all_states();
-    pc_machine_reset(machine, RESET_TYPE_WAKEUP);
-    cpu_synchronize_all_post_reset();
-}
-"""
-WAKE_NEW = """/* kayfabe: a guest S3 wake keeps the Hyper-V synthetic MSR state (traces/win11_s3_wake_20261123). */
-#define KF_HV_LO offsetof(CPUX86State, msr_hv_hypercall)
-#define KF_HV_LEN (offsetof(CPUX86State, msr_hv_tsc_emulation_status) + sizeof(uint64_t) - KF_HV_LO)
-static void pc_machine_wakeup(MachineState *machine)
-{
-    CPUState *cs;
-    size_t n = 0, i = 0;
-    uint8_t *save;
-
-    cpu_synchronize_all_states();
-    CPU_FOREACH(cs) {
-        n++;
-    }
-    save = g_malloc(n * KF_HV_LEN);
-    CPU_FOREACH(cs) {
-        memcpy(save + KF_HV_LEN * i++, (uint8_t *)&X86_CPU(cs)->env + KF_HV_LO, KF_HV_LEN);
-    }
-    pc_machine_reset(machine, RESET_TYPE_WAKEUP);
-    i = 0;
-    CPU_FOREACH(cs) {
-        memcpy((uint8_t *)&X86_CPU(cs)->env + KF_HV_LO, save + KF_HV_LEN * i++, KF_HV_LEN);
-    }
-    g_free(save);
-    cpu_synchronize_all_post_reset();
-}
-"""
+# Optional QEMU patches: name -> plain unified diff in the kayfabe tree. Applied in this order, never by default.
+PATCH_DIR = "tools/qemu-patches"
+OPTIONAL_PATCHES = {"hyperv-wake": PATCH_DIR + "/hyperv-wake.patch"}
 
 
 class KitRefused(Exception):
@@ -393,8 +362,8 @@ def source_files(root):
     return sorted(set(p for p in out.split("\0") if p))
 
 
-def asset_names(qemu_version, revision, dirty=False):
-    stem = "%s-%s-%s%s" % (ASSET_PREFIX, qemu_version, revision[:8], "-dirty" if dirty else "")
+def asset_names(qemu_version, revision, dirty=False, patches=()):
+    stem = "%s-%s-%s%s%s" % (ASSET_PREFIX, qemu_version, revision[:8], "-dirty" if dirty else "", "".join("-with-" + n for n in patches))
     return {"binary": stem + "-linux-x86_64.tar.xz", "source": stem + "-source.tar.xz", "manifest": stem + "-manifest.json"}
 
 
@@ -407,15 +376,17 @@ def _device_sources(kroot):
     return files
 
 
-def apply_overlay(qemu_tree, kroot, archive):
-    """Lay the device into `qemu_tree` and return the patch records. Idempotent; refuses before it writes anything."""
+def apply_overlay(qemu_tree, kroot, archive, with_patches=()):
+    """Lay the device into `qemu_tree`, then the named optional patches, and return the patch records. Idempotent; refuses before
+    it writes anything."""
     qemu_tree, archive = Path(qemu_tree), Path(archive)
     meson, kconfig = qemu_tree / "hw/misc/meson.build", qemu_tree / "hw/misc/Kconfig"
     if not meson.is_file() or not kconfig.is_file():
         raise KitRefused("%s lacks hw/misc/meson.build or hw/misc/Kconfig: not a QEMU source tree" % qemu_tree)
     if not archive.is_file():
         raise KitRefused("the kayfabe archive %s was not built" % archive)
-    wake_text = _wake_hunk_text(qemu_tree)
+    names = patch_names(with_patches)
+    patched = _patched_files(qemu_tree, kroot, names)
     sources = _device_sources(kroot)
     dest = qemu_tree / "hw/misc/kf3"
     ours = {p.name for p in sources} | {"libkf_qemu.a"}
@@ -437,32 +408,165 @@ def apply_overlay(qemu_tree, kroot, archive):
     records.sort(key=lambda r: r["path"])
     records.append({"path": "hw/misc/Kconfig", "kind": "append-stanza", "sha256": sha256_bytes(KCONFIG_STANZA.encode())})
     records.append({"path": "hw/misc/meson.build", "kind": "append-line", "text": MESON_HUNK})
-    if wake_text is not None:
-        (qemu_tree / WAKE_FILE).write_text(wake_text)
-    records.append({"path": WAKE_FILE, "kind": "replace-function", "sha256": sha256_bytes(WAKE_NEW.encode())})
-    return records
+    for rel, text in patched.items():
+        (qemu_tree / rel).write_text(text)
+    return records + patch_records(kroot, names)
 
 
-def _wake_hunk_text(qemu_tree):
-    """The new text of hw/i386/pc.c with the wake hunk, None when it is already there; refuses a tree it cannot place it in."""
-    pc = Path(qemu_tree) / WAKE_FILE
-    if not pc.is_file():
-        raise KitRefused("%s lacks %s: not an x86 QEMU source tree" % (qemu_tree, WAKE_FILE))
-    text = pc.read_text()
-    if text.count(WAKE_NEW) == 1 and WAKE_OLD not in text:
-        return None
-    if text.count(WAKE_OLD) != 1:
-        raise KitRefused("%s: pc_machine_wakeup is not the QEMU 10.2.4 text the S3-wake hunk replaces" % pc)
-    return text.replace(WAKE_OLD, WAKE_NEW)
+# ------------------------------------------------------------------------------------------------ optional patches
+def patch_names(requested):
+    """The requested optional patch names, each once, in OPTIONAL_PATCHES order (never the order they were asked for)."""
+    unknown = sorted(set(requested) - set(OPTIONAL_PATCHES))
+    if unknown:
+        raise KitRefused("unknown optional patch %s; known: %s" % (", ".join(unknown), ", ".join(OPTIONAL_PATCHES)))
+    return [n for n in OPTIONAL_PATCHES if n in set(requested)]
 
 
-def apply_wake_hunk(qemu_tree):
-    """Only the S3-wake hunk (scripts/bench/build_kf3.sh lays the rest itself). Returns 'applied' or 'present'."""
-    new = _wake_hunk_text(qemu_tree)
-    if new is None:
+def parse_patch(text, name="patch"):
+    """A unified diff as {path: [(old_lines, new_lines), ...]}. Text before the first `diff --git` line (the header prose) is
+    ignored. Only plain edits of existing files are accepted (no mode lines, no new or renamed files), and every hunk must have
+    exactly the line counts its header gives, so a truncated file is refused."""
+    files, hunks, want, started, lines = {}, None, [0, 0], False, text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+
+    def closed():
+        if want != [0, 0]:
+            raise KitRefused("%s: a hunk does not have the number of lines its header gives" % name)
+
+    for line in lines:
+        if want[0] > 0 or want[1] > 0:
+            if line[:1] not in (" ", "-", "+"):
+                raise KitRefused("%s: a hunk line is not context, - or +: %r" % (name, line))
+            if line[0] != "+":
+                want[0] -= 1
+                hunks[-1][0].append(line[1:])
+            if line[0] != "-":
+                want[1] -= 1
+                hunks[-1][1].append(line[1:])
+            continue
+        closed()
+        if line.startswith("diff --git "):
+            started, hunks = True, None
+        elif not started:
+            continue
+        elif line.startswith("--- a/"):
+            hunks = files.setdefault(line[len("--- a/"):], [])
+        elif line.startswith("+++ b/"):
+            if hunks is None or line[len("+++ b/"):] not in files:
+                raise KitRefused("%s: +++ line without a matching --- line" % name)
+        elif line.startswith("@@ "):
+            m = re.fullmatch(r"@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@.*", line)
+            if hunks is None or not m:
+                raise KitRefused("%s: bad hunk header %r" % (name, line))
+            want[:] = [int(m.group(1) or 1), int(m.group(2) or 1)]
+            hunks.append(([], []))
+        elif line.strip():
+            raise KitRefused("%s: not a plain edit of an existing file (unexpected line %r)" % (name, line))
+    closed()
+    if not files or not all(files.values()):
+        raise KitRefused("%s: no hunks" % name)
+    return files
+
+
+def _block(lines):
+    return "".join(x + "\n" for x in lines)
+
+
+def _occurrences(text, block):
+    """Start offsets of `block` at a line start."""
+    out, at = [], text.find(block)
+    while at != -1:
+        if at == 0 or text[at - 1] == "\n":
+            out.append(at)
+        at = text.find(block, at + 1)
+    return out
+
+
+def hunks_state(text, hunks):
+    """'absent' (every hunk's old text is there once), 'present' (every new text is there once and no old text) or 'other'."""
+    olds = [len(_occurrences(text, _block(o))) for o, _ in hunks]
+    news = [len(_occurrences(text, _block(n))) for _, n in hunks]
+    if all(c == 1 for c in olds):
+        return "absent"
+    if all(c == 1 for c in news) and not any(olds):
         return "present"
-    (Path(qemu_tree) / WAKE_FILE).write_text(new)
-    return "applied"
+    return "other"
+
+
+def _replace_hunks(text, hunks, reverse=False):
+    for old, new in hunks:
+        old, new = (new, old) if reverse else (old, new)
+        at = _occurrences(text, _block(old))
+        assert len(at) == 1
+        text = text[:at[0]] + _block(new) + text[at[0] + len(_block(old)):]
+    return text
+
+
+def read_patch(kroot, name):
+    path = Path(kroot) / OPTIONAL_PATCHES[name]
+    if not path.is_file():
+        raise KitRefused("the optional patch %s is not in the kayfabe tree (%s)" % (name, path))
+    return path, parse_patch(path.read_text(), OPTIONAL_PATCHES[name])
+
+
+def _patched_files(qemu_tree, kroot, names):
+    """{relative path: new text} for the named patches, in order. Refuses a tree a requested patch does not fit, and a tree that
+    already holds an optional patch nobody asked for (a build must say what is in it)."""
+    qemu_tree, texts = Path(qemu_tree), {}
+    for name in OPTIONAL_PATCHES:
+        asked = name in names
+        if not asked and not (Path(kroot) / OPTIONAL_PATCHES[name]).is_file():
+            continue
+        for rel, hunks in read_patch(kroot, name)[1].items():
+            f = qemu_tree / rel
+            if not f.is_file():
+                if asked:
+                    raise KitRefused("%s lacks %s: not the QEMU source tree the patch %s is for" % (qemu_tree, rel, name))
+                continue
+            text = texts.get(rel, f.read_text())
+            state = hunks_state(text, hunks)
+            if state == "present" and not asked:
+                raise KitRefused("%s already holds the optional patch %s but it was not asked for: use a clean tree or pass --with-patch %s"
+                                 % (qemu_tree, name, name))
+            if asked and state == "other":
+                raise KitRefused("%s: %s is not the QEMU %s text the optional patch %s changes" % (qemu_tree, rel, SUPPORTED_QEMU[0], name))
+            if asked and state == "absent":
+                texts[rel] = _replace_hunks(text, hunks)
+    return texts
+
+
+def patch_records(kroot, names):
+    """One manifest record per applied optional patch: the patch's hash, so the manifest says what the binary holds."""
+    return [{"path": path, "kind": "optional-patch", "patch": n, "sha256": sha256_file(Path(kroot) / path)}
+            for n in names for path in (OPTIONAL_PATCHES[n],)]
+
+
+def set_tree_patches(qemu_tree, names, kroot=ROOT):
+    """Make a QEMU tree hold exactly the named optional patches, in place (the bench tree is reused between builds). Returns
+    {name: 'applied' | 'present' | 'reverted' | 'absent'}; refuses before it writes anything."""
+    names, plan, result = patch_names(names), {}, {}
+    for name in OPTIONAL_PATCHES:
+        _, files = read_patch(kroot, name)
+        for rel, hunks in files.items():
+            f = Path(qemu_tree) / rel
+            if not f.is_file():
+                raise KitRefused("%s lacks %s: not an x86 QEMU source tree" % (qemu_tree, rel))
+            text = plan.get(rel, f.read_text())
+            state = hunks_state(text, hunks)
+            if state == "other":
+                raise KitRefused("%s: %s is not the QEMU %s text the optional patch %s changes or contains" % (qemu_tree, rel, SUPPORTED_QEMU[0], name))
+            if name in names:
+                result[name] = "present" if state == "present" else "applied"
+                if state == "absent":
+                    plan[rel] = _replace_hunks(text, hunks)
+            else:
+                result[name] = "reverted" if state == "present" else "absent"
+                if state == "present":
+                    plan[rel] = _replace_hunks(text, hunks, reverse=True)
+    for rel, text in plan.items():
+        (Path(qemu_tree) / rel).write_text(text)
+    return result
 
 
 # ------------------------------------------------------------------------------------------------ environment and runner
@@ -652,20 +756,26 @@ revision above.
 
 Use: bin/qemu-system-x86_64 -device kf3-gpu,gpu-minor=0 ... (docs/howto/installing.md). Nothing here is installed by the kit.
 """
+PATCHED_README = """
+This build also has the optional QEMU patch `%(patch)s` (tools/qemu-patches/%(patch)s.patch in the kayfabe tree, named in the
+manifest). A build without `--with-patch` does not have it.
+"""
 QEMU_NOTICES = (("COPYING", "COPYING"), ("COPYING.LIB", "notices/qemu/COPYING.LIB"), ("LICENSE", "notices/qemu/LICENSE"),
                 ("pc-bios/README", "notices/qemu/pc-bios-README"))
 RUST_NOTICE_FILES = ("COPYRIGHT-library.html", "COPYRIGHT.html")
 
 
 def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_versions=probe_tool_versions, rust_notices=probe_rust_notices,
-          caller_env=None, allow_dirty=False, source_tarball=None):
-    """Build the binary tarball and the manifest into `out`. Returns {'out', 'assets', 'manifest'}."""
+          caller_env=None, allow_dirty=False, source_tarball=None, with_patches=()):
+    """Build the binary tarball and the manifest into `out`. Returns {'out', 'assets', 'manifest'}. `with_patches`: the optional
+    QEMU patches to apply (OPTIONAL_PATCHES); none by default."""
     kroot, out = Path(kayfabe_root).absolute(), Path(out).absolute()
     caller_env = dict(os.environ if caller_env is None else caller_env)
     ident = kayfabe_identity(kroot, allow_dirty)
+    optional = patch_names(with_patches)
     work = _prepare_workdir(workdir)
     version, qsource = resolve_qemu(qemu, work)
-    names = asset_names(version, ident["revision"], ident["dirty"])
+    names = asset_names(version, ident["revision"], ident["dirty"], optional)
     if out.exists() and any((out / n).exists() for n in names.values()):
         raise KitRefused("%s already holds this build's assets; use an empty directory" % out)
     srcdir, builddir, target, stage, logs = work / "src", work / "build", work / "target", work / "stage", work / "logs"
@@ -683,8 +793,8 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
         env["RUSTFLAGS"] += " --remap-path-prefix=%s=%s/vendor" % (work / "vendor", MAP_KAYFABE)
     _step(runner, ["cargo", *CARGO_ARGS, *cargo_config, "-j", str(jobs)], kroot, env, logs / "cargo.log", "cargo build of kf-qemu")
     archive = target / "release" / "libkf_qemu.a"
-    patches = apply_overlay(srcdir, kroot, archive)
-    pkgversion = "kayfabe-" + ident["revision"][:8] + ("-dirty" if ident["dirty"] else "")
+    patches = apply_overlay(srcdir, kroot, archive, optional)
+    pkgversion = "kayfabe-" + ident["revision"][:8] + ("-dirty" if ident["dirty"] else "") + "".join("+" + n for n in optional)
     cargs = configure_args(src=srcdir, build=builddir, kroot=kroot, pkgversion=pkgversion)
     _step(runner, [srcdir / "configure", *cargs], builddir, env, logs / "configure.log", "QEMU configure")
     _step(runner, ["ninja", "-C", builddir, "-j", str(jobs)], builddir, env, logs / "ninja.log", "QEMU build")
@@ -708,7 +818,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     for name, data in sorted(rust_notices(env, kroot).items()):
         (pkg / "notices" / "rust" / name).parent.mkdir(parents=True, exist_ok=True)
         (pkg / "notices" / "rust" / name).write_bytes(data)
-    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8]})
+    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8]} + "".join(PATCHED_README % {"patch": n} for n in optional))
     staged = work / "assets"
     staged.mkdir()
     pack_tree(pkg, staged / names["binary"], ident["source_date_epoch"], top)
@@ -723,6 +833,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
         "source_tarball": None if source_tarball is None else dict(source_tarball),
         "cargo": list(CARGO_ARGS),
         "patches": patches,
+        "optional_patches": optional,
         "configure": {"args": [configure_line([a], srcdir, builddir, kroot) for a in cargs], "line": configure_line(cargs, srcdir, builddir, kroot)},
         "environment": {k: env[k] for k in ("SOURCE_DATE_EPOCH", "TZ", "LC_ALL", "LANG", "CARGO_INCREMENTAL")}
         | {"path_maps": sorted([MAP_SRC, MAP_BUILD, MAP_KAYFABE, MAP_CARGO, MAP_RUSTUP, MAP_TARGET])},
@@ -849,6 +960,11 @@ def _add_inputs(p):
     p.add_argument("--allow-dirty", action="store_true", help="build a checkout with uncommitted changes; the result is named -dirty")
 
 
+def _add_patch_option(p, what):
+    p.add_argument("--with-patch", action="append", default=[], choices=sorted(OPTIONAL_PATCHES), metavar="NAME", dest="with_patch",
+                   help="%s the optional QEMU patch NAME (%s); repeatable; none by default" % (what, ", ".join(sorted(OPTIONAL_PATCHES))))
+
+
 def _inputs(p, a):
     given = [x for x in (a.qemu_tarball, a.qemu_tree, a.source_tarball) if x]
     if len(given) > 1:
@@ -871,12 +987,14 @@ def _plan(a, qi):
     source = ({"kind": "tree", "tree_sha256": tree_digest(qi.path)} if qi.kind == "tree" else
               {"kind": "tarball", "name": "qemu-%s.tar.xz" % version, "note": "not fetched by plan"})
     where = ("/work/src", "/work/build", "/work/kayfabe")
-    cargs = configure_args(src=where[0], build=where[1], kroot=where[2], pkgversion="kayfabe-<revision>")
+    optional = patch_names(a.with_patch)
+    cargs = configure_args(src=where[0], build=where[1], kroot=where[2], pkgversion="kayfabe-<revision>" + "".join("+" + n for n in optional))
     plan = {"qemu_version": version, "qemu_source": source, "supported_qemu": list(SUPPORTED_QEMU),
             "patches": [{"path": "hw/misc/kf3/" + p.name, "kind": "add-file", "sha256": sha256_file(p)} for p in _device_sources(kroot)]
             + [{"path": "hw/misc/kf3/libkf_qemu.a", "kind": "add-file", "note": "cargo build --release --locked -p kf-qemu"},
                {"path": "hw/misc/Kconfig", "kind": "append-stanza"}, {"path": "hw/misc/meson.build", "kind": "append-line", "text": MESON_HUNK},
-               {"path": WAKE_FILE, "kind": "replace-function", "sha256": sha256_bytes(WAKE_NEW.encode())}],
+               ] + patch_records(kroot, optional),
+            "optional_patches": {"requested": optional, "available": list(OPTIONAL_PATCHES)},
             "configure_line": configure_line(cargs, *where)}
     return plan
 
@@ -885,7 +1003,8 @@ def _build_one(a, qi, out, workdir, source_tarball=None):
     kroot, qemu, record = Path(a.kayfabe_root), qi, source_tarball
     if a.source_tarball:
         kroot, qemu, record = open_source_tarball(a.source_tarball, Path(workdir).with_name(Path(workdir).name + "-src"))
-    return build(kayfabe_root=kroot, qemu=qemu, out=out, workdir=workdir, jobs=a.jobs, allow_dirty=a.allow_dirty, source_tarball=record)
+    return build(kayfabe_root=kroot, qemu=qemu, out=out, workdir=workdir, jobs=a.jobs, allow_dirty=a.allow_dirty, source_tarball=record,
+                 with_patches=a.with_patch)
 
 
 def main(argv=None):
@@ -897,14 +1016,18 @@ def main(argv=None):
         if name != "plan":
             s.add_argument("--out", required=True, metavar="DIR", help="output directory")
             s.add_argument("--workdir", metavar="DIR", help="scratch directory, recreated each run (default: OUT.work)")
+        if name in ("plan", "build", "reproduce"):
+            _add_patch_option(s, "apply" if name != "plan" else "plan with")
         if name in ("build", "reproduce"):
             s.add_argument("--jobs", type=int, default=os.cpu_count() or 2, help="parallel jobs")
-    w = sub.add_parser("wake-hunk", help="apply only the S3-wake hunk to a QEMU tree in place (build_kf3.sh)")
+    w = sub.add_parser("set-patches", help="make a QEMU tree hold exactly the named optional patches, in place (build_kf3.sh)")
     w.add_argument("tree", metavar="QEMU_TREE")
+    _add_patch_option(w, "keep")
     a = p.parse_args(argv)
-    if a.cmd == "wake-hunk":
+    if a.cmd == "set-patches":
         try:
-            print("KIT_WAKE_HUNK %s %s" % (apply_wake_hunk(a.tree), Path(a.tree) / WAKE_FILE))
+            done = set_tree_patches(a.tree, a.with_patch)
+            print("KIT_PATCHES %s" % " ".join("%s=%s" % kv for kv in sorted(done.items())))
             return 0
         except KitRefused as e:
             print("KIT_REFUSED: %s" % e, file=sys.stderr)

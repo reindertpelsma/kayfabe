@@ -3,7 +3,7 @@
 **STATUS: LIVE, 2026-10-14 — MEASURED on the trusted host (RTX 4070, kf3 `559db30c`): the Linux desktop
 guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in one boot (§6).** Branch
 `claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
-(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-23 (§7b, above
+(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-24 (§7b2, above §7b): the wake hunk is an optional patch by owner ruling (default off), with the public-source check and the open control experiments.** **UPDATE 2026-11-23 (§7b, above
 §7a): the Windows post-wake hang is root-caused (QEMU's wake reset wipes the Hyper-V TSC page while the TSC restarts) and
 fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** **UPDATE 2026-11-23 (§7c, above §7b):
 that TDR has two causes; the first (every RAM lease revoked by the wake's flat-view re-split) is fixed, the second (kf3's display
@@ -210,6 +210,60 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   declared 4 KiB), then the core channel parks waiting for that window's interlock. [inferred] the guest's window-channel
   PUT and the GET kf3 kept across the wake disagree. The release row `windows-sleep-wake` stays expected-FAIL.
 
+## 7b2. UPDATE 2026-11-24: the wake hunk is an optional patch (owner ruling), and what the public sources say
+
+**STATUS: LIVE, 2026-11-24. Owner ruling 2026-11-24: *"I am hesitant to force a patched QEMU binary. For some QEMU bug fixes, only if
+really needed, we may apply a .patch, if it remains optional."* The measurements of §7b stand; only how the fix is shipped changes.**
+- **What changed.** §7b's "third QEMU hunk, hardwired, no flag" is now `tools/qemu-patches/hyperv-wake.patch`, a plain unified
+  diff with the same code (only the comment differs) and a header that says who needs it and lists the links below.
+  `scripts/release/build_qemu.py` applies it only for `--with-patch hyperv-wake` (plan, build, reproduce; `set-patches` for a tree
+  in place); the default build, and so every release build, has the device and its two one-line hunks and nothing else.
+  `scripts/bench/build_kf3.sh` no longer applies anything: the no-patch check (`scripts/ci/no_patch_check.py`) forbids a stock
+  entrypoint to reach a patch applicator, so a bench build with the patch is `scripts/bench/build_kf3_patched.py --with-patch
+  hyperv-wake <tree>`, which patches a copy of the tree and builds it with `build_kf3.sh` into `patched-hyperv-wake/` (own build
+  directory and own `kf3-bins/`, so the plain binary of a revision is never replaced). The `wake-hunk` subcommand is gone. A
+  Windows sleep/wake run on the bench must now build with it explicitly and point `QEMU_BIN` at the patched binary. A patched build says so in its manifest, asset names,
+  `--version` and `README.txt`. User text: `docs/howto/building.md`, *Optional QEMU patch*. Tests:
+  `scripts/ci/test_release_qemu.py` (`test_the_default_*`, `test_the_option_*`, the parser and `set-patches` tests) and
+  `scripts/ci/release_qemu_mutants.py` (`optional-patch-*`, `set-patches-*`, `patched-bench-build-*`, `plain-bench-build-*`).
+- **Wording of the claim "Windows sleep and wake works".** It holds, as measured, **with the optional patch** (3 of 3 wakes clean,
+  stable-TSC host, Hyper-V enlightenments on, §7b R3; 3 of 3 cycles without a TDR, §7d) **or without the Hyper-V enlightenments**
+  (§7b R2: stock QEMU, `host,-vmx`, stable-TSC host: **1 of 1, one cycle only**; a longer run was not made, so "works without
+  the patch" is a one-cycle result). It is **not** claimed for a stock QEMU with the enlightenments on a stable-TSC host (0 of 1,
+  the storm of §7b R1t). The release row `windows-sleep-wake` is not changed by this.
+- **Read in the QEMU sources, 2026-11-24 (10.2.4 from the pinned tarball, sha256 equal to `scripts/bench/qemu.pin`; master from
+  gitlab.com/qemu-project/qemu):** `pc_machine_wakeup` in `hw/i386/pc.c` is the same text in 10.2.4 and in master (no Hyper-V
+  state is kept); `x86_cpu_reset_hold` clears `CPUX86State` up to `end_reset_fields` and the `msr_hv_*` fields are before it;
+  `kvm_put_msrs` writes `env->msr_hv_tsc` to `HV_X64_MSR_REFERENCE_TSC` from the first CPU; `docs/system/i386/hyperv.rst` says nothing
+  about reset or sleep. So upstream QEMU does not already keep or specially reset the Hyper-V state on a wake.
+- **Public sources searched (searches and page reads only; no tracker entry for this exact symptom was found, which is a
+  statement about what the searches returned, not proof that none exists):**
+  - QEMU issue [1152](https://gitlab.com/qemu-project/qemu/-/issues/1152): Windows 10 crashes after `system_wakeup` with
+    `hv-tlbflush` (QEMU 7.0.0; a different symptom, no TSC page or timer in it, no fix on the page).
+  - KVM, [Graf, "kvm: hyper-v: Delay firing of expired stimers"](https://lkml.iu.edu/2601.1/09282.html), 2026-01-15, for Windows
+    Server 2025 hibernation (Windows computes timer targets in the past, interrupt storm, bugchecks 0x9f/0xa0). It delays a
+    one-shot timer that is already expired by 100 ticks. Review ([Christopherson, Kuznetsov](https://lkml.iu.edu/2601.3/01436.html))
+    questioned padding the count; on 2026-01-24 the author wrote ([thread](https://lkml.iu.edu/2601.3/00359.html)) "Let's put this
+    patch on hold until I have a more reliable reproducer". **No merge was found.** So a host kernel cannot be assumed to have it,
+    and it is a close relative (timers in the past after a resume), not the same cause: ours is a stale TSC page after QEMU's reset.
+  - KVM, [López, "Clamp stimer deadline to avoid livelock"](https://lkml.iu.edu/2607.0/07481.html)
+    ([v2](https://patchew.org/linux/20260714133212.3916611-3-clopez@suse.de/), kvm-x86 commit 0ca49fbd2883, Cc stable, CVE-2026-89927):
+    a count near U64_MAX overflows `100 * delta`, the deadline is in the past and the timer re-arms forever. That is the
+    arithmetic §7b R1t measured (`count = 18446744073705572754`). [inferred, not run] With the clamp the deadline saturates, so
+    the busy re-arming would stop but the timer still never fires: the guest would still not wake. The release that carries it
+    was not established.
+  - [Red Hat bug 1078089](https://bugzilla.redhat.com/show_bug.cgi?id=1078089) (2014): `hv_time` stopped Windows 7 guests from
+    resuming in a WHQL job; fixed by newer kernel, QEMU and virtio-win; it does not describe S3.
+  - QEMU 7.0 "target/i386: properly reset TSC on reset" ([thread](https://lore.kernel.org/all/3007B2D1-5DCB-43E9-9FA1-37AE4CB79986@redhat.com/T/),
+    [Launchpad 2064914](https://bugs.launchpad.net/ubuntu/jammy/+source/qemu/+bug/2064914)): the guest TSC is reset to 1 on a CPU
+    reset, which is the restart §7b measured; that thread is about reboots and the Hyper-V reference time, not S3.
+- **Not known: sleep/wake of a Windows guest without a GPU driver on stock QEMU.** Windows turns S3 off without a graphics
+  driver, so a bare-QEMU control could not be run; a Linux guest has no Hyper-V enlightenments and passed 3 cycles (§6). Whether
+  that guest shows the storm is open. Experiments that could settle it: (1) VFIO passthrough of the same GPU on the pc with
+  the same CPU flags and stock QEMU (no kf3 device), several cycles; (2) arm A (`host,-vmx`) on a stable-TSC host with 5 or
+  more cycles, to see whether the one clean cycle of §7b R2 holds; (3) the same two on a host kernel where the López clamp is
+  present, to see whether the spin turns into a silent hang.
+
 ## 7b. UPDATE 2026-11-23: the Windows post-wake hang, root cause and fix (corrects §7a below)
 
 **STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62082978 (RTX 4090, nested KVM, L1 kernel 6.8.0-59), kf3 `1052e2f9`,
@@ -228,6 +282,7 @@ q35, Windows 11 LTSC with the 580.88 driver from `windows_gate.sh`; evidence `tr
   `TIME_REF_COUNT` (always KVM's) and the wake is clean with stock QEMU: the hang depends on the host. §7a's inference that
   the TSC is reset to 0 by the wake now holds as measured on a stable-TSC host; its inference that the common factor is
   i440FX + OVMF is withdrawn for arm B (q35 hangs the same way); arm A on q35 was clean once (R2).
+- ⊘ *Superseded by §7b2 (2026-11-24): the hunk is an optional patch, off by default; the text below says how it was first shipped.*
 - **Fix (hardwired, no flag):** a third QEMU source hunk, `pc_machine_wakeup` keeps each vCPU's Hyper-V MSR block
   (`msr_hv_hypercall` .. `msr_hv_tsc_emulation_status`) across the `RESET_TYPE_WAKEUP` reset: read from KVM, reset, put back,
   then written to KVM, so KVM republishes a valid page for the restarted TSC. Architectural CPU state is reset as before; a

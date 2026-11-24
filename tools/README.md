@@ -1,6 +1,6 @@
 # tools/
 
-**STATUS: LIVE, 2026-11-23.** Host-side tools, generators and research probes. None of it is linked into the product. Where a directory has its own README, that README carries its own STATUS.
+**STATUS: LIVE, 2026-11-24.** Host-side tools, generators and research probes. None of it is linked into the product. Where a directory has its own README, that README carries its own STATUS.
 
 | Path | What it is |
 |---|---|
@@ -9,6 +9,7 @@
 | `drivermatrix/` | The generator that sweeps ogkm release tags into version ranges and emits `crates/kf-abi/src/generated/matrix.rs` (`dm.py`, `collapse.py`, `emit_rust.py`, `regen.sh`); `scripts/drivermatrix/` is the separate hardware sweep. |
 | `legal/` | The notice generator and the NVIDIA MIT licence texts it needs (`THIRD_PARTY_NOTICES.md`). |
 | `cudart_probe/`, `probes/`, `util-probe/`, `read_display_caps_page.py`, `align_metadata.py` | Small measurement probes and shims. |
+| `qemu-patches/` | Optional patches to QEMU 10.2.4 as plain unified diffs, each with a header (problem, who needs it, upstream links). `hyperv-wake.patch` keeps a guest's Hyper-V state across an ACPI S3 wake. Nothing here is applied unless asked for: `scripts/release/build_qemu.py ... --with-patch <name>` or `scripts/bench/build_kf3_patched.py --with-patch <name>` (`docs/howto/building.md`). |
 | `host_patches/`, `uvm_efs/` | Optional bring-up patches and UVM research; they do not establish supported UVM (`docs/howto/requirements.md`). |
 | `vfio-gsp-observer/`, `windows-capture/`, `windows-debug-capture/`, `windows-guest/`, `windows-runlist-probe/`, `windows-ctrl-export/` | Capture and observation tools for the VFIO reference and the Windows driver (research; `windows-ctrl-export/` is superseded and holds only its README). |
 | `display-ilut-constructor-probe/`, `display-tmo-constructor-probe/`, `memory-list-probe/` | Default-off research experiments, each with a README. |
