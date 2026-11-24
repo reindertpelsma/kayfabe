@@ -6,7 +6,7 @@ set -euo pipefail
 K=$1; W=$2
 mkdir -p "$W" && cd "$W"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q ninja-build pkg-config python3-venv libglib2.0-dev libpixman-1-dev \
-  libslirp-dev libzstd-dev flex bison qemu-utils cloud-image-utils >/dev/null
+  libslirp-dev libzstd-dev python3-tomli flex bison qemu-utils cloud-image-utils >/dev/null
 TARBALL=$(python3 -I "$K/scripts/ci/qemu_source.py" fetch "$W")
 FLAGS=$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import build_qemu; print(" ".join(build_qemu.CONFIGURE_FLAGS))' \
   "$K/scripts/release")
@@ -19,6 +19,7 @@ for v in stock patched; do
      && ninja -j"$(( $(nproc) / 2 ))" qemu-system-x86_64 >ninja.log 2>&1 && echo "BUILD_OK $v") &
 done
 wait
+for v in stock patched; do test -x "build-$v/qemu-system-x86_64"; done
 IMG=noble-server-cloudimg-amd64.img
 curl -sSfLO "https://cloud-images.ubuntu.com/noble/current/$IMG"
 curl -sSfL https://cloud-images.ubuntu.com/noble/current/SHA256SUMS | grep " \*$IMG\$" | sha256sum -c -
