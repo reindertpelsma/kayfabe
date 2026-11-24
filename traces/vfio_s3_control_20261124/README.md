@@ -76,7 +76,7 @@ Post-wake Hyper-V timer deadlines (`storm_deadlines.py run`, first ~0.75-1.8 s o
 - **HV5 (post-wake TDR):** 0 `nvlddmkm` 153 in 10 clean VFIO wakes (A 5, B+P 5). kf3 logged three per wake before #575 and
   none after. The real driver's wake under QEMU does not TDR [measured on one die, one guest driver].
 
-## Finding outside the question: a udev load/unload loop of the host NVIDIA modules during a VFIO bind (measured)
+## Finding outside the question: a udev load/unload loop of the host NVIDIA modules during a VFIO bind (measured, run vfio-s3 on the pc 2026-11-24 01:01Z-02:27Z, tools at revision `cda273be`, host driver 595.91.07)
 
 At 01:01:49Z, 7 minutes after the bind, a root ssh session loaded `nvidia`. Source: a coordinator-side `nvidia-smi` probe
 during the bind (coordinator error, now removed from its routine; stated by the coordinator 2026-11-24: its night tick ran
