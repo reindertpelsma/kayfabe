@@ -50,7 +50,7 @@ CASES = [
     # A chunk that failed is recorded as gone anyway (a half-applied chunk the ledger hides). (2026-11-16: two edits
     # around the profiling's ledger timer, `V3_VA_PROFILE.md`; same mutant: no early return, cut and retire, then `r`.)
     ("failed-chunk-cut-anyway", changed_all(BATCH, [
-        ("        r?;\n        // \u2605 2026-11-16 (observation only): the ledger's share", "        // \u2605 2026-11-16 (observation only): the ledger's share"),
+        ("        r?;\n        // The ledger's share, the frees it makes excluded.", "        // The ledger's share, the frees it makes excluded."),
         ("            kf_host::phase::ns_since(t_led).saturating_sub(freed),\n        );\n        Ok(())", "            kf_host::phase::ns_since(t_led).saturating_sub(freed),\n        );\n        r"),
     ])),
     # The span's tail chunk is never issued.
