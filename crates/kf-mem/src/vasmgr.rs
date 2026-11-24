@@ -1305,12 +1305,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         &self.walker
     }
 
-    /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
     /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`, settable (tests, the device).
     pub fn set_clear_over_absent(&mut self, on: bool) {
         self.clear_absent = on;
     }
 
+    /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
     pub fn walker_mut(&mut self) -> &mut W {
         &mut self.walker
     }
@@ -1737,7 +1737,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
-    /// Account one space's apply; name it (`SLOW-APPLY`) when it exceeded
+    /// ★ 2026-11-13: account one space's apply; name it (`SLOW-APPLY`) when it exceeded
     /// [`SLOW_APPLY_MS`]. Hot path: one compare and a max; nothing is formatted below the threshold.
     /// Everything printed is host-measured or a host-assigned id/count (nothing guest bytes).
     fn note_apply(
@@ -4063,7 +4063,7 @@ mod tests {
         assert!(e.iter().all(|x| x.partial && x.runs.is_empty()));
     }
 
-    /// `[measured f4a b20fd84b]` one diff larger than the report's run
+    /// ★★★ 2026-11-15 (M4) — `[measured f4a b20fd84b]` one diff larger than the report's run
     /// capacity was refused (`walk report TRUNCATED`), the split failed and the channel died. Now
     /// the report carries a window, every window is applied and acknowledged, and the split is NOT
     /// done until the diff is empty: 25 scattered maps at a report capacity of 10 are three walks.

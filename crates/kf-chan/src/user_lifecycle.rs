@@ -30,7 +30,7 @@ pub enum Start {
     Fresh,
 }
 
-/// . The measurement-class switch of the lifecycle, read ONCE from the
+/// ★ 2026-10-16 (PHASE 1c, second review N2). The measurement-class switch of the lifecycle, read ONCE from the
 /// environment variable [`LifecycleMode::ENV`] when a relay is created (never per turn, never required to boot; an
 /// unknown value is reported loudly and means [`LifecycleMode::Default`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

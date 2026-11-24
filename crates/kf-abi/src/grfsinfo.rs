@@ -266,7 +266,7 @@ impl GrFsQuery {
             },
             Some(g) => match value(g) {
                 Some(HostFsAnswer::Word(v)) => QueryAnswer::Data { at: 4, value: v },
-                // In range, and the HOST refused this slot (TU116's `ROP_MASK`,
+                // ★ 2026-09-28: in range, and the HOST refused this slot (TU116's `ROP_MASK`,
                 // `0x56`): the same per-query status — a measured refusal, not an unmodelled type.
                 Some(HostFsAnswer::Refused(status)) => QueryAnswer::RefusedByHardware { status },
                 // ⊘ In range, but the host's word was never measured: whole-call refusal.

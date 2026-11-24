@@ -2289,7 +2289,7 @@ pub struct Spare {
 /// Spares kept; a retirement beyond this frees the host space instead.
 const SPARES_MAX: usize = 32;
 
-/// Where the next mirror space starts under
+/// ★ 2026-11-15 (was `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): where the next mirror space starts under
 /// `profile` — the 64 KiB twin floor iff the guest has declared the measured Windows build and
 /// `windows-support` is on ([`kf_rm::winprofile::WindowsProfile::active`]), host RM's default otherwise:
 /// every Linux guest, a guest that declared nothing yet, and every guest of a `windows-support=off` VM.

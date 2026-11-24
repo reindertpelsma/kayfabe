@@ -578,7 +578,7 @@ pub struct HostControl {
 
 use crate::generated::matrix as hm;
 
-/// The host the GSS-legacy cudart/clock rows were measured on.
+/// ★ Lane C 2026-10-14: the host the GSS-legacy cudart/clock rows were measured on.
 const HOST_595_91_07: DriverVersion = DriverVersion {
     major: 595,
     minor: 91,
@@ -657,7 +657,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         0x0080_170e,
         NV0080_CTRL_FIFO_GET_LATENCY_BUFFER_SIZE_PARAMS
     ),
-    // NON_PRIVILEGED (`flags = 0x30008`), asked at realize
+    // ★ 2026-10-11 (channel budget, `kf_abi::chanbudget`): NON_PRIVILEGED (`flags = 0x30008`), asked at realize
     // once per served runlist for its channel count and what is in use. One measured layout in the matrix.
     hc!(
         "NV2080_CTRL_CMD_FIFO_GET_INFO",
@@ -1389,7 +1389,7 @@ mod tests {
             host("575.57.08").control_carry(0x2080_a026),
             Err(HostAbiError::NoHeader { .. })
         ));
-        // A measured opaque row is size-checked inside the interval too.
+        // ★ Lane C 2026-10-14: a measured opaque row is size-checked inside the interval too.
         assert_eq!(
             host("580.126.09")
                 .control_carry(0x2080_a026)

@@ -98,7 +98,7 @@ pub struct Row {
     pub size: usize,
     /// The input words that select the answer (everything else is zero in the request).
     pub inputs: &'static [(usize, u32)],
-    /// The guest's request must equal [`Row::request`] byte for byte
+    /// ★ Lane C 2026-10-14: the guest's request must equal [`Row::request`] byte for byte
     /// (every byte not named in `inputs` zero). For controls whose request layout is unknown but
     /// whose real-driver request was MEASURED all-zero: no word is guessed to be an input, and any
     /// non-zero byte makes it a different question.

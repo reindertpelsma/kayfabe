@@ -58,7 +58,7 @@ use kf_chip::Family;
 pub struct HostFacts {
     /// The GPU family (`MC_GET_ARCH_INFO` → [`Family::from_arch`]).
     pub family: Family,
-    /// The host DIE (`MC_GET_ARCH_INFO` architecture + implementation,
+    /// ★ Lane C 2026-10-14: the host DIE (`MC_GET_ARCH_INFO` architecture + implementation,
     /// named by ogkm, [`kf_chip::DieId`]) — the key of the published measured table
     /// ([`crate::consttab`]): a measured row is served only to the die it was measured on.
     pub die: kf_chip::DieId,

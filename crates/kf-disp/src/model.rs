@@ -160,13 +160,13 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
-    // ROUTE_TO_PHYSICAL on NV04_DISPLAY_COMMON. The Windows
+    // ★ 2026-10-07 (Windows Code43 batch): ROUTE_TO_PHYSICAL on NV04_DISPLAY_COMMON. The Windows
     // driver binds two NV01_EVENT_KERNEL_CALLBACK handles to its display-common object and enables
     // notifiers 1 and 2 REPEAT ([measured] VFIO vfio-10, RPCs 2557-2560). Answered from the
     // object's own action table, with `dispapiCtrlCmdEventSetNotification_IMPL`'s checks
     // (`disp_objs.c:629-700`); no notifier is ever raised by this display.
     ("NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION", "event_notify"),
-    // `IMP_SET_GET_PARAMETER` (`ctrl5070chnc.h:934-1100`). Only GET of
+    // ★ 2026-10-07 (Windows run29): `IMP_SET_GET_PARAMETER` (`ctrl5070chnc.h:934-1100`). Only GET of
     // `IMP_ENABLE` is answered: FALSE, because this display bypasses IMP — "all Is Mode Possible
     // queries are answered with 'mode is possible'" is exactly `mode_possible` below. Every other
     // index (ASR/MSCG/stutter/mclk-switch: memory power features, host-owned under owner ruling
@@ -179,7 +179,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // line and VBLANK state — the same live raster position the core's `GET_RG_SCAN_LINE(h)` word
     // answers (`crate::ports::Ports::scan_position_at`), read from atomics, no lock.
     ("NV5070_CTRL_CMD_GET_RG_SCAN_LINE", "rg_scan_line"),
-    // `SYSTEM_GET_HOTPLUG_STATE` (`ctrl0073system.h:476-528`, flags
+    // ★ 2026-10-07 (Windows run29): `SYSTEM_GET_HOTPLUG_STATE` (`ctrl0073system.h:476-528`, flags
     // 0x48 ROUTE_TO_PHYSICAL). Lid open (a desktop monitor). `hotplugAfterEdidMask` lists every
     // display of this device: [measured] vfio-10 RPC 2917 answered every supported display (0x7f00)
     // although the guest had read the active one's EDID; that the physical side counts only its OWN
@@ -188,7 +188,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE",
         "hotplug_after_edid",
     ),
-    // Three parameterless INTERNAL notifications the guest's CPU-RM
+    // ★ 2026-10-07 (Windows run29): three parameterless INTERNAL notifications the guest's CPU-RM
     // sends physical RM ([measured] vfio-10 RPCs 2916, 2978, 2982, internal client c2000006).
     // ACPI_SUBSYSTEM_ACTIVATED "intializes display ACPI child devices" (`ctrl2080internal.h:3519-3526`):
     // this display has none, so there is nothing to initialise. PRE/POST_MODESET bracket a modeset

@@ -737,7 +737,7 @@ fn bios_get_info_v2_is_the_hosts_version_or_refused() {
     );
 }
 
-/// `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE` is the HOST's row
+/// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE` is the HOST's row
 /// for the guest's `engineID` (`[measured vfio-10 2855]` COPY2: gp 0x20, pb 0xe00), at the
 /// guest's measured layout; an engine the host gave no row for is INVALID_ARGUMENT, as the `_VF`
 /// body refuses one its table lacks (`kernel_fifo_ctrl.c:983-1008`).

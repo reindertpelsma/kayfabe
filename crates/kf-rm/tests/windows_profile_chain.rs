@@ -1,4 +1,4 @@
-//! the
+//! ★ 2026-11-15 (flag cleanup, Stage 1; owner: "set the measured Windows profile as the default"): the
 //! Windows support profile through the WHOLE served chain, one arm per guest.
 //!
 //! The profile's RM-level behaviours were environment flags, default off (`KF3_PREEMPT_BIND_PROBE`,

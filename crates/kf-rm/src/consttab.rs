@@ -406,7 +406,7 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
                     .map_err(|e| format!("line {ln}: branch {:?}: {e}", f[2]))?,
             )
         };
-        // ONE stated exception to "a measurement is never a wildcard": a HOST-STATE key (`zbc.*`, the table the host's
+        // ★ 2026-10-15: ONE stated exception to "a measurement is never a wildcard": a HOST-STATE key (`zbc.*`, the table the host's
         // physical RM installs in hardware at load) may be measured per DIE with the branch `*`, because no driver the GUEST runs
         // changes it (the guest never installs it; its branch names the GSP the guest believes it talks to). The die stays exact.
         let host_state = is_host_state_key(f[0]);

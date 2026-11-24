@@ -241,7 +241,7 @@ pub struct DisplayPolicy {
     /// ★ EXPERIMENT `x11-dispsw`: each display-SW constructor's query paired with its alloc
     /// ([`DispSwPairing`]); `None` with the switch off (nothing is looked at).
     dispsw_pairing: Option<DispSwPairing>,
-    /// The Windows support profile.
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_IMP_ENABLE`): the Windows support profile.
     /// At every fn 1 the model is told whether the guest declared the measured Windows build, and
     /// answers `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` TRUE only then ([`Self::with_windows_profile`]).
     /// `None` (a link built without a profile) answers FALSE, as before.
@@ -390,7 +390,7 @@ impl DisplayPolicy {
         }
     }
 
-    /// Serve the Windows profile's display answer — the
+    /// ★ 2026-11-15 (was `KF3_DISPLAY_IMP_ENABLE`): serve the Windows profile's display answer — the
     /// real GPU's TRUE for `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` (vfio-10 RPC 2645, run56; ⊘
     /// `IS_MODE_POSSIBLE` already answers "possible") — to a guest that declares the measured Windows
     /// build at fn 1, and FALSE to every other guest, including every Linux guest. Evaluated at each

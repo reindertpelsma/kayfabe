@@ -80,8 +80,8 @@ use kf_gsp::{CommandObserver, RpcCommand, RpcFunction};
 /// `4 + 4 + 4 = 12`.
 ///
 /// ⊘ Stated here, in the device crate, and that is a deliberate exception with a bound: the
-/// quarantine rule (decision #2) exists so that no crate above `kf-abi` states an
-/// NVIDIA `#[repr(C)]` field offset. The *reason* `kf-abi` mirrors no struct for this
+/// quarantine rule (decision #2) exists so that no crate above `kayfabe-abi` states an
+/// NVIDIA `#[repr(C)]` field offset. The *reason* `kayfabe-abi` mirrors no struct for this
 /// class is that mirroring it would create a decoder for the `NvP64` callback pointer two
 /// fields later — see this module's header. One named `u32` offset, read through a bounds
 /// check, is the smaller of the two evils; `crate::osevent`'s tests pin it against the

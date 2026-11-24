@@ -250,7 +250,7 @@ pub struct ChannelAlloc {
     /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
     /// the alloc's facts; it never changes over the channel's life.
     pub user_work: bool,
-    /// The guest declared the measured Windows build at fn 1 AND
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the guest declared the measured Windows build at fn 1 AND
     /// `windows-support` is on, as of this alloc ([`ChannelPolicy`]'s identity). The channel plane gates
     /// every Windows-profile birth behaviour on this one fact (the kernel-GR tier, the deferred-API
     /// trigger, the copy-engine relay, host-owned scheduling): a Linux guest's channels carry `false`
@@ -262,8 +262,8 @@ pub struct ChannelAlloc {
     pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
 
-/// May a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
-/// `enabled` is now "the guest declared the
+/// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
+/// ★ 2026-11-15 (was the default-off `KF3_ASYNC_PREEMPT`): `enabled` is now "the guest declared the
 /// measured Windows build and `windows-support` is on" ([`ChannelPolicy`]'s identity), so a Linux guest's
 /// asynchronous form is refused exactly as before.
 /// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
@@ -889,10 +889,10 @@ pub struct ChannelPolicy {
     /// default (`deviceGetDefaultVASpace`, `device_share.c:322-347`). A second set on such a Device
     /// is refused as RM refuses it (`device_share.c:390-394`).
     device_vas_bound: std::collections::BTreeSet<(u32, u32)>,
-    /// `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
+    /// ★ 2026-10-07: `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
     /// matrix has no layout for it: the control then stays unserviced, as before).
     chan_props: Option<kf_abi::fifoctl::ChannelPropsLayout>,
-    /// `SET_DEFAULT_VASPACE` at the guest's measured version.
+    /// ★ 2026-10-07: `SET_DEFAULT_VASPACE` at the guest's measured version.
     default_vas: Option<DefaultVaspaceCtl>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
@@ -1943,7 +1943,7 @@ impl ChannelPolicy {
                 }
             }
             DISABLE_USERMODE_CHANNELS => {
-                // `[measured b2-b6]` refused, the Linux suspend's
+                // ★ 2026-10-14: `[measured b2-b6]` refused, the Linux suspend's
                 // `nv_preempt_user_channels` failed and its error path released nvidia-uvm's PM lock
                 // it never took (`nv.c:4759-4810` → `uvm_resume`, `uvm_global.c:360-400`): every
                 // UVM ioctl then answered EAGAIN for the rest of the boot (nvidia-smi spun on it).
@@ -4430,7 +4430,7 @@ mod tests {
         "windows, windows-support=off",
     ];
 
-    /// The link's Windows identity, end to end from a REAL fn 1.
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the link's Windows identity, end to end from a REAL fn 1.
     /// Only the measured Windows build on a `windows-support=on` VM is an identity; a Linux declaration,
     /// no declaration, and a Windows declaration on an `off` VM are not, and a later declaration replaces
     /// the earlier one. Every other behaviour of this file keys on this one fact.

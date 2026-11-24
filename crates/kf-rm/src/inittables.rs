@@ -682,7 +682,7 @@ pub enum WantedTable {
     /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
     /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
     GrZcullInfo,
-    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` — 72 bytes,
+    /// ★ 2026-09-26: `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` — 72 bytes,
     /// engine 0 from the host's unprivileged `GR_GET_SM_ISSUE_RATE_MODIFIER`
     /// (`HostFacts::gr_sm_issue_rate_modifier`). Boot survives its refusal (`kernel_graphics.c:
     /// 1405-1408`), but the guest's client control is served ONLY from this cache, and
@@ -1565,7 +1565,7 @@ impl InitTablePolicy {
 }
 
 /// A reply that carries no body and a non-zero envelope result — the short-circuit.
-/// An ENCODER's refusal, named — `w349c`'s rule for the gates above, applied to the
+/// ★ 2026-09-26: an ENCODER's refusal, named — `w349c`'s rule for the gates above, applied to the
 /// 34 arms whose `Err(_)` was silent. `[measured GB203 bw1]` `INTERNAL_GET_DEVICE_INFO_TABLE`
 /// refused in a loop with nothing in the log but the guest's `NV_ERR_NOT_SUPPORTED`.
 fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
@@ -1973,7 +1973,7 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
-        // The Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
+        // ★ 2026-10-15: the Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
         // this guest branch for exactly the measured request is served; anything else falls through UNCHANGED to the refusal
         // the control got before (counted notice naming the key). Keys whose serving is an owner decision are `Withheld`.
         if let Some(key) = crate::rowserve::key_of_control(req.cmd)
@@ -2331,7 +2331,7 @@ impl CommandPolicy for InitTablePolicy {
             // itself (`kern_gmmu.c:1909`), and a size that is not a multiple of
             // `NVC369_BUF_SIZE` is a partial fault packet in a queue whose capacity is a
             // division (`kern_gmmu.c:1725`).
-            // (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
+            // ★ 2026-10-15 (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
             // branch (the Windows-captured GSP statics) wins; otherwise the AUTHORED value is served, labelled and counted
             // (the matrix says AUTHORED; the AD104 states other numbers - owner decision D-1, so no AD104 row is published).
             WantedTable::GmmuStaticInfo => {
@@ -2609,7 +2609,7 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: mem_desc.c:239-241`) — and a policy whose worst case is a *silent*
             // wall is exactly the shape `#127`'s named-refusal default forbids.
             WantedTable::CeFaultMethodBufferSize => {
-                // Measured row for (die, guest branch), else the authored value, labelled and counted.
+                // ★ 2026-10-15: measured row for (die, guest branch), else the authored value, labelled and counted.
                 let size = match crate::rowserve::ce_fault_method_buffer_size(
                     self.host.die,
                     self.driver.driver_version().major,

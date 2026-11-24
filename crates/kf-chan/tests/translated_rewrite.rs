@@ -457,7 +457,7 @@ fn a_hopper_plus_fast_scrub_becomes_a_virtual_zero_fill() {
     assert_ne!(l & (1 << 23), 0, "GA10x: bit 23 is not ours to touch");
 }
 
-/// A Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
+/// ★ 2026-09-26: a Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
 /// Blackwell host placed the identity window at `0x1ff_fffe_0000_0000`; masking to 17 bits sent the
 /// copy to `0x1fffe_…` (Xid 31 FAULT_PDE). Ampere keeps 17.
 #[test]

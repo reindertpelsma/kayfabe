@@ -20,7 +20,7 @@
 //!   and not retired;
 //! - run31's CE segment (software subchannel 5 bound to 1) completes on a CE T-mode ring with the
 //!   inert-bind rule, and a later software method on subchannel 5 is refused by name;
-//! That CE completion wakes one of the fds kf3's worker
+//! - That CE completion wakes one of the fds kf3's worker
 //!   parks on (`FIFO_EVENT_MTHD`, the host CE's non-stall notifier; measured separately) — the wake
 //!   that lets the worker relay it to the guest's CE vector;
 //! - ★ OWNER_RULINGS §U.2 (2026-10-07): the host GATE of a deferred TLB invalidate — an equality
@@ -627,7 +627,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     });
     let mut chan2 = TranslatedChannel::new(ring2, host2, 2);
     chan2.set_tspace(win, false);
-    // The wake path a CE ring's completion takes in kf3.
+    // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): the wake path a CE ring's completion takes in kf3.
     // kf3's worker parks on the session fd, which carries FIFO_EVENT_MTHD and the host CE's own
     // non-stall notifier (`ChanPlane::new`, `Completions::also`); each is measured on its own fd
     // here. A poll consumes a dataless event's readiness, so the "before" poll clears the GR arm's.

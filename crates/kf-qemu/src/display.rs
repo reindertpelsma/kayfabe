@@ -1235,7 +1235,7 @@ impl Held {
 /// Window channels any family has (`chan_of`: channel numbers 1..=32).
 const MAX_WINDOWS: usize = 32;
 
-/// The ISO context DMA each window's ARMED
+/// ★★ 2026-10-04 (B5 on box vmb, `V3_DISPLAY.md` §4.11.13): the ISO context DMA each window's ARMED
 /// state was resolved to — kept until that window latches again, because the display engine scans
 /// the surface its ARMED state latched, not whatever the instance-memory hash says on a later frame.
 ///
@@ -2323,7 +2323,7 @@ impl DisplayPlane {
                 "kf3: display: a constructor probe is on: the SDR colour path (Windows profile) is not built"
             );
         }
-        // The page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
+        // ★ 2026-10-15 (H01): the page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
         // the window-layer family rows (T1) and this die's measured words (T3, `data/caps_measured.tsv`).
         // The captured AD104 page that `KF3_DISPLAY_CAPS_PROBE` served is gone; it is a test oracle.
         // The constructor-only diagnostics keep their own nested pages.
@@ -2560,7 +2560,7 @@ impl DisplayPlane {
         self.boot.as_ref()
     }
 
-    /// The SDR colour path, `Some`
+    /// ★★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR=1`): the SDR colour path, `Some`
     /// ONLY while the Windows profile is active (`windows-support=on` and the guest's fn-1 declaration is
     /// the measured Windows build) and the path was built. Every colour decision of the worker goes
     /// through here, so a Linux guest, an undeclared guest and `windows-support=off` take the plain
@@ -7548,7 +7548,7 @@ mod tests {
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
     }
 
-    /// THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
+    /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
     /// `D3DKMTGetScanLine` (`[measured run 2990, BAR0 read trace]` `0x680220` = core
     /// `GET_RG_SCAN_LINE(0)`, `0x690208` = window 0 `GET_LINE`) are derived at those offsets on Ada and
     /// Ampere; a frame edge reads VBLANK at line `BLANK_START.Y`, the raster then moves and leaves the
@@ -7788,7 +7788,7 @@ mod tests {
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
     }
 
-    /// The head-timing interrupt follows the frame
+    /// ★ 2026-10-08 (H-flip, the VFIO DVI reference): the head-timing interrupt follows the frame
     /// edges while the guest keeps LAST_DATA enabled, and only then. Replays Windows' measured order
     /// on hardware (boot3, 113/113 enables): read `0x611800`, write-1-clear LAST_DATA, enable — no
     /// interrupt at the enable; one at EVERY following frame edge while enabled (the ISR clears it
@@ -8026,7 +8026,7 @@ mod tests {
         }
     }
 
-    /// The boot layer is shown only while store
+    /// ★★ 2026-10-18 (branch `claude/bootlayer-20261018`): the boot layer is shown only while store
     /// `[0, G)` is clean. A guest RM life writes its own vidmem there (`[measured, run 3081]` coloured
     /// rows at fixed positions on the boot screen and after an unload), so while it is tainted the
     /// console shows no boot layer: the last frame before any guest scanout, black after one was

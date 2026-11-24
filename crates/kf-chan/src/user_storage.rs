@@ -581,7 +581,7 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
     }
 
-    /// **The marker** (`crate::user_loop`, `crate::user_gate::Marks`): a private 16-byte
+    /// ★ 2026-10-14 — **the marker** (`crate::user_loop`, `crate::user_gate::Marks`): a private 16-byte
     /// segment `[SET_REFERENCE value, NON_STALL_INTERRUPT 0]` in the read-only mapping, one cell per
     /// ring `slot` (so the value each marker writes is its own and a later marker never rewrites the
     /// bytes of an earlier one still in flight), entered as a `LEVEL_SUBROUTINE` main entry.

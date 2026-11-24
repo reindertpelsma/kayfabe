@@ -1,4 +1,4 @@
-//! **The guest's half of an S3 suspend/resume that GSP-RM serves**
+//! ★ 2026-10-14 — **the guest's half of an S3 suspend/resume that GSP-RM serves**
 //! (`docs/design/V3_S3_RESUME.md` §4b).
 //!
 //! On silicon a PM-transition suspend asks GSP-RM to save its own heap (every RM object, the

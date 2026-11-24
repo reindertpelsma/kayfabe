@@ -507,7 +507,7 @@ pub const COMPOSE_ALPHA: u32 = 1;
 pub const COMPOSE_SWAP_RB: u32 = 2;
 /// … opaque: store the source word …
 pub const COMPOSE_OPAQUE: u32 = 4;
-/// … ★ XOR: `out = below XOR (source & 0x00ffffff)` — the
+/// … ★ XOR (`OWNER_RULINGS.md` §O, 2026-10-04): `out = below XOR (source & 0x00ffffff)` — the
 /// cursor composition `MODE_XOR` (`ogkm-580: clc37d.h:859-861`); alpha and the factors play no
 /// part (see [`plan_cursor`] for why this is a definition, not a measurement).
 pub const COMPOSE_XOR: u32 = 8;

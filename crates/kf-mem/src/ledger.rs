@@ -464,7 +464,7 @@ impl HostVas<'_> {
         })
     }
 
-    /// Unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
+    /// ★ 2026-10-09: unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
     /// straddles a reservation edge of the twin space was MAPPED as one map per `hDma`
     /// (`kf_host::VaSpace::dma_pieces`; `[measured, run 225]` Windows' `0xb0000+0x80000` and
     /// `0xff000+0x2000`), so the whole-mapping unmap keyed by `va` alone ([`MapTarget::unmap`])

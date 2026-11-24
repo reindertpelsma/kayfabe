@@ -1147,6 +1147,7 @@ pub mod lockcost {
         (rank as usize).min(RANKS - 1)
     }
 
+    /// Record that a lock of `rank` was waited for `d`; keeps the worst per rank.
     pub fn note_wait(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         WORST_WAIT[slot(rank)].fetch_max(us, Ordering::Relaxed);
@@ -1430,6 +1431,7 @@ pub mod lockcost {
         format!("HAMMER(rank{want}) {body} overflow={over}")
     }
 
+    /// Record that a lock of `rank` was held for `d`; keeps the worst per rank.
     pub fn note_hold(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         WORST_HOLD[slot(rank)].fetch_max(us, Ordering::Relaxed);

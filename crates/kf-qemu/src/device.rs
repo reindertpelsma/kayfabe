@@ -100,7 +100,7 @@ pub struct Config {
     /// The device's guest PCI `devfn` (0..=255), a byte of the `auto` construction: it separates
     /// two kf3 devices of one VM that sit on one host GPU.
     pub pci_devfn: u32,
-    /// the
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; `docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`): the
     /// `windows-support` property, default ON. On, a guest that declares the measured Windows build at
     /// fn 1 gets the Windows profile (kernel-GR tier, user-channel passthrough, deferred API, the
     /// fabricated preempt/zcull/GFX-pool/display-control answers, host-owned scheduling, the SDR colour

@@ -29,6 +29,7 @@ use crate::trappolicy::{DoorbellPlacement, PRAMIN_BASE, PRAMIN_LEN};
 use crate::vmm::Bar;
 use kf_chip::Family;
 
+/// The page size the map is made of.
 pub const PAGE: u64 = 0x1000;
 
 /// A timer-page store is always ignored, including unaligned/wide stores crossing an edge.
@@ -64,7 +65,10 @@ pub enum Disposition {
     /// ⚠ The only disposition that costs a read exit, and it is never chosen for performance — it
     /// is forced, by a register whose **read has a side effect the guest verifies**. `why` names
     /// the register so a reader never has to guess which one dragged the page in.
-    Hole { why: &'static str },
+    Hole {
+        /// The register that forces the read exit.
+        why: &'static str,
+    },
 }
 
 impl Disposition {
@@ -83,18 +87,26 @@ impl Disposition {
 /// One contiguous span of one BAR, and how to serve it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
+    /// The BAR the span is in.
     pub bar: Bar,
+    /// Offset of the span in the BAR.
     pub base: u64,
+    /// Length of the span in bytes.
     pub len: u64,
+    /// How the span is served.
     pub how: Disposition,
 }
 
 /// The complete map for one device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryMap {
+    /// Every span of every BAR.
     pub regions: Vec<Region>,
+    /// Size of BAR0 in bytes.
     pub bar0_bytes: u64,
+    /// Size of BAR1 in bytes.
     pub bar1_bytes: u64,
+    /// Size of BAR2 in bytes.
     pub bar2_bytes: u64,
 }
 

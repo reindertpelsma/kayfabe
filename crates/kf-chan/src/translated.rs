@@ -439,13 +439,28 @@ pub enum Piece {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
     /// A header this codec cannot decode.
-    BadHeader { at: usize, word: u32 },
+    BadHeader {
+        /// Word index in the segment.
+        at: usize,
+        /// The word that did not decode.
+        word: u32,
+    },
     /// A method's arguments run past the segment.
-    Truncated { at: usize },
+    Truncated {
+        /// Word index of the method whose arguments are cut off.
+        at: usize,
+    },
     /// A physical operand in `PEERMEM`.
     PeerOperand,
     /// A physical operand no window covers contiguously.
-    Untranslatable { target: Target, phys: u64, len: u64 },
+    Untranslatable {
+        /// The aperture the operand names.
+        target: Target,
+        /// Its physical address.
+        phys: u64,
+        /// Its byte length.
+        len: u64,
+    },
     /// A physical operand in BLOCK-LINEAR layout: its footprint is a function of the block
     /// geometry, which a kernel scrub never uses — refused rather than bounded by a guess.
     BlockLinearPhysical,
@@ -1182,7 +1197,7 @@ fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal>
     })
 }
 
-/// `OFFSET_{IN,OUT}_UPPER` is `16:0` through
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): `OFFSET_{IN,OUT}_UPPER` is `16:0` through
 /// `NVC7B5` (a 49-bit VA, `clc7b5.h:162,166`) and `24:0` from `HOPPER_DMA_COPY_A` on (57-bit,
 /// `clc8b5.h:92,96`). `[measured GB203]` masking a Blackwell window VA to 17 bits sent the scrubber's
 /// zero-fill to `0x1fffe_0005_0000` instead of `0x1ff_fffe_0005_0000` — Xid 31 FAULT_PDE on our ring.
@@ -1207,7 +1222,7 @@ const LAUNCH_MEMORY_SCRUB_ENABLE: u32 = 1 << 23;
 /// own 1-byte fill map (`channel_utils.c:1029-1033`).
 const REMAP_BYTE_FILL_FROM_CONST_A: u32 = ce::REMAP_DST_SEL_CONST_A;
 
-/// **A Hopper+ FAST SCRUB on a physical
+/// ★★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — **a Hopper+ FAST SCRUB on a physical
 /// destination becomes the equivalent virtual zero-fill.**
 ///
 /// `[measured GB203, bws3]` RM's PMA scrubber pushes `LAUNCH_DMA` with `MEMORY_SCRUB_ENABLE`

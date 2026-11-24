@@ -107,7 +107,7 @@ fn is_self_referential(path: &str) -> bool {
         // The guest-ingress gate's generated table (I7) names an id to admit or refuse it at the
         // guest's door; it never reads a captured row's body.
         || path.ends_with("crates/kf-abi/src/ingress_generated.rs")
-        // The unprivileged
+        // ★ 2026-10-14 (lane C, after merging `claude/ctl-probe-20261013`): the unprivileged
         // control probe sends each listed id with ZEROED input and prints only RM's status and a
         // reply prefix — a measurement of the id at the host, never a reader of the captured
         // row's body.

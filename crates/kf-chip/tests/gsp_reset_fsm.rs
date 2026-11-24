@@ -1,4 +1,4 @@
-//! The GSP reset
+//! ★ 2026-10-14 (die sweep, GB206 + Windows 580.88, `docs/design/V3_DIE_SWEEP_20261014.md` §3.1) — the GSP reset
 //! handshake the Windows RM runs between the FSP capability query and its boot commands. Every expectation is
 //! the ogkm header's / HAL body's, not a measurement of a die:
 //! `kgspResetHw_GH100` (`kernel_gsp_gh100.c:113-150`) writes `NV_PGSP_FALCON_ENGINE.RESET = ASSERT`, waits for

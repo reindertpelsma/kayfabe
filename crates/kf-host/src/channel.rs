@@ -2857,7 +2857,7 @@ mod twin_va_start_tests {
     }
 }
 
-/// A guest row that straddles a reservation edge is SPLIT into one piece per `hDma`
+/// ★ 2026-10-09 — a guest row that straddles a reservation edge is SPLIT into one piece per `hDma`
 /// (`[measured, run 225]` Windows' `0xb0000+0x80000` and `0xff000+0x2000` across the 1 MiB edge of the
 /// low reservation; the old refusal let the GPU fault on the unmapped VA, Xid 31).
 #[cfg(test)]
@@ -2911,7 +2911,7 @@ mod split_row_tests {
         Err(RmError::Other(code))
     }
 
-    /// The batch predicate (`kf_mem::batch::SpaceVerbs::splits_safely`) — only a
+    /// ★ 2026-10-09: the batch predicate (`kf_mem::batch::SpaceVerbs::splits_safely`) — only a
     /// range wholly inside ONE guest reservation may hold a mapping a range unmap will split; the
     /// Windows process VAs `[1 MiB, 4.5 GiB)` (`[measured run 243]` `0x4034000`) and anything
     /// crossing an edge go through the `NV01` range, where a split frees the whole VA block.

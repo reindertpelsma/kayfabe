@@ -1,4 +1,4 @@
-//! **The doorbell token → token-table index, per family** (`V3_FAMILY_PORT_BLACKWELL.md` §4).
+//! ★★★ 2026-09-26 — **the doorbell token → token-table index, per family** (`V3_FAMILY_PORT_BLACKWELL.md` §4).
 //!
 //! The guest computes its channels' work-submit tokens itself (`kchannelCtrlCmdGpfifoGetWorkSubmitToken`
 //! never reaches the GSP), and a doorbell write carries one. Our token table is indexed by a function

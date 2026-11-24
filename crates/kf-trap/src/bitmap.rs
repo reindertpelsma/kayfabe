@@ -9,8 +9,8 @@
 
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-/// 2²¹ tokens ⇒ 2²¹ bits = 256 KiB of bits... §5.1 quotes 64 KiB for the *expressible* range in
-/// the common (Ampere, 19-bit) case. We size from the constant so the two cannot drift.
+/// Bits of the token table index: 2¹⁹ tokens, 64 KiB of bitmap (§5.1). The bitmap is sized from
+/// this constant so the two cannot drift.
 /// ⊘⊘ **This is a TABLE INDEX, not the host token.** `[fable w823]` they were the same constant,
 /// so widening the host token to 32 bits would have allocated a 4-billion-entry bitmap, and
 /// narrowing the index would have silently aliased guest tokens.
@@ -20,10 +20,14 @@ use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 /// and the per-die doorbell-type bits (GB202 bit 30, GB100 bits 22/31) are **not** part of the
 /// index — they are flags on the value, which is exactly why the two must not share a constant.
 pub const TOKEN_BITS: u32 = 19;
+/// Tokens the bitmap can name.
 pub const N_TOKENS: usize = 1 << TOKEN_BITS;
+/// 64-bit words of the bitmap.
 pub const N_WORDS: usize = N_TOKENS / 64;
+/// Words of the summary level: one bit per bitmap word.
 pub const N_SUMMARY: usize = N_WORDS / 64;
 
+/// The two-level bitmap of tokens that have been rung and not yet looked at.
 pub struct RungBitmap {
     words: Box<[AtomicU64]>,
     summary: Box<[AtomicU64]>,
@@ -51,6 +55,7 @@ impl Default for RungBitmap {
 }
 
 impl RungBitmap {
+    /// An empty bitmap.
     pub fn new() -> RungBitmap {
         RungBitmap {
             words: (0..N_WORDS)

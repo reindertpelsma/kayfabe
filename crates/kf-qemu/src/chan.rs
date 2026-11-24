@@ -1954,7 +1954,7 @@ struct Slot {
     sw: SwSlot,
 }
 
-/// the
+/// ★★ 2026-11-15 (flag cleanup, Stage 1; owner: "set the measured Windows profile as the default") — the
 /// Windows profile's BIRTH behaviours, as one pure function of one fact: the alloc's declared Windows
 /// identity ([`kf_rm::chanlink::ChannelAlloc::windows`]: the guest declared the measured Windows build at fn 1
 /// and `windows-support` is on).
@@ -5387,7 +5387,7 @@ impl ChanPlane {
             let _ = register_other_sw(&self.pt, (client, parent));
         }
         if user_work {
-            // Windows allocates a 5080 on
+            // ★★ 2026-10-08 (§V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): Windows allocates a 5080 on
             // EVERY channel, its per-process ones included; refusing it fails the D3D device
             // creation. On a Passthrough twin nothing ever reads the ring, so the object is a
             // guest-graph node only: no host object, no trigger. A `0x200` the guest's bytes
@@ -7505,7 +7505,7 @@ impl ChanPlane {
         // space's next walk (its next invalidate or split). `[measured 5fead67d]` no privileged
         // leaf was ever walked in a space that turned kernel this way (UVM's): they live in
         // RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
-        // The legacy `force_kernel` arm (no refusal) is deleted with `KF3_TSPACE`.
+        // ⊘ 2026-10-10: the legacy `force_kernel` arm (no refusal) is deleted with `KF3_TSPACE`.
         self.defer(
             "birth translated",
             Box::new(move |me: &ChanPlane| {

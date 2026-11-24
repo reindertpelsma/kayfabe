@@ -1741,7 +1741,7 @@ impl Engine {
                 let begun = Self::notify_of(&v, c, n, Chan::armed, false, was_active);
                 let begun_awakens = matches!(begun, Some(Effect::Notify { awaken: true, .. }));
                 // the entry this latch flipped away: its release, its notifier FINISHED — never the new entry's.
-                // Its FINISHED raises the channel's AWAKEN (in its own WRITE_AWAKEN mode) when the
+                // ★ 2026-10-14: its FINISHED raises the channel's AWAKEN (in its own WRITE_AWAKEN mode) when the
                 // window was active and nothing else in this latch raises it — a flip to NO surface (a plane
                 // disable) completes as on hardware [measured, the plane oracle's AD104 reference].
                 if let Some((release, notify, awaken_mode)) = outgoing {

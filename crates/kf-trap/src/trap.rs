@@ -46,7 +46,9 @@ pub enum Class {
     UserspaceMappable,
     /// Guest root only.
     Privileged {
+        /// Whether the guest may read it back.
         readable: bool,
+        /// How a write to it is served.
         semantics: WriteSemantics,
     },
 }
@@ -58,7 +60,10 @@ pub enum Action {
     /// Nothing at all. ★ The overwhelmingly common case, and it costs no exit beyond the write.
     None,
     /// Write the host doorbell **inline, on this vCPU**. No queue, no wake, no lock (§5).
-    RingHostInline { host_token: u32 },
+    RingHostInline {
+        /// The host token whose doorbell to ring.
+        host_token: u32,
+    },
     /// Work was published; wake one worker via the worker eventfd.
     WakeWorker,
     /// A privileged write was queued; wake the **drainer** — ⊘ a *different* word and a
@@ -77,12 +82,17 @@ pub enum Action {
 
 /// The trap path's immutable wiring.
 pub struct TrapPath<'a> {
+    /// The token words, one per channel.
     pub tokens: &'a [TokenWord],
+    /// Which tokens have been rung.
     pub bits: &'a RungBitmap,
     /// §5.3: two words, signalled by the two arms of the classifier, *"which are disjoint by
     /// construction"*.
+    /// Wakes a worker.
     pub worker_wake: &'a WakeWord,
+    /// Wakes the register drainer.
     pub drainer_wake: &'a WakeWord,
+    /// The privileged-write ring.
     pub ring: &'a PrivRing,
     /// Doorbell value → table index, per family (`crate::tokenindex`).
     pub index: crate::tokenindex::TokenIndex,

@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn a_zero_veid_step_size_is_served_where_no_reader_multiplies_by_it() {
-        // `[measured TU116]` the host states 0 at 0x37, and Turing's
+        // ★ 2026-09-28: `[measured TU116]` the host states 0 at 0x37, and Turing's
         // `kgrmgrGetVeidsFromGpcCount_46f6a7` reads nothing. The other two zeros stay refused.
         let turing = GrInfoReaders {
             veid_step_size: false,

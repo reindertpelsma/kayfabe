@@ -12,7 +12,7 @@ use kf_arch::{
 use kf_gsp::{RpcCommand, RpcFunction};
 use kf_rm::rmgraph::{AllocFacts, RmEvent};
 
-/// The software-runlist allocation
+/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_SW_RUNLIST_PROBE=0|1`): the software-runlist allocation
 /// metadata is served to a guest that declared the measured Windows build with `windows-support` on, and
 /// to NO other: a Linux declaration, no declaration, and `windows-support=off` with a Windows declaration
 /// take the default path, exactly as with no probe installed. Each arm runs in a child process so the

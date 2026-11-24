@@ -7,7 +7,7 @@ const GB202: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt"
 ));
-// GB203 measured on its own die, own Vast lease 58957600 (equal to GB202 on every word).
+// 2026-11-03: GB203 measured on its own die, own Vast lease 58957600 (equal to GB202 on every word).
 const GB203: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt"

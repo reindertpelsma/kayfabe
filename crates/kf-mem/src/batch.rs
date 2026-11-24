@@ -367,7 +367,7 @@ pub enum BookRefusal {
 /// inserts and removals go in chunks of this size, the structure consistent between chunks.
 pub const LEDGER_CHUNK: usize = 2048;
 
-/// The most ledger entries — our host
+/// ★ 2026-11-15 (Wukong stalls, `WUKONG_STALLS_20261115.md` §B): the most ledger entries — our host
 /// mappings, one per placed run piece — ONE host unmap RM call may cover. ⊘ Was unbounded: one
 /// maximal owned span was one `NVOS47` range unmap however long (`[measured, f4a b20fd84b]` 120 930
 /// runs in TWO calls, 1 502 ms, about 4 µs per run), and the channel that asked for the split waited

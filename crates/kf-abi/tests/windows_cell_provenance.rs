@@ -43,7 +43,7 @@ fn every_row_of_every_windows_cell_has_an_accepted_source_tag() {
     }
     let s = sw_runlist::cell(windows_wire()).unwrap();
     check_rows(s.rows, sw_runlist::ITEMS).unwrap_or_else(|e| panic!("sw_runlist: {e}"));
-    // The measured allocation-only cell merged from the Blackwell branch follows the same rule.
+    // 2026-11-01: the measured allocation-only cell merged from the Blackwell branch follows the same rule.
     let native: Vec<_> = sw_runlist::native_cell_rows().collect();
     assert!(
         !native.is_empty(),

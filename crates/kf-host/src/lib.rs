@@ -2687,7 +2687,7 @@ mod control_plan_tests {
         }
     }
 
-    /// Every host tag of the driver matrix
+    /// ★★ 2026-11-18 (owner: "across ALL supported versions"): every host tag of the driver matrix
     /// (`kf_abi::generated::matrix::MEASURED`, 29 tags) x the five controls, through `control_plan`.
     /// The three lists must cover MEASURED exactly, so a new matrix tag fails here until classified.
     #[test]

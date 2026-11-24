@@ -569,7 +569,7 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.unmeasured.len(), 1);
     }
     // GB205 now has its own independently measured580 row.
-    // GB202 (impl 2) has its OWN measured 580 row now; it is served
+    // ★ 2026-10-20 (bw-resume): GB202 (impl 2) has its OWN measured 580 row now; it is served
     // from that row, never from GB205/GB206.
     {
         let die = Die {

@@ -164,7 +164,7 @@ pub struct ObjectLinks {
     /// `docs/design/V3_DISPLAY.md` §4.11.4): fn 72's kept body, the BAR1 aperture and — with
     /// `gop=on` — the boot framebuffer's size. `None` serves the board's region table, as before.
     pub console: Option<staticinfo::ConsoleSeat>,
-    /// The Windows support profile — the `windows-support`
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile — the `windows-support`
     /// property and the guest's declared identity ([`winprofile`]). `Default` is the property ON with
     /// nothing declared: the Windows behaviours below are then reachable by a guest that declares the
     /// measured Windows build at fn 1, and by no other. Shared by `Clone`, so the device's display and
@@ -556,7 +556,7 @@ pub fn served_chain(
     chain.push(Box::new(kf_gsp::Observing(Box::new(
         winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
     ))));
-    // Software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
+    // ★ 2026-11-15: software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
     // identity observer refuses every allocation until the guest declares the measured Windows build.
     if windows.support()
         && let Some(policy) = objects.take()

@@ -839,6 +839,8 @@ pub trait BootSequence: Send + Sync {
         false
     }
 
+    /// Serve a generation-local register read (the state-dependent half; [`Self::may_read`] is the
+    /// state-free half).
     fn on_read(
         &self,
         _model: &dyn GspModel,
@@ -960,7 +962,6 @@ pub trait GspModel: Send + Sync {
         None
     }
 
-    /// The LibOS region-array geometry this driver regime publishes.
     /// Where `reg` lives for this model, `(bar, offset)` — `None` if this family has no such
     /// register. ★ What lets a caller PUBLISH the model's answers into a read shadow (v3 BAR0 reads
     /// take no exit), uniformly across families.
@@ -968,6 +969,7 @@ pub trait GspModel: Send + Sync {
         None
     }
 
+    /// The LibOS region-array geometry this driver regime publishes.
     fn libos_region_layout(&self) -> LibosRegionLayout;
 
     /// ★★★ v3-initrace — **a write to the boot processor's ucode-load DMA registers**, decoded

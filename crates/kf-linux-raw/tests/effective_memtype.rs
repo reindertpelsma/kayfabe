@@ -27,7 +27,7 @@
 //! `/proc/iomem` and the kernel's PAT record are **categorical**: the kernel names what it
 //! installed and the answer does not depend on how busy the machine is. The timed read is
 //! **statistical**, and on a loaded host it is not always able to answer at all — measured
-//! A genuine device aperture reads anywhere from 4.2x to 31x the
+//! 2026-08-01 (task #150), a genuine device aperture reads anywhere from 4.2x to 31x the
 //! cached reference depending on load, which straddles any fixed floor. So the categorical
 //! answer is the one this test *requires*, the timed one **corroborates** it, and the timed
 //! one is allowed to return [`memtype::BandwidthVerdict::Inconclusive`] — which is recorded
@@ -72,7 +72,7 @@ const TIMED_ATTEMPTS: u32 = 4;
 ///
 /// ⚠ `eprintln!` goes through libtest's capture, which is discarded on the **passing**
 /// path — the arm that matters for a gate whose whole job is to be countable. Measured
-/// Across three hardware-run logs on the bench box: `KVM-GATE`
+/// 2026-08-01 (task #150) across three hardware-run logs on the bench box: `KVM-GATE`
 /// (56), `SANDBOX-GATE` (10) and `VBIOS-ORACLE-GATE` (13) markers all appear, and
 /// `MEMTYPE-GATE` appears **zero** times — this file's markers had never once reached a
 /// log, so `run_full_suite.sh`'s `gate-census` (which derives its families from the log)

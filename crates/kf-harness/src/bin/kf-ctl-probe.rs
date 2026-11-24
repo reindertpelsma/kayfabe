@@ -133,7 +133,7 @@ fn main() {
         );
         std::process::exit(3);
     }
-    // `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
+    // ★ Lane C 2026-10-14: `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
     // a 4th column of request words `off=value,...` (hex) — a measured request shape, never guessed.
     let extra_only = std::env::var("KF_PROBE_EXTRA_ONLY").as_deref() == Ok("1");
     type ProbeRow = (String, u32, Vec<u32>, Vec<(usize, u32)>);

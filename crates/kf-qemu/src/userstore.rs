@@ -79,7 +79,7 @@ fn note(kind: &str, n: u64, why: &str) {
 }
 
 /// An arm can fail after the RM mapping exists. Never discard that ownership.
-struct ArmError<V> {
+pub(crate) struct ArmError<V> {
     retained: Option<V>,
 }
 
@@ -370,7 +370,7 @@ pub(crate) struct Native {
     store: u32,
 }
 
-struct NativeView {
+pub(crate) struct NativeView {
     cpu: Option<VolatileRegion>,
     _node: CharDevice,
     cookie: Option<u64>,

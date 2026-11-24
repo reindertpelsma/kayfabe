@@ -2908,6 +2908,8 @@ impl GspFsm {
         self.pending_command_doorbells = self.pending_command_doorbells.saturating_add(n);
     }
 
+    /// Post every held reply, oldest first, and return how many were posted. A reply stays held
+    /// until its post succeeds.
     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
         let mut posted = 0usize;
         while let Some(h) = self.held.front() {
@@ -3035,6 +3037,8 @@ impl GspFsm {
         self.post_event(ram, &rpc)
     }
 
+    /// Post one RPC to the guest. Outside the bootup window it is refused with
+    /// [`GspFault::NotRunning`] until the GSP phase is `Running`.
     pub fn post_event(
         &mut self,
         ram: &mut dyn GuestRam,
@@ -5213,7 +5217,7 @@ mod device_reset_from_every_phase {
 
     // ---- 3. S3: a PM-transition suspend, the platform's wake reset, the resume ---------------
     //
-    // (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
+    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
     // `KGSP_BOOT_MODE_SR_RESUME` found the GSP Cold after the wake (`device reset #2 … Halted ->
     // Cold`), its Booter Load changed nothing, and `kgspBootstrap_TU102` returned NOT_READY (0x55).
     mod s3_resume {

@@ -55,7 +55,7 @@ pub fn cuda_thread() -> Result<(), CudaError> {
 
 /// ★ [`cuda_thread`] over any [`ThreadCapOps`] and memo cell (a simulated thread in tests).
 ///
-/// Above the memo it corrects: the memo used to
+/// ⊘⊘ 2026-11-14 (security review 2 D-13), above the memo it corrects: the memo used to
 /// short-circuit for the rest of the thread's life after the first clear. The permitted set keeps
 /// `CAP_SYS_ADMIN`, so code on the thread could raise it again, and every later CUDA entry would
 /// then create ADMIN channels with no refusal. Now a memoised thread is RE-VERIFIED on every entry

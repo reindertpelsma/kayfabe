@@ -41,12 +41,17 @@ pub const OCCUPANCY_ALARM: usize = CAPACITY / 4;
 /// One privileged register write, as the trap classified it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RegWrite {
+    /// The BAR written.
     pub bar: u8,
+    /// Offset of the register in the BAR.
     pub offset: u32,
+    /// The value written.
     pub value: u64,
+    /// Width of the store in bytes.
     pub width: u8,
 }
 
+/// What pushing a write onto the ring did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Push {
     /// Queued at this sequence. The drainer will apply it in exactly this order.
@@ -58,6 +63,7 @@ pub enum Push {
     Dropped,
 }
 
+/// The bounded ring of privileged register writes between the trap and the drainer.
 pub struct PrivRing {
     slots: Box<[AtomicU64]>,  // packed RegWrite, one per slot
     meta: Box<[AtomicU64]>,   // offset|bar|width, one per slot
@@ -77,6 +83,7 @@ impl Default for PrivRing {
 }
 
 impl PrivRing {
+    /// An empty ring of [`CAPACITY`] slots.
     pub fn new() -> PrivRing {
         PrivRing {
             slots: (0..CAPACITY)
@@ -177,10 +184,12 @@ impl PrivRing {
     pub fn applied_seq(&self) -> u64 {
         self.applied_seq.load(Ordering::Acquire)
     }
+    /// Has the ring overflowed? Once poisoned, writes are dropped by name.
     #[inline]
     pub fn is_poisoned(&self) -> bool {
         self.poisoned.load(Ordering::Acquire)
     }
+    /// Writes queued and not yet applied.
     #[inline]
     pub fn occupancy(&self) -> usize {
         (self.tail.load(Ordering::Acquire) - self.head.load(Ordering::Acquire)) as usize

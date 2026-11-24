@@ -1432,6 +1432,7 @@ impl VolatileRegion {
         Ok(())
     }
 
+    /// Load the `u32` at `offset` (`Relaxed`).
     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
         Ok(self.word_at::<AtomicU32>(offset)?.load(Ordering::Relaxed))
     }

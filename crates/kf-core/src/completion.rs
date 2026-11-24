@@ -76,6 +76,7 @@ pub struct EngineIrq {
     delivered: AtomicU64,
 }
 
+/// What [`EngineIrq`] says to do with an edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Raise {
     /// Deliver an interrupt for this engine now.
@@ -85,6 +86,7 @@ pub enum Raise {
 }
 
 impl EngineIrq {
+    /// An engine interrupt state: masked, nothing pending, nothing retired.
     pub const fn new() -> EngineIrq {
         EngineIrq {
             armed: AtomicBool::new(false),
@@ -94,6 +96,7 @@ impl EngineIrq {
         }
     }
 
+    /// The guest armed this engine's interrupt. Unlike [`Self::unmask`] this does not deliver a pending edge.
     pub fn arm(&self) {
         self.armed.store(true, Ordering::Release);
     }
@@ -127,6 +130,7 @@ impl EngineIrq {
         }
     }
 
+    /// The guest masked this engine's interrupt; edges are held until [`Self::unmask`].
     pub fn mask(&self) {
         self.armed.store(false, Ordering::Release);
     }
@@ -138,6 +142,7 @@ impl EngineIrq {
     pub fn delivered(&self) -> u64 {
         self.delivered.load(Ordering::Acquire)
     }
+    /// Work retired on this engine so far.
     #[inline]
     pub fn retired_count(&self) -> u64 {
         self.retired.load(Ordering::Acquire)

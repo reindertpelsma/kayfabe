@@ -337,7 +337,7 @@ impl Default for WalkCfg {
         // report **truncate** — which the shadow refuses by name, so the symptom would be a
         // permanently VACUOUS census with the cause one indirection away.
         //
-        // Above the text it corrects: a diff LARGER than `run_capacity` is no longer
+        // ★ 2026-11-15 (M4), above the text it corrects: a diff LARGER than `run_capacity` is no longer
         // refused. `kf_diff_emit` reports a window of it (`KFWR_HF_CUT`, entries `KFWR_V_CUT`; the spec is
         // `diffmodel::cut_report`), the host applies and acknowledges the window, and the rest comes on the
         // next walk; the split completes on the walk whose diff is empty. Only one overlap-connected clump
@@ -358,7 +358,7 @@ impl Default for WalkCfg {
         // 64 spaces × 16 384 × 32 B × 2 snapshots = 64 MiB of device memory.
         // ⚠ A space with more than 16 384 non-coalescing runs still truncates: that needs a
         // chunked reply (the wire), not a bigger number here.
-        // `runs_per_pdb` is also ONE SLOT's capacity (committed placements), and
+        // ★ 2026-09-25: `runs_per_pdb` is also ONE SLOT's capacity (committed placements), and
         // the diff's scratch (4 × runs per entry) reuses the walk's run stage — exactly full at
         // 16 384. Memory: walk 64 × 16 384 × 32 B = 32 MiB, slots 128 × 16 384 × 32 B = 64 MiB
         // (was two 32 MiB snapshot tables).
@@ -1191,7 +1191,7 @@ impl WalkKernel {
         let ack = view(pin_at.ack, core::mem::size_of::<KfAck>())?;
         let ack_code = view(pin_at.ack_code, cfg.run_capacity as usize)?;
         let lay = view(pin_at.lay, core::mem::size_of::<crate::abi::KfLayout>())?;
-        // The REPORT lives in the pinned buffer too — the diff kernels write it
+        // ★ 2026-09-25: the REPORT lives in the pinned buffer too — the diff kernels write it
         // straight into host memory, so a walk moves only the bytes its diff has (a one-run diff
         // is a few hundred bytes) and needs no read-back node. `[measured gate9, 50a6c9a9]` the
         // capacity-sized copy it replaces was 512 KiB of PCIe on every walk. The commit node reads

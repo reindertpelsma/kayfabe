@@ -25,7 +25,7 @@ impl GuestRamAuthority for Ram {
         panic!("no registration write")
     }
 }
-/// the
+/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_MEMORY_LIST_PROBE`, isolated in child processes): the
 /// contiguous-SYSRAM descriptor is served to a guest that declared the measured Windows build with
 /// `windows-support` on, and to NO other: a Linux declaration, no declaration, and `windows-support=off`
 /// with a Windows declaration all reach the refusal the descriptor always got.

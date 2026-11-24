@@ -148,7 +148,7 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
     )
 }
 
-/// MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
+/// ★ 2026-10-14 MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
 /// never changes a decision). When a USER-ring scan refuses, the pump writes one bounded report per
 /// refused channel into `<dir>`: the GP descriptor and its backing, the GP ring around the cursor,
 /// the channel's last [`TRACE_HISTORY`] scanned segments (their words, capped), and three re-reads
@@ -168,7 +168,7 @@ fn trace_dir() -> Option<&'static std::path::Path> {
     })
     .as_deref()
 }
-/// MEASUREMENT CLASS — `KF3_LIFECYCLE_MODE`
+/// ★ 2026-10-16 (PHASE 1c, second review N2) MEASUREMENT CLASS — `KF3_LIFECYCLE_MODE`
 /// (`default` | `always_scan` | `no_pointer_markers` | `no_anchored_windows`, see
 /// `kf_chan::user_lifecycle::LifecycleMode` and the design document). Never needed to boot: unset means `default`
 /// (the lifecycle fully on), an unknown value is reported loudly and also means `default`. Read ONCE, when the first
@@ -211,7 +211,7 @@ fn parse_lifecycle_mode(
         ),
     }
 }
-/// MEASUREMENT CLASS (default ON, never needed to boot) -- lazy observe, `kf_chan::user_lazy`:
+/// ★ 2026-10-17 MEASUREMENT CLASS (default ON, never needed to boot) -- lazy observe, `kf_chan::user_lazy`:
 /// `KF3_PUT_CACHE=0` turns the guest `GP_PUT` cache (A) off, `KF3_LAZY_OBSERVE=0` turns the lazy private-`USERD` look (B)
 /// off, so that the split arms run from one binary. Anything else (including unset) leaves the rule on; the interval is the
 /// constant `kf_chan::user_lazy::OBSERVE_INTERVAL`. Read ONCE, when the first relay is created, never per turn. The rules
@@ -434,7 +434,7 @@ fn words_text(out: &mut String, words: &[u32]) {
 fn source_receipt(staged: bool, first: bool, generation: u64, get: u32) -> Option<(u64, u32)> {
     (!staged && first).then_some((generation, get))
 }
-/// (Win11 Heaven D3D11 and Edge: host Xid 13 `ESR 0x404000=0x80000010` right after a USER
+/// ★ 2026-10-14 (Win11 Heaven D3D11 and Edge: host Xid 13 `ESR 0x404000=0x80000010` right after a USER
 /// ring's growth migration) — the measured triggers of `FIFO_UPDATE_CHANNEL_INFO` sit INSIDE a front-end
 /// atomic sequence (`NVC7C0_FE_ATOMIC_SEQUENCE_BEGIN` 0x148 … `_END` 0x14c on the compute subchannel,
 /// `clc7c0.h`): `… 80002052 8001201e [2001a080 <handle>] 80002053`. Staging the prefix, waiting for its
@@ -1594,7 +1594,7 @@ impl Pump {
             )
             .ok()
             .map(|()| u32::from_le_bytes(b));
-        // `try_lock` (measurement only): the VA thread holds `storage` across host
+        // ★ 2026-11-14: `try_lock` (measurement only): the VA thread holds `storage` across host
         // RM calls; a busy lock prints `None`, the worker never waits.
         let native_get = r
             .lease
@@ -2017,7 +2017,7 @@ impl Pump {
         }
         // Re-read the same GP slot, the same segment and USERD PUT later; rescan from the same state.
         let mut summary = Vec::new();
-        // The 221 ms of re-read sleeps run on the shared worker,
+        // ★ 2026-11-14 (userpump pass F5): the 221 ms of re-read sleeps run on the shared worker,
         // so only the first 4 refusals of the process sleep (measurement only).
         static SLEPT: AtomicU32 = AtomicU32::new(0);
         let may_sleep = SLEPT.fetch_add(1, Ordering::Relaxed) < 4;

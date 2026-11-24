@@ -301,7 +301,7 @@ pub struct Cuda {
     /// `V3_P4_PORT_MAP.md` §3 row 2 (*"fails if any `cuCtxSynchronize` runs on the worker
     /// (count the calls)"*). A counter, not a promise: gate 8 reads it around its walks.
     ctx_sync_calls: core::sync::atomic::AtomicU64,
-    // The w755i export-side entry points (`cuMemGetAllocationGranularity`,
+    // ⊘ 2026-11-13: the w755i export-side entry points (`cuMemGetAllocationGranularity`,
     // `cuMemCreate`, `cuMemExportToShareableHandle`, `cuMemRelease`) are no longer resolved: their
     // one user, `export_device_allocation`, was removed (see there).
     // ★★★★★ **w755w — THE IMPORT SIDE, which is the direction that can work.**
@@ -2818,7 +2818,7 @@ impl Cuda {
     /// rejected handle rather than a mis-passed argument — the shape that cost w755v two
     /// wrong answers.
     ///
-    /// Returns a [`DevBuf`] of exactly `bytes` (D-02); a negative fd and an empty
+    /// ★ 2026-11-13: returns a [`DevBuf`] of exactly `bytes` (D-02); a negative fd and an empty
     /// object are refused here (a negative fd used to become fd 0, stdin: D-14).
     ///
     /// CALLER-CONTRACT: `fd` names an open RM export of at least `bytes` bytes. Not validated

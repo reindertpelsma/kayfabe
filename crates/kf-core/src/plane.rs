@@ -177,6 +177,7 @@ impl Default for Vmm {
 }
 
 impl Vmm {
+    /// A VMM-level state with its one worker wakeup word.
     pub const fn new() -> Vmm {
         Vmm {
             worker_wake: WakeWord::new(),
@@ -189,13 +190,17 @@ impl Vmm {
 /// and ⊘ **the ring and its drainer — because ordering is per PCI function**, so a shared ring
 /// would impose an order across devices that hardware does not have.
 pub struct Plane<'v> {
+    /// One word per channel token.
     pub tokens: Vec<TokenWord>,
+    /// Which rung each token is on.
     pub bits: RungBitmap,
     /// Borrowed from the VMM: **one** word across all GPUs.
     pub vmm: &'v Vmm,
     /// Per GPU, like the ring it wakes.
     pub drainer_wake: WakeWord,
+    /// The privileged-write ring this device's register drainer applies in order.
     pub ring: PrivRing,
+    /// Mask that turns a doorbell value into a token.
     pub token_mask: u32,
     /// Doorbell value / channel → table index (`kf_trap::tokenindex`):
     /// `RunlistVector` on the device ([`Plane::for_device`], every family); [`Plane::for_family`]
@@ -316,6 +321,7 @@ impl<'v> Plane<'v> {
         false
     }
 
+    /// The VMM's one worker wakeup word.
     #[inline]
     pub fn worker_wake(&self) -> &WakeWord {
         &self.vmm.worker_wake
