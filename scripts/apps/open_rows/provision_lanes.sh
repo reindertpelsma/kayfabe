@@ -56,7 +56,8 @@ llama_vulkan() {
   local src=$ROOT/src/llama.cpp sdk=""
   { command -v cmake && command -v g++ && command -v git; } >/dev/null || apt_need cmake build-essential git || return 1
   if ! { command -v glslc && [ -f /usr/include/vulkan/vulkan.h ]; } >/dev/null; then
-    apt_need libvulkan-dev glslc 2>/dev/null || { lunarg_sdk || return 1; sdk=$ROOT/vulkan-sdk/$OPENROWS_LUNARG_SDK_VERSION/x86_64; }
+    if apt-cache show glslc >/dev/null 2>&1; then apt_need libvulkan-dev glslc || return 1
+    else lunarg_sdk || return 1; sdk=$ROOT/vulkan-sdk/$OPENROWS_LUNARG_SDK_VERSION/x86_64; fi
   fi
   pin_git_checkout "$src" "$PIN_LLAMA_URL" "" "$PIN_LLAMA_COMMIT" || return 1
   # the CUDA rows' commit, so a throughput difference between the CUDA and the Vulkan row is the backend's

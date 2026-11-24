@@ -876,6 +876,7 @@ class Wiring(unittest.TestCase):
         self.assertLess(body.index("sdk.sha"), body.index("sha256sum"))          # the checksum is fetched from LunarG and compared ...
         self.assertLess(body.index("SDK_HASH_MISMATCH"), body.index("tar -C"))   # ... before anything is unpacked
         self.assertNotIn("wget", text)
+        self.assertIn("apt-cache show glslc", text)                      # a distribution without the package goes to the SDK at once, not after a package-lock wait
         self.assertNotIn("git clone", text)
         self.assertIsNone(re.search(r"command\s+apt-get", text))             # the one sanctioned bypass stays in pin_lib.sh
 
