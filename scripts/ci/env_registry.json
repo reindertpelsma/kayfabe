@@ -146,6 +146,14 @@
    "proposal": "device-property"
   },
   {
+   "name": "KF3_CMC_LOG_BUFFER_PROBE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/cmc_log_probe.rs",
+   "why": "Set to 1 to answer the guest's CMC log-buffer registration (0x20800a89, guest 580.65.06 only) with an emulated NV_OK echo instead of a refusal; nothing is mapped or forwarded; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
    "name": "KF3_COMPLETION_PROBE",
    "class": "measurement",
    "file": "crates/kf-qemu/src/chan.rs",
@@ -395,13 +403,6 @@
    "class": "debug",
    "file": "qemu/hw/misc/kf3/kf3.c",
    "why": "When 1, logs the guest privilege level and RIP of the first 4096 usermode doorbell writes via read-only KVM ioctls; default off.",
-   "changes_guest_served": false
-  },
-  {
-   "name": "KF3_GSS_NATIVE",
-   "class": "debug",
-   "file": "crates/kf-rm/src/gssnative.rs",
-   "why": "Removed experiment: setting it to 1 only prints an ignored notice; the GSS-legacy controls stay refused. Dead read.",
    "changes_guest_served": false
   },
   {

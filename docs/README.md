@@ -1,6 +1,6 @@
 # docs/ — a map
 
-**STATUS: LIVE, 2026-11-07.** The map of what is published, what is current and what is history.
+**STATUS: LIVE, 2026-11-24 (repository map re-checked against the tree).** The map of what is published, what is current and what is history.
 
 ## Where things are (repository map)
 

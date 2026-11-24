@@ -519,6 +519,10 @@ tick retries. A failed list still aborts the whole sweep. Logs carry fixed event
 or `malformed_list` (null document or invalid/duplicate ID). These name the failed check, not a
 provider root cause. No exception text, provider body, key, header, label, ID or URL is reported.
 
+**NOT APPLIED, 2026-11-24:** the reaper's optional `REAPER_SEEN` KV binding (the memory of ids seen under a
+`kf-ci-` label, so that a relabelled box is still reaped) is commented out in `ci/vast-reaper/wrangler.toml`,
+so the reaper decides by label alone. The steps are in "Worker hardening", "Owner checklist" (steps 1 and 2).
+
 [INFERRED: independent scheduler and account quotas] Put the reaper in a separate Cloudflare
 account if request-quota independence is required. Provider outages and inaccurate
 start_date/labels can still prevent deletion. Keep the prepaid balance small.
@@ -1041,7 +1045,7 @@ Known follow-ups (review of #282, not done in this change): the guest password i
 Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
 the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s in the reviewer's probe,
 bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
-sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
+sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev` (NOT APPLIED, see "Worker hardening", owner checklist); D1 calls in the publisher have no
 timeout; the 0004 tables have no retention.
 
 
@@ -1157,16 +1161,25 @@ Order after merge: master must carry this pin before the coordinator deploys; se
 
 ## Worker hardening (review 4 of 2026-11-13: F4, F5, F6, F8, F10)
 
-STATUS: LIVE as source on branch claude/worker-hardening-20261113; NOT DEPLOYED. Every item below
-is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
+STATUS: LIVE as source on `next` (merged), 2026-11-24; the Worker change is NOT DEPLOYED and two
+configuration items are NOT APPLIED (checklist at the end of this section). Every item below is
+[CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
+
+**NOT APPLIED, 2026-11-24 (nothing was changed on Cloudflare by this document):**
+
+1. `REAPER_SEEN` KV binding. The block is commented out at `ci/vast-reaper/wrangler.toml` lines 14-18,
+   so the reaper still decides by label alone and a box that relabels itself is not reaped.
+2. The `nosniff` / CSP response-header rule on `logs.kayfabe.dev` (a Cloudflare Transform Rule). Public
+   log objects are served without those two headers until it exists.
 
 - **F4, teardown by the proven id.** `Vast.destroy` verifies the instance id, the ledger's own
   `kf-ci-` label prefix and the onstart proof, but no longer the current label (a box-writable
   field). The reaper has no ledger: it deletes an instance whose label matches
   `kf-ci-<n>-<n>`, or an id it has itself seen under such a label (first-seen `start_date` must
-  match). That memory is an optional KV binding `REAPER_SEEN` (create one namespace and add
-  `[[kv_namespaces]] binding = "REAPER_SEEN"` to ci/vast-reaper/wrangler.toml with its id; without
-  it the label alone decides, as before). Ids never seen under the label are never touched. Residual:
+  match). That memory is an optional KV binding `REAPER_SEEN`. **[NOT APPLIED]** The binding is
+  commented out in ci/vast-reaper/wrangler.toml, so the deployed reaper decides by the label alone, as
+  before the change; steps 1-2 of the owner checklist below apply it. Ids never seen under the label
+  are never touched. Residual:
   a box that relabels before the first 5-minute tick sees it still escapes the reaper (the broker's
   own destroy covers it); an onstart rewritten through an instance key would still stop the broker's
   destroy (UNVERIFIED whether Vast allows either).
@@ -1174,9 +1187,10 @@ is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
   held change is flushed by the next heartbeat, the liveness alarm or the socket close.
 - **F6.** Every gateway response carries `X-Content-Type-Options: nosniff`; non-JSON ones also a
   deny-all CSP and an attachment disposition. R2 objects of the public log get a fixed inline
-  filename. R2 cannot set `nosniff` or a CSP per object: add a Cloudflare Transform Rule on
-  `logs.kayfabe.dev` (response headers `X-Content-Type-Options: nosniff`,
-  `Content-Security-Policy: default-src 'none'; sandbox`). [NOT DONE: dashboard setting.]
+  filename. R2 cannot set `nosniff` or a CSP per object, so those two headers need a Cloudflare
+  Transform Rule on `logs.kayfabe.dev` (response headers `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox`). **[NOT APPLIED]** It is a dashboard setting
+  that no repository change or deploy step creates; step 3 of the owner checklist below applies it.
 - **F8.** `deploy.mjs` refuses any file beside the hashed bundle other than wrangler's own
   `README.md` and `index.js.map`, re-hashes the file just before the upload, and sets
   `DEPLOYED_BUNDLE_SHA256` from the uploaded bytes (not from wrangler.toml). NOT done: the runner
@@ -1192,6 +1206,35 @@ is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
   the full URL) in every private and public log, report and evidence path it writes, including the
   values the box held at rent time. Boxes receive them by design; they are not capabilities beyond
   reaching the Worker's edge, because every route still needs a run token.
+
+### Owner checklist: configuration this section needs and that is NOT APPLIED
+
+Only the owner (or a deploy step run by the owner) applies these. No coding lane, test or CI job does.
+[CODE READ] for the commands, [UNVERIFIED] for their live effect: none has been run.
+
+1. **Create the KV namespace for the reaper** (once; Cloudflare account of the reaper):
+   ```sh
+   cd ci/vast-reaper
+   ../vast-broker/node_modules/.bin/wrangler kv namespace create REAPER_SEEN
+   ```
+   It prints a namespace id.
+2. **Bind it and deploy the reaper.** In `ci/vast-reaper/wrangler.toml` uncomment the four lines of the
+   `[[kv_namespaces]]` block (`binding = "REAPER_SEEN"`) and put the id from step 1 in `id`; land that
+   change through a PR to `next`; then, from `ci/vast-reaper`:
+   ```sh
+   ../vast-broker/node_modules/.bin/wrangler deploy --dry-run
+   ../vast-broker/node_modules/.bin/wrangler deploy
+   ```
+   The dry run must list `REAPER_SEEN` as a KV binding. Check after a tick that listed a `kf-ci-` box:
+   `../vast-broker/node_modules/.bin/wrangler kv key get seen --binding REAPER_SEEN --remote` prints a JSON
+   object of instance id to `start_date`. The reaper's cron, `REAPER_VAST_API_KEY` and vars do not change.
+3. **Add the response-header rule for the public logs.** Cloudflare dashboard, zone `kayfabe.dev`, Rules,
+   Transform Rules, Modify Response Header, new rule: expression `http.host eq "logs.kayfabe.dev"`;
+   set static header `X-Content-Type-Options` to `nosniff`; set static header `Content-Security-Policy`
+   to `default-src 'none'; sandbox`. Check with
+   `curl -sI https://logs.kayfabe.dev/<run id>/log.txt`: both headers must appear on the response.
+4. Until steps 1-3 are done, keep reading F4 and F6 above as source only: the reaper is label-only and the
+   log domain serves without `nosniff` or a CSP.
 
 ## Bundle pin regenerated 2026-11-23
 

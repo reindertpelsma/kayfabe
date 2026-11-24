@@ -495,7 +495,7 @@ pub static CONTROLS: &[IngressRow] = &[
         id: 0x0080170f,
         forwarded: false,
         runs: &[
-            Run { first: 0, last: 29, name: "NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES", verdict: Verdict::Refuse(Refusal::Judgement(Judgement::AnsweredInChain)) },
+            Run { first: 0, last: 29, name: "NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES", verdict: Verdict::Allow(Basis::OgkmNonPrivileged) },
         ],
     },
     IngressRow {
@@ -523,7 +523,7 @@ pub static CONTROLS: &[IngressRow] = &[
         id: 0x00801812,
         forwarded: false,
         runs: &[
-            Run { first: 0, last: 29, name: "NV0080_CTRL_DMA_SET_DEFAULT_VASPACE", verdict: Verdict::Refuse(Refusal::KernelOnly) },
+            Run { first: 0, last: 29, name: "NV0080_CTRL_DMA_SET_DEFAULT_VASPACE", verdict: Verdict::Allow(Basis::Mode2Rpc) },
         ],
     },
     IngressRow {
@@ -1278,7 +1278,7 @@ pub static CONTROLS: &[IngressRow] = &[
         id: 0x20801117,
         forwarded: false,
         runs: &[
-            Run { first: 0, last: 29, name: "NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS", verdict: Verdict::Refuse(Refusal::KernelOnly) },
+            Run { first: 0, last: 29, name: "NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS", verdict: Verdict::Allow(Basis::Mode2Rpc) },
         ],
     },
     IngressRow {
@@ -1815,6 +1815,20 @@ pub static CONTROLS: &[IngressRow] = &[
         ],
     },
     IngressRow {
+        id: 0x20808163,
+        forwarded: true,
+        runs: &[
+            Run { first: 0, last: 29, name: "GSS_ENC_SESSION_ACQUIRE", verdict: Verdict::Allow(Basis::Mode2Rpc) },
+        ],
+    },
+    IngressRow {
+        id: 0x20808164,
+        forwarded: true,
+        runs: &[
+            Run { first: 0, last: 29, name: "GSS_ENC_SESSION_RELEASE", verdict: Verdict::Allow(Basis::Mode2Rpc) },
+        ],
+    },
+    IngressRow {
         id: 0x208081ea,
         forwarded: false,
         runs: &[
@@ -2077,7 +2091,7 @@ pub static CONTROLS: &[IngressRow] = &[
         id: 0xa06f0112,
         forwarded: false,
         runs: &[
-            Run { first: 0, last: 29, name: "NVA06F_CTRL_CMD_STOP_CHANNEL", verdict: Verdict::Refuse(Refusal::Judgement(Judgement::AnsweredInChain)) },
+            Run { first: 0, last: 29, name: "NVA06F_CTRL_CMD_STOP_CHANNEL", verdict: Verdict::Allow(Basis::OgkmNonPrivileged) },
         ],
     },
     IngressRow {

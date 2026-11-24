@@ -1,5 +1,7 @@
 # Troubleshooting
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device. Messages are quoted from the source tree this manual belongs to; a binary built from another revision may word them differently.
+
 This page lists symptoms that the repository documents, with the cause and the action it records. It is not exhaustive. Where the repository does not explain a symptom, the page says so. <!-- src: scripts and documents named per entry -->
 
 **First rule: if the same workload passes on the host with no VM and fails in the guest, the defect is kayfabe's.** Run the equivalent program on the host first; only a failure there indicts the machine. If you find a defect, [Report a problem](report-a-problem.md) says what to attach.
@@ -136,7 +138,7 @@ The device checks its configuration when QEMU starts and refuses by name rather 
 | `USER_RING_STAGED_SPAN_BUDGET` in the QEMU log | A Windows command buffer larger than 917,504 bytes also contains a software-class method call that kayfabe has to act on, so it cannot be inspected in the space available and its channel stops. The log line also shows `live=` (registered software calls) and `post_switch=` (entries still inspected after a ring migration). Save the log and report the application and workload. <!-- src: crates/kf-chan/src/user_turn.rs, crates/kf-chan/src/user_chunk.rs, docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md --> |
 | `USER_RING_SCAN_BUDGET` in the QEMU log | Older builds only: a command buffer above 917,504 bytes that had to be inspected stopped its channel (the application then stalls and Windows resets the GPU). Current builds inspect such buffers in parts and no longer print this message; update. <!-- src: docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md --> |
 | Edge resets after 7 to 16 minutes of playback | Known and unfinished. <!-- src: README.md "Not finished" --> |
-| The guest does not wake from sleep | Windows sleep/wake is not supported yet. <!-- src: README.md --> |
+| The guest does not wake from sleep | Windows sleep/wake is not supported yet. A guest with Hyper-V enlightenments can hang on wake; see the optional patch in [Building from source](building.md#optional-qemu-patch-sleep-and-wake-of-a-windows-guest). <!-- src: README.md, docs/howto/building.md --> |
 
 ### Reading a TDR on Windows
 
@@ -151,7 +153,7 @@ A cluster of resets can bugcheck the guest: with Windows' default `TdrLimitCount
 
 Event 153 alone does not establish a TDR: keep the provider, message and timestamp, and correlate them with `Display` 4101, Windows Error Reporting live-kernel reports or bugchecks, and the QEMU GSP transition log described above (read from the application matrix's rules). The investigation separates a harness restart triggered by its 153-inclusive budget from an independently recorded 141 or 4101 TDR. <!-- src: docs/STATUS_AND_HANDOFF.md update of 2026-10-12 21:01 UTC; docs/design/V3_WINDOWS_APP_MATRIX.md sections 2.4-2.5 -->
 
-A TDR does not by itself mean a failure of the application, and the README's rule for a pass is the application's own completion, no host Xid and no GPU reset. <!-- src: README.md, docs/design/V3_WINDOWS_APP_MATRIX.md -->
+A TDR does not by itself mean a failure of the application, and the project's rule for a pass is the application's own completion, with no host Xid and no GPU reset. <!-- src: README.md, docs/design/V3_WINDOWS_APP_MATRIX.md -->
 
 ## Not documented yet
 

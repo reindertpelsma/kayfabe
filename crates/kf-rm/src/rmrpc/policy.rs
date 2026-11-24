@@ -830,16 +830,6 @@ impl ObjectPolicy {
         }
     }
 
-    /// ⊘ REMOVED 2026-11-13 (security review 1, F-06; `docs/design/V3_GSS_NATIVE.md`, SUPERSEDED):
-    /// the `KF3_GSS_NATIVE` experiment carried guest control bytes to the host RM. The seat is
-    /// DROPPED here, unread, and the link is byte for byte the link without it. Kept only so the
-    /// kf-qemu glue still builds until it is deleted (`crate::gssnative` module docs).
-    #[must_use]
-    pub fn with_gss_native(self, seat: crate::gssnative::GssSeat) -> Self {
-        drop(seat);
-        self
-    }
-
     /// A class-5080 registration control, served from the object graph's
     /// tables (`crate::defapi`): `NV_OK` with the params echoed (what the real GSP answered
     /// `[measured: the 2026-10-05 VFIO boots 8/9/10]`), or the real body's status. `None`: not a 5080 control this seat

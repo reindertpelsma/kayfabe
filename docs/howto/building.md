@@ -1,5 +1,7 @@
 # Building from source
 
+**Assumes:** a Debian or Ubuntu x86-64 machine (the package commands are `apt`'s; other distributions are not documented) with network access for the QEMU 10.2.4 tarball and the Rust toolchain. Building and the GPU-free tests need no GPU.
+
 There is no public binary yet, so you build it. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps of the build, in their order. Once you have the binary, continue with [Install](installing.md), step 3. <!-- src: README.md, scripts/bench/build_kf3.sh -->
 
 Read [Requirements](requirements.md) first. No public binary is published yet; whether and when one is published is the project owner's decision, not a licence limit of the source (see [Credits and notices](credits.md)). <!-- src: docs/OWNER_RULINGS.md section BC item 1, LICENSE exception 2 -->
@@ -26,7 +28,7 @@ bash scripts/bench/provision_box.sh --packages bench   # QEMU build and the gues
 ```
 <!-- src: scripts/bench/provision_box.sh (kf_packages) -->
 
-At the time of writing, `full` is `build-essential pkg-config git curl python3 kmod pciutils cpio zstd psmisc busybox-static openssh-client clang lld libssl-dev` and `bench` is `ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage qemu-system-x86 ovmf musl-tools libslirp-dev`. The script is authoritative. <!-- src: scripts/bench/provision_box.sh -->
+`full` is the compiler, linker and Rust-workspace set; `bench` adds what the QEMU build and the guest disk tooling need. The script's output is the list; this page does not copy it, so it cannot go stale. <!-- src: scripts/bench/provision_box.sh -->
 
 To install both lists in one step (this needs root, so it is the one step of this page that does):
 
@@ -172,7 +174,7 @@ python3 -I kayfabe-qemu-10.2.4-<revision>-source/kayfabe/scripts/release/build_q
 
 ## 6. Optional builds
 
-**The GPU gates** (`kf-gate1` to `kf-gate9`) play the guest against the real planes on a real GPU with no QEMU: `cargo build --release -p kf-harness --bins`, run through `scripts/bench/v3_gates.sh` (see [Running the QEMU device](installing.md)). <!-- src: scripts/bench/v3_gates.sh, ARCHITECTURE.md -->
+**The GPU gates** (`kf-gate1` to `kf-gate9`) play the guest against the real planes on a real GPU with no QEMU: `cargo build --release -p kf-harness --bins`, run through `scripts/bench/v3_gates.sh` (see [What you can test](test-yourself.md)). <!-- src: scripts/bench/v3_gates.sh, ARCHITECTURE.md -->
 
 **The raw client** is the test program the 30-arm suite uses, built twice: for the host (bare-metal baseline) and as a static musl binary for the guest. <!-- src: scripts/fastguest/bare_metal_suite.sh, scripts/bench/provision_bench_tree.sh -->
 
@@ -213,4 +215,4 @@ What the test changes, and nothing else:
 - Cross-building for arm64.
 - Windows-host builds.
 
-<!-- src (basis of this page): `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -- -->
+<!-- src (basis of this page): `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh` (AGENTS.md, "Verification"). -->
