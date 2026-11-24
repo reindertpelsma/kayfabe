@@ -17,7 +17,9 @@ offline slirp, `-global ICH9-LPC.disable_s3=0`. Sleep: a scheduled task in the s
 
 QEMU binaries: arms A and B the distro `/usr/bin/qemu-system-x86_64` (Ubuntu `1:10.2.1+ds-1ubuntu3.2`, no kf3 code); B+P
 and B0 built on the pc from the pinned 10.2.4 tarball (`build_qemu_pair.sh`, sha256 checked against
-`scripts/bench/qemu.pin`), one with `hyperv-wake.patch` (sha256 of the binary `5164ee64968a9c53...`), one without
+`scripts/bench/qemu.pin`), one with the registered optional patch `tools/qemu-patches/hyperv-wake.patch` (PR #583, branch
+`claude/optional-wake-patch-20261124`; patch file sha256 `47658004acb945f196a7e6d3ab9dbbde81239c87c57613445bd36f9fb4f7062a`,
+applies with `patch -p1` to QEMU 10.2.4; passed to `build_qemu_pair.sh` as its PATCH argument; sha256 of the binary `5164ee64968a9c53...`), one without
 (`1398ac7f44d468f9...`); `-device help` of all three lists `vfio-pci` and no kf3 device; every argv has no kf3 device
 (`run/*/argv_scrubbed.txt`).
 
@@ -103,7 +105,7 @@ queue is empty before reloading, and treats a non-empty queue with nvidia add/re
 ## Files
 
 `PREREGISTRATION.md`; `s3vfio.py` (prep + session driver), `pcsession.py` (the 2026-11-18 safe bind, unchanged, sha256
-`3a4e74fb...`), `build_qemu_pair.sh`, `hyperv-wake.patch` (as applied; from `claude/optional-wake-patch-20261124`),
+`3a4e74fb...`), `build_qemu_pair.sh` (takes the patch path as an argument; the patch itself is not copied here, see above),
 `summarize_run.py`, `storm_deadlines.py`; `run/`: `s3probe.log` (the session log), `bind.txt`, `restore.txt`,
 `host_before.txt`, `host_after.txt` (written by the session at 02:20Z, before the repair), `host_final.txt` (after it),
 `results.json.gz`, per boot `c*_result.json`, `c*_wedge_sample.json`, `argv_scrubbed.txt`, `powercfg_a.txt`,
