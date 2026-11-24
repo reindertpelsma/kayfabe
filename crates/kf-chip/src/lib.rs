@@ -1,13 +1,13 @@
 //! **v3 `kf-chip` — the chip model on the compatibility AXES.**
 //!
-//! Owner, 2026-09-13: *"stop maintaining per exact GPU die constants … derive them from the host
-//! using unprivileged userspace or automatically from ogkm source or fabricated that satisfy ogkm
-//! anyways, and only maintain things per family."* So this crate has three layers:
+//! Per-die constants are not maintained: they are derived from the host through unprivileged
+//! userspace, or generated from the ogkm source, and only the per-family rows are written by hand.
+//! So this crate has three layers:
 //!
 //! 1. **The FAMILY row** — a few enum answers per family ([`Family::mmu_format`],
 //!    [`Family::boot_style`], its GSP model). Class sets are GENERATED from ogkm ([`classes`]);
 //!    the host classes are DERIVED from the host's own class list ([`host_classes`]).
-//!    ★ Every family is first-class (owner, w826): no family is the reference the others hang off.
+//!    Every family is first-class: no family is the reference the others hang off.
 //! 2. **Register offsets** — generated from ogkm `dev_*.h` per die group ([`hwref`], by
 //!    `tools/derive_hwref.sh`); today the table CHECKS the hand-written offsets rather than
 //!    supplying them (`docs/design/V3_HW_BOUNDARY_INVENTORY.md`).

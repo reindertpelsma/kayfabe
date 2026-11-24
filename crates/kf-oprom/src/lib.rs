@@ -21,29 +21,16 @@
 //!   revision 3 with the host's ids and class and the last-image bit, the descriptor, and the
 //!   unmodified PE, sized in 512-byte blocks.
 //!
-//! ⊘ **CORRECTED 2026-10-03 (`docs/OWNER_RULINGS.md` §K, built on branch `v3-gop`) — the bullet below
-//! is withdrawn, and with it this crate's `KF_GOP_EFI`, `pack_kf_gop` and feature `embedded-gop`.**
-//! Owner: *"We aren't going to put compiled stuff in the repo right? … the efi driver is compiled when
-//! building the repo."* No compiled binary is committed. The driver is built from `firmware/kf-gop`
-//! during the ordinary cargo build by `crates/kf-gop-image/build.rs` (nested cargo, for
-//! `<arch>-unknown-uefi` of the arch kayfabe is built for) and embedded there as
-//! `kf_gop_image::KF_GOP_EFI`. It is not done here because this crate is pure — `no_std`, no I/O, in
-//! `scripts/ci/dependencies.py`'s PURE set, whose rule includes build edges — and because the firmware
-//! itself depends on this crate, so a build script here would run inside every build of the driver it
-//! builds. This crate stays the container, and nothing else.
-//! - (superseded, kept as written) `KF_GOP_EFI` and `pack_kf_gop` (feature `embedded-gop`, on by
-//!   default) — the GOP driver itself. Owner, 2026-10-03: *"generate the uefi data in kayfabe and give
-//!   it as blob in the rom … all is given as config data, just like cuda."* The release build of
-//!   `firmware/kf-gop` is committed beside its source as `firmware/kf-gop/kf-gop.efi` and embedded here
-//!   with `include_bytes!`, the way `kf-cuda` embeds its PTX. Nothing is installed per GPU and there is
-//!   no `romfile=`: kf3 calls `pack_kf_gop` at realize with the identity it already presents and
-//!   kf-disp's geometry and EDID. CI's `firmware` job rebuilds the blob from source and fails if one byte
-//!   differs (the link is reproducible: `firmware/kf-gop/build.rs`).
+//! The EFI driver itself is not here. `crates/kf-gop-image/build.rs` compiles `firmware/kf-gop` during
+//! the ordinary cargo build and embeds it as `kf_gop_image::KF_GOP_EFI`; no compiled binary is
+//! committed. This crate is pure (`no_std`, no I/O, in `scripts/ci/dependencies.py`'s PURE set, whose
+//! rule includes build edges) and the firmware depends on it, so a build script here would run inside
+//! every build of the driver it builds.
 //!
 //! The `kf-oprom` binary (`src/bin/kf-oprom.rs`) wraps [`pack`] and [`rom::images`] for scripts:
 //! the local stand-in test and CI's size record.
 //!
-//! ★ Pure by construction: no I/O, no OS vocabulary, `unsafe_code = "forbid"` from the workspace.
+//! Pure by construction: no I/O, no OS vocabulary, `unsafe_code = "forbid"` from the workspace.
 //! Every refusal is a named error variant — the VMM refuses a bad geometry or PE at realize, by name,
 //! instead of booting a guest whose firmware will quietly skip the device.
 #![no_std]

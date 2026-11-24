@@ -57,7 +57,7 @@
 //!
 //! # 2. How version skew is represented
 //!
-//! ★ **Since 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md`): MEASURED, per exact tag.**
+//! **MEASURED, per exact tag** (`docs/design/V3_DRIVER_MATRIX.md`).
 //! [`versions::table_for`] assembles a [`versions::DriverAbiTable`] for a driver version
 //! from [`matrix`] — every consumed layout and constant, measured by compiling ogkm at each
 //! tag (`tools/drivermatrix/`). Selection is **exact membership** in the measured tag list;

@@ -6,8 +6,8 @@
 //! (`completion::Completion::for_route`: Passthrough and Translated are NEVER forged — the GPU writes
 //! them; only Emulated work that reached no GPU is).
 //!
-//! Copied from the old tree's `kayfabe-doorbell` (v3-native, w823-824: 48 tests, an exhaustive
-//! interleaving model) — only these modules; the trap path is `kf-trap`. ⊘ This is the ONE worker
+//! The modules come from the frozen `kayfabe-doorbell` crate, rebuilt v3-native (with an exhaustive
+//! interleaving model); the trap path itself is `kf-trap`. This is the ONE worker
 //! loop: `kf-chan`'s runners are what `HostOps` calls, never a second loop.
 
 pub mod caps;
