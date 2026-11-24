@@ -10,7 +10,8 @@ A Windows 11 guest runs NVIDIA's stock driver on kayfabe. You install Windows an
 2. **Run `kayfabe-windows-setup.bat`** in the guest before NVIDIA's driver installer, and again after it ([below](#the-settings-it-needs-and-why)).
 3. **Install NVIDIA's driver** with NVIDIA's own installer. Version 580.88 is the Windows driver that has been tested.
 4. **Restart** the guest. Check `nvidia-smi` and that Device Manager shows no error on the display adapter.
-5. For a visible desktop use `display=on,gop=on` on the device and a broker window or VNC ([Display and the broker](display.md)). Secure Boot guests need the boot display driver signed and given with `gop-efi=`.
+5. Give a Windows guest `display=on,gop=on` on the device (with `-vga none`), even when nobody watches the screen; view it with a broker window or VNC ([Display and the broker](display.md)). Without the virtual display, NVIDIA's Windows driver resets itself (System log: `nvlddmkm` event 153) within two minutes of boot, and in one series the guest then powered itself off. Secure Boot guests need the boot display driver signed and given with `gop-efi=`. <!-- src: traces/fill_probe_20261124/README.md (Experiment 2) -->
+
 
 You supply and license Windows yourself. Kayfabe ships no Windows and no NVIDIA binary ([Credits and notices](credits.md)).
 

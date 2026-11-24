@@ -1,0 +1,663 @@
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x20809064 [(0, 0), (4, 1), (8, 8)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14; kf-ctl-probe KF_PROBE_GSS_ROWS=1 unprivileged, the kf_abi::gssreplay::ROWS requests, traces/constants_night_20261014/gss_rows_probe_595.txt); its layout at host driver 595
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14; kf-ctl-probe KF_PROBE_GSS_ROWS=1 unprivileged, the kf_abi::gssreplay::ROWS requests, traces/constants_night_20261014/gss_rows_probe_595.txt); its layout at host driver 595
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x2080a084 [(0, 0)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x2080a026 [(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x20809009: host control 0x20809009 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x20809009 [(0, 0), (4, 0)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x20809001: host control 0x20809001 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x20809001 [(0, 0), (4, 0)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also traces/ctl_probe_20261013/probe_pass1.tsv);
+kf3: host facts: GSS 0x20809064 [(0, 0), (4, 2), (8, 1), (18, 4)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x20809064 [(0, 0), (4, 3), (8, 1), (18, 4)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080852c [(0, 0), (4, 0), (8, 1f)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a001 [(0, 0), (4, 0), (8, 0), (c, 0)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x20808524 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a70a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a088 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: : body is 1456 bytes, its layout is 15352 [#16, rate-limited]
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x20808162 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC1->Some(4) NVENC2->Some(5) NVDEC0->Some(3) OFA->Some(6)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)
+kf3: display: caps page derived (sdr=true) — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)
+kf3: display: caps page derived (sdr=false) — 36 words: 35 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf3: P4 memory plane: store 4096 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0xf1cac000 bar2=0x
+kf3: display: compose kernel self-test PASSED
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+2026-11-24T19:59:17.160717Z qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.46b1baf0.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>: info: kf3: family=Ada ph
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: mem t=3.167s tspace space=0xcafe0013 fb=0x120000000+0xefbe0000 ram=0x20fbe0000+0x200000000 (obj 0xcafe0012) rings=0xff00000000+0x100000000 build_us=136549 fb_pages=2M:0xefa00000+4K:0x1e0000 [#1, rate-limited]
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withh
+kf3: family=Ada phase=Cold trapped=4 applied=4 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x88080 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_w
+kf3: display: +42307 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349AUTHORED key=rm.0x20802a08 die=AD102 branch=580: rm.0x20802a08: unmeasured on AD102 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (CE fault-method buffer size: AUTHORE
+W349AUTHORED key=rm.0x20800a59 die=AD102 branch=580: rm.0x20800a59: unmeasured on AD102 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (GMMU fault-buffer sizes: AUTHORED, c
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows [#1, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#1, rate-limited]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#2, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#2, rate-limited]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#3, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#3, rate-limited]
+kf3: display: InstMem(InstMem { phys: 4022009856, size: 65536, addr_space: 2 }) [#1, rate-limited]
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: SharedData(Some(InstMem { phys: 4022001664, size: 32, addr_space: 2 })) [#2, rate-limited]
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#4, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#4, rate-limited]
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows [#5, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#5, rate-limited]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#6, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#6, rate-limited]
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows [#7, rate-limited]
+kf3: TSPACE-RETIRE tok=0x1 host=0x28 key=VasKey(13970166077300801602) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x1 (host 0x28) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[m
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#7, rate-limited]
+kf3: mem t=42.758s retire VasKey(13970166077300801602): 0 row(s) unmapped (0 refused) in 1 us, 0 host call(s), host space 0xcafe0022 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 8 unmap call(s) (8 range(s)) + 0 free(
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#8, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#8, rate-limited]
+kf-mem: leaf 0x120000000+0xefc00000 (store 0x0) CLIPPED at the firmware carve-out 0xefbe0000: 0x120000000+0xefbe0000 placed, 0x20fbe0000+0x20000 left absent (§Q)
+kf3: mem leaf 0x120000000+0xefa00000 HELD BY HOST (host RM placed its own buffer there)
+kf-mem: HELD-BY-HOST guest row 0x120000000+0xefa00000 (ram=false) — host RM already maps that VA
+kf3: mem invalidate seq 80 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=42.766s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 84 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=42.769s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 85 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=42.769s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #1)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #2)
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 5)
+kf3: GSP REFUSED fn76/0x20809009=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627727360, limit: 4095, size_enum: 0 }), life: 1 } [#3, rate-limited]
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627694592, limit: 4095, size_enum: 0 }), life: 1 } [#4, rate-limited]
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627698688, limit: 4095, size_enum: 0 }), life: 1 } [#5, rate-limited]
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627702784, limit: 4095, size_enum: 0 }), life: 1 } [#6, rate-limited]
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627706880, limit: 4095, size_enum: 0 }), life: 1 } [#7, rate-limited]
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627710976, limit: 4095, size_enum: 0 }), life: 1 } [#8, rate-limited]
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627678208, limit: 4095, size_enum: 0 }), life: 1 } [#16, rate-limited]
+kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#16, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#16, rate-limited]
+kf3: mem t=43.504s retire VasKey(13965662457344034896): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0052 kept as a spare — host RM over its life: 0 map call(s) (0 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 0 unmap call(s) (0 range(s)) + 0 free(
+kf3: mem t=43.507s retire VasKey(13965662457344034896): 0 row(s) unmapped (0 refused) in 0 us, 0 host call(s), host space 0xcafe0052 kept as a spare — host RM over its life: 0 map call(s) (0 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 0 unmap call(s) (0 range(s)) + 0 free(
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#32, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#32, rate-limited]
+kf-rm: display: RUNLIST_PREEMPT_COMPLETE event 0xc1d00002:0xff0620a0 (parent 0xff030000) registered
+kf-rm: display: hotplug event 0xc1d00002:0xff060070 (parent 0xff0a0000) registered
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #3)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=1, relay #1)
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a6=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #4)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #2)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #5)
+kf3: family=Ada phase=Running trapped=11424 applied=1510 refused=0 serviced=683 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81210 mem[inval=319 walks=327/327 cleared=319 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=307 unmapped=32 clipped=0x0 held=1 vmm_overlaps=
+kf3: family=Ada phase=Running trapped=41293 applied=1510 refused=0 serviced=683 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2076 walks=2084/2084 cleared=2076 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=374 unmapped=99 clipped=0x0 held=1 vmm_overl
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #6)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #7)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #8)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #9)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #10)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #11)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #12)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #13)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #14)
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 2 privileged run(s) (0x247000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 2 privileged run(s) (0x247000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 2 privileged run(s) (0x247000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 3 privileged run(s) (0x24a000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 4 privileged run(s) (0x283a000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0x20000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x285a000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x28da000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x28da000 bytes) withheld — a user twin
+kf3: GSP REFUSED fn76/0x00730280=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730122=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: the guest armed its first head at +46901 ms — the boot layer is retired after 69 boot frame(s)
+kf3: display: +46901 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: head 0 ACTIVE raster 2200x1125 period 16666666 ns (raster 16666666 ns, cap 75 Hz) [#1, rate-limited]
+kf3: display: head 1 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz) [#2, rate-limited]
+kf3: display: head 2 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz) [#3, rate-limited]
+kf3: display: head 3 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz) [#4, rate-limited]
+kf3: display: 1 updates completed, 9357 methods
+kf3: display: 2 updates completed, 9359 methods
+kf3: display: 3 updates completed, 9382 methods
+kf3: display: 4 updates completed, 9385 methods
+kf3: display: 5 updates completed, 9388 methods
+kf3: GSP REFUSED fn76/0x00730282=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #15)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #16)
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x28da000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x28da000 bytes) withheld — a user twin
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #32)
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 5 privileged run(s) (0x28da000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x12010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x12035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1012010f000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1012011f000+0x237000 (ap=0 at=0xec9eb000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1012035c000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x101203e0000+0xa0000 (ap=0 at=0xef780000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x10124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662616257824848) root 0xefa2f000: 10 privileged run(s) (0x51b4000 bytes) withheld — a user twin
+kf3: display: 6 updates completed, 9397 methods
+kf3: display: 8 updates completed, 9399 methods
+kf3: display: 9 updates completed, 9447 methods
+kf3: display: 10 updates completed, 9461 methods
+kf3: display: 11 updates completed, 9478 methods
+kf3: display: 12 updates completed, 9489 methods
+kf3: display: +47369 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored=true, OLUT Some(Lut { entries: 1025, binding: Dma { handle: 4280279364, offset: 0 }, interpolate: false, mirror: true }); every input provably nonnegative)
+kf3: display: 14 updates completed, 9497 methods
+kf3: family=Ada phase=Running trapped=45022 applied=1583 refused=0 serviced=756 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2268 walks=2285/2285 cleared=2268 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=589 unmapped=111 clipped=0x0 held=1 vmm_over
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 21)
+kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 22)
+kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 23)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 24)
+kf3: family=Ada phase=Running trapped=45738 applied=1598 refused=0 serviced=771 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2268 walks=2285/2285 cleared=2268 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=589 unmapped=111 clipped=0x0 held=1 vmm_over
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 25)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 26)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 27)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 28)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 29)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 30)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 31)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 32)
+kf3: family=Ada phase=Running trapped=46529 applied=1628 refused=0 serviced=801 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2268 walks=2285/2285 cleared=2268 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=589 unmapped=111 clipped=0x0 held=1 vmm_over
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 33)
+kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kf-rm: RPC-REFUSED #3 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows [#64, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#64, rate-limited]
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1200e5000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 2 privileged run(s) (0x13000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1200e5000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x124000000+0x25f0000 (ap=0 at=0xed190000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 3 privileged run(s) (0x2603000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x1200cf000+0x10000 (ap=2 at=0x279807000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1200e5000+0x3000 (ap=0 at=0xefa74000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x2623000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #64)
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: family=Ada phase=Running trapped=48271 applied=1710 refused=0 serviced=883 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=2318 walks=2342/2343 cleared=2318 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=637 unmapped=113 clipped=0x0 held=1 vmm_over
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #3)
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #128)
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 36)
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662659207497808) root 0xefa01000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf3: VasKey(13965662659207497808) root 0xefa01000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: VasKey(13965662659207497808) root 0xefa01000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf3: VasKey(13965662633437694032) root 0xefa18000: 4 privileged run(s) (0x26a3000 bytes) withheld — a user twin
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #256)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #4)
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #512)
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 39)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 40)
+kf3: family=Ada phase=Running trapped=52628 applied=1835 refused=0 serviced=1008 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=2394 walks=2644/2644 cleared=2394 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=1125 unmapped=234 clipped=0x0 held=1 vmm_ov
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #5)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #1024)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#128, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#128, rate-limited]
+kf3: family=Ada phase=Running trapped=55889 applied=1926 refused=0 serviced=1087 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2427 walks=2864/2864 cleared=2427 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=1601 unmapped=324 clipped=0x0 held=1 vmm_ov
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 43)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #6)
+kf3: family=Ada phase=Running trapped=59022 applied=1985 refused=0 serviced=1142 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2460 walks=3057/3057 cleared=2460 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=2035 unmapped=438 clipped=0x0 held=1 vmm_ov
+kf3: display: 15 updates completed, 9507 methods
+kf3: display: 16 updates completed, 9512 methods
+kf3: display: 17 updates completed, 9522 methods
+kf3: display: 18 updates completed, 9526 methods
+kf3: display: 19 updates completed, 9536 methods
+kf3: display: 20 updates completed, 9540 methods
+kf3: display: 21 updates completed, 9550 methods
+kf3: display: 22 updates completed, 9554 methods
+kf3: display: 23 updates completed, 9564 methods
+kf3: display: 24 updates completed, 9568 methods
+kf3: display: 25 updates completed, 9581 methods
+kf3: display: 26 updates completed, 9582 methods
+kf3: display: 27 updates completed, 9592 methods
+kf3: display: 28 updates completed, 9596 methods
+kf3: display: 29 updates completed, 9606 methods
+kf3: display: 30 updates completed, 9610 methods
+kf3: display: 31 updates completed, 9620 methods
+kf3: display: 32 updates completed, 9624 methods
+kf3: display: 33 updates completed, 9637 methods
+kf3: display: 34 updates completed, 9638 methods
+kf3: display: 35 updates completed, 9648 methods
+kf3: display: 36 updates completed, 9652 methods
+kf3: display: 37 updates completed, 9662 methods
+kf3: display: 38 updates completed, 9666 methods
+kf3: display: 39 updates completed, 9676 methods
+kf3: display: 40 updates completed, 9680 methods
+kf3: display: 41 updates completed, 9690 methods
+kf3: display: 42 updates completed, 9694 methods
+kf3: display: 43 updates completed, 9704 methods
+kf3: display: 44 updates completed, 9708 methods
+kf3: display: 45 updates completed, 9718 methods
+kf3: display: 46 updates completed, 9722 methods
+kf3: display: 47 updates completed, 9732 methods
+kf3: display: 48 updates completed, 9736 methods
+kf3: display: 49 updates completed, 9746 methods
+kf3: display: 50 updates completed, 9750 methods
+kf3: display: 51 updates completed, 9760 methods
+kf3: display: 52 updates completed, 9764 methods
+kf3: display: 53 updates completed, 9774 methods
+kf3: display: 54 updates completed, 9778 methods
+kf3: display: 55 updates completed, 9788 methods
+kf3: display: 56 updates completed, 9792 methods
+kf3: display: 57 updates completed, 9802 methods
+kf3: display: 58 updates completed, 9806 methods
+kf3: display: 59 updates completed, 9816 methods
+kf3: display: 60 updates completed, 9820 methods
+kf3: display: 61 updates completed, 9830 methods
+kf3: display: 62 updates completed, 9834 methods
+kf3: display: 63 updates completed, 9844 methods
+kf3: display: 64 updates completed, 9848 methods
+kf3: family=Ada phase=Running trapped=62965 applied=1987 refused=0 serviced=1144 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81208 mem[inval=2460 walks=3099/3099 cleared=2460 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=2139 unmapped=512 clipped=0x0 held=1 vmm_ov
+kf3: family=Ada phase=Running trapped=67092 applied=1987 refused=0 serviced=1144 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=2460 walks=3101/3101 cleared=2460 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=2159 unmapped=512 clipped=0x0 held=1 vmm_ov
+kf3: family=Ada phase=Running trapped=71028 applied=1987 refused=0 serviced=1144 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=2460 walks=3171/3171 cleared=2460 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=2653 unmapped=598 clipped=0x0 held=1 vmm_ov
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 46)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 47)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 48)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 49)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 50)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 51)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 52)
+kf3: family=Ada phase=Running trapped=76376 applied=2015 refused=0 serviced=1172 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=2460 walks=3190/3190 cleared=2460 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=2665 unmapped=606 clipped=0x0 held=1 vmm_ov
+kf3: GSP REFUSED fn76/0x00809908=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 54)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 55)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 56)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 57)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 58)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 59)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 60)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #7)
+kf3: walk capacity: re-walk (needs s9:1912); walk pool 1048576 runs, slot pool 2097152 runs (2085888 free), max per space 1048576, slots held 11, grows 0, retries 1, ceilings 0, largest slot 0, largest walk 1024
+kf3: walk capacity: re-walk (needs s9:1913); walk pool 1048576 runs, slot pool 2097152 runs (2083840 free), max per space 1048576, slots held 11, grows 1, retries 2, ceilings 0, largest slot 3072, largest walk 2560
+kf3: walk capacity: re-walk (needs s9:4728); walk pool 1048576 runs, slot pool 2097152 runs (2083840 free), max per space 1048576, slots held 11, grows 1, retries 3, ceilings 0, largest slot 3072, largest walk 3072
+kf3: walk capacity: re-walk (needs s9:4729); walk pool 1048576 runs, slot pool 2097152 runs (2079744 free), max per space 1048576, slots held 11, grows 2, retries 4, ceilings 0, largest slot 7168, largest walk 6144
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 61)
+kf-rm: chanlink: VAS-DECL 0xc1d00042:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true [#16, rate-limited]
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: family=Ada phase=Running trapped=80005 applied=2190 refused=0 serviced=1347 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=2607 walks=3378/3379 cleared=2606 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=7533 unmapped=719 clipped=0x0 held=1 vmm_ov
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #8)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #2048)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #9)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: family=Ada phase=Running trapped=82791 applied=2295 refused=0 serviced=1452 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2666 walks=3506/3507 cleared=2666 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=7613 unmapped=780 clipped=0x0 held=1 vmm_ov
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #10)
+kf3: walk capacity: re-walk (needs s13:1031); walk pool 1048576 runs, slot pool 2097152 runs (2076928 free), max per space 1048576, slots held 13, grows 3, retries 5, ceilings 0, largest slot 7168, largest walk 7168
+kf3: family=Ada phase=Running trapped=91079 applied=2340 refused=0 serviced=1497 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=2712 walks=4256/4256 cleared=2712 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=10567 unmapped=1002 clipped=0x0 held=1 vmm_
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 69)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 71)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #11)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 73)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 74)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 75)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 76)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 77)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #12)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #4096)
+kf3: walk capacity: re-walk (needs s13:1795); walk pool 1048576 runs, slot pool 2097152 runs (2075904 free), max per space 1048576, slots held 13, grows 4, retries 6, ceilings 0, largest slot 7168, largest walk 7168
+kf3: family=Ada phase=Running trapped=95597 applied=2486 refused=0 serviced=1643 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2778 walks=4548/4549 cleared=2778 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=10989 unmapped=1132 clipped=0x0 held=1 vmm_
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 80)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#256, rate-limited]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#256, rate-limited]
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 81)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #13)
+kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #14)
+kf3: USER_RING_LIFECYCLE (c1d00033, ff040011) mode=Pointer Counts { entries_scan: 17, entries_pointer: 1059, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 82)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 83)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 84)
+kf3: USER_RING_LIFECYCLE (c1d00035, ff040012) mode=Pointer Counts { entries_scan: 15, entries_pointer: 86, pointer_large_entries: 0, pointer_entry_max_bytes: 264, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_byt
+kf3: mem invalidate seq 2828 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.241s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem invalidate seq 2829 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.241s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem invalidate seq 2830 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.242s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem invalidate seq 2831 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.243s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem invalidate seq 2832 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.244s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem invalidate seq 2833 CLEARED OVER ABSENCE (Some(VasKey(13965662659207497808))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=77.244s REFUSED VasKey(13965662659207497808) root 0xefa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk capacity: re-walk (needs s10:1025); walk pool 1048576 runs, slot pool 2097152 runs (2076160 free), max per space 1048576, slots held 12, grows 5, retries 7, ceilings 0, largest slot 7168, largest walk 7168
+kf3: family=Ada phase=Running trapped=105122 applied=2663 refused=0 serviced=1778 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5074/5074 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=11986 unmapped=2211 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=105746 applied=2663 refused=0 serviced=1778 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5076/5076 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12010 unmapped=2211 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=106130 applied=2663 refused=0 serviced=1778 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5078/5078 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12010 unmapped=2271 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=106643 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5091/5091 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2371 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=106976 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5091/5091 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2371 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=107286 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5091/5091 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2371 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=107840 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5093/5093 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2419 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=108909 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5093/5093 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2419 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=109249 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5093/5093 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2419 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=109571 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5093/5093 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2419 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=109937 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=110241 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=110581 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=110903 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111129 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111247 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111281 applied=2671 refused=0 serviced=1782 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 85)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 86)
+W349REFUSE cmd=0x20809009 why=consttab cudart.0x20809009: unmeasured on AD102 branch 580 (measured on: GA106/580, AD103/575, AD104/595) — refused, a neighbour's row is never served (refusals so far: 87)
+kf3: family=Ada phase=Running trapped=111383 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111395 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111407 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111419 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=111559 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5095/5095 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2469 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112513 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112525 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112537 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112549 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112561 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112573 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112585 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=112597 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5096/5096 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12012 unmapped=2493 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=113887 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=2835 walks=5115/5115 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2499 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=115559 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5115/5115 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2499 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=115571 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5115/5115 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2499 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=116324 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=116336 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=116348 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=116392 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117444 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117456 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117468 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117480 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117492 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117504 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117516 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117528 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5164/5164 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12034 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117641 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117675 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117687 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117699 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117758 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117913 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=117974 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119008 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5165/5165 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2919 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119110 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119122 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119134 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119146 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119158 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119170 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119182 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119194 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119206 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119218 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119230 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119242 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119254 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=119266 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120186 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120350 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120362 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120374 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120386 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120398 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120410 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120422 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5166/5166 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12058 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120529 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120563 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120575 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120587 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120599 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120611 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=120623 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121425 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5167/5167 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2943 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121699 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121711 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121723 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121735 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121747 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121759 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121771 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121783 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121795 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121807 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121819 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121831 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121843 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=121855 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122615 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122867 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122879 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122891 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122903 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=122915 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5168/5168 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=2967 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124276 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5289/5289 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124288 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5289/5289 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12082 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124395 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124429 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124441 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124453 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124549 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124601 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=124613 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125323 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5290/5290 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5351 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125701 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125713 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125725 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125737 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125749 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125761 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125773 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125785 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125797 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125809 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125821 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125833 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125845 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=125857 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126513 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126941 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126953 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126965 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126977 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=126989 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127001 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127013 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5291/5291 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12106 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127120 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127154 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127166 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127178 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127190 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127202 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127214 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=127760 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2835 walks=5292/5292 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5375 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128260 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5293/5293 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5399 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128272 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5293/5293 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5399 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128284 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5293/5293 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5399 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128296 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5293/5293 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5399 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128308 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5293/5293 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=5399 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128418 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5302/5302 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=7389 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128430 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5302/5302 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=7389 clipped=0x0 held=1 vmm
+kf3: family=Ada phase=Running trapped=128442 applied=2684 refused=0 serviced=1795 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2835 walks=5302/5302 cleared=2835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12130 unmapped=7389 clipped=0x0 held=1 vmm

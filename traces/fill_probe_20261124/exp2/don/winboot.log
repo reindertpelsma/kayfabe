@@ -1,0 +1,14 @@
+[    0.0s] WINBOOT_START label=don display=on launch_rc=0 [2026-11-24T19:59:16Z] detached: tag=fp_don, log logs/fp_don_run.log (stdout logs/fp_don_run.out) 
+[   70.7s] guest up=True after 71s
+[   77.5s] GPU ADAPTER NVIDIA GeForce RTX 4090 code=0 ; NVSMI NVIDIA GeForce RTX 4090, 580.88
+[  111.8s] POLL t=41s status=running guest_rc=0 events=13 153=4
+[  147.2s] POLL t=77s status=running guest_rc=0 events=13 153=4
+[  180.7s] POLL t=110s status=running guest_rc=0 events=13 153=4
+[  214.1s] POLL t=143s status=running guest_rc=0 events=13 153=4
+[  247.5s] POLL t=177s status=running guest_rc=0 events=13 153=4
+[  280.8s] POLL t=210s status=running guest_rc=0 events=13 153=4
+[  314.2s] POLL t=244s status=running guest_rc=0 events=13 153=4
+[  347.5s] POLL t=277s status=running guest_rc=0 events=13 153=4
+[  380.9s] POLL t=310s status=running guest_rc=0 events=13 153=4
+[  380.9s] WINBOOT_RESULT label=don display=on up=True n153=4 died=False final=running panicked=0 mmuwalk=2 xid=0
+[  398.1s] WINBOOT_EXIT

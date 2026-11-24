@@ -1,0 +1,26 @@
+WINDOWS_GATE_START tag=fp rev=48c8434e source=/root/kayfabe 2026-11-24T19:44:39+00:00 idle_s=120 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-24T19:44:39+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 78982(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 78982(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 78982(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 78982(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 78982(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 79029(bash) uid_root 0/0/0/0
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 4090" driver=595.84 cpus=30 ram_gb=48 disk_free_gb=109 uid=0 memlock_kb=6362232
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-24T19:44:39+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.84, 24564 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-24T19:44:40+00:00
+GATE_STAGE prereqs EXIT ok 6s
+GATE_STAGE kf3_binary START 2026-11-24T19:44:46+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/731c88b5/qemu-system-x86_64 sha256=a8dfa76f3e8e0cac rev=48c8434e
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE lke_die START 2026-11-24T19:44:46+00:00
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR stage=lke_die why="the host RM identity is unreadable (lke_die_error.txt)" rev=48c8434e gpu="NVIDIA GeForce RTX 4090" hostref=green/unrun secs=9
+GATE_NOTE evidence: /root/prov/fp_windows (11 files), /root/prov/fp_windows.tgz sha256=57bd0505d394bee2
+WINDOWS_GATE_TIMING total=9s preflight=0s hostref_before=1s prereqs=6s kf3_binary=0s
+WINDOWS_GATE_EXIT rc=3 2026-11-24T19:44:48+00:00
