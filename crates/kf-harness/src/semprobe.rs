@@ -3,8 +3,9 @@
 //! runs these words on a native USER channel and reports.
 //!
 //! Variants (each one process, one fresh channel, its own VA space, owned memory only; no guest memory):
-//! - **A** `SET_REFERENCE 0x4B460001`, then a WITNESS release. INFERRED today: if `0x50` is not a method on the
-//!   family, the PBDMA stops at it (Xid 32, METHOD) and the witness never lands.
+//! - **A** `SET_REFERENCE 0x4B460001`, then a WITNESS release. Measured once on GB203 / 595.91.07
+//!   (`traces/semprobe_gb203_20261118/`): one Xid 32 with `intr 00200000` (METHOD), and the witness after it still landed, so the verdict does not look at the
+//!   witness. Any other Xid, or a second one, is `Unexpected`.
 //! - **B** the stage-1 semaphore marker cell (`kf_chan::user_semaphore::marker_cell`, `SemaphoreMarker`): the word
 //!   must read the marker value, and no Xid.
 //! - **C** `NON_STALL_INTERRUPT 0`, then a witness release: no Xid, the witness lands.
