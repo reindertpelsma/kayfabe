@@ -49,3 +49,17 @@ Before the first probe: the guest UTC; a listing (path, size, mtime) of the log 
 
 # What is NOT claimed
 One box, one die (AD102), one sealed image, one or two boots. A feature that "works" works on this boot; a feature that fails is classified only as far as its logs say. An inference is written as INFERRED.
+
+# ADDENDUM, 2026-11-24 about 03:58Z, still before the first guest boot (the image download was at about 20 GB)
+Source: a read-only look at the sealed image on the coordinator (`qemu-nbd --read-only`, `ntfs-3g -o ro,norecover`; unmounted afterwards, image size, mtime and mode unchanged). No content of it is committed beyond the facts below.
+- MEASURED: `%APPDATA%\Adobe\CameraRaw\GPU\Adobe Photoshop Camera Raw\Camera Raw GPU Config.txt` (written 2026-11-19 17:39Z, unchanged since) holds `gpu_compute_quick_self_test_passed="False"`. The last Camera Raw log in the image (`Camera Raw Log Latest v1.txt`, host After Effects, RTX 4070, 2026-11-22 01:26Z) says `Need to run gpu self tests : False`, `GPU3 failed (previous) sanity test`, `GPU3 Hard Status: fail_cached_sanity_test`, `GPU4 Hard Status: fail_no_gpu3`, `ML inference: default device (Auto Fastest)`. So since 2026-11-19 Camera Raw runs without its GPU3/GPU4 compute path on that die and does not test again while the GPU digest is unchanged.
+- MEASURED: the licensing logs (`%LOCALAPPDATA%\Temp\NGL\NGLClient_*.log`) of the last session show the profile served from cache (`CachedNotValidated`, then `Cached`) and IMS access tokens taken from a cache (`FetchAccessTokenFromDeviceToken : FetchCachedAccessToken`).
+
+Two more hypotheses, written now:
+H_gpu3 (the cached failed GPU self-test causes the model-load failure). INFERRED to be unlikely before the run: the file is from 2026-11-19 and the 2026-11-21 online session loaded the masking models with it in place. On this box the die differs (RTX 4090), so the digest changes and Camera Raw should run its self-tests again in the guest, under kf3.
+- FALSIFIED if Camera Raw's log in this run shows the GPU3 self-test passing and masking still fails with the model-load message, or shows it failing and masking works.
+- Side question, reported either way: does Camera Raw's GPU3 quick self-test pass under kf3 on the RTX 4090? A FAIL is a kayfabe suspect (a GPU compute result that differs from what Camera Raw expects), to be compared with a bare-metal arm before any claim.
+
+H_token (refines H_clock): the masking and Lens Blur models need a valid IMS access token, which the image holds only in a time-limited cache; the pc (real clock, 2026-11-24) was past it, the recorded clock (about 50 minutes after the seal) is not.
+- Prediction: under the recorded clock the licensing log shows the cached token used without error around the click and the model loads; a guest clock after 2026-11-24 shows a token fetch that fails offline right before the model-load message.
+- FALSIFIED if the recorded-clock boot fails with the model-load message while the licensing log shows a cached token accepted in the same second, or if no token request is logged around the click.
