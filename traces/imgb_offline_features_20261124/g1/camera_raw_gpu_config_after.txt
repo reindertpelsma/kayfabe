@@ -1,0 +1,14 @@
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000 1.000000, 0000/00/00-00:00:00        ">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+   crs:gpu_preferred_system=""
+   crs:gpu_init_digest="F947C2B6601D33A6328720013F53A308"
+   crs:gpu_compute_digest="084BEA5C8F6B055F3762389988DA9CDC"
+   crs:gpu_compute_quick_self_test_passed="True"
+   crs:gpu_hdr_display_scale="1"
+   crs:gpu_noise_fudge="0"
+   crs:gpu_trimap_dilate_radius="0.01"
+   crs:gpu_trimap_erode_radius="0.01"/>
+ </rdf:RDF>
+</x:xmpmeta>

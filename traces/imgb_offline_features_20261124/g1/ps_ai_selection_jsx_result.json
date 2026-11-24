@@ -1,0 +1,7 @@
+{
+ "version": "28.0.0",
+ "start_utc": "2026-11-22T02:55:56Z",
+ "end_utc": "2026-11-22T02:57:08Z",
+ "secs": 72,
+ "js": "open ok ktiponissi_dirfys_4480x2928.jpg Sunday, 22 Nov 2026 02:56:01 GMT || select_subject_device OK selection 1347,1391,1748,1505 ms=36338 at Sunday, 22 Nov 2026 02:56:38 GMT || select_subject_default OK selection 1347,1391,1748,1505 ms=7795 at Sunday, 22 Nov 2026 02:56:45 GMT || select_sky OK selection 0,0,4480,975 ms=14374 at Sunday, 22 Nov 2026 02:57:00 GMT || remove_background OK no selection ms=8479 at Sunday, 22 Nov 2026 02:57:08 GMT"
+}

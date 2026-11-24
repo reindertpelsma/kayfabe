@@ -1,0 +1,216 @@
+# guest %APPDATA%\Adobe\CameraRaw\Logs\Camera Raw Log Latest v1.txt, copied at guest 03:21:30Z; lines removed: 260x 'Building compute pipeline state (n/260)', 'Unexpected re-entrancy in RedrawMonitor' (2366x), 'TrimFootprint', 'Profile self-check'
+cr_sdk_initialize: Adobe Photoshop Camera Raw 19.0 (Windows), version 19.0x2794, 64-bit, Release
+Camera Raw Plugin Host: Photoshop 28.0.0
+gDNGMaxSIMD: 3
+Memory allocator: internal scalable (cr_memory_scalable_allocator)
+libdispatch threading: yes
+thread type: dispatch
+ACE thread type: dispatch
+cr_scratch_file: using multiple files (new method)
+CPU: AMD Virtual CPU
+OS: 10.0.26100.7920
+MPProcessorCount (hyperthreading = false): 8
+MPProcessorCount (hyperthreading = true): 8
+MPThreadCount: 8
+std::thread::hardware_concurrency: 8
+AVX support: yes
+AVX2 support: yes
+AVX512 support: no
+System physical RAM: 16 GB
+Initialize GPU system
+Read GPU config
+Safe load GPU
+Device 0 (0x00180e9d): NVIDIA GeForce RTX 4090
+Native16BitShaderOpsSupported: YES
+SupportsShaderModel_6_2_OrHigher: YES
+Supports FP16 for DX on WML: YES
+Building pipeline states for NVIDIA GeForce RTX 4090
+    name                                    : NVIDIA GeForce RTX 4090
+    VendorId                                : 4318
+    DeviceId                                : 9860
+    SubSysId                                : 1088033880
+    Revision                                : 161
+    DedicatedVideoMemory                    : 8234594304
+    DedicatedSystemMemory                   : 0
+    SharedSystemMemory                      : 8554504192
+    MemoryBudget                            : 7429287936
+    AdapterLuid.LowPart                     : 1576605
+    AdapterLuid.HighPart                    : 0
+    Flags                                   : 0
+        DoublePrecisionFloatShaderOps           : yes
+        ConservativeRasterizationTier           : 3
+        CrossNodeSharingTier                    : 0
+        ResourceBindingTier                     : 3
+        ResourceHeapTier                        : 2
+        TiledResourcesTier                      : 4
+        NodeIndex                               : 0
+        TileBasedRenderer                       : no
+        UMA                                     : no
+        CacheCoherentUMA                        : no
+        feature level                           : 0x00009100
+        feature level                           : 0x00009200
+        feature level                           : 0x00009300
+        feature level                           : 0x0000a000
+        feature level                           : 0x0000a100
+        feature level                           : 0x0000b000
+        feature level                           : 0x0000b100
+        feature level                           : 0x0000c000
+        feature level                           : 0x0000c100
+        MaxSupportedFeatureLevel                : 0x0000c100
+        HighestShaderModel                      : 0x60
+        WaveOps                                 : yes
+        WaveLaneCountMin                        : 32
+        WaveLaneCountMax                        : 32
+        TotalLaneCount                          : 16384
+        ExpandedComputeResourceStates           : yes
+        Int64ShaderOps                          : yes
+        RootSignature.HighestVersion            : 0x2
+Device 1 (0x00006dcb): Microsoft Basic Render Driver
+Loaded GPU system: DirectX
+GPU primary driver version: 32.0.15.8088
+GPU device count: 1
+GPU device names: NVIDIA GeForce RTX 4090
+GPU3 allow list: yes
+GPU3 deny list: no
+GPU3 prev digest: C26ED639CCB7A188D077FB4A3D994FCA
+GPU3 new digest: 084BEA5C8F6B055F3762389988DA9CDC
+Need to run gpu self tests : True.
+New/changed sanity digest, so zapping any TempDisableGPU3 files
+GPU Init Status (part 1): I2_GPU2
+GPU3 Hard Status Result (part 1): unknown
+GPU3 Soft Status Result (part 1): success
+GPU4 Hard Status Result (part 1): unknown
+GPU4 Soft Status Result (part 1): success
+ML inference: default device (Auto Fastest)
+PatchMatch initialized (version 6.0.0.0). Using 8 threads.
+WML: Try use GPU? yes
+Intel Compiler: no
+ML Model subject: version=318769633 (19.0.0.2529)
+ML Model sky: version=234881976 (14.0.0.952)
+ML Model object: version=234881976 (14.0.0.952)
+ML Model skin: version=234881976 (14.0.0.952)
+ML Model depth: version=37B906DA95BD40F3889028E4FB427132
+ML Model layered depth: version=945A3D4FBDC9AB7B3C6DA3E3A40AAF4A
+ML Model AI Look: version=1.0.8 - 20240818 (ONNX)
+ML Model Dereflect: version=2026-04-14-1258
+ML Model Dereflect Base: version=2026-04-14-1258
+ML Model Dereflect Upsampler: version=2025-06-25-0915
+ML Model Skin Blemish Detection: version=1.0.3 - 07-23-2025
+ML Model Skin Retouch: version=1.0.6 - 06-12-2026
+ML Model Dust Detection: version=1.0.2 - 08-19-2024
+ML Model GenCrop Automatic: version=0.6.0 - 09-25-2026
+Loaded adobe_c2pa: adobe_api/1.76.0 c2pa-c-ffi/0.90.16 c2pa-rs/0.90.16
+QuietMode: is_quiet_mode_overall=0, show_onboarding=1, show_whats_new=1, show_rich_tooltips=1, show_standard_tooltips=1
+QuietMode: is_quiet_mode_overall=0, show_onboarding=1, show_whats_new=1, show_rich_tooltips=1, show_standard_tooltips=1
+NVIDIA GeForce RTX 4090: Finished building compute pipeline states.
+Begin cr_gpu_test::RunSanity (quick = False, doing init = True).
+Not triggering delayed auto restart: Download 100% completed
+*** Warning: edit panel 11 not available ***
+*** Warning: masking panel 6 wrapper not available ***
+*** Warning: Pane 'fRefreshVariations' not found ***
+Image A: H = 1000, W = 1000, Planes = 4
+Image B: H = 1000, W = 1000, Planes = 4
+Completed cr_gpu_test::RunSanity successfully.
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRProxyPane' format 23
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRFilmStripPane' format 23
+PoseCRMainDialog backingScale = 1.2500
+PoseCRMainDialog screen bounds = L 0.0000, T 0.0000, R 1920.0000, B 1080.0000
+GPU Init Status (part 2): I4_GPU4
+GPU3 Hard Status Result (part 2): success
+GPU3 Soft Status Result (part 2): success
+GPU4 Hard Status Result (part 2): success
+GPU4 Soft Status Result (part 2): success
+Determined GPU3 hard status: success
+Initializing person mask session task...
+CalculateAutoTone: atv2013c
+ML inference: constrained memory (no)
+ML inference: GPU discrete memory (7.669 GB), persistent model loading (yes)
+*** Error: ML model not loaded ***
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+sky inference: time (avg)=19.85 sec (19.85 sec), memory (baseline): 2129.52 MB (4109.52 MB)
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+depth_estimation::DoInference time (sec)=36.780
+depth_refinement::DoInference time (sec)=0.692
+depth_estimation::depth_estimation_planar time (sec)=37.573
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+*** Error: ML model not loaded ***
+*** Error: ML model not loaded ***
+*** Warning: No background stuff masks found ***
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+CRFilmStrip::ClearAllSavedManualNRSettings
+TrimGPUandMLMemory
+QuietMode: is_quiet_mode_overall=0, show_onboarding=1, show_whats_new=1, show_rich_tooltips=1, show_standard_tooltips=1
+Not triggering delayed auto restart: Download 100% completed
+*** Warning: edit panel 11 not available ***
+*** Warning: masking panel 6 wrapper not available ***
+*** Warning: Pane 'fRefreshVariations' not found ***
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRProxyPane' format 23
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRFilmStripPane' format 23
+PoseCRMainDialog backingScale = 1.2500
+PoseCRMainDialog screen bounds = L 0.0000, T 0.0000, R 1920.0000, B 1080.0000
+Initializing person mask session task...
+CalculateAutoTone: atv2013c
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+*** Error: ML model not loaded ***
+Initializing person mask session task...
+*** Error: CRMaskPane::UpdateToolControls - toolType is image mask, but there is no active component or active component is not a cr_mask_image ***
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+sky inference: time (avg)=14.09 sec (16.46 sec), memory (baseline): 2056.76 MB (4036.76 MB)
+sky inference: time (avg)=16.42 sec (16.44 sec), memory (baseline): 2056.76 MB (4036.76 MB)
+depth_estimation::DoInference time (sec)=39.748
+depth_refinement::DoInference time (sec)=98.779
+depth_estimation::depth_estimation_planar time (sec)=138.728
+No background download is running.
+Not resuming background download since it was not previously running.
+CRFilmStrip::ClearAllSavedManualNRSettings
+TrimGPUandMLMemory
+QuietMode: is_quiet_mode_overall=0, show_onboarding=1, show_whats_new=1, show_rich_tooltips=1, show_standard_tooltips=1
+Not triggering delayed auto restart: Download 100% completed
+*** Warning: edit panel 11 not available ***
+*** Warning: masking panel 6 wrapper not available ***
+*** Warning: Pane 'fRefreshVariations' not found ***
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRProxyPane' format 23
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+Windows cr_gpu_view backing scale: h=  1.2500, v=  1.2500
+first frame index is: 0
+ BuildSwapChain 'CRFilmStripPane' format 23
+PoseCRMainDialog backingScale = 1.2500
+PoseCRMainDialog screen bounds = L 0.0000, T 0.0000, R 1920.0000, B 1080.0000
+CalculateAutoTone: atv2013c
+depth_estimation::DoInference time (sec)=47.515
+depth_refinement::DoInference time (sec)=10.627
+depth_estimation::depth_estimation_planar time (sec)=58.278
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+Initializing person mask session task...
+No background download is running.
+Not resuming background download since it was not previously running.
+*** Error: ML model not loaded ***
+*** Error: ML model not loaded ***
+Initializing person mask session task...
+*** Error: CRMaskPane::UpdateToolControls - toolType is image mask, but there is no active component or active component is not a cr_mask_image ***

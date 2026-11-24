@@ -44,7 +44,7 @@ Before the first probe: the guest UTC; a listing (path, size, mtime) of the log 
 
 # Stop and report rules
 - Each boot records its end: `qemu-exit` row with `GUEST_PANICKED args=0x...` or the shutdown reason (`propimage_check.py`, PR #578), host Xid watch before and after.
-- Time box: 3 box-hours and 3.5 USD (cap entry `kf-imgboff-` in the cost guard). The box is destroyed by its own id and its absence is verified.
+- Time box of this 2026-11-24 run: 3 box-hours and 3.5 USD (cap entry `kf-imgboff-` in the cost guard). The box is destroyed by its own id and its absence is verified.
 - A kayfabe defect, if one shows up, gets the smallest GPU-free test that fails before the fix and passes after.
 
 # What is NOT claimed
