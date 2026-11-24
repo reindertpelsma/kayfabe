@@ -352,15 +352,21 @@ impl ReselectAtFn1 {
         let Ok(r) = kf_abi::guestsysinfo::ReportedDriver::decode(payload) else {
             return Reselection::Kept;
         };
+        // Every fn 1 is guest-repeatable: both lines are rate-limited, and the guest's own string is
+        // escaped (a Windows name may carry whitespace, `\r` and `\n` included).
         if let Some(t) = r.twin {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: the guest is Windows {} ({}), the Windows build of Linux {} (one changelist, \
                  {}): keyed as {}",
-                r.said, t.win_branch, t.linux_tag, t.linux_cl, t.linux_tag
+                r.said.escape_debug(),
+                t.win_branch,
+                t.linux_tag,
+                t.linux_cl,
+                t.linux_tag
             );
         }
         if let Some(why) = &r.twin_refusal {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: the guest says it is {:?}, not a Windows twin: {why}",
                 r.said
             );
