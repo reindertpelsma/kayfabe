@@ -4,7 +4,10 @@
 
 `docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1 (GT200_DEBUGGER sessions, `crates/kf-qemu/src/chan.rs`
 `admit_debugger`/`PendingDebugger`), G-2 (engine objects per twin, `admit_engine_object`) and G-3
-(the host handle counter, `crates/kf-host/src/lib.rs` `next_handle`/`admit_want`). Each mutant is a
+(the host handle counter, `crates/kf-host/src/lib.rs` `next_handle`/`admit_want`), and the follow-ups of
+the security review of PR #540: F1 (the statement/act split `seat_debugger`/`PendingDebugger::settle`,
+the per-VM cap `debugger_vm_cap`, `admit_want` on every minted alloc path) and F2 (a guest free racing a
+pending debugger act, `doom_debuggers`). Each mutant is a
 one-line change; each must be killed by at least two independently named failing tests. Every file
 touched is overwritten in place and ALWAYS restored (also on an interrupt).
 Run: python3 scripts/ci/guest_influence_mutants.py [mutant-name ...]   (exit 0 only if no mutant is weak)
@@ -35,20 +38,42 @@ CASES = [
     ("debugger-busy-ignores-pending", changed(CHAN, "    if live.contains_key(&key) || pending.contains_key(&key) {", "    if live.contains_key(&key) {")),
     ("debugger-gr-cap-removed", changed(CHAN, "    if on_obj >= DEBUGGERS_PER_GR_OBJECT {", "    if false {")),
     ("debugger-gr-cap-off-by-one", changed(CHAN, "    if on_obj >= DEBUGGERS_PER_GR_OBJECT {", "    if on_obj > DEBUGGERS_PER_GR_OBJECT {")),
-    ("debugger-gr-cap-ignores-pending", changed(CHAN, "        .saturating_add(pending.values().filter(|g| **g == host_obj).count());", "        .saturating_add(0);")),
+    ("debugger-gr-cap-ignores-pending", changed(CHAN, "        .saturating_add(pending.values().filter(|s| s.gr == host_obj).count());", "        .saturating_add(0);")),
     ("debugger-vm-cap-removed", changed(CHAN, "    if live.len().saturating_add(pending.len()) >= per_vm {", "    if false {")),
     ("debugger-vm-cap-ignores-pending", changed(CHAN, "    if live.len().saturating_add(pending.len()) >= per_vm {", "    if live.len() >= per_vm {")),
     ("debugger-seat-never-released", changed(CHAN, "        if let Ok(mut m) = self.pending.lock() {\n            m.remove(&self.key);\n        }", "        let _ = &self.key;")),
+    # Security review of PR #540, F1 (W1-W5) and F2: the statement/act split and the free race.
+    ("debugger-statement-skips-admission", changed(CHAN, "    admit_debugger(&live, &book, key, host_obj, per_vm)?;", "    let _ = (&live, per_vm);")),
+    ("debugger-seat-not-counted", changed(CHAN, "    book.insert(key, seat);\n    Ok(PendingDebugger {", "    let _ = &mut book;\n    Ok(PendingDebugger {")),
+    ("debugger-vm-cap-unbounded", changed(CHAN, "    usize::try_from(channel_budget).unwrap_or(usize::MAX)", "    let _ = channel_budget;\n    usize::MAX")),
+    ("debugger-act-publishes-cancelled", changed(CHAN, "                let kept = pending.get(&key).is_some_and(|s| !s.cancelled);", "                let kept = pending.len() < usize::MAX;")),
+    ("debugger-free-ignores-pending", changed(CHAN, "            s.cancelled = true;", "            let _ = s;")),
+    # Re-review of PR #594: the live call sites (X1-X4), pinned by debugger_wiring_tests (source scans).
+    ("x1-free-cancels-an-empty-pending-map", changed(CHAN, "            &self.dbg_pending,\n            client,\n            object,\n            &doomed_twin_objs,", "            &DbgPending::default(),\n            client,\n            object,\n            &doomed_twin_objs,")),
+    ("x2-vm-cap-unbounded-at-new", changed(CHAN, "            dbg_vm_cap: debugger_vm_cap(channel_budget),", "            dbg_vm_cap: usize::MAX,")),
+    ("x3-act-skips-settle", changed(CHAN, """                let h = seat
+                    .settle(&me.dbg, |o| me.rm.alloc_debugger(o), |h| {
+                        let _ = me.rm.free(h);
+                    })
+                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over {obj3d:#x}: {e}")))?;""", """                drop(seat);
+                let h = me.rm.alloc_debugger(host_obj).map_err(|e| (NV_ERR_INVALID_STATE, format!("{e:?}")))?;
+                if let Ok(mut m) = me.dbg.lock() {
+                    m.insert((client, handle), (parent, h, host_obj));
+                }""")),
+    ("x4-admission-with-unbounded-cap", changed(CHAN, "            host_obj,\n            self.dbg_vm_cap,\n        ) {", "            host_obj,\n            usize::MAX,\n        ) {")),
     ("engine-twin-cap-removed", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if false {")),
     ("engine-twin-cap-off-by-one", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if v.objects.len().saturating_add(v.pending_objects.len()) > ENGINE_OBJECTS_PER_TWIN {")),
     ("engine-twin-cap-ignores-pending", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if v.objects.len() >= ENGINE_OBJECTS_PER_TWIN {")),
     ("mint-wraps-again", changed(HOST, "    if h != 0 {\n        *next = h.checked_add(1).unwrap_or(0);", "    if true {\n        *next = h.wrapping_add(1);")),
+    ("admit-want-removed-from-raw-alloc-exact", changed(HOST, "        admit_want(want)?;\n        birth::admit_alloc_class(class, inside)?;", "        birth::admit_alloc_class(class, inside)?;")),
+    ("admit-want-removed-from-os-descriptor", changed(HOST, "        let want = self.mint();\n        admit_want(want)?;", "        let want = self.mint();")),
     ("null-want-admitted", changed(HOST, "    if want == 0 {\n        kf_arch::rate_eprintln!(\n            \"kf-host: HOST HANDLES EXHAUSTED", "    if false {\n        kf_arch::rate_eprintln!(\n            \"kf-host: HOST HANDLES EXHAUSTED")),
 ]
 
 TESTS = [
-    ["-p", "kf-qemu", "--lib", "--", "debugger_tests", "engine_object"],
+    ["-p", "kf-qemu", "--lib", "--", "debugger_tests", "debugger_wiring_tests", "engine_object"],
     ["-p", "kf-host", "--lib", "--", "mint_tests"],
+    ["-p", "kf-host", "--test", "channel_birth_bound"],
 ]
 
 

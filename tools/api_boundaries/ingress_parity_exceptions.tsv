@@ -1,8 +1,14 @@
 # STATUS: LIVE, 2026-11-20 (task I7; docs/design/V3_GUEST_INGRESS_TABLE.md section 5). REVIEWED LIST.
 # Ids the generated guest-ingress gate admits at a tag where the pre-I7 gate refused them. Read only by
 # crates/kf-rm/tests/ingress_parity.rs (never by the generator): any other such id fails that test. Each row
-# needs: the ogkm flag (NON_PRIVILEGED at the tag), kayfabe serving it, and why the old gate refused it.
+# needs: the ogkm flag (NON_PRIVILEGED at the tag) or the Mode2Rpc reason, kayfabe serving it, and why the old gate
+# refused it. The four rows of 2026-11-24 (security review of PR #545, F1) widen nothing a guest reaches: the channel
+# link served these ids without asking either gate; it now asks, and the table admits them by name.
 # kind	id	first_tag	last_tag	name	evidence
 control	0x00801909	550.40.07	550.40.07	NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL	ogkm 550.40.07 exports it NON_PRIVILEGED with the same name and flags as 550.54.14..615.71.09, where the old gate admitted it; served (kf-abi hostabi HOST_CONTROLS, CudaLimit statement); the old gate refused it at 550.40.07 only because that tag sorted under its 545.23.06 block, which predates the row
 control	0x20802068	550.40.07	550.40.07	NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE	ogkm 550.40.07 exports it NON_PRIVILEGED with the same name and flags as 550.54.14..615.71.09, where the old gate admitted it; served (named in kf-rm); same 545.23.06-block cause as above
 control	0x20801357	570.86.15	570.148.08	NV2080_CTRL_CMD_FB_GET_STATUS	ogkm 570.86.15..570.148.08 exports 0x20801357 as FB_GET_STATUS NON_PRIVILEGED, the same name and flags as 575.51.02..615.71.09 where the old gate admitted it; served (named in kf-rm); the old gate's 570 block carried the DRAM-encryption pair at their pre-575 numbers but not this id
+control	0x0080170f	535.309.01	615.71.09	NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES	ogkm exports it NON_PRIVILEGED at every tag; served by kf_rm::chanlink set_channel_properties (only the engine timeslice, carried as kayfabe's own SET_TIMESLICE on the VM's own group, which the gate also admits); the old gate refused it but the channel link answered it before that gate, so no guest-visible reach changes
+control	0x00801812	535.309.01	615.71.09	NV0080_CTRL_DMA_SET_DEFAULT_VASPACE	kernel-only in ogkm, sent by the guest KERNEL RM over GSP RPC (Mode2Rpc row); served by kf_rm::chanlink set_default_vaspace as bookkeeping only (no host call); the old gate refused it but the channel link answered it before that gate
+control	0x20801117	535.309.01	615.71.09	NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS	kernel-only in ogkm, sent by the guest KERNEL's suspend path over GSP RPC (Mode2Rpc row); served by kf_rm::chanlink as DisableUsermode on the VM's own twins; the old gate refused it but the channel link answered it before that gate (refusing it broke UVM, boots b2-b6)
+control	0xa06f0112	535.309.01	615.71.09	NVA06F_CTRL_CMD_STOP_CHANNEL	ogkm exports it NON_PRIVILEGED at every tag; served by kf_rm::chanlink as Stop (disable and deschedule of the guest's own twin with kayfabe's verbs); the old gate refused it but the channel link answered it before that gate

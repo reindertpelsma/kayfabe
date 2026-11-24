@@ -209,6 +209,7 @@ def scan_file(root: Path, p: Path, consts: dict[str, str]) -> tuple[list[tuple[s
         spans, declared = cfg_test_spans(skel)
         code, skel = blank_spans(code, spans), blank_spans(skel, spans)
     rel = str(p.relative_to(root))
+    own = {m.group(1): m.group(2) for m in CONST_STR.finditer(text)} if lang == "rust" else {}
     pat = RUST_CALL if lang == "rust" else C_CALL
     reads = []
     for m in pat.finditer(skel):
@@ -226,6 +227,10 @@ def scan_file(root: Path, p: Path, consts: dict[str, str]) -> tuple[list[tuple[s
         arg, how = literal_at(code, pos)
         if how == "literal":
             reads.append((arg, line, "literal"))
+            continue
+        if how == "ident" and arg in own:
+            # the file's own const wins: a name defined in several files is not a global
+            reads.append((own[arg], line, "const"))
             continue
         if how == "ident" and arg in consts or (how == "ident" and arg.split("::")[-1] in consts):
             reads.append((consts.get(arg, consts.get(arg.split("::")[-1])), line, "const"))
@@ -254,12 +259,14 @@ def lookups(code: str) -> list[str]:
     return sorted(set(re.findall(r'\bget\(\s*"((?:KF3|KF|KAYFABE)_[A-Z0-9_]+)"', code)))
 
 
+CONST_STR = re.compile(r'\bconst\s+([A-Z][A-Z0-9_]*)\s*:\s*&(?:\'static\s+)?str\s*=\s*"([^"\\]*)"')
+
+
 def const_table(files: list[Path]) -> dict[str, str]:
     table: dict[str, str] = {}
-    pat = re.compile(r'\bconst\s+([A-Z][A-Z0-9_]*)\s*:\s*&(?:\'static\s+)?str\s*=\s*"([^"\\]*)"')
     for p in files:
         if p.suffix == ".rs":
-            for m in pat.finditer(p.read_text(errors="replace")):
+            for m in CONST_STR.finditer(p.read_text(errors="replace")):
                 table[m.group(1)] = m.group(2)
     return table
 

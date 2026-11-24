@@ -19,8 +19,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 GEN = "tools/api_boundaries/ingress_policy.py"
 GATE = "crates/kf-abi/src/capability.rs"
+CHANLINK = "crates/kf-rm/src/chanlink.rs"
 FILES = {}
-for rel in (GEN, GATE):
+for rel in (GEN, GATE, CHANLINK):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         FILES[rel] = f.read()
 
@@ -43,12 +44,29 @@ CASES = [
     ("absent-control-admitted", changed(GEN, '        return False, "NotExported"', '        return True, "OgkmNonPrivileged"')),
     ("unknown-control-given-a-row", changed(GEN, "                if not ruled:\n                    continue",
                                             "                if False:\n                    continue")),
+    # Security review of PR #545, F2: ogkm's accessRight is a derived refusal.
+    ("access-right-ignored", changed(GEN, '    if any(x.get("access") for x in e["exports"]):', "    if False:")),
+    ("access-right-not-extracted", changed(GEN, '                                 "access": _access_names(int(m.group(2), 0), rights)})',
+                                           '                                 "access": []})')),
     ("duplicate-id-first-wins", changed(GEN, "    if key not in sink or value < sink[key]:", "    if key not in sink:")),
     # the gate
     ("gate-unlisted-admitted", changed(GATE, "        matches!(self, ControlPermit::Admitted { .. })",
                                        "        !matches!(self, ControlPermit::Denied(Denial::Refused { .. }))")),
     ("gate-refusal-admitted", changed(GATE, "        }) => Err(Denial::Refused { name, why: *why }),",
                                       "        }) => { let _ = why; Ok((name, Basis::OgkmNonPrivileged)) }")),
+    # Security review of PR #545 F1 and its re-review (#594): the channel link asks the gate first.
+    ("chanlink-gate-removed", changed(CHANLINK, """        if !self
+            .abi
+            .capabilities()
+            .control(kf_arch::ids::ControlCmd(h.cmd))
+            .is_permitted()
+        {
+            return None;
+        }
+        if let Some(d) = self.default_vas""", "        if let Some(d) = self.default_vas")),
+    ("chanlink-answers-before-the-gate", changed(CHANLINK, "        // ★ The guest-ingress gate decides every control this link carries to a host act, before",
+                                                 "        if h.cmd == 0x2080_dead {\n            return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, \"x\", cmd));\n        }\n"
+                                                 "        // ★ The guest-ingress gate decides every control this link carries to a host act, before")),
     ("gate-class-check-skipped", changed(GATE, "        matches!(self, AllocPermit::Admitted { .. })", "        true")),
 ]
 

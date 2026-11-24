@@ -277,6 +277,63 @@ fn every_alloc_request_is_admitted_first() {
     );
 }
 
+/// ★ G-3 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md`; security review of PR #540, F1, mutants W4
+/// and W5): every function that builds an alloc request (`NV_ESC_RM_ALLOC`, `_ALLOC_MEMORY`) with
+/// a MINTED handle refuses the exhausted (null) handle by name before the request, so host RM never
+/// picks a handle for kayfabe. The universe is derived; the one fixed-handle request is the
+/// session's own client root.
+#[test]
+fn every_minted_alloc_request_admits_its_handle_first() {
+    let sites: Vec<_> = all_functions()
+        .into_iter()
+        .filter(|(_, _, body)| body.contains("NV_ESC_RM_ALLOC"))
+        .collect();
+    let mut bad = Vec::new();
+    let mut minted = 0usize;
+    for (file, name, body) in &sites {
+        let alloc = body.find("NV_ESC_RM_ALLOC").expect("filtered");
+        if body.contains("h_object_new: REQUESTED_CLIENT_HANDLE") && !body.contains("want") {
+            assert_eq!(
+                name, "allocate_root",
+                "only the client root has a fixed handle"
+            );
+            continue;
+        }
+        minted += 1;
+        match body.find("admit_want(") {
+            Some(a) if a < alloc => {}
+            _ => bad.push(format!("src/{file}: fn {name}")),
+        }
+    }
+    assert!(
+        minted >= 4,
+        "★ NON-VACUITY: {minted} minted alloc request(s) found; expected at least 4"
+    );
+    assert!(
+        bad.is_empty(),
+        "★ G-3 BREACHED — these build an alloc request with a minted handle without \
+         `admit_want` first, so an exhausted counter's null handle would let host RM pick one:\n  {}",
+        bad.join("\n  ")
+    );
+}
+
+/// ★ G-3, by name: each of the four minted alloc paths the review read admits its handle.
+#[test]
+fn the_four_minted_alloc_paths_admit_their_handle() {
+    for name in [
+        "raw_alloc_exact",
+        "raw_alloc_via_exact",
+        "raw_alloc_nested",
+        "alloc_os_descriptor",
+    ] {
+        let body = one_fn("lib.rs", name);
+        assert!(
+            body.contains("admit_want(want)?"),
+            "fn {name} no longer refuses an exhausted handle before its alloc request"
+        );
+    }
+}
+
 /// ★★★ (2) The admitting token is unforgeable and made in one place.
 #[test]
 fn the_birth_token_is_made_only_by_born_user() {

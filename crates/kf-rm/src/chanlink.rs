@@ -143,6 +143,33 @@ pub const PERF_CUDA_LIMIT_SET_CONTROL: u32 = 0x0080_2009;
 /// on the guest's INTERNAL device at a Device's teardown (`kern_cuda_limit.c:47-75`).
 pub const PERF_CUDA_LIMIT_DISABLE: u32 = 0x0080_2004;
 
+/// Every control id `ChanLinkPolicy::on_control` turns into a statement (each arm of its
+/// `match h.cmd`), besides the two whose id depends on the guest's driver version
+/// (`DefaultVaspaceCtl::at`, `kf_abi::fifoctl::ChannelPropsLayout::at`). The link asks the
+/// guest-ingress gate about every control before any arm (security review of PR #545, F1), and
+/// `crates/kf-rm/tests/ingress_parity.rs` requires the gate to admit each of these at every tag and
+/// this list to be exactly the arms of the `match`.
+pub const CLAIMED_CONTROLS: &[u32] = &[
+    GPFIFO_SCHEDULE,
+    TSG_GPFIFO_SCHEDULE,
+    GET_WORK_SUBMIT_TOKEN,
+    kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE,
+    kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE,
+    GR_SET_CTXSW_PREEMPTION_MODE,
+    GR_CTXSW_ZCULL_BIND,
+    TSG_SET_TIMESLICE,
+    PERF_CUDA_LIMIT_SET_CONTROL,
+    PERF_CUDA_LIMIT_DISABLE,
+    DEBUG_SET_EXCEPTION_MASK,
+    PROMOTE_CTX,
+    EVICT_CTX,
+    BIND,
+    STOP_CHANNEL,
+    TSG_PREEMPT,
+    DISABLE_USERMODE_CHANNELS,
+    DISABLE_CHANNELS,
+];
+
 /// ★ v3-chanctl: a `DISABLE_CHANNELS` list as a `Copy` value (`(hClient, hChannel)` × `n`, ≤ 64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChanList {
@@ -1548,6 +1575,17 @@ impl ChannelPolicy {
                 .or_default()
                 .insert(st.vaspace.0);
             self.vas_objects.insert((st.client.0, st.vaspace.0));
+            return None;
+        }
+        // ★ The guest-ingress gate decides every control this link carries to a host act, before
+        // any arm (security review of PR #545, F1): an id the gate refuses at this tag is not this
+        // link's, and falls through to the gate's own refusal.
+        if !self
+            .abi
+            .capabilities()
+            .control(kf_arch::ids::ControlCmd(h.cmd))
+            .is_permitted()
+        {
             return None;
         }
         if let Some(d) = self.default_vas.filter(|d| d.cmd == h.cmd) {

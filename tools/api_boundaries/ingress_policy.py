@@ -16,7 +16,8 @@ Inputs, and nothing else:
 
 The policy (ours, docs/design/V3_GUEST_INGRESS_TABLE.md section 2):
   control  ALLOWED at tag T  iff  served  and  T exports it  and  T's flags have NON_PRIVILEGED
-                                   and neither PRIVILEGED, INTERNAL nor RM_TEST_ONLY_CODE;
+                                   and neither PRIVILEGED, INTERNAL nor RM_TEST_ONLY_CODE,
+                                   and no export requires an access right (accessRight mask, RS_ACCESS_*);
   class    ALLOWED at tag T  iff  served  and  resource_list.h at T gives it RS_FLAGS_ALLOC_NON_PRIVILEGED
                                    and neither RS_FLAGS_ALLOC_PRIVILEGED nor _KERNEL_PRIVILEGED,
                                    or it is a client root (internal class RmClientResource: serverAllocClient
@@ -68,8 +69,11 @@ def vkey(tag):
 
 # --------------------------------------------------------------------------------------- per-tag extraction
 # One exported-method entry of an NVOC class: flags, then methodId, then the owning class.
+# accessRight is a MASK of the rights the caller must hold (NVBIT(RS_ACCESS_<right>): resource.c
+# serverControl_InitCookie copies it into rightsRequired.limbs[0]; rs_access.h RS_ACCESS_MASK_TEST).
 _EXPORT = re.compile(
-    r"/\*flags=\*/\s*(0x[0-9a-fA-F]+)[uU]?\s*,\s*/\*accessRight=\*/[^,]*,\s*/\*methodId=\*/\s*"
+    r"/\*flags=\*/\s*(0x[0-9a-fA-F]+)[uU]?\s*,\s*/\*accessRight=\*/\s*(0x[0-9a-fA-F]+|[0-9]+)[uU]?\s*,"
+    r"\s*/\*methodId=\*/\s*"
     r"(0x[0-9a-fA-F]+)[uU]?\s*,[^{}]*?/\*pClassInfo=\*/\s*&\(__nvoc_class_def_(\w+)\.classInfo\)")
 _DEFINE_HEX = re.compile(r"^[ \t]*#[ \t]*define[ \t]+(\w+)[ \t]+\(?[ \t]*(0x[0-9a-fA-F]+)[uUlL]*[ \t]*\)?", re.M)
 _FINN_CTRL = re.compile(r"^[ \t]*#[ \t]*define[ \t]+(NV\w+)[ \t]+\((0x[0-9a-fA-F]{5,8})U?\)[ \t]*/\*[ \t]*finn: Evaluated from",
@@ -84,6 +88,23 @@ def _flag_values(control_h):
         if int(m.group(2), 16):
             vals[m.group(1)] = int(m.group(2), 16)
     return vals
+
+
+def _access_rights(rs_access_h):
+    """RS_ACCESS_<RIGHT> -> its index, read from THIS tag's rs_access.h (RS_ACCESS_COUNT is not a right)."""
+    out = {}
+    if os.path.exists(rs_access_h):
+        for m in re.finditer(r"#\s*define\s+RS_ACCESS_(\w+)\s+\(?(\d+)U?\)?", _strip(_read(rs_access_h))):
+            if m.group(1) != "COUNT":
+                out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def _access_names(mask, rights):
+    """The rights a mask requires, by name; a set bit no right names is UNKNOWN (still a refusal)."""
+    names = sorted(n for n, i in rights.items() if mask >> i & 1)
+    known = sum(1 << i for i in rights.values())
+    return names + (["UNKNOWN"] if mask & ~known else [])
 
 
 def _flag_names(value, vals):
@@ -152,6 +173,7 @@ def extract_tree(tree, tag):
     src = os.path.join(tree, "src")
     vals = _flag_values(os.path.join(src, "nvidia/inc/kernel/rmapi/control.h"))
     sdk = os.path.join(src, "common/sdk/nvidia/inc")
+    rights = _access_rights(os.path.join(sdk, "rs_access.h"))
     ctrl_names, class_ids, finn_names = {}, {}, {}
     for sub, sink in (("ctrl", ctrl_names), ("class", class_ids)):
         for dp, _dn, fn in os.walk(os.path.join(sdk, sub)):
@@ -182,9 +204,10 @@ def extract_tree(tree, tag):
         if not (f.startswith("g_") and f.endswith("_nvoc.c")):
             continue
         for m in _EXPORT.finditer(_read(os.path.join(gen, f))):
-            cid = int(m.group(2), 16)
+            cid = int(m.group(3), 16)
             e = controls.setdefault("0x%08x" % cid, {"name": ctrl_names.get(cid, ""), "exports": []})
-            e["exports"].append({"cls": m.group(3), "flags": _flag_names(int(m.group(1), 16), vals)})
+            e["exports"].append({"cls": m.group(4), "flags": _flag_names(int(m.group(1), 16), vals),
+                                 "access": _access_names(int(m.group(2), 0), rights)})
     classes = {}
     for ext, flags, guarded in _rs_entries(os.path.join(src, "nvidia/src/kernel/rmapi/resource_list.h")):
         if ext not in class_ids:
@@ -282,6 +305,8 @@ def control_verdict(e):
         return False, "TestOnly"
     if any("PRIVILEGED" in f for f in each):
         return False, "Privileged"
+    if any(x.get("access") for x in e["exports"]):
+        return False, "AccessRight"
     if not all("NON_PRIVILEGED" in f for f in each):
         return False, "KernelOnly"
     return True, "OgkmNonPrivileged"
@@ -312,7 +337,9 @@ def _fact_rows(f):
     """One tag's facts -> {(kind, id): (name, flags-string)}; flags '-' = named in a header, not exported."""
     rows = {}
     for cid, e in f["controls"].items():
-        fl = ";".join(sorted("|".join(sorted(set(x["flags"]) & KEEP_CTRL)) or "KERNEL" for x in e["exports"]))
+        fl = ";".join(sorted("|".join(sorted((set(x["flags"]) & KEEP_CTRL)
+                                             | {"ACCESS_" + r for r in x.get("access", [])})) or "KERNEL"
+                             for x in e["exports"]))
         rows[("control", int(cid, 16))] = (e["name"], fl)
     for n, cid in f["ctrl_names"].items():
         rows.setdefault(("control", int(cid, 16)), (n, "-"))
@@ -329,7 +356,9 @@ def _rows_to_facts(tag, rows):
                 f["ctrl_names"][name] = "0x%08x" % i
             if fl != "-":
                 f["controls"]["0x%08x" % i] = {"name": name, "exports": [
-                    {"flags": [] if x == "KERNEL" else x.split("|")} for x in fl.split(";")]}
+                    {"flags": [t for t in toks if not t.startswith("ACCESS_")],
+                     "access": [t[len("ACCESS_"):] for t in toks if t.startswith("ACCESS_")]}
+                    for toks in ([] if x == "KERNEL" else x.split("|") for x in fl.split(";"))]}
         else:
             f["class_names"][name] = "0x%04x" % i
             f["classes"]["0x%04x" % i] = {"name": name, "flags": [] if fl == "NONE" else fl.split("|")}
@@ -375,7 +404,8 @@ def write_facts(repo, per):
     keys = sorted(set().union(*[set(per[t]) for t in tags]))
     L = ["# @generated by %s extract from ogkm %s..%s (%d tags); do not edit." % (TOOL, tags[0], tags[-1], len(tags)),
          "# Facts of NVIDIA's open-gpu-kernel-modules (MIT): per control the privilege flags of each exporting",
-         "# class (';' between exports, KERNEL = no visibility flag, '-' = named in a header but not exported);",
+         "# class (';' between exports, KERNEL = no visibility flag, '-' = named in a header but not exported,",
+         "# ACCESS_<RIGHT> = an access right the export requires, decoded from its accessRight mask);",
          "# per class its RS_FLAGS_ALLOC_* privilege. One row per run of equal facts over consecutive tags.",
          "# kind\tid\tfirst_tag\tlast_tag\tname\tflags"]
     for k in keys:
@@ -496,6 +526,7 @@ REASONS = {
     "TestOnly": "Verdict::Refuse(Refusal::TestOnly)",
     "Privileged": "Verdict::Refuse(Refusal::Privileged)",
     "KernelOnly": "Verdict::Refuse(Refusal::KernelOnly)",
+    "AccessRight": "Verdict::Refuse(Refusal::AccessRight)",
     "NoPrivilegeFlag": "Verdict::Refuse(Refusal::NoPrivilegeFlag)",
     "NotExported": "Verdict::Refuse(Refusal::AbsentAtTag)",
     "NotInResourceList": "Verdict::Refuse(Refusal::AbsentAtTag)",
