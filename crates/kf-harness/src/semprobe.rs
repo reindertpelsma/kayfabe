@@ -4,8 +4,8 @@
 //!
 //! Variants (each one process, one fresh channel, its own VA space, owned memory only; no guest memory):
 //! - **A** `SET_REFERENCE 0x4B460001`, then a WITNESS release. Measured once on GB203 / 595.91.07
-//!   (`traces/semprobe_gb203_20261118/`): one Xid 32 with `intr 00200000` (METHOD), and the witness after it still landed, so the verdict does not look at the
-//!   witness. Any other Xid, or a second one, is `Unexpected`.
+//!   (`traces/semprobe_gb203_20261118/`): one Xid 32 with `intr 00200000` (METHOD), and the witness after it
+//!   still landed, so the verdict does not look at the witness. Any other Xid, or a second one, is `Unexpected`.
 //! - **B** the stage-1 semaphore marker cell (`kf_chan::user_semaphore::marker_cell`, `SemaphoreMarker`): the word
 //!   must read the marker value, and no Xid.
 //! - **C** `NON_STALL_INTERRUPT 0`, then a witness release: no Xid, the witness lands.
@@ -398,6 +398,65 @@ mod tests {
 
     fn landed_with(x: Xid) -> Attempt {
         att(true, Some(witness_value(Variant::A)), &[x])
+    }
+
+    /// A's answer is Xid 32 specifically: another Xid number with the same METHOD `intr` bits is not it.
+    /// (A MMU fault or a fallen-off-the-bus GPU can print the same `intr` word; code 20 is how the first run's
+    /// log printed 32, in hexadecimal.)
+    #[test]
+    fn a_method_refusal_is_xid_32_and_no_other_number() {
+        for code in [0, 13, 20, 31, 33, 43, 45, 48, 61, 62, 79, 119] {
+            let x = Xid {
+                code,
+                intr: Some(INTR_METHOD),
+            };
+            for word in [None, Some(Variant::A.expected_word()), Some(0)] {
+                assert_eq!(
+                    verdict(Variant::A, &att(true, word, &[x])),
+                    Verdict::Unexpected,
+                    "Xid {code} with the METHOD intr bits is not variant A's answer"
+                );
+            }
+        }
+        let x32 = Xid {
+            code: 32,
+            intr: Some(INTR_METHOD),
+        };
+        assert_eq!(
+            verdict(Variant::A, &att(true, None, &[x32])),
+            Verdict::MethodRefused
+        );
+    }
+
+    /// A second Xid of any kind next to A's own stops the run, in either order.
+    #[test]
+    fn an_extra_xid_next_to_a_methods_refusal_stops_the_run() {
+        let m = Xid {
+            code: 32,
+            intr: Some(INTR_METHOD),
+        };
+        for extra in [
+            m,
+            Xid {
+                code: 31,
+                intr: None,
+            },
+            Xid {
+                code: 79,
+                intr: Some(INTR_METHOD),
+            },
+        ] {
+            for order in [[m, extra], [extra, m]] {
+                assert_eq!(
+                    verdict(
+                        Variant::A,
+                        &att(true, Some(Variant::A.expected_word()), &order)
+                    ),
+                    Verdict::Unexpected,
+                    "{order:?}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -9,10 +9,16 @@
 //! - it reads the dmesg delta for `NVRM: Xid` lines and classifies the attempt;
 //! - it STOPS at the first unexpected outcome (fail closed), keeping the evidence on stdout.
 //!
-//! Usage: `kf-semmarker-probe [ATTEMPTS]` (default 3; GPU by `KF_GATE_GPU`, as the gates).
-//! Internal: `kf-semmarker-probe child <A|B|C>`.
+//! Usage: `kf-semmarker-probe --i-am-on-a-spec-box [ATTEMPTS]` (default 3; GPU by `KF_GATE_GPU`, as the gates).
+//! Internal: `kf-semmarker-probe --i-am-on-a-spec-box child <A|B|C>`.
+//!
+//! ⚠ Variant A raises a host `Xid 32` on purpose, on the probe's own channel. The run guard
+//! (`kf_harness::semprobe_host`) therefore refuses to start, in the parent and again in every child, unless the
+//! flag is given AND the host facts say the GPU is otherwise idle: no connected or enabled display connector, no
+//! other process holding the GPU's device node, no `qemu` or kf3 process. Exit code 4 is a refusal.
 use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_PUT, USERD_REFERENCE_C56F, gp_entry};
 use kf_harness::semprobe::{self, Attempt, Variant, Verdict};
+use kf_harness::semprobe_host::{self, Cli, OPT_IN_FLAG, Roots};
 use kf_host::{HostRm, MapNode, MapPerm, VaSpace, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset, HostPageSize, VolatileRegion};
 use std::io::Read;
@@ -29,34 +35,51 @@ const WATCHDOG: Duration = Duration::from_secs(20);
 /// After a kill, how long the parent waits for the child to be reaped before giving up on it.
 const REAP: Duration = Duration::from_secs(10);
 
-fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) == Some("child") {
-        let Some(v) = args.get(2).and_then(|s| Variant::parse(s)) else {
-            eprintln!("usage: kf-semmarker-probe child A|B|C");
-            return ExitCode::from(2);
-        };
-        return match child(v) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(e) => {
-                println!("SEMPROBE_CHILD_ERROR variant={} error={e}", v.letter());
-                ExitCode::from(3)
-            }
-        };
-    }
-    let attempts: u32 = match args.get(1).map(|s| s.parse()) {
-        None => 3,
-        Some(Ok(n)) if (1..=10).contains(&n) => n,
-        _ => {
-            eprintln!("usage: kf-semmarker-probe [ATTEMPTS 1..=10]");
-            return ExitCode::from(2);
+/// The run guard against the real host. A refusal prints one `SEMPROBE_REFUSED` line per reason.
+fn guard(opt_in: bool) -> Result<(), ExitCode> {
+    let minor = kf_harness::gate_gpu().0;
+    semprobe_host::guard(&Roots::host(), opt_in, minor, std::process::id()).map_err(|refusals| {
+        for r in &refusals {
+            println!("SEMPROBE_REFUSED gpu_minor={minor} {r}");
         }
-    };
-    match parent(attempts) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            println!("SEMPROBE_STOP {e}");
-            ExitCode::from(1)
+        ExitCode::from(4)
+    })
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match semprobe_host::parse_cli(&args) {
+        Err(usage) => {
+            eprintln!("{usage}");
+            ExitCode::from(2)
+        }
+        Ok(Cli::Child { variant, opt_in }) => {
+            let Some(v) = Variant::parse(&variant) else {
+                eprintln!("usage: kf-semmarker-probe child A|B|C");
+                return ExitCode::from(2);
+            };
+            if let Err(code) = guard(opt_in) {
+                return code;
+            }
+            match child(v) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    println!("SEMPROBE_CHILD_ERROR variant={} error={e}", v.letter());
+                    ExitCode::from(3)
+                }
+            }
+        }
+        Ok(Cli::Parent { attempts, opt_in }) => {
+            if let Err(code) = guard(opt_in) {
+                return code;
+            }
+            match parent(attempts) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    println!("SEMPROBE_STOP {e}");
+                    ExitCode::from(1)
+                }
+            }
         }
     }
 }
@@ -103,32 +126,15 @@ fn parent(attempts: u32) -> Result<(), String> {
             let before = dmesg_lines()?;
             let started = Instant::now();
             let mut c = Command::new(&me)
-                .args(["child", &v.letter().to_string()])
+                .args([OPT_IN_FLAG, "child", &v.letter().to_string()])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::inherit())
                 .spawn()
                 .map_err(|e| format!("spawn: {e}"))?;
-            let mut exited = false;
-            while started.elapsed() < WATCHDOG {
-                if c.try_wait().map_err(|e| format!("wait: {e}"))?.is_some() {
-                    exited = true;
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            let mut status = None;
-            if exited {
-                status = c.try_wait().ok().flatten();
-            } else {
-                let _ = c.kill();
-                let killed = Instant::now();
-                while killed.elapsed() < REAP {
-                    if let Ok(Some(s)) = c.try_wait() {
-                        status = Some(s);
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
+            let outcome =
+                semprobe_host::supervise(&mut c, WATCHDOG, REAP, Duration::from_millis(50))?;
+            let (exited, status) = (outcome.exited, outcome.status);
+            if outcome.killed {
                 println!(
                     "SEMPROBE_WATCHDOG variant={} attempt={n} killed=true reaped={}",
                     v.letter(),
