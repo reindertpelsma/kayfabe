@@ -91,7 +91,7 @@ pub fn inline_delta(get: u32, put: u32, entries: u32, credits: u32) -> Option<u3
     (delta <= MAX_INLINE_GP && delta <= credits).then_some(delta)
 }
 
-/// ★ 2026-10-16 (PHASE 2 protocol, model only: NO production caller yet; brief appendix C). Why an inline
+/// . Why an inline
 /// copy stopped short of the delta it was asked to cover. Anything but [`InlineStop::None`] means the
 /// worker must take over the rest (the caller leaves PENDING and requests a non-blocking worker wake).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

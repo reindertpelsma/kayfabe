@@ -226,7 +226,7 @@ impl State {
 #[derive(Debug, Default)]
 pub struct Registry {
     inner: Mutex<State>,
-    /// ★ 2026-10-16 (`V3_USER_RING_LIFECYCLE_20261016.md` §1.1): bumped (release) AFTER every change of the
+    /// Bumped (release) AFTER every change of the
     /// set of live entries, while the lock that made the change is still held, and so BEFORE the
     /// registration's reply is built. A worker that loads it (acquire) after a guest GP entry and sees a
     /// new value finds the change in [`Registry::live_count`].
@@ -444,7 +444,7 @@ impl Registry {
         }
     }
 
-    /// ★ 2026-10-16 (`V3_USER_RING_LIFECYCLE_20261016.md` §1.1): the monotone epoch of the set of live
+    /// The monotone epoch of the set of live
     /// entries (acquire load; see the field). One atomic load, no lock: the USER-ring worker calls it for
     /// every GP entry.
     #[must_use]
@@ -452,7 +452,7 @@ impl Registry {
         self.epoch.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// ★ 2026-10-16: the number of live entries of `key`, whatever their kind and state (an executed
+    /// The number of live entries of `key`, whatever their kind and state (an executed
     /// EXPLICIT-delete entry is still live). Takes the registry lock: call it only when [`Registry::epoch`]
     /// moved.
     #[must_use]
@@ -853,7 +853,7 @@ mod tests {
         assert_eq!(reg(&r, 1, 0, 0), NV_OK, "a re-created object starts empty");
     }
 
-    /// ★ 2026-10-16: the epoch moves exactly when the set of live entries changes, and an entry is
+    /// The epoch moves exactly when the set of live entries changes, and an entry is
     /// visible to `live_count` by the time the epoch that announces it is.
     #[test]
     fn the_epoch_counts_changes_of_the_live_set_and_nothing_else() {

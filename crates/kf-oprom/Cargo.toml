@@ -12,9 +12,7 @@ default = ["alloc"]
 # with `default-features = false`: it only decodes a descriptor out of a ROM it was handed, and it
 # has no allocator.
 alloc = []
-# ⊘ `embedded-gop` (the committed kf-gop.efi, `include_bytes!`d here) was REMOVED 2026-10-03 on
-# branch v3-gop — OWNER_RULINGS §K: no compiled binary in the repo. crates/kf-gop-image builds the
-# driver from source in its build script and embeds that.
+# The EFI driver is not embedded here: crates/kf-gop-image builds it from source and embeds it.
 
 [[bin]]
 name = "kf-oprom"

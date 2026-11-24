@@ -1,4 +1,4 @@
-//! ★ 2026-10-20 (bw-resume): Blackwell's caps class names the post-composition pipe
+//! Blackwell's caps class names the post-composition pipe
 //! `NVCA73_POSTCOMP_HDR_CAP*(i)` (one per output TILE, `clca73.h`), where Turing..Ada name it
 //! `POSTCOMP_HEAD_HDR_CAP*`. Public NVKMS reads `POSTCOMP_HDR_CAPA(i)` for every usable tile and
 //! asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present (ogkm 580.65.06 nvkms-evo4.c:1826-1831,

@@ -18,7 +18,7 @@ const SPAN: u64 = 8 << 20;
 fn report(runs: Vec<KfMapRun>) -> Report {
     let mut header = KfReportHeader::default();
     header.magic = KFWR_MAGIC;
-    // ★ 2026-11-14 (S1-69): the validator checks the format version and bounds every run by the
+    // The validator checks the format version and bounds every run by the
     // report's own page-size table (VER2's: 4 KiB, 64 KiB, 2 MiB, 512 MiB)
     header.version = kf_cuda::abi::KFWR_VERSION;
     header.ps_log2 = [12, 16, 21, 29];

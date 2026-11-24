@@ -82,7 +82,7 @@ pub struct SimMap {
 /// What one model page translates to: `(ram, backing offset)`.
 pub type Backing = (bool, u64);
 
-/// ★ 2026-11-18: the host PTE state of one VA ([`SimRm::host_pte`]).
+/// The host PTE state of one VA ([`SimRm::host_pte`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostPte {
     /// A mirror mapping translates it.
@@ -614,7 +614,7 @@ impl SimRm {
         })
     }
 
-    /// ★ 2026-11-18 (sparse residency RCA): what the host MMU finds at `va` in this space — a mirror
+    /// What the host MMU finds at `va` in this space — a mirror
     /// translation, or for an unmapped VA the state host RM leaves there. ogkm-580
     /// `gpu_vaspace.c:1577-1600` ("VA reserved as sparse is sparsified immediately, changing its
     /// unmapped state from invalid to zero") and `2279-2289` (an unmap inside a sparse block

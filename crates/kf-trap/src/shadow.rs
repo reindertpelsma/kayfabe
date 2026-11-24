@@ -38,9 +38,11 @@ pub enum WriteSemantics {
 pub struct Cell(AtomicU64);
 
 impl Cell {
+    /// A cell holding zero.
     pub const fn new() -> Cell {
         Cell(AtomicU64::new(0))
     }
+    /// The cell's value.
     #[inline]
     pub fn read(&self) -> u64 {
         self.0.load(Ordering::Acquire)
@@ -94,6 +96,7 @@ pub struct Trigger {
     completed: AtomicU64,
 }
 
+/// What clearing a [`Trigger`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClearOutcome {
     /// We cleared the trigger we were given.
@@ -107,6 +110,7 @@ pub enum ClearOutcome {
 }
 
 impl Trigger {
+    /// An idle trigger.
     pub const fn new() -> Trigger {
         Trigger {
             armed_at: AtomicU64::new(0),
@@ -195,6 +199,7 @@ impl Trigger {
     pub fn issued(&self) -> u64 {
         self.issued.load(Ordering::Acquire)
     }
+    /// How many armed writes have completed.
     #[inline]
     pub fn completed(&self) -> u64 {
         self.completed.load(Ordering::Acquire)

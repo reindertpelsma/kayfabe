@@ -20,7 +20,7 @@ pub(crate) const PENDING_MAX_US: u32 = 1_000;
 /// No walk in flight: the idle backstop.
 pub(crate) const IDLE_US: u32 = 50_000;
 
-/// ★ 2026-11-03 (Ada lane): how long the VA worker may sleep before it next queries a pending
+/// How long the VA worker may sleep before it next queries a pending
 /// walk's GPU event, given how long ago the walk was submitted (`None`: nothing in flight).
 ///
 /// No host callback signals a walk (the R34 per-walk nonstall interrupt, `fc5c83379`), so the

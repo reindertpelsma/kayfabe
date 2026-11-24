@@ -482,13 +482,13 @@ pub enum HostParams {
         /// Request and reply size, checked before the host ioctl.
         size: usize,
     },
-    /// ★ 2026-11-18: a GSS-legacy control whose `paramsSize` moved with the host's GSP firmware
+    /// A GSS-legacy control whose `paramsSize` moved with the host's GSP firmware
     /// branch (F-4, `V3_CONSTANT_MATRIX_20261014.md` §5.3.2). Inside the encoded interval the old
     /// contract holds unchanged (the bytes pass through: the 580 sizes); outside it, ONLY a host
     /// that is one of the exact tags of a measured [`BranchSize`] profile is asked, at that
     /// branch's size; every other host is refused by name with `source`.
     ///
-    /// ⊘ Tier 2, not tier 1 (OWNER_RULINGS §AH; the reason is in `V3_DRIVER_MATRIX.md` §2.2, 2026-11-18):
+    /// ⊘ Tier 2, not tier 1:
     /// the size check for these ids is done by the GSP firmware, and ogkm only forwards its status (ogkm-595
     /// `rmapi_gss_legacy_control.c:33-37`, `src/kernel/vgpu/rpc.c:11227-11234`). No ogkm tag names the ids,
     /// so their sizes cannot be derived from ogkm.
@@ -529,7 +529,7 @@ pub struct BranchSize {
     pub source: &'static str,
 }
 
-/// ★ 2026-11-18: the 595 GSP branch — host tags 595.84 and 595.91.07 (Linux: the GSP firmware is
+/// The 595 GSP branch — host tags 595.84 and 595.91.07 (Linux: the GSP firmware is
 /// the driver's own; Windows 596.51 carries GSP 595.76). Both are matrix tags (`generated::matrix`)
 /// and both were probed unprivileged on several dies (`traces/constants_measure_20261014b/tier2/`).
 pub static GSP_BRANCH_595: HostBranch = HostBranch {
@@ -650,7 +650,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         0x0080_1909,
         NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS
     ),
-    // ★ 2026-10-07: NON_PRIVILEGED (`g_device_nvoc.c` flags 0x50048), asked at realize per
+    // NON_PRIVILEGED (`g_device_nvoc.c` flags 0x50048), asked at realize per
     // advertised engine on kayfabe's own host Device (`kf_abi::fifoctl`).
     hc!(
         "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE",
@@ -897,7 +897,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NVA06C_CTRL_PREEMPT_PARAMS
     ),
     hc!("NVA06F_CTRL_CMD_BIND", 0xa06f_0104, NVA06F_CTRL_BIND_PARAMS),
-    // ★ 2026-10-08 (x11-dispsw at host 595.91.07, `V3_DISPLAY.md` §8.18): the display-SW twin's
+    // The display-SW twin's
     // readback (kf-host `disp_sw_class_id`). Unlisted, it was refused outside the encoded interval
     // (`HOST_ABI_REFUSED`, run wl1), so every guest GF100_DISP_SW was refused there. Its id has no
     // `_CMD_` in its name, so the matrix measures it under `host_chan_cmds` (`host.spec`).
@@ -912,7 +912,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS
     ),
     // GSS-legacy (bit 15; no open header) — `crate::gssreplay`.
-    // ★ Lane C 2026-10-14: `0x20809064`, `0x2080a084`, `0x2080a026` (and the new cudart rows
+    // `0x20809064`, `0x2080a084`, `0x2080a026` (and the new cudart rows
     // `0x20809009`, `0x20809001`) are MEASURED at host 595.91.07 on the AD104: an unprivileged
     // libcudart 13.3 asked them with the requests `crate::gssreplay::ROWS` names and the host
     // answered `NV_OK` at these sizes (traces/constants_night_20261014/host_cudart_probe_595.txt;
@@ -984,7 +984,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 16,
         },
     },
-    // ★ Lane C 2026-10-14: the exact-zero Windows-only GSS rows (`crate::gssreplay`, `exact`).
+    // The exact-zero Windows-only GSS rows (`crate::gssreplay`, `exact`).
     // 852a/8524/a70a/a088 answered a zero request NV_OK unprivileged at 595.91.07 (AD104,
     // traces/ctl_probe_20261013/probe_pass1.tsv); 852e/853a/a618 did NOT (INVALID_ARGUMENT there,
     // although AD103 at 575.51.03 and the Windows driver's GSP 580.65.05 answer the same zero
@@ -998,7 +998,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         name: "",
         cmd: 0x2080_852a,
         params: HostParams::MeasuredOpaque {
-            // ★ 2026-11-18: 1784 NV_OK at both 595 tags; at AD104 595.91.07 every size from 1784 up
+            // 1784 NV_OK at both 595 tags; at AD104 595.91.07 every size from 1784 up
             // and none below (so the 1716-byte row of a GSP 570 guest is refused here, correctly).
             source: "measured:1784 NV_OK at 595.84 and 595.91.07, traces/constants_measure_20261014b/tier2/raw_36762817.txt:27, \
                      raw_49498406.txt:27, raw_53783014.txt:27, raw_55027878.txt:27; AD104 595.91.07 scan: \
@@ -1034,7 +1034,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 12,
         },
     },
-    // ★ 2026-11-04 (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): `0x2080852c`, asked by the
+    // (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): `0x2080852c`, asked by the
     // Windows 580.88 guest at 1440 B (AD102 gate runs ada102a/p/q, `W343GSSCENSUS`) and refused as an unlisted control
     // at 595.91.07. MEASURED on our own AD104 at 595.91.07 (kf-ctl-probe `KF_PROBE_SCAN`, unprivileged, zero requests of
     // 4..16384 B): the host answers exactly one size, 1440, NV_OK; kf3 asked it again at realize in run ada102p, NV_OK.
@@ -1058,7 +1058,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 1,
         },
     },
-    // ★★ 2026-11-18: the F-4 rows. kf-host refused these four by name at realize on every 595 host
+    // The F-4 rows. kf-host refused these four by name at realize on every 595 host
     // (traces/die_coverage_20261104/ada/ad104/realize_gss_lines_timer_arm.txt). The consumers measured are
     // Windows guest drivers (`crate::gssreplay`); a Linux or NVENC consumer is unverified. ⊘ Not a CUDA fix:
     // on the coordinator's pc (2026-11-19), CUDA passed on a warmed 595.91.07 guest with and without these rows. Each is
@@ -1143,7 +1143,7 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: crate::gssreplay::ENC_SESSION_PARAMS_SIZE,
         },
     },
-    // ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, device property `report-utilization`): the ONE
+    // (`docs/design/V3_UTILIZATION_FLAG.md`, device property `report-utilization`): the ONE
     // unprivileged host read behind the guest's utilisation numbers, `NV2080_CTRL_CMD_PERF_GET_GPUMON_PERFMON_UTIL_
     // SAMPLES_V2` (flags 0x50008, NON_PRIVILEGED). Id and size come from the generated utilisation table, never
     // from here; valid in the encoded interval and at the listed tags whose probed row prints the same size.
@@ -1359,7 +1359,7 @@ mod tests {
     /// An unlisted control passes through only where the old contract holds; elsewhere it is refused.
     #[test]
     fn the_display_sw_readback_is_carried_at_595_and_580() {
-        // ★ 2026-10-08 (run wl1): refused at 595.91.07 while it was unlisted; its params are one
+        // Refused at 595.91.07 while it was unlisted; its params are one
         // layout at every measured tag, so it now goes untouched at 580 and at 595
         for v in ["580.159.04", "595.91.07", "610.43.02"] {
             let c = host(v).control_carry(0x906f_0101);
@@ -1437,7 +1437,7 @@ mod tests {
                 );
             }
         }
-        // ★ Lane C 2026-10-14: the cudart/clock GSS rows measured at 595.91.07 are carried there
+        // The cudart/clock GSS rows measured at 595.91.07 are carried there
         // at their measured size; the two that were not asked there stay refused by name.
         for (cmd, size) in [
             (0x2080_9064, 520),
@@ -1475,7 +1475,7 @@ mod tests {
                 "{cmd:#x}"
             );
         }
-        // ⊘ 2026-11-18: the INVALID_ARGUMENT at 595.91.07 was the 580-branch size (F-4); these are
+        // The INVALID_ARGUMENT at 595.91.07 was the 580-branch size (F-4); these are
         // now asked there at the 595 sizes (`gsp_595_branch_hosts_carry_the_measured_sizes`).
         assert!(matches!(
             HostAbi::for_host(HostDriverVersion::parse("595.91.08").expect("parse")),
@@ -1483,7 +1483,7 @@ mod tests {
         ));
     }
 
-    /// ★★ 2026-11-18 (host-ABI coverage, not a CUDA fix): the GSS rows whose `paramsSize`
+    /// The GSS rows whose `paramsSize`
     /// moved with the GSP firmware branch (F-4). The guest-facing rows (`crate::gssreplay`) had the
     /// 595 sizes since 2026-10-14, but the HOST table refused them by name at every 595 host, so
     /// realize never asked them and the guest's GSP-bound question was refused. MEASURED at both

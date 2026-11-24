@@ -16,8 +16,11 @@
 /// The twin classes §9.1 names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Twin {
+    /// A host channel twin.
     Channel,
+    /// A host engine-object twin.
     EngineObject,
+    /// A host address-space twin.
     AddressSpace,
     /// *"one host object per non-coalescable system-memory leaf"* — the one that scales with guest
     /// behaviour rather than with guest configuration, and so the one most able to starve a
@@ -25,10 +28,18 @@ pub enum Twin {
     SysmemLeaf,
 }
 
+/// Why a twin was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     /// ⊘ By name and counted, never a silent failure or a generic OOM.
-    OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+    OverDeclaredCap {
+        /// The twin class that hit its cap.
+        twin: Twin,
+        /// The cap: the count the guest was told.
+        cap: u32,
+        /// The live count the refused request would have made.
+        asked: u32,
+    },
 }
 
 /// One VM's twin accounting.
@@ -37,7 +48,7 @@ pub struct VmCaps {
     caps: [u32; 4],
     live: [u32; 4],
     refused: [u64; 4],
-    /// ★ 2026-10-11: live channel twins per guest runlist. The channel cap is PER RUNLIST (the count
+    /// Live channel twins per guest runlist. The channel cap is PER RUNLIST (the count
     /// the guest was told per runlist, `kf_abi::chanbudget`), so a guest that fills one runlist cannot
     /// take another's share of the host's channels.
     chan_live_rl: Vec<u32>,
@@ -110,6 +121,7 @@ impl VmCaps {
             .unwrap_or(0)
     }
 
+    /// Count one more live twin of class `t`, or refuse it by name when the class is at its cap.
     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {
         let i = ix(t);
         if self.live[i] >= self.caps[i] {
@@ -124,11 +136,13 @@ impl VmCaps {
         Ok(())
     }
 
+    /// Count one live twin of class `t` as gone.
     pub fn release(&mut self, t: Twin) {
         let i = ix(t);
         self.live[i] = self.live[i].saturating_sub(1);
     }
 
+    /// Live twins of class `t`.
     #[inline]
     pub fn live(&self, t: Twin) -> u32 {
         self.live[ix(t)]
@@ -150,13 +164,16 @@ impl VmCaps {
 /// > answer, not an error.**"*
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backing {
+    /// The range is backed by the host aperture.
     Backed {
+        /// Offset of the range in the host aperture.
         host_offset: u64,
     },
     /// ⊘ Named, never a hole. A hole returns plausible bytes and the guest proceeds on them.
     RefusedUnbackable,
 }
 
+/// The guest's framebuffer aperture and how much of it the host can back.
 #[derive(Debug)]
 pub struct Aperture {
     len: u64,
@@ -165,6 +182,7 @@ pub struct Aperture {
 }
 
 impl Aperture {
+    /// Is `[offset, offset + len)` backed? An unbackable range is refused by name and counted.
     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
         match offset.checked_add(len) {
             Some(end) if end <= self.backed_len => Backing::Backed {
@@ -177,14 +195,17 @@ impl Aperture {
         }
     }
 
+    /// The aperture's length in bytes.
     #[inline]
     pub fn len(&self) -> u64 {
         self.len
     }
+    /// Is the aperture zero bytes long?
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
+    /// How many ranges were refused as unbackable.
     #[inline]
     pub fn refusals(&self) -> u64 {
         self.refusals

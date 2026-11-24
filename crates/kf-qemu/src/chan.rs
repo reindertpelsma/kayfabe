@@ -124,7 +124,7 @@ fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf
     ACT_DELAYED.with(|c| c.borrow_mut().push((not_before, act, d, what)));
 }
 
-/// ★ 2026-11-14 (security review 1 F-10): the most guest-driven acts queued (or parked) at once.
+/// The most guest-driven acts queued (or parked) at once.
 /// Each act holds one guest RPC reply; the guest kernel can post RPCs faster than the act thread
 /// runs host calls (a slow host RM, many births), and the queue was an unbounded channel. Past this
 /// a guest-driven act is refused `NV_ERR_INSUFFICIENT_RESOURCES` on the drainer (never a wait),
@@ -135,7 +135,7 @@ fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf
 /// few hundred bytes, so the cap is about a megabyte (design choice, not measured).
 const ACT_QUEUE_CAP: usize = 4096;
 
-/// ★ 2026-11-14: what an act is, for the act queue's cap.
+/// What an act is, for the act queue's cap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActClass {
     /// Guest-driven work: refused past [`ACT_QUEUE_CAP`].
@@ -144,7 +144,7 @@ enum ActClass {
     Release,
 }
 
-/// ★ 2026-11-14: admit one act of `class` into a queue whose depth is `queued`. A `Work` act is
+/// Admit one act of `class` into a queue whose depth is `queued`. A `Work` act is
 /// admitted only while the depth is below `cap` (one atomic, never a wait); a `Release` always.
 /// The act thread gives the depth back as it takes each act ([`act_taken`]).
 fn admit_act(queued: &std::sync::atomic::AtomicUsize, cap: usize, class: ActClass) -> bool {
@@ -161,13 +161,13 @@ fn admit_act(queued: &std::sync::atomic::AtomicUsize, cap: usize, class: ActClas
     }
 }
 
-/// ★ 2026-11-14: the act thread took one admitted act off the queue (or a send failed after
+/// The act thread took one admitted act off the queue (or a send failed after
 /// admission). Never below zero.
 fn act_taken(queued: &std::sync::atomic::AtomicUsize) {
     let _ = queued.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
 }
 
-/// ★ 2026-11-14 (review 1 F-05 = S1-42): one guest NVENC session acquire/release against the
+/// One guest NVENC session acquire/release against the
 /// per-VM book, `host(cmd)` being the host control. An acquire is reserved BEFORE the host call and
 /// refused `NV_ERR_INSUFFICIENT_RESOURCES` with no host call past the cap; a host refusal gives the
 /// reservation back; a release with nothing held makes no host call. The book's lock is never held
@@ -241,7 +241,7 @@ fn enc_session_step(
 /// One queued act: the act, the cell its reply waits on, its name.
 type ActItem = (Act, kf_gsp::Deferred, &'static str);
 
-/// ★ 2026-11-14 (review 1 F-10): the act queue's only sender. Every send goes through
+/// The act queue's only sender. Every send goes through
 /// [`ActSender::send`], which admits it against [`ACT_QUEUE_CAP`] ([`admit_act`]), so no path can
 /// queue an act the depth does not count.
 #[derive(Clone)]
@@ -250,7 +250,7 @@ struct ActSender {
     queued: Arc<std::sync::atomic::AtomicUsize>,
 }
 
-/// ★ 2026-11-14: [`ChanPlane::defer_classed`]'s body — queue one act on `acts` and answer the
+/// [`ChanPlane::defer_classed`]'s body — queue one act on `acts` and answer the
 /// drainer: `Deferred` once queued; past the cap (a `Work` act) `NV_ERR_INSUFFICIENT_RESOURCES`,
 /// counted in `over` and logged only when [`crate::reset::loud`] picks the count; with no act
 /// thread `NV_ERR_INVALID_STATE`. ⊘ Never waits beyond the `acts` lock (held only for the send).
@@ -470,7 +470,7 @@ impl EngineObj {
             };
             {
                 let rl = row_len;
-                // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many host
+                // By RANGE over the whole row — outside a reservation a row is many host
                 // mappings (D1: one per 4 KiB page, or one reservation holding it), so a start-keyed
                 // unmap would take only its first. THROUGH the space's ownership ledger
                 // (`BatchedVas::hand_to_host`): our mappings only, each through the hDma it was mapped
@@ -652,10 +652,10 @@ struct PtChan {
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
-    /// ★ 2026-10-08: a Windows guest-kernel channel classified per-process USER work at its alloc
+    /// A Windows guest-kernel channel classified per-process USER work at its alloc
     /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`); fixed for the twin's life.
     user_work: bool,
-    /// ★ 2026-11-15: the alloc's declared Windows identity ([`kf_rm::chanlink::ChannelAlloc::windows`]);
+    /// The alloc's declared Windows identity ([`kf_rm::chanlink::ChannelAlloc::windows`]);
     /// fixed for the twin's life, like [`PtChan::user_work`].
     windows: bool,
     user_ring: bool,
@@ -741,11 +741,11 @@ struct PtNotifier {
     guest_stop_write: bool,
 }
 
-/// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): at most this many completed async preempts wait for the
+/// At most this many completed async preempts wait for the
 /// drainer (a guest cannot grow a host allocation by preempting in a loop).
 const PREEMPT_DONE_MAX: usize = 64;
 
-/// ★★ 2026-10-08 (after run84) — **a `RUNLIST_PREEMPT_COMPLETE` goes out only after its control's
+/// **A `RUNLIST_PREEMPT_COMPLETE` goes out only after its control's
 /// reply.** The GSP answers the async `DISABLE_CHANNELS` first and posts 139 after it, every time
 /// (`[measured, vfio-10]` RPCs 6628-6633 and 8100-8126: reply, then event). kayfabe's act pushes the
 /// completion when the host verb returns, BEFORE its deferred reply settles; a drainer pass between
@@ -860,7 +860,7 @@ pub struct EngineEvent {
     pub wakes: AtomicU64,
     /// Wakes raised to the guest.
     pub raised: AtomicU64,
-    /// ★ 2026-10-08 (coordinator's first step on H-ce-intr): wakes NOT raised because no guest twin
+    /// Wakes NOT raised because no guest twin
     /// was live on this engine (`live == 0`)…
     pub unraised_no_live: AtomicU64,
     /// …and because the served table gives this engine no guest vector (`vector == None`).
@@ -871,17 +871,17 @@ pub struct EngineEvent {
     pub tlive: AtomicU64,
     /// Wakes relayed to the guest while a Translated GR-tier ring was live.
     pub trelays: AtomicU64,
-    /// ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): Translated copy-engine pumps on this (guest)
+    /// Translated copy-engine pumps on this (guest)
     /// engine that found entries retired after their host fence, not yet relayed.
     pub cpending: AtomicU64,
     /// Relays raised on this engine's guest vector for Translated copy-engine work.
     pub crelays: AtomicU64,
-    /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): the guest's non-stall subscription slot
+    /// The guest's non-stall subscription slot
     /// for this engine (`kf_abi::eventnotify::nonstall_slot_*`; `None`: no such row).
     pub slot: Option<usize>,
     /// Host notifier wakes on this engine whose event the guest had not armed (nothing raised).
     pub not_armed: AtomicU64,
-    /// ★ 2026-10-09: an edge of THIS engine is in a paced raise still owed (credited to `raised`
+    /// An edge of THIS engine is in a paced raise still owed (credited to `raised`
     /// when the tick delivers it). Written by the one worker thread only.
     pub owed_late: std::sync::atomic::AtomicBool,
 }
@@ -898,7 +898,7 @@ fn is_copy_engine(engine_type: u32) -> bool {
     kf_chan::passthrough::is_copy_engine(engine_type)
 }
 
-/// ★ 2026-11-12: the CE class a Translated ring is born with for the CE-implicit binding
+/// The CE class a Translated ring is born with for the CE-implicit binding
 /// ([`kf_chan::ce_implicit`]), or `0`. A pure function of host-held facts: the link's own
 /// classification (`kernel_client`, `user_work`: guest-kernel work only), the channel's engine
 /// and the class of the CE object the ring's host channel holds. Kept apart from the birth
@@ -987,7 +987,7 @@ impl kf_chan::host::UserdInit for UserdView {
     }
 }
 
-/// ★★ 2026-10-08 (`docs/design/V3_USERD_RELAY.md`, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Passthrough
+/// (`docs/design/V3_USERD_RELAY.md`, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Passthrough
 /// twin whose USERD the host cannot adopt (a Windows per-process channel's USERD is a guest-RAM slot at
 /// an IOVA wider than a USERD may be). The twin's USERD is a kayfabe-owned video-memory object; a
 /// worker relays `GP_PUT` in and `GP_GET` out, four bytes each, never a GP entry or push-buffer word.
@@ -1890,7 +1890,7 @@ impl Publisher for VaSplit<'_> {
     }
 }
 
-/// ⊘ 2026-10-10 (`OWNER_RULINGS.md` §AB): **no mirror window.** The legacy rewriter translated
+/// **No mirror window.** The legacy rewriter translated
 /// physical operands through the store and guest-RAM windows every mirror carried (deleted with
 /// `KF3_TSPACE`); every Translated ring is now a T-mode ring, which binds its operands against the
 /// T-space's windows at push (`kf_chan::tmode::push_bound`) and never consults this one
@@ -1913,7 +1913,7 @@ struct Slot {
     guest_engine: u32,
     ctx: CtxBind,
     scheduled: bool,
-    /// ★ 2026-11-15: the alloc's declared Windows identity (fixed at birth; [`WindowsBirth`]).
+    /// The alloc's declared Windows identity (fixed at birth; [`WindowsBirth`]).
     windows: bool,
     dead: Option<String>,
     /// Serves (doorbells + completion rings that reached this channel).
@@ -2023,7 +2023,7 @@ impl WindowsBirth {
     }
 }
 
-/// ★ 2026-11-15 (review of PR #438, F2): every birth decision the Windows profile makes, as ONE value
+/// Every birth decision the Windows profile makes, as ONE value
 /// computed from the alloc by [`BirthPlan::of`]. [`ChanPlane::birth`] reads only these fields, never the
 /// alloc's identity directly, so the decision is testable without a host (`windows_birth_tests`): a Linux
 /// alloc yields an all-`false` plan.
@@ -2081,7 +2081,7 @@ fn sw_subch_inert() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_SW_SUBCH_INERT").is_some_and(|v| v == "1"))
 }
 
-// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.2's follow-up; H-getget after run76): a relayed twin's
+// A relayed twin's
 // engine-written GP_GET is also written into the guest's slot on every host non-stall wake (before the
 // guest's interrupt) and on the worker's park tick — not only at a doorbell. Host-derived only; never
 // rings, never reads GP_PUT. Default off (one variable per run).
@@ -2548,7 +2548,7 @@ pub struct ChanPlane {
     /// ★ The HOST async copy engine our rings run on (authored: the first copy engine the host
     /// says is not a GRCE).
     pub host_ce: u32,
-    /// ★ 2026-09-26: the served FIFO table — which runlist an engine's channels are on (the
+    /// The served FIFO table — which runlist an engine's channels are on (the
     /// Blackwell token index carries it, `kf_trap::tokenindex`).
     engine_table: Vec<kf_abi::inittables::FifoDeviceEntry>,
     stop: AtomicBool,
@@ -2556,12 +2556,12 @@ pub struct ChanPlane {
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
     pt: crate::ptlock::PtLock<HashMap<(u32, u32), PtChan>>,
-    /// ★ 2026-10-20: the lock holders' hand-off (`kf_chan::handoff`): a relay that lost a `try_lock` registers, the holder rings it.
+    /// The lock holders' hand-off (`kf_chan::handoff`): a relay that lost a `try_lock` registers, the holder rings it.
     handoff: std::sync::Arc<crate::ptlock::HandoffHub>,
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
     user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
-    /// ★ 2026-10-14 (`kf_chan::user_loop`): the USER-ring relays' bounded production counters.
+    /// The USER-ring relays' bounded production counters.
     pub relay_stats: kf_chan::user_loop::Stats,
     /// Summary lines printed when the last USER-ring relay went away.
     relay_reports: AtomicU64,
@@ -2570,7 +2570,7 @@ pub struct ChanPlane {
     user_birth_holds: Mutex<Vec<(Arc<()>, Arc<userrelay::Cell>)>>,
     /// Current live object graph for bounded, exact-lifetime USERD access.
     pub memory_access: Arc<kf_rm::memory_access::Access>,
-    /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
+    /// (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
     relays: Mutex<HashMap<u32, Arc<Mutex<Relay>>>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
     pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
@@ -2595,7 +2595,7 @@ pub struct ChanPlane {
     pub acts_run: AtomicU64,
     /// Acts refused.
     pub acts_refused: AtomicU64,
-    /// ★ 2026-10-11: births refused because the guest's channel budget (`channel-budget`, the count
+    /// Births refused because the guest's channel budget (`channel-budget`, the count
     /// it was told per runlist) is spent on the birth's runlist. Named and always on: the status line's `birth_refused_cap`.
     pub birth_refused_cap: AtomicU64,
     /// Slowest act, µs.
@@ -2604,11 +2604,11 @@ pub struct ChanPlane {
     pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
-    /// ★ 2026-10-08 (owner ruling §X): host `FIFO_EVENT_MTHD` edges seen by the relay.
+    /// Host `FIFO_EVENT_MTHD` edges seen by the relay.
     pub pt_fifo_edges: AtomicU64,
     /// …of which raised a guest vector (at once, or late through optional pacing).
     pub pt_fifo_raised: AtomicU64,
-    /// ★ 2026-10-09: one bit per guest vector — a paced raise still owed there carries a
+    /// One bit per guest vector — a paced raise still owed there carries a
     /// `FIFO_EVENT_MTHD` edge (credited to `pt_fifo_raised` when the tick delivers it).
     pt_fifo_owed: [AtomicU64; kf_chan::ptnsi::VECTORS / 64],
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
@@ -2627,7 +2627,7 @@ pub struct ChanPlane {
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
-    /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
+    /// Which guest TSGs the guest has scheduled — written at
     /// statement time by the drainer, read by the birth act (`crate::latejoin`).
     guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
@@ -2637,13 +2637,13 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
-    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
+    /// `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
     /// (Translated) token, for the USER ring trace (`userpump`). Monotonic; nothing decides on it.
     queued: Box<[AtomicU64]>,
     /// `KF3_USER_RING_TRACE` only: every doorbell-class write by route (translated, passthrough,
     /// other/none) and the last value of an "other" one. Measurement; nothing reads it to decide.
     db_census: [AtomicU64; 4],
-    /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
+    /// Host non-stall edges → the guest vectors
     /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
     pub nsi: kf_chan::ptnsi::Relay,
     /// The guest's non-stall subscriptions (`kf_rm::osevent::NonstallArms`), set once at realize
@@ -2662,11 +2662,11 @@ pub struct ChanPlane {
     pub rc_ev: kf_host::EventFd,
     /// ★ P5c: RC events waiting for the register drainer (which owns the GSP queue).
     rc_queue: Mutex<Vec<RcEvent>>,
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): `(hClient, pRunlistPreemptEvent)` of async
+    /// `(hClient, pRunlistPreemptEvent)` of async
     /// `DISABLE_CHANNELS` whose HOST disable+preempt returned — posted by the drainer as
     /// `RUNLIST_PREEMPT_COMPLETE` ([`ChanPlane::take_preempt_done`]). Bounded.
     preempt_done: Mutex<Vec<(u32, u64)>>,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the twins `DISABLE_USERMODE_CHANNELS(bDisable)`
+    /// (`docs/design/V3_S3_RESUME.md`): the twins `DISABLE_USERMODE_CHANNELS(bDisable)`
     /// disabled on the host — exactly those its `bDisable=FALSE` re-enables (a twin the guest
     /// disabled itself with `DISABLE_CHANNELS` is neither taken nor given back).
     usermode_off: Mutex<Vec<(u32, u32)>>,
@@ -2691,7 +2691,7 @@ pub struct ChanPlane {
     /// ★ Review fix 2026-10-04 (§4.2): Translated births refused in a space whose only user
     /// channels are being freed (their host free not finished, or refused).
     pub twin_freeing_refused: AtomicU64,
-    /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
+    /// The doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
     dbfast: &'static kf_chan::dbfast::DbFast,
@@ -2709,10 +2709,10 @@ pub struct ChanPlane {
     pub life_reset: crate::reset::Ack,
     /// Retries the act thread holds parked ([`crate::actq::ActQueue::parked`]), as of its last act.
     acts_parked: std::sync::atomic::AtomicUsize,
-    /// ★ 2026-11-14 (review 1 F-10): acts admitted and not yet taken by the act thread (queued
+    /// Acts admitted and not yet taken by the act thread (queued
     /// plus parked retries), against [`ACT_QUEUE_CAP`].
     acts_queued: Arc<std::sync::atomic::AtomicUsize>,
-    /// ★ 2026-11-14: guest-driven acts refused because the queue was at [`ACT_QUEUE_CAP`].
+    /// Guest-driven acts refused because the queue was at [`ACT_QUEUE_CAP`].
     pub acts_over_cap: AtomicU64,
     /// Device resets that gave up waiting for a parked retry or a refused free (counted, named).
     pub reset_incomplete: AtomicU64,
@@ -3250,7 +3250,7 @@ fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     )
 }
 
-/// ★ 2026-10-08 (owner ruling §X): the relay's settings (`kf_chan::ptnsi`), read once at realize.
+/// The relay's settings (`kf_chan::ptnsi`), read once at realize.
 /// - `KF3_PT_NSI_RELAY=0` — the falsifier mode: host `FIFO_EVENT_MTHD` edges are counted and NOT
 ///   raised (engine-notifier edges still are). Default on.
 /// - `KF3_PT_NSI_MIN_INTERVAL_US` — optional, loss-free pacing per guest vector (an edge inside the
@@ -3264,7 +3264,7 @@ fn nsi_relay_from_env() -> kf_chan::ptnsi::Relay {
     )
 }
 
-/// ★ 2026-10-08 (owner ruling §X): the guest's non-stall subscription slot for an engine kind.
+/// The guest's non-stall subscription slot for an engine kind.
 fn engine_slot(kind: kf_rm::authored::EngineKind) -> Option<usize> {
     use kf_abi::eventnotify as ev;
     use kf_rm::authored::EngineKind as K;
@@ -3441,7 +3441,7 @@ impl ChanPlane {
                 let _ = inbox.wake.signal();
             })
         };
-        // ★ 2026-10-20: the lock holders' hand-off rings through the plane's token and the worker eventfd
+        // The lock holders' hand-off rings through the plane's token and the worker eventfd
         let handoff = std::sync::Arc::new(crate::ptlock::HandoffHub::new(move |token| {
             if plane.ring_internal(token) {
                 let _ = wake.signal();
@@ -3591,7 +3591,7 @@ impl ChanPlane {
     /// order, off the drainer and off every lock the drainer holds.
     ///
     /// # Errors
-    /// ★ 2026-10-20 (`kf_chan::handoff`): a lock holder -- the drainer after a pass, the VA thread after a loop, the act thread after an act -- has released what it held:
+    /// A lock holder -- the drainer after a pass, the VA thread after a loop, the act thread after an act -- has released what it held:
     /// ring the relays that lost a `try_lock` and registered. One atomic add and one atomic load when nobody waits. Never blocks.
     pub fn handoff_released(&self) {
         self.handoff.released();
@@ -3620,7 +3620,7 @@ impl ChanPlane {
                     self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
                     let r = act(self);
-                    // ★ 2026-10-20: a checkpoint of the lock holders' hand-off. Whatever the act held is released; tell the relays that lost a try_lock to it.
+                    // A checkpoint of the lock holders' hand-off. Whatever the act held is released; tell the relays that lost a try_lock to it.
                     self.handoff.released();
                     // Retries the act parked (a steer waiting for a map in flight to end).
                     for (when, a, dd, w) in
@@ -3771,7 +3771,7 @@ impl ChanPlane {
     /// what the optional pacing owes. Returns whether anything is still owed. With pacing off
     /// (the default) it is one branch.
     ///
-    /// ★ 2026-10-09: a late raise is credited to the source(s) whose edge it carries — `pt_fifo_raised`
+    /// A late raise is credited to the source(s) whose edge it carries — `pt_fifo_raised`
     /// if a `FIFO_EVENT_MTHD` edge was owed on its vector, and `raised` of every engine whose own
     /// edge was owed there (the edge side marks them; edges, tick and marks all run on the one
     /// worker thread). One late raise can carry both kinds, so the per-source counts may sum above
@@ -3935,7 +3935,7 @@ impl ChanPlane {
         (r, f)
     }
 
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained) —
+    /// The completed async preempts not yet posted (drained) —
     /// ⊘ none while any reply is still held ([`preempt_posts_ready`]): the event must follow its
     /// control's reply, as the GSP posts it.
     pub fn take_preempt_done(&self, held_replies: usize) -> Vec<(u32, u64)> {
@@ -3948,7 +3948,7 @@ impl ChanPlane {
             .unwrap_or_default()
     }
 
-    /// ★ 2026-10-08: give back preempt completions the queue could not take yet (front first).
+    /// Give back preempt completions the queue could not take yet (front first).
     pub fn requeue_preempt_done(&self, back: Vec<(u32, u64)>) {
         if let Ok(mut q) = self.preempt_done.lock() {
             let mut v = back;
@@ -3975,7 +3975,7 @@ impl ChanPlane {
         Some((v, e.name.as_str(), n, e.tlive.load(Ordering::Relaxed)))
     }
 
-    /// ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): for each guest copy engine whose Translated rings
+    /// For each guest copy engine whose Translated rings
     /// retired fenced work since the last call, `f(vector, engine name, relay number)`. Called by the
     /// worker right after [`ChanPlane::serve`]; an engine with no guest vector is counted, not raised.
     pub fn for_each_ce_relay(&self, mut f: impl FnMut(u32, &str, u64)) {
@@ -4009,19 +4009,19 @@ impl ChanPlane {
             } else {
                 let _ = e
                     .live
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
             }
         }
     }
 
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
-    /// ★ 2026-11-14: guest-driven work, refused past [`ACT_QUEUE_CAP`].
+    /// Guest-driven work, refused past [`ACT_QUEUE_CAP`].
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
         self.defer_cell(what, act, d)
     }
 
-    /// ★ 2026-11-14: [`Self::defer`] for a release (a guest free, the reset's and unload's
+    /// [`Self::defer`] for a release (a guest free, the reset's and unload's
     /// barriers): never refused by the queue's cap ([`ActClass::Release`]).
     fn defer_release(&self, what: &'static str, act: Act) -> ChanAnswer {
         self.defer_classed(what, act, kf_gsp::Deferred::new(), ActClass::Release)
@@ -4146,7 +4146,7 @@ impl ChanPlane {
                     Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
                 };
                 let result = run();
-                // ★ 2026-10-09: a schedule the host refused is not the guest's scheduled state.
+                // A schedule the host refused is not the guest's scheduled state.
                 if result.is_err()
                     && let Ok(mut s) = me.guest_sched.lock()
                 {
@@ -4169,7 +4169,7 @@ impl ChanPlane {
                 enable,
             } => {
                 let answer = self.schedule_statement(client, object, enable);
-                // ★ 2026-10-09 (late TSG joiners): the guest's own scheduled state, recorded at
+                // The guest's own scheduled state, recorded at
                 // STATEMENT time (statement order is the act thread's order, so a twin whose birth
                 // act is still queued sees it). A refused statement is not a schedule.
                 if !matches!(answer, ChanAnswer::Refused { .. })
@@ -4485,7 +4485,7 @@ impl ChanPlane {
                     }),
                 )
             }
-            // ★ 2026-10-07 (Windows run34): `SET_CHANNEL_PROPERTIES` engine timeslice on ONE guest
+            // `SET_CHANNEL_PROPERTIES` engine timeslice on ONE guest
             // channel — the host's `SET_TIMESLICE` on that channel's own host group (passthrough
             // twin or Translated ring), the same unprivileged verb as the TSG arm above. Resolved
             // in this client's namespace only; no host call or wait holds these locks.
@@ -4720,7 +4720,7 @@ impl ChanPlane {
     /// guest's (the guest's cursor is in its USERD, which the pump reads).
     /// ⊘ A list naming a channel the plane does not own is refused whole (nothing is half-done);
     /// a list naming none of ours is not ours.
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **`DISABLE_USERMODE_CHANNELS`, as the host's
+    /// (`docs/design/V3_S3_RESUME.md`) — **`DISABLE_USERMODE_CHANNELS`, as the host's
     /// `DISABLE_CHANNELS` over this VM's user twins.** RM's promise is "disable or enable scheduling
     /// of all usermode channels" (`ctrl2080fifo.h:832-841`); this VM's usermode channels are its
     /// passthrough twins (the RM-internal kernel channels — CeUtils, the FBSR copies — are Translated
@@ -4915,7 +4915,7 @@ impl ChanPlane {
                         }
                     }
                 }
-                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the host's disable+preempt RETURNED — the host's
+                // The host's disable+preempt RETURNED — the host's
                 // real completion — so the guest's RUNLIST_PREEMPT_COMPLETE may be posted now (by the
                 // drainer, after this act's held reply). Never before, never without it.
                 if let Some(ev) = preempt_event
@@ -5786,7 +5786,7 @@ impl ChanPlane {
         ))
     }
 
-    /// ★★ 2026-10-08 (§V): a deferred INITIALIZE/PROMOTE/EVICT whose target is a Windows user-work
+    /// A deferred INITIALIZE/PROMOTE/EVICT whose target is a Windows user-work
     /// Passthrough twin (the channel, or every member of the TSG it names). INITIALIZE and PROMOTE are
     /// satisfied by the twin's own host context (ruling B, as for Translated twins); EVICT takes the
     /// twin's host channel off its runlist (the direct path's act, `evict_ctx`). `None` when no
@@ -6021,7 +6021,7 @@ impl ChanPlane {
             }
         }
         cancel_pending_engine_objects(&self.pt, client, object);
-        // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
+        // A freed TSG (or client) is no longer scheduled — its handle may come back
         // as a new group, whose first channel must not be scheduled from the old one's state.
         if let Ok(mut s) = self.guest_sched.lock() {
             s.forget(client, object);
@@ -6293,7 +6293,7 @@ impl ChanPlane {
     /// ★ v3-video: a guest NVENC session acquire/release, carried to the HOST's GPU-wide slot
     /// accounting (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`): an act (a host ioctl), the reply
     /// held until it lands. A release with nothing held is answered without a host call.
-    /// ★ 2026-11-14 (review 1 F-05 = S1-42): an acquire past the per-VM cap
+    /// An acquire past the per-VM cap
     /// ([`encquota::ENC_SESSIONS_PER_VM`]) is refused `NV_ERR_INSUFFICIENT_RESOURCES` BEFORE the
     /// host call, counted, and logged only when [`crate::reset::loud`] picks the count. The act
     /// resolves its own cell, so acquires and releases are quiet (no line per guest call).
@@ -6419,7 +6419,7 @@ impl ChanPlane {
         outcome
     }
 
-    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2): kayfabe's own USERD for a relayed twin — a 4 KiB
+    /// kayfabe's own USERD for a relayed twin — a 4 KiB
     /// device-local object (in no GPU VA space) and one CPU view of it. Everything made is given back on
     /// failure.
     fn relay_userd(&self) -> Result<(u32, kf_linux_raw::CharDevice, u64, VolatileRegion), String> {
@@ -6456,7 +6456,7 @@ impl ChanPlane {
         }
     }
 
-    /// ★ 2026-10-08: remove the relay of host token `token` (if any) and give back its USERD — after
+    /// Remove the relay of host token `token` (if any) and give back its USERD — after
     /// the host channel is gone; a worker step holds the relay's lock, so none is mid-store.
     fn drop_relay(&self, token: u32) {
         let Some(r) = self.relays.lock().ok().and_then(|mut m| m.remove(&token)) else {
@@ -6519,7 +6519,7 @@ impl ChanPlane {
         let _ = self.rm.free(mem);
     }
 
-    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.1-2.2): one relay step for host token `ht`, on a worker.
+    /// One relay step for host token `ht`, on a worker.
     /// `None` when `ht` is not a relayed twin.
     fn relay_serve(&self, ht: u32) -> Option<bool> {
         let r = self.relays.lock().ok()?.get(&ht).cloned()?;
@@ -6604,7 +6604,7 @@ impl ChanPlane {
         out
     }
 
-    /// ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH=1`, default off; [`kf_chan::userd_relay::refresh`]): on a
+    /// On a
     /// worker, write every relayed twin's engine-written `GP_GET` into its guest slot when it moved —
     /// called on an engine's host non-stall wake (before the guest's interrupt is raised) and on the
     /// worker's park tick. A relay whose lock a doorbell step holds is skipped (that step writes it
@@ -7137,13 +7137,13 @@ impl ChanPlane {
             );
             ChanAnswer::Refused { status, why }
         };
-        // ★★ 2026-10-08 (OWNER_RULINGS §V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Windows
+        // A Windows
         // guest-kernel channel the link classified as per-process USER work at its alloc
         // (`kf_rm::chanlink::windows_user_work`) takes the Passthrough route; every kernel-only
         // route below is for the others.
         let passthrough = !a.kernel_client || a.user_work;
         let kernel_work = a.kernel_client && !a.user_work;
-        // ★ 2026-10-10 (§AB): `KF3_TSPACE` is hardwired, so no route below is gated on it.
+        // `KF3_TSPACE` is hardwired, so no route below is gated on it.
         // `KF3_KERNEL_NVDEC_CTX`/`_NVENC_CTX`/`_OFA_CTX` are deleted and hardwired ON (the
         // Windows profile's values; measured required, runs 21-24). ★ 2026-11-15: the kernel-GR tier
         // (was `KF3_KERNEL_GR_CE`) is the Windows profile's and follows the alloc's declared identity
@@ -7230,7 +7230,7 @@ impl ChanPlane {
                 ),
             );
         };
-        // ★ 2026-09-26: the index is per family (`kf_trap::tokenindex`) — on Blackwell chids are per
+        // The index is per family (`kf_trap::tokenindex`) — on Blackwell chids are per
         // runlist, and the runlist is the one the served FIFO table gives this engine (what the
         // guest's own token carries in RUNLIST_ID). Through Hopper the runlist is ignored.
         let runlist =
@@ -7248,7 +7248,7 @@ impl ChanPlane {
             );
         }
         if passthrough {
-            // ★★ 2026-10-08 (`V3_USERD_RELAY.md`): a Windows user-work twin with a guest-RAM USERD is
+            // (`V3_USERD_RELAY.md`): a Windows user-work twin with a guest-RAM USERD is
             // born over kayfabe's own USERD and relayed; the guest's slot is only read (`GP_PUT`) and
             // written (`GP_GET`) by a worker. Its guest-RAM view is made here, before any host verb.
             // ⚠ CONTROL (2026-10-08, owner decision; `KF3_USERD_RELAY_OFF=1`, default off): no relay —
@@ -7396,7 +7396,7 @@ impl ChanPlane {
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
                     let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
-                    // ★ 2026-10-08: the relayed twin's own USERD (refused by name, fail closed, if it
+                    // The relayed twin's own USERD (refused by name, fail closed, if it
                     // cannot be made — never a twin without its relay).
                     let relay_host = match relay_guest.as_ref().map(|_| me.relay_userd()) {
                         Some(Ok(h)) => Some(h),
@@ -7452,7 +7452,7 @@ impl ChanPlane {
                         .map(|_| ())
                         .and_then(|()| me.caps.lock().map_err(|_| "caps poisoned".to_string()))
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| {
-                            // ★ 2026-10-11: LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
+                            // LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
                             let rl = me.plane.token_index.runlist_of(me.plane.token_index.clamp(idx));
                             let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                             eprintln!("kf3: ⚠ CHANNEL BUDGET EXHAUSTED on guest runlist {rl}: {e:?} (refusal #{n}; the `channel-budget` property, docs/design/V3_CHANNEL_BUDGET.md)");
@@ -7706,7 +7706,7 @@ impl ChanPlane {
                 } else {
                     None
                 };
-                // ★ 2026-10-14: a kernel video ring decodes subchannels 0-4 against the class of
+                // A kernel video ring decodes subchannels 0-4 against the class of
                 // the video object its host channel holds (`kf_chan::vtables`), never as CE work.
                 let video_class = host.video_context().map_or(0, |(_, class, _)| class);
                 let gr_cfg = kf_chan::tmode::GrConfig {
@@ -7715,7 +7715,7 @@ impl ChanPlane {
                     deferred_api: plan.deferred_api,
                     video: video_class,
                 };
-                // ★ 2026-10-19 (run 3017, token 0x806): a guest-KERNEL copy-engine ring decodes
+                // A guest-KERNEL copy-engine ring decodes
                 // subchannels 0-4 against the CE class its own host channel holds when the guest
                 // has sent no `SET_OBJECT` (not required by any engine). Kernel work on a copy
                 // engine only: a user-tier channel never reaches this route, a graphics or video
@@ -7924,7 +7924,7 @@ impl ChanPlane {
                 if w != n.at_arm && (w[3] >> 16) != 0 {
                     n.reported = true;
                     found.push(RcEvent {
-                        // ★ 2026-09-26: the GUEST chid (the index carries the runlist on Blackwell).
+                        // The GUEST chid (the index carries the runlist on Blackwell).
                         chid: self.plane.token_index.chid_of(t.idx),
                         engine: t.engine,
                         except_type: w[2],
@@ -8584,7 +8584,7 @@ impl ChanPlane {
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",
                 g.guest_idx, g.key
             );
-            // ★ 2026-10-07 (Windows Code43, run41: a kernel copy channel died with an EMPTY rows
+            // (Windows Code43, run41: a kernel copy channel died with an EMPTY rows
             // map although the walker had mapped its ring into that space): is the channel's
             // mirror still the plane's mirror for its key? Error path only; never waits.
             let plane_now = self.mirrors.try_lock().ok().map(|m| {
@@ -8758,7 +8758,7 @@ impl ChanPlane {
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).
     #[must_use]
     pub fn alive(&self, ht: u32) -> bool {
-        // ★ 2026-10-08 (`V3_USERD_RELAY.md`): a relayed twin is served by the worker too; it has no
+        // (`V3_USERD_RELAY.md`): a relayed twin is served by the worker too; it has no
         // Translated slot (its ring is the guest's, never pumped), so its liveness is the relay's.
         // [measured, run67 at 8288ff8e] without this the plane judged it untranslatable and never
         // ran a relay step (gets=0).
@@ -9245,7 +9245,7 @@ mod dispsw_tests {
         }
     }
 
-    /// ★ 2026-11-15 (review of PR #438, F2): the deferred-API plan of a twin is read from the twin's own
+    /// The deferred-API plan of a twin is read from the twin's own
     /// declared identity. A Linux twin (`windows == false`) gets no host object even if its record says
     /// user work; a declared Windows user-work twin gets one; a Windows twin that is not user work, and a
     /// handle that names no twin of ours, get none.
@@ -10139,7 +10139,7 @@ mod sw_scan_tests {
     }
 }
 
-/// ★★ 2026-11-15 (flag cleanup, Stage 1): the Windows profile's birth behaviours ([`WindowsBirth`]) are a
+/// The Windows profile's birth behaviours ([`WindowsBirth`]) are a
 /// function of the alloc's declared identity and of nothing else. For a channel that did not declare it
 /// (every Linux channel) every behaviour is off and every route is the one it took before the profile.
 #[cfg(test)]
@@ -10227,7 +10227,7 @@ mod windows_birth_tests {
         );
     }
 
-    /// ★ 2026-11-15 (review of PR #438, F2): the plan `birth()` reads. A Linux alloc (no declared
+    /// The plan `birth()` reads. A Linux alloc (no declared
     /// identity) yields an all-`false` plan whatever the route (kernel or user, any engine), so the
     /// kernel-GR tier, its GR work, the deferred-API trigger and host-owned scheduling are all off and the
     /// slot is stamped `windows == false`.
@@ -10503,7 +10503,7 @@ mod replay_creo04_gb203_xid32 {
     }
 }
 
-/// ★ 2026-10-08 (after run84) — the async preempt's ordering and the disable list's resolution, with
+/// The async preempt's ordering and the disable list's resolution, with
 /// fake host completions (no GPU): a model drainer that holds replies until their acts settle,
 /// releases them in order, then posts queued preempt completions through [`preempt_posts_ready`] —
 /// the same pass order as `Device::drainer_loop` (`release_settled`, then `deliver_preempt_complete`).
@@ -10799,7 +10799,7 @@ mod ce_birth_tests {
     }
 }
 
-/// ★ 2026-11-14 (security review 1 F-10): the act queue's cap. Deterministic (no act thread).
+/// The act queue's cap. Deterministic (no act thread).
 #[cfg(test)]
 mod act_cap_tests {
     use super::{
@@ -10934,7 +10934,7 @@ mod act_cap_tests {
     }
 }
 
-/// ★ 2026-11-14 (security review 1 F-05 = S1-42): the per-VM NVENC cap at the act's boundary,
+/// The per-VM NVENC cap at the act's boundary,
 /// with a fake host call (no HostRm).
 #[cfg(test)]
 mod nvenc_cap_tests {

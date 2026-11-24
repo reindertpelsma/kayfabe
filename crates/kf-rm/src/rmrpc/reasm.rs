@@ -76,7 +76,7 @@ use super::BridgeRefusal;
 /// driver's own bound is one we cannot see: `rpcSetRegistry` asserts
 /// `totalSize < pRpc->pMessageQueueInfo->commandQueueSize`
 /// (`ogkm-610: rpc.c:10510`, `ogkm-580: :10703`), and the
-/// command queue's size lives in `kayfabe-gsp`'s geometry, which
+/// command queue's size lives in `kf-gsp`'s geometry, which
 /// `CommandPolicy::respond` is deliberately not given (§1.3 — the signature must not
 /// widen).
 ///

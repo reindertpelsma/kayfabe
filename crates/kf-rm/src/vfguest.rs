@@ -62,7 +62,7 @@ const NV_OK: u32 = 0;
 const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
 const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 
-/// ★ 2026-10-07 (audit `docs/audits/2026-10-07-code43-gr-derive-compliance.md` S4/S5): the three
+/// (audit `docs/audits/2026-10-07-code43-gr-derive-compliance.md` S4/S5): the three
 /// controls' ids, params sizes and values at the GUEST's driver version, read from the driver
 /// matrix (`kf_abi::generated::matrix`, measured per ogkm tag by `tools/drivermatrix`) instead of
 /// typed by hand. The status word's offset is the version's `rm_control_wire().status_off`.

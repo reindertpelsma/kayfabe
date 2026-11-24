@@ -1,4 +1,4 @@
-//! ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`): the use sites of the `report-utilization` property that
+//! (`docs/design/V3_UTILIZATION_FLAG.md`): the use sites of the `report-utilization` property that
 //! cannot be reached GPU-free (`Device::realize` needs a host RM; `kf3_realize` is the C ABI; `kf3.c` is C).
 //!
 //! The decision itself is [`kf_qemu::utilhost::enable_if`], tested behaviourally (off builds no host and makes

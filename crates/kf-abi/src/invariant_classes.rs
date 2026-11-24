@@ -21,7 +21,7 @@
 //! ⊘ **The wrong fix would have been to widen the gate's pattern or re-exempt the crate.**
 //! The gate's own failure text prescribes the right one in as many words: *"give it a name
 //! that says what it MEANS, not which chip has it"*. That is what this module is. It is
-//! deliberately in `kayfabe-abi` — the crate the quarantine rule allows to spell an NVIDIA
+//! deliberately in `kf-abi` — the crate the quarantine rule allows to spell an NVIDIA
 //! constant — so the generation names below sit exactly where they are supposed to, once.
 //!
 //! ★ And it does something a rename alone would not: it makes the invariance an

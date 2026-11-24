@@ -209,7 +209,7 @@ pub struct GrInfoProfile {
     pub data: [u32; GR_INFO_MAX_SIZE],
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 1) — which of RM's **zero-sensitive** readers
+/// Which of RM's **zero-sensitive** readers
 /// of this table the guest's HAL binds. Family-free here; the composition root fills it from the
 /// family row (`kf_chip::Family::reads_gr_veid_step_size`), which cites the HAL binding.
 ///

@@ -21,7 +21,7 @@
 //! | command | on the trigger |
 //! |---|---|
 //! | `DMA_INVALIDATE_TLB` | the host GATE (`kf_chan::swmethod`): walk + commit + host invalidate of the channel's OWN space by the VA-manager thread, which then opens the gate; the guest's `hClientVA`/`hDeviceVA`/`hVASpace` are ignored (§U.2) |
-//! | `GPU_INITIALIZE_CTX` | satisfied by the twin (owner ruling B, "golden context is guest-kernel-only"): the target's host context was created and golden-initialised by host RM at its birth; `PRESERVE_CTX` (a context migrated from another channel) is REFUSED |
+//! | `GPU_INITIALIZE_CTX` | satisfied by the twin: the target's host context was created and golden-initialised by host RM at its birth; `PRESERVE_CTX` (a context migrated from another channel) is REFUSED |
 //! | `GPU_PROMOTE_CTX` | satisfied by the twin (ruling B), the legacy `(virtAddress, size)` shape only; `hVirtMemory` and entry lists are REFUSED (no producer measured) |
 //! | `GPU_EVICT_CTX` | the target's host ring off its runlist — the direct path's own act (`ChanPlane::evict_ctx`) |
 //! | `FIFO_UPDATE_CHANNEL_INFO` | REFUSED: re-pointing a channel's USERD/GPFIFO has no unprivileged host verb |

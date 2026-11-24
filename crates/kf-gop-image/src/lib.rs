@@ -2,14 +2,11 @@
 //! # kf-gop-image — kf3's boot-display GOP driver, built from source and embedded
 //!
 //! kf3's option ROM (`docs/design/V3_DISPLAY.md` §4.11) is one constant UEFI driver wrapped, per
-//! device, with generated config data (owner ruling `docs/OWNER_RULINGS.md` §K: *"generate the uefi
-//! data in kayfabe and give it as blob in the rom … all is given as config data, just like cuda"*).
-//! This crate is the constant half:
+//! device, with generated config data. This crate is the constant half:
 //!
 //! - [`KF_GOP_EFI`] — `firmware/kf-gop`, compiled by this crate's build script during the ordinary
-//!   cargo build for `<arch>-unknown-uefi` of the arch kayfabe is built for. ⊘ No compiled binary is
-//!   committed (§K, the same day: *"the efi driver is compiled when building the repo"*); until
-//!   2026-10-03 the driver was a committed `firmware/kf-gop/kf-gop.efi` embedded by `kf-oprom`.
+//!   cargo build for `<arch>-unknown-uefi` of the arch kayfabe is built for. No compiled binary is
+//!   committed.
 //! - [`TARGET`] — the UEFI triple it was built for.
 //! - [`pack_kf_gop`] — [`KF_GOP_EFI`] wrapped for one device by `kf_oprom::pack`: the ROM header with
 //!   the driver's own machine type, PCIR with the ids and class kf3 presents, the `KFGP` descriptor.
@@ -23,7 +20,7 @@
 use kf_oprom::pe::{SigError, SignedInfo};
 use kf_oprom::{BootFramebuffer, Identity, PackError};
 
-/// ★ kf3's boot-display GOP driver: `firmware/kf-gop`'s `kf-gop` binary, built by `build.rs` for
+/// kf3's boot-display GOP driver: `firmware/kf-gop`'s `kf-gop` binary, built by `build.rs` for
 /// [`TARGET`]. An EFI boot-service driver that `kf_oprom::pe::check` accepted at build time, whose
 /// COFF machine is the arch kayfabe is built for. The same bytes on every host for a given source
 /// and toolchain (`firmware/kf-gop/build.rs`: `/Brepro`, `/DEBUG:NONE`), so one future Secure Boot
@@ -61,9 +58,8 @@ impl core::fmt::Display for SignedPackError {
 
 impl std::error::Error for SignedPackError {}
 
-/// ★ Pack a SIGNED copy of [`KF_GOP_EFI`] for one device (2026-10-04, branch `v3-windows`,
-/// `docs/OWNER_RULINGS.md` §K: the ROM's EFI driver signed with a per-install kayfabe key enrolled in
-/// the VM's `db`).
+/// Pack a SIGNED copy of [`KF_GOP_EFI`] for one device: the ROM's EFI driver signed with a
+/// per-install kayfabe key enrolled in the VM's `db`.
 ///
 /// The signature is supplied at run time and never built in: the private key stays out of cargo's
 /// environment and `OUT_DIR`, the embedded driver stays reproducible, and a Microsoft third-party
@@ -181,7 +177,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// ★ 2026-10-03 (the review of `v3-gop`): the nested build is `--locked` against the
+    /// The nested build is `--locked` against the
     /// firmware's own lock, which pins kf-oprom — a path dependency whose version is the
     /// workspace's (`crates/kf-oprom/Cargo.toml`: `version.workspace = true`, as this crate's). A
     /// version bump without `cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom`

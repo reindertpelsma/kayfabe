@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — **SPARSE RESIDENCY, GPU-free** (`docs/design/V3_SPARSE_RESIDENCY_RCA.md`).
+//! **SPARSE RESIDENCY, GPU-free** (`docs/design/V3_SPARSE_RESIDENCY_RCA.md`).
 //!
 //! `[measured, box kf-openguest-172333, traces/open_rows_guest_20261117/confirm]` the Vulkan CTS
 //! sparse-residency cases (`multisampled_image_sparse_residency.rgba16ui.samples_4`,

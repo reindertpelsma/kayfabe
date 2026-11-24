@@ -1,4 +1,4 @@
-//! ★ 2026-10-07 (Windows Code43, run42): `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
+//! `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
 //! answered as the feature-absent state: `bEnable = NV_FALSE`.
 //!
 //! What the guest asks: whether FECS context-switch logging is enabled for its GR engine. The GSP

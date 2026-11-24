@@ -106,7 +106,7 @@ pub const KFWR_HF_TRUNCATED: u16 = 1 << 0;
 pub const KFWR_HF_RESYNC: u16 = 1 << 1;
 /// ★ Report header flag: the runs are each entry's DIFF against its slot's committed placements.
 pub const KFWR_HF_DIFF: u16 = 1 << 7;
-/// ★ 2026-11-15 (M4): the diff was larger than the report's run capacity, so the report carries a
+/// The diff was larger than the report's run capacity, so the report carries a
 /// WINDOW of it (every run that starts below a VA boundary no run straddles). NOT truncated: the
 /// commit applies it like any report; each entry that is not whole carries [`KFWR_V_CUT`].
 pub const KFWR_HF_CUT: u16 = 1 << 8;
@@ -152,13 +152,13 @@ pub const KFWR_R_FRONTIER_CAP: u32 = 1 << 12;
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
 pub const KFWR_V_OVERFLOW: u32 = 1 << 4;
-/// ★ 2026-11-15 (M4) per-entry flag: only part of the entry's diff is in the report (the window
+/// Per-entry flag: only part of the entry's diff is in the report (the window
 /// below a VA boundary no run straddles, or nothing of it while an earlier entry fills the report);
 /// the rest is re-emitted by the next walk. The host walks again at once and completes the split or
 /// invalidate only on a walk whose diff is empty.
 pub const KFWR_V_CUT: u32 = 1 << 6;
 /// ★ Per-entry flag: the entry's walk refused something (`KfPdbEntry::reserved2` = the
-/// `KFWR_R_*` bits); its refused leaves are absent from the walk (owner ruling 2026-09-25).
+/// `KFWR_R_*` bits); its refused leaves are absent from the walk.
 pub const KFWR_V_REFUSED: u32 = 1 << 5;
 
 /// `value = ((raw >> lo) & ((1 << bits) - 1)) << shift`.
@@ -261,13 +261,13 @@ pub struct KfFormat {
     pub pcf: KfField,
     /// The PCF value meaning SPARSE (VER3).
     pub pcf_sparse: u8,
-    /// ★ 2026-11-14 (fixcuda2; review 3 F-1 host side): VER3's big-PTE PCF value meaning "no
+    /// VER3's big-PTE PCF value meaning "no
     /// valid 4 KiB PTE below me" (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE` = 0x3). Carried in the
     /// descriptor, as the format's other moved values are; it took one of `pad1`'s bytes (no
     /// offset moved). 0 on VER2. `WalkKernel::bring_up_on` refuses a descriptor whose value
     /// differs from the one the committed kernel compiles (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`).
     pub pte_pcf_no_valid_4k: u8,
-    /// ★ 2026-11-14: VER3's PDE PCF bit meaning SPARSE for either ATS setting (0x1: SPARSE_ATS_
+    /// VER3's PDE PCF bit meaning SPARSE for either ATS setting (0x1: SPARSE_ATS_
     /// ALLOWED 1 and _NOT_ALLOWED 3 both have it, the INVALID values 0 and 2 do not). 0 on VER2.
     /// Checked at bring-up like [`Self::pte_pcf_no_valid_4k`].
     pub pde_pcf_sparse_bit: u8,
@@ -1144,7 +1144,7 @@ pub fn kf_format_ver3() -> KfFormat {
         pad: 0,
     };
     f.pcf_sparse = 1;
-    // ★ 2026-11-14: the two VER3 PCF enumerants that are not a moved bit, as the `.cu` assigns
+    // The two VER3 PCF enumerants that are not a moved bit, as the `.cu` assigns
     // them in `kf_format_ver3` (pinned by the descriptor differential); tied to ogkm's
     // `hopper/gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py` through the kernel's defines.
     f.pte_pcf_no_valid_4k = 0x3;

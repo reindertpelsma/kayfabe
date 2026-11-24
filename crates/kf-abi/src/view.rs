@@ -92,7 +92,7 @@ pub enum AllocWire {
 /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2132-2135`, repeated
 /// `:6464-6465`), which are element-relative with a 48-byte element header and a
 /// 32-byte envelope in front, i.e. **minus 80** they are `0/4/8/12/20/32`. Two
-/// humans, two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts
+/// humans, two trees, one answer; `crates/kf-abi/tests/mean_wire.rs` asserts
 /// the subtraction rather than trusting it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RpcAllocReq {
@@ -149,7 +149,7 @@ impl RpcAllocReq {
 /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2134-2135`, repeated
 /// `:2732-2733`), element-relative with a 48-byte element header and a 32-byte
 /// envelope in front, i.e. **minus 80** they are `0/4/8/12/16/40`. Two humans,
-/// two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts the
+/// two trees, one answer; `crates/kf-abi/tests/mean_wire.rs` asserts the
 /// subtraction rather than trusting it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RpcControlReq {

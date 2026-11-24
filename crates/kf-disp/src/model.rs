@@ -116,7 +116,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP",
         "head_routing",
     ),
-    // ★ 2026-10-14: the display SHARED DATA page — kernel RM's per-head vblank counters
+    // The display SHARED DATA page — kernel RM's per-head vblank counters
     // (`KernelDisplaySharedMem.kHeadVblankCount[]`, ogkm `kern_disp.c:557-627`), which physical RM
     // updates and a GSP client's `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` READS
     // (`disp_common_kern_ctrl_minimal.c:401-410`). Stated to the worker, which counts each head's
@@ -173,7 +173,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // §S) and every SET/RESET stays refused NOT_SUPPORTED. [measured] vfio-10 RPC 2645: GET of
     // index 1 on head 0 (the real GPU answered TRUE: it runs IMP).
     ("NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER", "imp_param"),
-    // ★ 2026-10-14 (Win11 queue item: `D3DKMTGetScanLine` read line 0 / never in the blank; the
+    // (Win11 queue item: `D3DKMTGetScanLine` read line 0 / never in the blank; the
     // control was refused NOT_SUPPORTED, `traces/win11_opengl_20261014/guest_probe_results.txt`).
     // `GET_RG_SCAN_LINE` (`ctrl5070rg.h:361-391`, layout derived): the raster generator's current
     // line and VBLANK state — the same live raster position the core's `GET_RG_SCAN_LINE(h)` word
@@ -201,7 +201,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ),
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET", "no_params"),
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET", "no_params"),
-    // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
+    // ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
     // 0x40), so it reaches us. NVKMS sends PRESERVE_HW before freeing each channel after it restored
     // the console (`nvkms-rm.c:2990-3017`): the display keeps scanning the console through the free.
     // The mark is the DISPLAY OBJECT's the control names ([`DisplayModel::control_on`]).
@@ -481,7 +481,7 @@ pub enum Statement {
         kind: ChannelKind,
         /// Instance.
         instance: u32,
-        /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the free carried
+        /// The free carried
         /// `NV5070_CTRL_SET_RMFREE_FLAGS_PRESERVE_HW` — the display hardware keeps scanning what
         /// it scans (NVKMS sets it after a console restore, `nvkms-rm.c:2990-3017`).
         preserve: bool,
@@ -558,7 +558,7 @@ pub struct DisplayModel {
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the live `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`
+    /// The live `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`
     /// registrations (same bound, same retire rules as [`Self::hotplug`]) — where a preempt-complete
     /// `POST_EVENT` is addressed.
     pub preempt: Vec<HotplugRegistration>,
@@ -743,7 +743,7 @@ impl DisplayModel {
         n
     }
 
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): record a `RUNLIST_PREEMPT_COMPLETE` registration (an
+    /// Record a `RUNLIST_PREEMPT_COMPLETE` registration (an
     /// ACCEPTED event alloc with that notify index), bounded as [`Self::register_hotplug`].
     pub fn register_preempt(&mut self, r: HotplugRegistration) -> bool {
         if self
@@ -760,7 +760,7 @@ impl DisplayModel {
         true
     }
 
-    /// ★ 2026-10-08: the live `RUNLIST_PREEMPT_COMPLETE` registration of `client` (newest first).
+    /// The live `RUNLIST_PREEMPT_COMPLETE` registration of `client` (newest first).
     #[must_use]
     pub fn preempt_target(&self, client: u32) -> Option<HotplugRegistration> {
         self.preempt
@@ -2216,7 +2216,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-10-14: `MAP_SHARED_DATA` states the display shared-data page to the worker (which
+    /// `MAP_SHARED_DATA` states the display shared-data page to the worker (which
     /// keeps each head's vblank count in it): bMap 1 -> the page as kernel RM described it (FB base,
     /// size, address space), bMap 0 -> unmapped; the reply is the request.
     #[test]
@@ -2601,7 +2601,7 @@ mod tests {
         crate::ports::NUM_CHANNELS as u32
     }
 
-    /// ★ 2026-10-03 (B5): `SET_RMFREE_FLAGS` PRESERVE_HW is the DISPLAY OBJECT's
+    /// `SET_RMFREE_FLAGS` PRESERVE_HW is the DISPLAY OBJECT's
     /// (`disp_objs.c:563-578`) and lasts for the free it was set for (`ctrl5070chnc.h:901-913`).
     /// ⊘ CORRECTED the same day (the review of `v3-gop-unload`): it was one model-wide flag, cleared
     /// after every `GSP_RM_FREE` — another client's flag marked this client's free, and a child's
@@ -2926,7 +2926,7 @@ mod tests {
         assert_eq!(m.hotplug_target(), None);
     }
 
-    /// ★ 2026-10-14: `GET_RG_SCAN_LINE` answers the live raster position of the head it names
+    /// `GET_RG_SCAN_LINE` answers the live raster position of the head it names
     /// (the core word's), line 0 / not in the blank before a raster runs, and refuses a head the
     /// display does not have, another subdevice or a short struct — both derived driver versions.
     #[test]
@@ -2990,7 +2990,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-07 (Windows run29): the VFIO shapes of IMP_SET_GET_PARAMETER (vfio-10 2645),
+    /// The VFIO shapes of IMP_SET_GET_PARAMETER (vfio-10 2645),
     /// SYSTEM_GET_HOTPLUG_STATE (2917) and the parameterless internal notifications (2916, 2978,
     /// 2982), for both derived driver versions.
     #[test]
@@ -3192,7 +3192,7 @@ mod tests {
         assert!(m.display_events.is_empty());
     }
 
-    // ---- 2026-10-11: GET_CAPS_V2 derived, GET_NUM_HEADS(CLIENT), DFP_ASSIGN_SOR (V3_DISPLAY.md §4.15) ----
+    // GET_CAPS_V2 derived, GET_NUM_HEADS(CLIENT), DFP_ASSIGN_SOR (V3_DISPLAY.md §4.15)
 
     fn ada(version: &str) -> DisplayModel {
         DisplayModel::new(

@@ -9,7 +9,7 @@
 //! * [`registry`] — the arm registry: name, one-line doc, expected runtime native and guest, and the
 //!   [`caps::Capability`] list an arm needs. A capability is *checked against facts the host answered*
 //!   ([`caps::HostFacts`], built from `MC_GET_ARCH_INFO`, the class list, the page size), never against
-//!   a table of dies kept here (`AGENTS.md`: derive, never capture).
+//!   a table of dies kept here (derive, never capture).
 //! * [`outcome`] and [`ledger`] — the **output contract** the suites parse, kept byte-compatible with the
 //!   legacy client where the suites read it: exit code is the verdict (0 pass, 1 fail, 3 not run, 124 the
 //!   watchdog), `RUNG_<arm>=PASS|FAIL|NOTRUN`, `RUNGCTL_<arm>=PASS|FAIL`, `CHECK <name> PASS|FAIL <why>`.

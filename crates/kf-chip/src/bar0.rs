@@ -46,7 +46,7 @@ pub struct Bar0Facts {
     pub fb_mb: u64,
     /// The PCIe link capabilities word to present (the host's own, see [`pcie_link_caps`]).
     pub pcie_link_caps: u32,
-    /// ★ 2026-10-14: this device's BAR1 aperture in bytes (the `bar1-size` it was realized with) —
+    /// This device's BAR1 aperture in bytes (the `bar1-size` it was realized with) —
     /// what [`resize_bar1_ctrl`] reports.
     pub bar1_bytes: u64,
 }
@@ -82,7 +82,7 @@ pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen, max_width: u32) -
     }
 }
 
-/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — `NV_XVE_RESIZE_BAR1_CTRL` for a BAR1 of
+/// (`docs/design/V3_S3_RESUME.md`) — `NV_XVE_RESIZE_BAR1_CTRL` for a BAR1 of
 /// `bar1_bytes`: `BAR_SIZE` (`12:8`) is the PCIe Resizable-BAR size encoding, `log2(bytes) - 20`
 /// (`ogkm-580: published/ampere/ga100/dev_nv_xve.h:38-41`; `_MIN` 6 = 64 MiB, `_MAX` 0x13). RM
 /// caches it at load and, on every resume, refuses a cached value below `_MIN` — `[measured b2,
@@ -226,7 +226,7 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             });
         }
     }
-    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): the FSP families' FIRST boot poll.
+    // (`V3_FAMILY_PORT_BLACKWELL.md`): the FSP families' FIRST boot poll.
     // `kfspPrepareBootCommands_GH100` opens with `kfspWaitForSecureBoot_HAL` (`ogkm-580:
     // kern_fsp_gh100.c:1299`), which spins (4–5 s, then "FSP secure boot partition timed out") until
     // `NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE` (the whole register, `dev_therm_addendum.h`) reads
@@ -246,7 +246,7 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             ),
         });
     }
-    // ★ 2026-10-14 (die sweep, GB206, Windows 580.88 — `docs/design/V3_DIE_SWEEP_20261014.md` §3.1): the Blackwell
+    // The Blackwell
     // GSP reset waits for its PLM first. `kgspResetHw_GB100` polls `NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK` until
     // `READ_PROTECTION_LEVEL0` and `WRITE_PROTECTION_LEVEL0` both read `_ENABLE` (`ogkm-580: kernel_gsp_gb100.c:
     // 42-90`, "required to allow GSP to lower the PLM so RM has reset access"); the Windows RM resets the GSP
@@ -264,7 +264,7 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             ),
         });
     }
-    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): in a VM RM takes the PASSTHROUGH branch of
+    // In a VM RM takes the PASSTHROUGH branch of
     // `gpuReadBusConfigCycle_GM107` (`bIsPassthru`, `ogkm-580: gpu.c:4745-4769`; `kern_gpu_gm107.c:
     // 103-106`), and on GH100/GB20x `gpuReadPassThruConfigReg_GH100` reads the config space's BAR0
     // MIRROR: `DEVICE_BASE(NV_EP_PCFGM)` = `0x92000` (`hopper/gh100/dev_xtl_ep_pri.h:26`) + the
@@ -281,7 +281,7 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             from: Provenance::Host("the host's PCIe link capability"),
         });
     }
-    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): GA100…AD107 bind
+    // (`docs/design/V3_S3_RESUME.md`): GA100…AD107 bind
     // `kbus{Cache,Restore}BAR1ResizeSize_WAR_BUG_3249028_GA100`, which read this word through the
     // BAR0 XVE mirror (`g_kern_bus_nvoc.c:1419-1421`); Turing binds a no-op and Hopper/Blackwell
     // read the config space's Resizable-BAR capability, absent here, which clears the property.
@@ -327,7 +327,7 @@ const NV_EP_PCFGM: u64 = 0x0009_2000;
 /// `NV_EP_PCFG_GPU_LINK_CAPABILITIES` (`hopper/gh100/dev_xtl_ep_pcfg_gpu.h:73`).
 const NV_EP_PCFG_GPU_LINK_CAPABILITIES: u16 = 0x6C;
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — one dword of the device's **PCI configuration
+/// One dword of the device's **PCI configuration
 /// space** the guest driver reads with a real config cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfigWord {
@@ -396,7 +396,7 @@ pub struct PciIdentity {
 /// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
 /// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): **Hopper/Blackwell read no VBIOS image.** Their
+/// (`V3_FAMILY_PORT_BLACKWELL.md`): **Hopper/Blackwell read no VBIOS image.** Their
 /// `kgspExtractVbiosFromRom` binds `_395e98` = `NV_ERR_NOT_SUPPORTED` (every chip outside the
 /// TU10x…AD10x mask, `ogkm-580: generated/g_kernel_gsp_nvoc.c:1283-1301`, `g_kernel_gsp_nvoc.h:1803`),
 /// which `kgspPrepareForBootstrap` treats as *"not supported"* ⇒ no FWSEC parse
@@ -419,7 +419,7 @@ pub fn vbios_profile(
         vbios_version: version.0,
         vbios_oem_version: version.1,
         fwsec: kf_abi::vbios::GENERATED_FWSEC,
-        // ★ 2026-09-28: the descriptor version the family's HS-falcon HAL runs (V2 on Turing).
+        // The descriptor version the family's HS-falcon HAL runs (V2 on Turing).
         fwsec_desc: family.fwsec_desc(),
     })
 }
@@ -690,7 +690,7 @@ mod hwref_check {
         }
     }
 
-    /// ★ 2026-10-14: the resizable-BAR1 word's field and bounds are the header's, wherever it is
+    /// The resizable-BAR1 word's field and bounds are the header's, wherever it is
     /// served, and the encoding states this device's BAR1 exactly.
     #[test]
     fn the_resize_bar1_word_is_the_header_field() {

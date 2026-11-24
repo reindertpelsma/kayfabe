@@ -29,6 +29,7 @@ pub enum Owner {
 /// destroys the very producer cursor whose ring triggered it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Birth {
+    /// The channel is adopted when the guest allocates it.
     AtAllocation,
 }
 
@@ -44,10 +45,14 @@ pub enum Disposition {
     FaultChannel,
 }
 
+/// What the disposition of a submission is decided from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Submission {
+    /// Who owns the channel.
     pub owner: Owner,
+    /// The route the channel's work takes.
     pub route: Route,
+    /// Whether every operand of the submission could be translated.
     pub all_operands_translatable: bool,
 }
 
@@ -100,7 +105,10 @@ impl Submission {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decoded {
     /// We model this form and read these operand words.
-    Modelled { operand_words: u8 },
+    Modelled {
+        /// How many operand words follow the method header.
+        operand_words: u8,
+    },
     /// ⊘ We can SIZE it — so the stream stays in sync — but we do not model it. It decodes to
     /// **nothing**, never to a guess.
     SizedOnly,
@@ -147,7 +155,12 @@ pub enum CpuMoveRefusal {
     /// 15** — every one of the six arms that "regressed" had been passing **because our CPU was
     /// doing the GPU's work.** ⇒ The CPU executor is faster to make green, and that is precisely
     /// the hazard: it buys passing arms with a lie the ledger cannot see.
-    TooLarge { want: u64, max: u64 },
+    TooLarge {
+        /// The bytes asked for.
+        want: u64,
+        /// The most the executor moves.
+        max: u64,
+    },
     /// ★ The operand names **real card vidmem**. Unreachable by construction today — the executor
     /// that could move bytes holds neither the emulated framebuffer nor guest RAM — but named so
     /// that a future executor which *could* reach it is refused rather than silently permitted.
@@ -155,6 +168,7 @@ pub enum CpuMoveRefusal {
 }
 
 impl CpuMoveRefusal {
+    /// The refusal's stable name, as logged.
     pub fn name(&self) -> &'static str {
         match self {
             CpuMoveRefusal::TooLarge { .. } => "cpu_move_too_large",

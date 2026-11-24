@@ -46,7 +46,7 @@ fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 const GA104: &str = "real_ga104/grfs_probe_real_ga104_3060ti.txt";
 /// The RTX 4070 (AD104).
 const AD104: &str = "real_ad104/grfs_probe_real_ad104_4070.txt";
-/// ★ 2026-09-28: the GTX 1660 SUPER (TU116, Turing) — contiguous `0x7`, but a Turing GR info table
+/// The GTX 1660 SUPER (TU116, Turing) — contiguous `0x7`, but a Turing GR info table
 /// (`LITTER_MIN_SUBCTX_PER_SMC_ENG` and `LITTER_NUM_SLICES_PER_LTC` 0, no RT / tensor cores) and a
 /// GRMGR that refuses `ROP_MASK` with `NV_ERR_NOT_SUPPORTED`.
 const TU116: &str = "real_tu116/grfs_probe_real_tu116_1660s.txt";
@@ -262,7 +262,7 @@ fn an_rtx4070_with_a_hole_at_gpc1_realizes_as_an_unprivileged_client() {
     );
 }
 
-/// ★★★ 2026-09-28 — **Turing (TU116) realizes over its own replies** — the die whose first
+/// **Turing (TU116) realizes over its own replies** — the die whose first
 /// realize (`traces/v3_turing/tu1_80e13bc5/`) refused `gr_info` because its host states 0 at
 /// `LITTER_MIN_SUBCTX_PER_SMC_ENG`, an entry no Turing HAL reads. The same table under Ampere's
 /// readers is still refused, naming the entry.

@@ -1,4 +1,4 @@
-//! # kayfabe-abi — Axis A: the declarative ABI
+//! # kf-abi — Axis A: the declarative ABI
 //!
 //! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate holds the **generated,
 //! committed** wire layouts produced by `kayfabe-abi-gen` from the vendored open
@@ -6,7 +6,7 @@
 //! version-independent views the logic crates consume.
 //!
 //! **The quarantine rule (decision #2):** `#[repr(C)]` NVIDIA wire structs exist
-//! ONLY here. The logic crates speak abstract domain types (`kayfabe-arch::ids`,
+//! ONLY here. The logic crates speak abstract domain types (`kf-arch::ids`,
 //! `kayfabe-core::rmgraph::RmEvent`); this crate's decoders translate wire ↔ core
 //! at the boundary. A concrete driver version (`V580`, …) or `#[repr(C)]` layout
 //! in any logic crate fails review + the grep gate (testing strategy §7 Tier 2).
@@ -16,13 +16,13 @@
 //! # 1. The generation strategy, and the three it is not
 //!
 //! **Chosen: an offline generator whose output is committed and reviewed.**
-//! `crates/kayfabe-abi/gen/` is a standalone cargo project *outside* the
+//! `crates/kf-abi/gen/` is a standalone cargo project *outside* the
 //! workspace, with zero third-party dependencies, run by hand against a vendored
 //! open-gpu-kernel-modules checkout:
 //!
 //! ```text
-//! cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
-//!     <ogkm-root> crates/kayfabe-abi/src/generated
+//! cargo run --manifest-path crates/kf-abi/gen/Cargo.toml -- \
+//!     <ogkm-root> crates/kf-abi/src/generated
 //! ```
 //!
 //! | | build.rs generator | bindgen | offline + committed |
@@ -57,7 +57,7 @@
 //!
 //! # 2. How version skew is represented
 //!
-//! ★ **Since 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md`): MEASURED, per exact tag.**
+//! **MEASURED, per exact tag** (`docs/design/V3_DRIVER_MATRIX.md`).
 //! [`versions::table_for`] assembles a [`versions::DriverAbiTable`] for a driver version
 //! from [`matrix`] — every consumed layout and constant, measured by compiling ogkm at each
 //! tag (`tools/drivermatrix/`). Selection is **exact membership** in the measured tag list;

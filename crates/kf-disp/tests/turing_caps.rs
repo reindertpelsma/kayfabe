@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-01 — the Turing Windows reset storm is the display caps page
+//! The Turing Windows reset storm is the display caps page
 //! (`traces/windows_gate_20261101/turing_caps/README.md`). `[measured, Vast lease 58721898, TU106 RTX 2060 SUPER,
 //! 2026-11-01]` with kf3's authored page Windows never programs a window after the modeset and the RM unloads every
 //! ~25 s (gate t1/t2 FAIL); with the authored page plus the two facts the AD104 bisection found (main-layer

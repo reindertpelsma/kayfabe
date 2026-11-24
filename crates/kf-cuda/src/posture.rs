@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ **No CUDA call runs on a thread that holds `CAP_SYS_ADMIN` in effect** — so every channel
-//! libcuda allocates is born `USER` (`docs/design/THE_CONSTRAINTS.md` §30; OWNER_RULINGS §P).
+//! libcuda allocates is born `USER`.
 //!
 //! Host RM stamps a channel's privilege at the channel-alloc ioctl from the calling thread's
 //! `capable(CAP_SYS_ADMIN)` (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`). kf-host

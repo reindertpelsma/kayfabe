@@ -135,7 +135,7 @@ pub enum Stage {
 pub trait Owners {
     /// The drainer's own state, reset synchronously ([`Stage::Drainer`]).
     ///
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): `wake` — every request this run covers was
+    /// (`docs/design/V3_S3_RESUME.md`): `wake` — every request this run covers was
     /// the platform's S3 WAKE (QEMU's `RESET_TYPE_WAKEUP`). Returns [`Life::Kept`] when the owner
     /// kept the guest life — the GSP-RM state a PM-transition suspend saved — and reset only what
     /// a power cycle resets on silicon (registers, interrupts); the coordinator then skips
@@ -158,7 +158,7 @@ pub trait Owners {
     fn stalled(&self, _stage: Stage, _epoch: u64, _waited: std::time::Duration) {}
 }
 
-/// ★ 2026-10-14 — what a reset run did to the guest life ([`Owners::reset_drainer_state`]).
+/// What a reset run did to the guest life ([`Owners::reset_drainer_state`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Life {
     /// The life ended: every stage ran, the device is as realize left it.
@@ -185,7 +185,7 @@ struct Run {
     stage: Stage,
     epoch: u64,
     life: Life,
-    /// ★ 2026-10-18: this run's Memory stage was asked to scrub (read at [`Stage::Memory`]'s end to
+    /// This run's Memory stage was asked to scrub (read at [`Stage::Memory`]'s end to
     /// clear the owed scrub only once it completed).
     scrub: bool,
     since: Option<std::time::Instant>,
@@ -219,15 +219,15 @@ pub struct Reset {
     from_vcpu: AtomicU64,
     /// Bounded waits ([`Reset::wait_completed`]) that hit their bound.
     waits_timed_out: AtomicU64,
-    /// ★ 2026-10-14: a request that was NOT the platform's S3 wake arrived since the last run's
+    /// A request that was NOT the platform's S3 wake arrived since the last run's
     /// Drainer stage read it — such a run never keeps a life. Set BEFORE the request is counted.
     cold_pending: std::sync::atomic::AtomicBool,
-    /// ★ 2026-10-18 (review B1): a scrub is OWED — a request that a NEW OS follows (a system reset
+    /// A scrub is OWED — a request that a NEW OS follows (a system reset
     /// from the main loop: [`crate::scrub::decide`]) arrived and no completed Memory stage has
     /// scrubbed since. Set BEFORE the request is counted; cleared only by a Memory stage that
     /// completed WITH the scrub, or by a pristine completion over a clean store (the start-up reset).
     new_os_pending: std::sync::atomic::AtomicBool,
-    /// ★ 2026-10-18 (review B1; owner decision on finding 1): the store may hold a guest life's
+    /// The store may hold a guest life's
     /// bytes. Set when the gate OPENS after any reset (the guest runs from there, and its BAR1,
     /// BAR2, PRAMIN and DMA writes are invisible to the device) and on every admitted guest access
     /// ([`Reset::touched`], for a device whose creation reset never ran); cleared ONLY while a Memory
@@ -256,7 +256,7 @@ pub enum Waited {
 }
 
 impl Reset {
-    /// ★ 2026-10-18: is a scrub owed — a request meant a NEW OS (a system reset from the main loop,
+    /// Is a scrub owed — a request meant a NEW OS (a system reset from the main loop,
     /// [`crate::scrub::decide`]) and no memory stage has scrubbed since? Not consuming.
     #[must_use]
     pub fn scrub_owed(&self) -> bool {
@@ -276,7 +276,7 @@ impl Reset {
         self.request_typed(from_vcpu, false)
     }
 
-    /// ★ 2026-10-14: [`Reset::request_from`] with QEMU's reset type: `wake` is
+    /// [`Reset::request_from`] with QEMU's reset type: `wake` is
     /// `RESET_TYPE_WAKEUP` (`hw/i386/pc.c:1723-1727`, the S3 resume's `qemu_devices_reset`).
     /// Any other request marks the run cold BEFORE it is counted, so the run that covers it
     /// never keeps a life ([`Owners::reset_drainer_state`]).
@@ -388,7 +388,7 @@ impl Reset {
                     // ⊘ Read only now: every entry admitted before the close has left, so its mark
                     // is visible. Nothing admitted since the last reset began ⇒ nothing to undo.
                     //
-                    // ★ 2026-10-18 (review B1): not pristine while a scrub is owed over a dirty
+                    // Not pristine while a scrub is owed over a dirty
                     // store — a reboot that arrives while a guest-issued reset runs finds `touched`
                     // consumed, and must still get its Memory stage.
                     let was_touched = self.touched.swap(false, Ordering::SeqCst);
@@ -400,7 +400,7 @@ impl Reset {
                         if !self.store_dirty.load(Ordering::SeqCst) {
                             self.new_os_pending.store(false, Ordering::SeqCst);
                         }
-                        // ★ 2026-10-14: the cold mark is this run's even when nothing was undone —
+                        // The cold mark is this run's even when nothing was undone —
                         // left set, it would make the NEXT life's S3 wake a full reset.
                         self.cold_pending.store(false, Ordering::SeqCst);
                         self.enter(&mut r, Stage::Finish);
@@ -412,7 +412,7 @@ impl Reset {
                     self.enter(&mut r, Stage::Drainer);
                 }
                 Stage::Drainer => {
-                    // ★ 2026-10-14: a cold request counted after this read restarts the run at
+                    // A cold request counted after this read restarts the run at
                     // `complete` (its count is newer than the epoch), and the rerun is not
                     // pristine after a kept life (`touched` is set below), so it resets fully.
                     let wake = !self.cold_pending.swap(false, Ordering::SeqCst);
@@ -697,9 +697,9 @@ mod tests {
         /// The reset whose status a stall report reads (the device's `stalled` does).
         status_of: RefCell<Option<Arc<Reset>>>,
         status_seen: RefCell<Option<String>>,
-        /// ★ 2026-10-14: the life ended with a PM-transition suspend (the GSP `Halted`, saved).
+        /// The life ended with a PM-transition suspend (the GSP `Halted`, saved).
         pm_suspended: Cell<bool>,
-        /// ★ 2026-10-18: the `scrub` argument of every `begin_memory`, as the real device gets it.
+        /// The `scrub` argument of every `begin_memory`, as the real device gets it.
         scrubs: RefCell<Vec<bool>>,
         /// A callback run inside `begin_memory` (a request arriving during the memory stage).
         during_memory: RefCell<Option<Box<dyn Fn()>>>,
@@ -997,7 +997,7 @@ mod tests {
         assert_eq!(r.completed(), 50);
     }
 
-    /// ★ 2026-10-18 (review B1): only a system reset from the main loop owes a scrub; a vCPU's bus
+    /// Only a system reset from the main loop owes a scrub; a vCPU's bus
     /// reset and the S3 wake do not (the table: [`crate::scrub::decide`]).
     #[test]
     fn only_a_system_reset_from_the_main_loop_owes_a_scrub() {
@@ -1328,7 +1328,7 @@ mod tests {
         );
         assert_eq!(o.finished.load(Ordering::SeqCst), 1);
         assert!(r.status().contains("main=2 vcpu=0"), "{}", r.status());
-        // ⊘ 2026-10-18 (owner, finding 1): a system reset after the gate opened is no longer
+        // A system reset after the gate opened is no longer
         // pristine even with no admitted access — the guest ran, and its BAR1/DMA writes are
         // invisible — so it takes the full sequence and scrubs.
         let e = r.request_from(false);
@@ -1390,7 +1390,7 @@ mod tests {
         assert!(a.is_done(2));
     }
 
-    // ---- ★ 2026-10-14: the S3 wake (`docs/design/V3_S3_RESUME.md`) ----------------------------
+    // The S3 wake (`docs/design/V3_S3_RESUME.md`)
 
     fn touched_life(r: &Reset, o: &Fake) {
         r.touched();

@@ -74,7 +74,7 @@ fn walk(roots: &[&str], ext: &str) -> Vec<(String, String)> {
 }
 
 fn rust_sources() -> Vec<(String, String)> {
-    // 2026-10-31: `kayfabe-device` moved to archive/crates/ (archive/README.md); it is still a
+    // `kayfabe-device` moved to archive/crates/ (archive/README.md); it is still a
     // reference site for several truncated rows, so it stays in the scanned universe.
     let out = walk(&["crates", "tests", "archive/crates/kayfabe-device"], ".rs");
     assert!(
@@ -95,7 +95,7 @@ fn rust_sources() -> Vec<(String, String)> {
 fn is_self_referential(path: &str) -> bool {
     path.ends_with("crates/kayfabe-abi/src/oracle.rs")
         || path.ends_with("crates/kayfabe-abi/tests/truncated_row_reads.rs")
-        // v3 (w826): `kf-abi` is a copy of `kayfabe-abi`; its oracle and this test are the
+        // v3 (w826): `kf-abi` is a copy of `kf-abi`; its oracle and this test are the
         // same self-references, not new consumers.
         || path.ends_with("crates/kf-abi/src/oracle.rs")
         || path.ends_with("crates/kf-abi/tests/truncated_row_reads.rs")

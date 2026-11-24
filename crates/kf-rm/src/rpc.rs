@@ -81,6 +81,7 @@ pub fn classify(function: u32) -> Disposition {
     }
 }
 
+/// The name of RPC function number `function`, if the surface lists it.
 pub fn name_of(function: u32) -> Option<&'static str> {
     SURFACE
         .iter()
@@ -132,6 +133,7 @@ pub enum ControlDisposition {
     AdmittedUndispatched,
 }
 
+/// The controls with a non-default disposition: `(command, disposition)`.
 pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0x00801813, ControlDisposition::ServedLocally),
     (0x2080012b, ControlDisposition::ServedLocally),
@@ -198,6 +200,7 @@ pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0x20801702, ControlDisposition::ServedLocally),
 ];
 
+/// The disposition of control command `cmd`.
 pub fn control_disposition(cmd: u32) -> ControlDisposition {
     CONTROLS
         .iter()

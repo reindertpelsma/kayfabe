@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 — **Sequential property, differential and corpus tests of the USER-ring lifecycle**
+//! **Sequential property, differential and corpus tests of the USER-ring lifecycle**
 //! (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`, brief section 3 items 3, 4, 6 and appendix D).
 //!
 //! The same `lifecycle_support::Relay` as the interleaving model, driven by a SEQUENTIAL simulator: the
@@ -2022,7 +2022,7 @@ fn t3_a_second_window_one_ring_lap_later_gates_its_sync_wait_entry_again() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// ★ 2026-10-17 lazy observe (production port): the OFF configuration IS the base relay
+// Lazy observe (production port): the OFF configuration IS the base relay
 
 /// A long randomised sequence through `Relay::new` (lazy observe OFF: the constructor every other test uses) must make
 /// EXACTLY the calls the BASE relay (`736c097d4`, before lazy observe existed) made: every `GP_PUT`, entry dword, epoch,
@@ -2139,7 +2139,7 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
 }
 
 // ------------------------------------------------------------------------------------------------
-// ★ 2026-10-17 lazy observe ON: the same relay, the same streams
+// Lazy observe ON: the same relay, the same streams
 
 fn lazy_cfgs() -> [kf_chan::user_lazy::LazyConfig; 4] {
     use kf_chan::user_lazy::LazyConfig;
@@ -2612,7 +2612,7 @@ fn lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_st
 }
 
 // ------------------------------------------------------------------------------------------------
-// ★ 2026-11-12 (review S3 of PR #360): the oracles above never stream (every segment is 0-4 words under the 917,504-byte
+// The oracles above never stream (every segment is 0-4 words under the 917,504-byte
 // bound). Offer the same relay a ONE-WORD per-copy bound: every two-or-more-word segment is classified in parts.
 
 fn run_limited(

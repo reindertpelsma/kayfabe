@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — **where host RM places a GR twin's own buffers, with and without
+//! **Where host RM places a GR twin's own buffers, with and without
 //! `NV_VASPACE_ALLOCATION_FLAGS_VA_INTERNAL_LIMIT`** (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §7,
 //! option C research).
 //!

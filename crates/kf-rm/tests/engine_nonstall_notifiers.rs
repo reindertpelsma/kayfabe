@@ -1,4 +1,4 @@
-//! ★ 2026-10-08: `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` for an ENGINE's non-stall notifier
+//! `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` for an ENGINE's non-stall notifier
 //! (`kf_abi::eventnotify::ENGINE_NONSTALL_NOTIFIERS`) — served for every copy engine, GR0 and the
 //! video/OFA engines, as the real GSP serves it (`[measured 2026-10-08]` the 4070's host RM armed
 //! CE0..CE9 although the die has COPY0..COPY3, `bare_ce-interrupt_9925108e_run1.log`); every index

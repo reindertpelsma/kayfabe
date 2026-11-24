@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **`PROGRESS_STRAND`**, the hardware endpoint of `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10.0. MEASUREMENT ONLY,
+//! **`PROGRESS_STRAND`**, the hardware endpoint of `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10.0. MEASUREMENT ONLY,
 //! default off (`KF3_DIAG_PROGRESS=<ms>`, the name the baton harness already sets).
 //!
 //! A relay is STRANDED when it holds an obligation (a demand `retry`, a recorded private-word wait, or an unannounced obligation) that no turn

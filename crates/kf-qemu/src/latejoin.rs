@@ -1,4 +1,4 @@
-//! ★ 2026-10-09 — **a channel that joins a guest TSG the guest has already scheduled.**
+//! **A channel that joins a guest TSG the guest has already scheduled.**
 //! `STATUS: LIVE (hardwired), 2026-10-10` — `docs/design/V3_LATE_TSG_JOINER.md`. [measured, Windows 11 / RTX 4070,
 //! `traces/windows_tdr_hunt_20261010` runs 287, 288 vs 290] without it the compute+copy joiners of a D3D12 device's TSG
 //! (ctxShare 1, 2) kept host `GP_GET=0` under rung work, the context flush hung and Windows reset the GPU (1 and 4 TDRs in

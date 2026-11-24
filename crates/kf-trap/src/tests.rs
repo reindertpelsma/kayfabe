@@ -534,7 +534,7 @@ fn a_parked_worker_is_woken_by_a_translated_doorbell() {
 }
 
 #[test]
-fn a_privileged_write_wakes_the_DRAINER_not_a_worker() {
+fn a_privileged_write_wakes_the_drainer_not_a_worker() {
     // ⊘ §5.3: "the drainer parks on its own word... Sharing one word with a wake-exactly-one
     // policy means a privileged register write can wake A WORKER INSTEAD OF THE DRAINER — and the
     // register write then waits for an unrelated doorbell while the guest spins on a trigger."

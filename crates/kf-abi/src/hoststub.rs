@@ -1,8 +1,8 @@
-//! ★ 2026-10-07 (Windows Code43): the host-owned stub set for a Windows guest - controls with no
+//! The host-owned stub set for a Windows guest - controls with no
 //! public body that kayfabe answers `NV_OK` with zeroed params, under owner ruling §S as
-//! **ASSUMED, owner to confirm** (`docs/OWNER_RULINGS.md` §S, "§S applied to `0x2081010d`").
+//! **ASSUMED, owner to confirm**.
 //!
-//! ★ 2026-10-31 (provenance fix): the table below is HAND-MAINTAINED, and every item carries a
+//! The table below is HAND-MAINTAINED, and every item carries a
 //! [`crate::provenance::Row`] with a source tag. The earlier generated table also carried two
 //! values read from a closed driver binary (the control's export flags and the row's position in
 //! the file); both are gone, nothing branched on them (they were only logged), and the generator
@@ -158,7 +158,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-31: the table was generated until this date. The values the Windows path reads
+    /// The table was generated until this date. The values the Windows path reads
     /// (cell key, identity, control id, interface, message, declared size, reason) are pinned here
     /// to the generated table's bytes, so the hand-maintained rewrite changes none of them.
     #[test]

@@ -1,4 +1,4 @@
-//! ★ 2026-11-16 (`docs/design/V3_VA_PROFILE.md`): **per-thread phase accumulators of the VA
+//! (`docs/design/V3_VA_PROFILE.md`): **per-thread phase accumulators of the VA
 //! thread's apply** — OBSERVATION ONLY. Nothing reads these to decide anything.
 //!
 //! Each [`Phase`] keeps a count, a sum and a maximum of nanoseconds in a thread-local cell, so the

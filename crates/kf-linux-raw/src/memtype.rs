@@ -1089,7 +1089,7 @@ mod tests {
         assert!(w.ns_per_read > 0.0);
         // The fixed-count primitive still counts what it was asked to. The instrument's
         // discriminating power is measured against a real device aperture in
-        // `crates/kayfabe-linux-raw/tests/effective_memtype.rs`, not here.
+        // `crates/kf-linux-raw/tests/effective_memtype.rs`, not here.
         let w = BandwidthWitness::measure(64, |_| std::hint::black_box(()));
         assert_eq!(w.reads, 64);
         assert!(w.ns_per_read >= 0.0);

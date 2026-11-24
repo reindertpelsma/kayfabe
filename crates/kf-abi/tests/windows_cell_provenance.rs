@@ -1,4 +1,4 @@
-//! ★ 2026-10-31 (provenance fix): the Windows-cell tables (`kf_abi::hoststub`,
+//! The Windows-cell tables (`kf_abi::hoststub`,
 //! `kf_abi::sw_runlist`) may carry only values with a public source. This test is the CI gate:
 //! every row has a source tag of an accepted kind (`ogkm-<version>:<ref>`, `measured:...`,
 //! `host-derived:...`; a `binary`/`re`/`blob` origin is refused), and every trace line a

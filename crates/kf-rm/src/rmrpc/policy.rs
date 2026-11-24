@@ -495,7 +495,7 @@ impl RmObjects for GraphObjects {
 
 /// The shared half of [`GraphPolicy`] and [`ObjectPolicy`]: reassemble → translate → apply.
 struct Bridge {
-    /// ★ 2026-11-15 (was `KF3_MEMORY_LIST_PROBE`): the Windows support profile that admits the
+    /// The Windows support profile that admits the
     /// contiguous-SYSRAM `ALLOC_MEMORY` descriptor; the descriptor is served only while the profile
     /// is active (`windows-support=on` and a declared Windows guest), per command, so a Linux guest
     /// that sends the same function code reaches the ledger as before.

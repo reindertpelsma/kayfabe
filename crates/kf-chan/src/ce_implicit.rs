@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-10-19 — WHICH rings get the CE-implicit binding ([`crate::tmode::TState::ce_object`]).
+//! WHICH rings get the CE-implicit binding ([`crate::tmode::TState::ce_object`]).
 //!
 //! The decision is a pure function of facts the HOST holds, so the birth route cannot be talked
 //! into it by a guest: the channel is guest-KERNEL work (facts guest userspace cannot produce:

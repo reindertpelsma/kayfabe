@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! 2026-10-23: tier-3 rows must match the committed public-interface measurements.
+//! tier-3 rows must match the committed public-interface measurements.
 use kf_chip::DieId;
 use kf_rm::consttab::{self, BranchScope, DieScope, SourceTag};
 

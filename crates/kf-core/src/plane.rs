@@ -177,6 +177,7 @@ impl Default for Vmm {
 }
 
 impl Vmm {
+    /// A VMM-level state with its one worker wakeup word.
     pub const fn new() -> Vmm {
         Vmm {
             worker_wake: WakeWord::new(),
@@ -189,15 +190,19 @@ impl Vmm {
 /// and ⊘ **the ring and its drainer — because ordering is per PCI function**, so a shared ring
 /// would impose an order across devices that hardware does not have.
 pub struct Plane<'v> {
+    /// One word per channel token.
     pub tokens: Vec<TokenWord>,
+    /// Which rung each token is on.
     pub bits: RungBitmap,
     /// Borrowed from the VMM: **one** word across all GPUs.
     pub vmm: &'v Vmm,
     /// Per GPU, like the ring it wakes.
     pub drainer_wake: WakeWord,
+    /// The privileged-write ring this device's register drainer applies in order.
     pub ring: PrivRing,
+    /// Mask that turns a doorbell value into a token.
     pub token_mask: u32,
-    /// ★ 2026-09-26: doorbell value / channel → table index (`kf_trap::tokenindex`):
+    /// Doorbell value / channel → table index (`kf_trap::tokenindex`):
     /// `RunlistVector` on the device ([`Plane::for_device`], every family); [`Plane::for_family`]
     /// keeps `Vector { mask: token_mask }` through Hopper for the harness planes.
     pub token_index: kf_trap::tokenindex::TokenIndex,
@@ -272,7 +277,7 @@ impl<'v> Plane<'v> {
         family: kf_chip::Family,
         bar0_bytes: u32,
     ) -> Plane<'v> {
-        // ★ 2026-09-26: Blackwell allocates chids PER RUNLIST (`kf_chip::Family::chids_per_runlist`),
+        // Blackwell allocates chids PER RUNLIST (`kf_chip::Family::chids_per_runlist`),
         // so its index carries the runlist and its table is sized for it.
         let token_index = if family.chids_per_runlist() {
             kf_trap::tokenindex::TokenIndex::RunlistVector
@@ -316,6 +321,7 @@ impl<'v> Plane<'v> {
         false
     }
 
+    /// The VMM's one worker wakeup word.
     #[inline]
     pub fn worker_wake(&self) -> &WakeWord {
         &self.vmm.worker_wake
@@ -350,7 +356,7 @@ impl<'v> Plane<'v> {
                 asked: tok,
             });
         }
-        // ★ 2026-10-11: per RUNLIST, against the budget the guest was told (`kf_abi::chanbudget`).
+        // Per RUNLIST, against the budget the guest was told (`kf_abi::chanbudget`).
         let runlist = self.token_index.runlist_of(idx as u32);
         caps.acquire_channel(runlist)?;
         // ⊘⊘ `[fable S3]` the return value is the point: a failed allocate leaves the OLD route

@@ -56,7 +56,7 @@
 //! - **Interleave controls are not tied to an object.** The guest's RM has already resolved the handle;
 //!   the link records nothing per object (no unbounded table), only the last level.
 //!
-//! ## ★ 2026-11-18, hardware falsifier of the first cut: REALTIME reaches two more controls
+//! Hardware falsifier of the first cut: REALTIME reaches two more controls
 //!
 //! `[measured]` (RTX 4090, kf3 with the policy served; scrubbed logs, see the fixture): `phigh` Pass, but
 //! `pcreate`/`pquery` Fail `-3` and `prt` NotSupported, and the kf3 log shows exactly two new refusals,

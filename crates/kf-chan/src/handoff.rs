@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **The lock HOLDER hands off to the loser** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10, owner design).
+//! **The lock HOLDER hands off to the loser** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10, owner design).
 //!
 //! A relay whose `try_lock` fails (the `pt` map, the USERD / RM-graph admission, a source mapping swap) does not retry on a budget and does not
 //! wait for a timer. It REGISTERS here before giving up; whoever held the lock RINGS the registered relays after releasing it

@@ -1,4 +1,4 @@
-//! ★★★ 2026-09-26 — **the FSP's RM EMEM channel, served synchronously on the vCPU** (Hopper,
+//! **The FSP's RM EMEM channel, served synchronously on the vCPU** (Hopper,
 //! Blackwell). `V3_FAMILY_PORT_BLACKWELL.md` §2.
 //!
 //! On the FSP families RM does not boot the GSP itself: it streams one COT packet to FSP through

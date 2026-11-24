@@ -4,7 +4,7 @@
 //!
 //! `kf_gsp::GspFsm::new` takes a [`GspAbi`] — a bundle of the `msgq` constants, the
 //! element layout, the RPC envelope and the init-args offsets. Every one of those is
-//! already version-keyed data in `kayfabe-abi`. But the code that *assembled* them into a
+//! already version-keyed data in `kf-abi`. But the code that *assembled* them into a
 //! `GspAbi` lived in `tests/src/gspworld.rs`, i.e. nothing that ships could construct the
 //! value the FSM needs. Stage Q4 needs one, so the assembly moved here and the harness
 //! delegates — which means the ~3 000 lines of existing GSP conformance tests now drive

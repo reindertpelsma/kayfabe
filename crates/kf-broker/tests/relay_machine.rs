@@ -830,7 +830,7 @@ fn a_later_no_downgrades_the_rung_and_reclaims_its_frames() {
     );
 }
 
-/// ★ 2026-10-15 incident (run 2990): the guest followed the window to 2080x1171 (pitch 8320, a
+/// Incident (run 2990): the guest followed the window to 2080x1171 (pitch 8320, a
 /// multiple of 128 but not of 256) and the compositor, an AMD iGPU under mutter, refused the LINEAR
 /// dma-buf import with a fatal protocol error; 1920x1080 (7680) and 2048x1155 (8192) imported. A host
 /// frame whose pitch is not a multiple of 256 therefore never goes as a dma-buf: it goes as shared
@@ -1074,7 +1074,7 @@ fn input_is_bounded_before_the_vmm_sees_it() {
                 dy: -1,
                 to: Pointer::Absolute
             },
-            // ★ 2026-10-08 (§8.20): the horizontal detent is handed on by sign (before: dropped
+            // The horizontal detent is handed on by sign (before: dropped
             // here); a VMM without a horizontal wheel ignores it at its sink
             Input::Wheel {
                 dx: 1,
@@ -1416,7 +1416,7 @@ fn a_withdrawal_between_two_sends_refuses_the_frame_and_keeps_the_connection() {
     assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
 }
 
-// ── rung 0: the GPU copy (V3_DISPLAY.md §8.11, OWNER_RULINGS.md §L) ─────────────────────────
+// ── rung 0: the GPU copy ─────────────────────────
 
 /// The GPU-copy modifier the fixture's device answers (`0x0300000000606014`, Turing+ XR24 h=4).
 const BL: u64 = 0x0300_0000_0060_6014;
@@ -2466,7 +2466,7 @@ fn the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf() {
     }
 }
 
-// ── §8.18: the buffer path each display environment ends on (owner, 2026-10-08) ─────────────
+// ── §8.18: the buffer path each display environment ends on ─────────────
 
 /// Which path the last ATTACH of slot `j` took.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2632,7 +2632,7 @@ fn env_software_display_ends_on_shm() {
     }
 }
 
-// ── §8.19: the grab routing invariant (owner, 2026-10-08: Minecraft's mouse-look) ───────────
+// ── §8.19: the grab routing invariant ───────────
 
 /// A packet carrying the broker's grab state, as every packet does (`F_GRABBED`).
 fn grabbed_pkt(t: &T, ty: u16, x: i32, y: i32, w0: u32, w1: u32) {

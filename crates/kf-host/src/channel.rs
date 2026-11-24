@@ -110,7 +110,7 @@ pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
 ///
-/// ⚠ 2026-11-18 (sparse residency RCA, `V3_SPARSE_RESIDENCY_RCA.md`): NOT `_SPARSE`
+/// (sparse residency RCA, `V3_SPARSE_RESIDENCY_RCA.md`): NOT `_SPARSE`
 /// ([`NVOS32_ALLOC_FLAGS_SPARSE`]), so an unmapped VA inside a reservation is INVALID on the host (a
 /// fault), never the guest's SPARSE "reads zero" (`ogkm-580 gpu_vaspace.c:1577-1600`, `2279-2289`),
 /// unless the VM opted into [`GuestVaFill::Zero`] for its static guest ranges. Public so the host model (`kf-mem` `sim`) derives the reservation's unmapped state from it.
@@ -152,7 +152,7 @@ impl GuestVaFill {
     }
 }
 
-/// ★ 2026-11-18: the static guest-range reservations of a mirror space that starts at `start`, in
+/// The static guest-range reservations of a mirror space that starts at `start`, in
 /// the order [`VaSpace::guest`] holds them: `(lo, hi, NVOS32 flags)`. Every range takes `fill`
 /// ([`GuestVaFill::reserve_flags`]). [`HostRm::alloc_vaspace_at`] reserves exactly these.
 pub fn guest_range_plan(
@@ -275,7 +275,7 @@ pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B77;
 /// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
 pub const VA_ROW_WRAPS: u32 = 0x4B78;
 
-/// ★ 2026-10-08 (Windows walls, task A) — **where a guest-mirror twin's host VA space starts.**
+/// **Where a guest-mirror twin's host VA space starts.**
 ///
 /// The rule. A twin's host space mirrors the guest's page tables, so it must accept every VA those
 /// tables can name — and that is NOT bounded by any RM's allocator start:
@@ -304,16 +304,16 @@ pub const VA_ROW_WRAPS: u32 = 0x4B78;
 /// guest input — and lies wholly below host RM's default start, so the space's host-side layout is
 /// otherwise unchanged.
 ///
-/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off): applied
+/// applied
 /// only to the spaces of a guest that DECLARED the measured Windows build at fn 1 with `windows-support`
-/// on (Windows per-process work, `OWNER_RULINGS.md` §V): the caller states it ([`HostRm::alloc_vaspace_at`],
+/// on: the caller states it ([`HostRm::alloc_vaspace_at`],
 /// [`MirrorVaStart::select`]); nothing here reads the environment. Linux guests keep host RM's default
 /// start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
 pub const TWIN_VA_FLOOR: u64 = 0x1_0000;
 /// Host RM's default VA-space start (`gvaspaceGetReservedVaspaceBase`, 1 MiB on a non-MIG GPU).
 pub const HOST_DEFAULT_VA_START: u64 = 0x10_0000;
 
-/// ★ 2026-11-15 (review of PR #438, F2): the start a host space is really allocated at: the caller's `start`
+/// The start a host space is really allocated at: the caller's `start`
 /// only for a space that reserves the guest's ranges (a mirror); a bare (T-space) allocation never takes the
 /// floor, whatever the caller asked. Pure, so the rule is tested where it is applied.
 #[must_use]
@@ -762,7 +762,7 @@ impl HostRm {
         }
     }
 
-    /// ★ 2026-11-15: [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
+    /// [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
     /// DECLARED identity ([`MirrorVaStart::select`]). A Linux guest's spaces are always
     /// [`MirrorVaStart::HostDefault`]; the floor is a Windows-profile behaviour (see [`TWIN_VA_FLOOR`]).
     ///
@@ -784,7 +784,7 @@ impl HostRm {
         self.alloc_vaspace_with(false, MirrorVaStart::HostDefault)
     }
 
-    /// ★ 2026-11-18 PROBE ONLY (`kf-va-fence-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §7): a bare space
+    /// PROBE ONLY (`kf-va-fence-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §7): a bare space
     /// (no guest-range reservations) allocated with the caller's `NV_VASPACE_ALLOCATION_FLAGS_*`.
     /// Production never calls it.
     ///
@@ -809,11 +809,11 @@ impl HostRm {
         flags: u32,
     ) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
-        // ★ 2026-10-08 (task A): a guest-mirror space starts where the guest's page tables can map
+        // A guest-mirror space starts where the guest's page tables can map
         // ([`TWIN_VA_FLOOR`] states the rule and its evidence). ⊘ Replaces the run70-72 diagnostic
         // `KF3_TWIN_VA_BASE=<hex>` (a guest-independent but operator-chosen base, with NO reservation
         // keeping host RM's own buffers out of the low range it opened).
-        // ★ 2026-11-15: a bare (T-space) allocation never takes the floor: no guest row lands there.
+        // A bare (T-space) allocation never takes the floor: no guest row lands there.
         let start = effective_start(reserve_guest, start);
         NvVaspaceAllocationParameters {
             va_base: start.va_base(),
@@ -860,7 +860,7 @@ impl HostRm {
                 };
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
-                // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
+                // Plus the low guest range of a floor-started space (slot 2).
                 if reserve_guest {
                     let plan = guest_range_plan(start, self.guest_va_fill());
                     for (slot, (lo, hi, flags)) in vas.guest.iter_mut().zip(plan) {
@@ -1012,7 +1012,7 @@ impl HostRm {
         let extra = extra | perm.nvos46_flags();
         let shared = backing == MapBacking::SharedSlice;
         match at {
-            // ★ 2026-10-09: a FIXED map is one map per `hDma` it touches ([`map_pieces`]).
+            // A FIXED map is one map per `hDma` it touches ([`map_pieces`]).
             Some(a) => map_pieces(
                 self,
                 space,
@@ -1108,7 +1108,7 @@ impl HostRm {
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, unmap_flags(defer))
     }
 
-    /// ★ 2026-10-09: unmap the ONE row `[va, va+len)` that a [`HostRm::map`] placed — every piece of
+    /// Unmap the ONE row `[va, va+len)` that a [`HostRm::map`] placed — every piece of
     /// it ([`VaSpace::dma_pieces`]), each by its exact start (the whole-mapping unmap, which every
     /// host driver carries). A row inside one object is exactly [`HostRm::unmap`]. Every piece is
     /// attempted even if one is refused; the first refusal is returned. `len` must be the length the
@@ -1163,7 +1163,7 @@ impl HostRm {
         unmap_pieces(self, space, va, len, true, unmap_flags(defer))
     }
 
-    /// ★ 2026-10-09: ONE FIXED map of `[offset, offset+len)` of `memory` at `at` THROUGH `h_dma`
+    /// ONE FIXED map of `[offset, offset+len)` of `memory` at `at` THROUGH `h_dma`
     /// — a reservation the caller made over that VA ([`HostRm::reserve_va`]; `kf_mem::batch`'s
     /// micro reservations). No piece routing: the caller guarantees `[at, at+len)` lies inside
     /// `h_dma` (RM asserts it, `dma.c:155-159`). Flags as [`HostRm::map_kind`].
@@ -1230,7 +1230,7 @@ impl HostRm {
         )
     }
 
-    /// ★ 2026-10-09: ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
+    /// ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
     /// mapping keyed by its exact start, else every mapping intersecting `[va, va+size)` — exact
     /// inside an `NV50_MEMORY_VIRTUAL` reservation (`virt_mem_allocator_gm107.c:1578-1633`).
     ///
@@ -1275,7 +1275,7 @@ impl HostRm {
         self.map_scattered_through(space, None, fd, pieces, at, defer, kind, perm)
     }
 
-    /// ★ 2026-10-09: [`HostRm::map_scattered`] mapped THROUGH `through` (a reservation the caller
+    /// [`HostRm::map_scattered`] mapped THROUGH `through` (a reservation the caller
     /// made with [`HostRm::reserve_va`] over the batch's VA, `kf_mem::batch` "micro reservation")
     /// instead of the space's own routing — so a later partial unmap is exact (see
     /// [`HostRm::unmap_range`]). `None` is [`HostRm::map_scattered`].
@@ -1323,7 +1323,7 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
-        // ★ 2026-11-16 (observation only, `crate::phase`): the three host-side steps before the map.
+        // The three host-side steps before the map.
         let ns = |d: std::time::Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
         crate::phase::record(crate::phase::Phase::Stitch, ns(t_stitch));
         crate::phase::record(crate::phase::Phase::Descriptor, ns(t_desc - t_stitch));
@@ -1768,7 +1768,7 @@ impl HostRm {
     /// (`0x5080`) under `chan`, with NO params (`RS_OPTIONAL(NV5080_ALLOC_PARAMS)`,
     /// `ogkm-595.84: resource_list.h:1524-1528`; `notifyCompletion` stays false) and nothing
     /// registered on it — the only thing it can do is be found by a `SET_OBJECT` on the channel's
-    /// software subchannel. Unprivileged class (`RS_FLAGS_ALLOC_NON_PRIVILEGED`, OWNER_RULINGS §U.1).
+    /// software subchannel. Unprivileged class.
     ///
     /// # Errors
     /// The host's refusal.
@@ -2764,7 +2764,7 @@ mod twin_va_start_tests {
 
     /// ★ Task A: the rule is OFF by default (Linux keeps host RM's start, nothing reserved low), and
     /// ON it starts at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved — constants, not inputs.
-    /// ★ 2026-11-15 (review of PR #438, F2): the start actually used. A mirror takes what the caller derived
+    /// The start actually used. A mirror takes what the caller derived
     /// from the guest's declaration; a bare (T-space) allocation never takes the floor.
     #[test]
     fn a_bare_space_never_takes_the_floor() {

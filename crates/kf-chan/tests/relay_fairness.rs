@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **The worker loop over the USER-ring relays: bounded fairness, the lock holder's hand-off, and the sleep invariant**
+//! **The worker loop over the USER-ring relays: bounded fairness, the lock holder's hand-off, and the sleep invariant**
 //! (P11, P12, P13, P14, P15). Owner design, binding: no heuristics (no retry budget, no "every Nth pass", no timer as correctness); one big
 //! loop that drains every fd, evaluates every relay's recorded state and serves with a per-visit bound; the worker blocks (`epoll_wait`
 //! without a timeout) ONLY when every obligation any relay holds has a registered wake source that reaches every worker; a relay that loses a

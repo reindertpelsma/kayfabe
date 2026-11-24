@@ -72,6 +72,7 @@ use crate::vmm::Bar;
 /// driver reaches instance memory before the real mappings exist, and trapping it would put a
 /// boot-time loop through the privileged ring.
 pub const PRAMIN_BASE: u64 = 0x0070_0000;
+/// Length of the PRAMIN window in bytes.
 pub const PRAMIN_LEN: u64 = 0x0010_0000;
 
 /// Where the doorbell lives.
@@ -194,8 +195,11 @@ pub enum ReadSource {
 /// mistake, while a `reads: false` field is one keystroke from a read exit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrapRegion {
+    /// The BAR the region is in.
     pub bar: Bar,
+    /// Offset of the region in the BAR.
     pub base: u64,
+    /// Length of the region in bytes.
     pub len: u64,
 }
 

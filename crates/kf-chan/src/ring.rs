@@ -129,7 +129,7 @@ pub enum RingRefusal {
 /// ★ DIAGNOSTIC (2026-10-07, Windows run30): the most words of a refused segment logged. A
 /// refusal kills the channel ([`RingRefusal`] is terminal for the ring), so this runs at most once
 /// per channel and prints at most this many guest words: bounded however the guest writes.
-/// ⊘ 2026-10-07 (run32 setup): raised from 32 to 128 — run31's GR segment had 46 words and the
+/// Raised from 32 to 128 — run31's GR segment had 46 words and the
 /// last 14 were not seen. Still bounded per channel (one refusal kills the ring).
 const REFUSED_SEGMENT_LOG_WORDS: usize = 128;
 
@@ -228,7 +228,7 @@ impl TranslatedRing {
         }
     }
 
-    /// ★ 2026-10-19: the CE class this guest-KERNEL copy-engine ring's own host channel holds
+    /// The CE class this guest-KERNEL copy-engine ring's own host channel holds
     /// ([`crate::tmode::TState::ce_object`]); `0` (the default) keeps the strict `NoCeObject`
     /// refusal. Derived by the caller from the host ring, never from the guest. No effect on a
     /// ring that is not in T-mode.

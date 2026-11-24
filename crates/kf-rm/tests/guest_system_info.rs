@@ -207,7 +207,7 @@ fn a_guest_speaking_another_pair_is_steered_to_ours_and_never_agreed_with() {
     // The 610 pair, sent to a port bound to 580. An echoing GSP would agree; RM would then
     // select the 610 function table and encode every later message at the wrong offsets.
     //
-    // ★ 2026-10-13: the answer used to be `rpc_result = NV_ERR_NOT_SUPPORTED`, a hard stop that
+    // The answer used to be `rpc_result = NV_ERR_NOT_SUPPORTED`, a hard stop that
     // never lets the guest read the pair we speak. The protocol's own answer is OK in the
     // envelope, a private status, and OUR pair in the body (ogkm-595.84 rpc.c:8947-8968); the
     // oracle test `fn1_negotiation_oracle.rs` drives the real guest through it. The load-bearing
@@ -336,7 +336,7 @@ fn the_encoder_writes_only_the_two_words() {
     assert!(body[8..].iter().all(|b| *b == 0));
 }
 
-/// ★ 2026-10-04 (branch `v3-windows`, C2): the identity the Windows 580.88 guest sent at fn 1 on
+/// The identity the Windows 580.88 guest sent at fn 1 on
 /// `vwin` (RTX 3060, kf3 `b98bdbec`): `guestDriverVersion="580.88" guestVersion="r580_78-7"
 /// guestClNum=0`. A device declared for 580.65.06 (its Linux twin, one changelist) accepts it; the
 /// same name with another branch version is refused, and the refusal says why it is not a twin.

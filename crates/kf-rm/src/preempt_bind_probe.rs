@@ -1,11 +1,11 @@
 //! ⚠⚠ **FABRICATED ANSWER, now PRODUCT behaviour for a declared Windows guest (2026-11-15).** Was the
 //! default-off `KF3_PREEMPT_BIND_PROBE` / `KF3_ZCULL_BIND_PROBE` probes; the owner's 2026-11-15 ruling
-//! ("set the measured Windows profile as the default", `OWNER_RULINGS.md` §W) made them part of the Windows
+//! made them part of the Windows
 //! support profile ([`crate::winprofile`]): the chain seats them behind [`crate::winprofile::WindowsOnly`],
 //! so they answer nothing for a Linux guest, for no declaration, or with `windows-support=off`. The text
 //! below is the 2026-10-08 probe's own, kept as the provenance of the answer.
 //!
-//! 2026-10-08 (Windows 580.88, H-preempt-bind): `[measured, run53 at 80169b57, 2026-10-08]` every
+//! `[measured, run53 at 80169b57, 2026-10-08]` every
 //! failed D3D device creation ends with two `NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND`
 //! (`0x20801211`, 112-byte params at 580.x) RmControl RPCs, both refused `0x56`, and then the Free
 //! of everything; vfio-10's real GSP answers both with status 0. The question this probe answers

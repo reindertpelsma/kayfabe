@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the WHOLE served chain
+//! (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the WHOLE served chain
 //! (`kf_rm::served_policy`) against hostile RPC commands, GPU-free.
 //!
 //! The guest's RM is untrusted (guest root), and most of what it sends on `GSP_RM_CONTROL` and

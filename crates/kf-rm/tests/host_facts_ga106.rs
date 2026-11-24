@@ -284,7 +284,7 @@ fn every_host_fact_states_where_it_comes_from() {
     );
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): a floorswept LCE is a HOLE, not the end of the
+/// A floorswept LCE is a HOLE, not the end of the
 /// list — GB203 presents `{0,1,4,5}`. The hole is refused at the serve exactly like a missing row.
 #[test]
 fn a_floorswept_lce_is_a_hole_not_the_end_of_the_list() {

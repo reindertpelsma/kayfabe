@@ -1,4 +1,4 @@
-//! # kayfabe-arch — abstract GPU vocabulary + the Axis-B `Arch` trait seams
+//! # kf-arch — abstract GPU vocabulary + the Axis-B `Arch` trait seams
 //!
 //! This crate is two things, deliberately together at the bottom of the GPU-domain
 //! dependency graph (below `kayfabe-core`, so core/mmu/fwd/completion share one set of
@@ -7,7 +7,7 @@
 //! 1. **The vocabulary** ([`ids`]): newtypes for every identity the system routes on —
 //!    [`ids::HClient`], [`ids::HObject`], [`ids::Pdb`], [`ids::VChid`], [`ids::ClassId`], …
 //!    These are *abstract*: no NVIDIA struct layout, no driver-version value, appears
-//!    anywhere in this crate (that is Axis A, quarantined to `kayfabe-abi` — design
+//!    anywhere in this crate (that is Axis A, quarantined to `kf-abi` — design
 //!    decision #2, `mode2_abi_agnostic_layer.md`).
 //!
 //! 2. **The Axis-B seams** ([`Arch`], [`GmmuFmt`], [`UserdModel`]): the *architectural
@@ -80,7 +80,7 @@ use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, VChid};
 ///   collapse this type exists to prevent).
 ///
 /// The numeric sentinel itself is an NVIDIA constant and lives, per the quarantine rule
-/// (decision #2), only in `kayfabe-abi` (`kf_abi::client_kind_from_process_id`).
+/// (decision #2), only in `kf-abi` (`kf_abi::client_kind_from_process_id`).
 /// Everything above the ABI seam speaks this abstract type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ClientKind {
@@ -119,7 +119,7 @@ pub enum ClientKind {
 /// all, and it is why this role is recorded rather than inferred.
 ///
 /// The numeric `index` that carries it is an NVIDIA constant and lives, per the
-/// quarantine rule (decision #2), only in `kayfabe-abi`
+/// quarantine rule (decision #2), only in `kf-abi`
 /// (`kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`, which also carries
 /// the full RM call chain). Everything above the ABI seam speaks this abstract type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -792,7 +792,7 @@ pub struct CpuOperand {
 
 /// ★★★ **WHO GUARANTEES THE BYTES STAY WHERE THEY ARE**, for the duration of an operation.
 ///
-/// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant (owner, 2026-08-08)
+/// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant
 ///
 /// The first attempt at this seam added a *"not ours, refuse"* arm to the plane, and the
 /// owner corrected it against the C artifact's own measured design
@@ -1283,7 +1283,7 @@ pub struct PushRange {
 /// The number of engine-object subchannels one channel has —
 /// `NVC56F_NUMBER_OF_SUBCHANNELS` (`ogkm-580:
 /// src/common/sdk/nvidia/inc/class/clc56f.h:67`), mirrored here rather than imported
-/// because `kayfabe-arch` is the vocabulary crate and depends on no ABI.
+/// because `kf-arch` is the vocabulary crate and depends on no ABI.
 pub const SUBCHANNELS: usize = 8;
 
 /// How many method slots [`MethodState`] holds per subchannel.
@@ -1579,7 +1579,7 @@ pub trait PushbufferAbi: Send + Sync {
 ///
 /// **A real implementer's checklist** (`impl Arch for Ampere`, zero core edits):
 /// classify the generation's class-ID set (sourced from the Axis-A codegen tables in
-/// `kayfabe-abi`), decode the work-submit token and channel USERD flags, and supply the
+/// `kf-abi`), decode the work-submit token and channel USERD flags, and supply the
 /// generation's `GmmuFmt`/`UserdModel`. That is the whole surface.
 pub trait Arch: Send + Sync {
     /// Human-readable generation name (trace/diagnostics only — the core must
@@ -1878,7 +1878,7 @@ pub trait HostClasses: Send + Sync + core::fmt::Debug {
     /// ## ⊘ `None` means UNMEASURED, never "this generation has none"
     ///
     /// Every generation has a compute class. We only have a verified constant for one of
-    /// them, and `kayfabe-abi` carries exactly one (`AMPERE_COMPUTE_B`); the other names
+    /// them, and `kf-abi` carries exactly one (`AMPERE_COMPUTE_B`); the other names
     /// appear in capability *tables* without a value. Returning a guessed id here would be
     /// a fabricated hardware fact wearing a type — the failure this tree has paid for
     /// repeatedly under *"an empty capture is evidence of NOTHING, not evidence of

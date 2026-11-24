@@ -2,7 +2,7 @@
 //! The public SDK defines the parameters, but not the class number: that is MEASURED on the wire.
 //! This evidence is deliberately separate from normal capabilities.
 //!
-//! ★ 2026-10-31 (provenance fix): the table below is HAND-MAINTAINED and every item carries a
+//! The table below is HAND-MAINTAINED and every item carries a
 //! [`crate::provenance::Row`] with a source tag. It was generated until this date from the pinned
 //! closed Windows driver (the class registration row, the caller's control instructions); that
 //! generator and everything only it supplied are gone. The class and the control's size are now
@@ -294,7 +294,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-31: the table was generated until this date. Every value the diagnostic reads is
+    /// The table was generated until this date. Every value the diagnostic reads is
     /// pinned here to the generated table's bytes, so the hand-maintained rewrite changes none.
     #[test]
     fn the_cell_is_byte_identical_to_the_generated_one_it_replaced() {

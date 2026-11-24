@@ -325,7 +325,7 @@ impl ControlCensusLog {
     }
 }
 
-/// ★ 2026-10-04 (branch `v3-windows`, runbook C3): `KF3_RPC_TRACE=1` logs every command this chain
+/// `KF3_RPC_TRACE=1` logs every command this chain
 /// answers, up to the fixed process lifetime quota below — the function, the control id or the alloc class, and the result the guest reads — so a
 /// Windows guest's command stream can be diffed against a Linux guest's
 /// (`docs/design/V3_WINDOWS_DISCOVERY.md`). Log only and off by default: it changes no reply.
@@ -369,7 +369,7 @@ fn trace_line(
         RpcFunction::RmControl => control.map_or_else(
             || "cmd=undecodable".to_owned(),
             |q| {
-                // ★ 2026-10-11: the first 96 reply bytes of an NV0073 display-common control (and of FB_GET_GPU_CACHE_INFO / GPU_QUERY_ECC_STATUS), so a
+                // The first 96 reply bytes of an NV0073 display-common control (and of FB_GET_GPU_CACHE_INFO / GPU_QUERY_ECC_STATUS), so a
                 // run's answers can be read against a reference capture (log only, bounded).
                 let params =
                     (q.cmd >> 16 == 0x0073 || q.cmd == 0x2080_1315 || q.cmd == 0x2080_012f)

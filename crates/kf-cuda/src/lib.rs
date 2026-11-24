@@ -1,4 +1,4 @@
-//! ★★★★★ **THE WALK KERNEL, INSIDE KAYFABE** — `SINGLE_STORE_PLAN.md` increment 4.
+//! **THE WALK KERNEL, INSIDE KAYFABE** — `SINGLE_STORE_PLAN.md` increment 4.
 //!
 //! `cuda/walk` is a standalone proving ground: a GPU, a buffer, a kernel and 58 assertions,
 //! with nothing from the kayfabe runtime in it. This crate is the other half — the same

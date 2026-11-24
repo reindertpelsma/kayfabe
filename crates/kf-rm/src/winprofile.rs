@@ -14,7 +14,7 @@
 //!    verbs, never forwarded from guest bytes. A Linux guest never declares it, so a Linux guest
 //!    reaches none of the behaviours — by construction, not by measurement.
 //!
-//! ⊘ What the profile adds, named as what it is (OWNER_RULINGS §W 2026-11-15 reversal): these became
+//! ⊘ What the profile adds, named as what it is: these became
 //! PRODUCT behaviour for a declared Windows guest, and several are **fabricated answers**
 //! (class (c): a value the guest accepts that no host query produced) — the `GFX_POOL_QUERY_SIZE`
 //! sizes ([`crate::gfxpool_probe`]), the `GR_CTXSW_PREEMPTION_BIND` / `GR_CTXSW_ZCULL_BIND` `NV_OK`

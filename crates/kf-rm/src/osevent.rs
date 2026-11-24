@@ -638,7 +638,7 @@ impl CommandObserver for OsEventRecorder {
                     self.log.note_malformed();
                     return;
                 };
-                // ★ 2026-10-08 (§X): a NON-STALL registration is the guest's subscription to an
+                // A NON-STALL registration is the guest's subscription to an
                 // engine's (or the host's) non-stall edges, resolved at the guest's version.
                 let slot =
                     kf_abi::eventnotify::nonstall_slot(self.driver.driver_version(), notify_index);
@@ -665,7 +665,7 @@ impl CommandObserver for OsEventRecorder {
             // ⊘ It does NOT gate on "was this handle one of ours": the guest frees far more
             // than events, and `retire` is a no-op for a handle that names no row. Gating
             // would mean holding a second copy of the object model here.
-            // ★ 2026-10-08 (§X): the guest's RM (re)starts — every earlier registration is dead.
+            // The guest's RM (re)starts — every earlier registration is dead.
             RpcFunction::SetGuestSystemInfo => self.log.clear(),
             RpcFunction::Free => {
                 let Ok(f) = self.driver.decode_free(&cmd.payload) else {
@@ -890,7 +890,7 @@ mod tests {
         assert_eq!(left[0].client, 0xc1d0_000d, "the other client is untouched");
     }
 
-    /// ★ 2026-10-08 (§X): a NON-STALL registration arms its slot, its `FREE` disarms it; a stall
+    /// A NON-STALL registration arms its slot, its `FREE` disarms it; a stall
     /// registration on the same index arms nothing.
     #[test]
     fn a_nonstall_registration_arms_its_slot_until_freed() {

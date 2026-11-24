@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]) on the exact words the Windows kernel driver
+//! The VIDEO tier ([`crate::vtables`]) on the exact words the Windows kernel driver
 //! sent on its NVDEC channel (run 2990 at `0c5fedff`, `qemu-2990-0c5fedff-full.log:111267`, chan
 //! `0xc1d00018:0xff040003`, engine `0x13`, class `0xC9B0`, GP 0 — refused before this tier as
 //! `NoCeObject { subch: 4, method: 576 }`, the channel declared DEAD, the guest TDR'd).

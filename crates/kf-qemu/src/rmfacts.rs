@@ -234,7 +234,7 @@ pub fn display_precomp(
     }
 }
 
-/// ★ 2026-10-11 (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
+/// (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
 /// runlist the guest is told AND the cap kayfabe enforces — from the host's own unprivileged
 /// `FIFO_GET_INFO` answers (one per served runlist) and the `channel-budget` property (`0` = derive).
 ///

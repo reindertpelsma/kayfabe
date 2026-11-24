@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ **The one path a channel-class object reaches host RM by, and the bound that keeps it the
-//! only one** (`docs/design/THE_CONSTRAINTS.md` §30; OWNER_RULINGS §P).
+//! only one**.
 //!
 //! Host RM stamps a channel's privilege once, at the channel-alloc ioctl, from the calling
 //! thread's `capable(CAP_SYS_ADMIN)` (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`).

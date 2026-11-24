@@ -1,4 +1,4 @@
-//! ★ 2026-10-17 — **The doorbell contract, pinned on the REAL token word** (`kf_trap::TokenWord`),
+//! **The doorbell contract, pinned on the REAL token word** (`kf_trap::TokenWord`),
 //! GPU-free. The model (`kf-chan/tests/user_loop_model.rs`) proves the same rules over every
 //! interleaving of a transliterated worker; these tests make the rules a regression suite on the
 //! production atomic itself, one test per rule, each named after the rule it pins.

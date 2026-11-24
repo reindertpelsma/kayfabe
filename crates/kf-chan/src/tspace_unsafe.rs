@@ -512,7 +512,7 @@ pub fn put_gr_address(
     Ok(())
 }
 
-/// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): emit one video-engine semaphore operation on
+/// The VIDEO tier ([`crate::vtables`]): emit one video-engine semaphore operation on
 /// `sub` — `SEMAPHORE_A` (the window address's upper bits, `UPPER` field width from the class's
 /// own header), `SEMAPHORE_B` (lower 32 bits), the payload `SEMAPHORE_C`, the 64-bit payload
 /// registers when given, then `SEMAPHORE_D` — every offset looked up by NAME in the class's derived

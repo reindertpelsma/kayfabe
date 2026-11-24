@@ -50,7 +50,7 @@ pub struct DiffRun {
     /// so a user twin WITHHOLDS the leaf ([`MapTarget::withholds_privileged`]) rather than map it
     /// where an unprivileged channel could reach it.
     pub privileged: bool,
-    /// ★ 2026-10-09: the guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
+    /// The guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
     /// 2 MiB, 512 MiB), in bytes; 0 = unknown (treated as the family grain). Outside a
     /// VA-reserving `hDma` the host maps ONE mapping per leaf — the smallest unit the guest can
     /// change independently — so every later change is a whole-mapping unmap
@@ -150,7 +150,7 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
-    /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
+    /// Runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
     /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
     pub kept_runs: usize,
     /// The first such fallback's reason.
@@ -160,12 +160,12 @@ pub struct Applied {
     /// leaves) — counted, and refused only with [`ApplyCfg::carve_refuse`].
     pub carve_gpu: usize,
     /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space, counted apart. ⊘ Corrected
-    /// 2026-10-10 (§AB): refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
+    /// Refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
     /// refused") ([`carve_reached`]).
     pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
-    /// ★ 2026-10-10: carve-out bytes left ABSENT from runs that straddle the carve-out base (the
+    /// Carve-out bytes left ABSENT from runs that straddle the carve-out base (the
     /// run's part below it is placed and the run acknowledged — [`prepare_row`]).
     pub carve_clipped_bytes: u64,
     /// ★ Review fix 2026-10-10 (findings 1, 2): runs acknowledged FAILED only because a LINKED run
@@ -371,7 +371,7 @@ impl PermPolicy {
     }
 }
 
-/// ★ 2026-10-09: a walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
+/// A walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
 /// code (the caller then treats the run as made of family-grain leaves).
 #[must_use]
 pub const fn leaf_bytes(code: u8) -> u64 {
@@ -438,7 +438,7 @@ fn carve_reached(
     }
 }
 
-/// ★★★ 2026-10-09 — **a page the diff names but does not change.** The walker unmaps WHOLE
+/// **A page the diff names but does not change.** The walker unmaps WHOLE
 /// committed placements and maps the pieces of the walk in the gaps (`kf_walk.cu`, "THE DIFF
 /// AGAINST THE COMMITTED PLACEMENTS"), and its UNMAP run IS the committed placement (same `at`,
 /// same flags). So a one-page change inside a 16-page row arrives as UNMAP(16 pages) + MAP(5) +
@@ -729,7 +729,7 @@ impl Applied {
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
-/// ★★★ 2026-10-09 (GPU targets): only what CHANGED reaches the host. A page an UNMAP and a MAP
+/// Only what CHANGED reaches the host. A page an UNMAP and a MAP
 /// of this entry name with the same mapping ([`same_mapping`]) is neither unmapped nor re-mapped
 /// — never transiently unmapped; the changed sub-ranges are unmapped by exact range over OUR
 /// placements (`crate::batch::BatchedVas::unmap_range`) and only the new pieces are mapped. A
@@ -754,7 +754,7 @@ impl Applied {
 /// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
-    // ★ 2026-11-16 (observation only, `kf_host::phase`): the apply's partition — Prep, UnmapPhase,
+    // The apply's partition — Prep, UnmapPhase,
     // MapPhase, Takedown, Invalidate — five clock reads and nothing decided by them.
     use kf_host::phase::{Phase, ns_since, record};
     let mut t_phase = std::time::Instant::now();
@@ -818,7 +818,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
             out.priv_mirrored = out.priv_mirrored.saturating_add(1);
         }
-        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
+        // Only the NEW pieces of the run reach the host; the unchanged part is
         // already ours (a kept remnant of the placement this entry unmaps).
         let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
         if new.is_empty() {
@@ -1139,7 +1139,7 @@ fn prepare_row(
         match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
             // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
             // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-            // ★ 2026-10-09: and its leaf size (one host mapping per leaf outside a reservation).
+            // And its leaf size (one host mapping per leaf outside a reservation).
             Ok(v) if v.len() == 1 => Desired {
                 kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
                 perm: r.perm,
@@ -1168,7 +1168,7 @@ fn prepare_row(
         );
         return None;
     }
-    // ★★★ 2026-10-10 (fix of the 6fafcc6e fast-suite regression; see
+    // (fix of the 6fafcc6e fast-suite regression; see
     // `tests::a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes`): only the carve-out
     // BYTES are refused. A run that starts inside the carve-out is refused whole, as before; a run
     // that STRADDLES its base (the guest RM's flat FB alias, whose last 2 MiB leaf overhangs it) is
@@ -1255,7 +1255,7 @@ fn prepare_row(
     Some((d, carve_clipped))
 }
 
-/// ★ 2026-10-10: a row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
+/// A row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
 /// row (placed by `crate::batch::BatchedVas` through ONE micro reservation, D1 2026-10-10 — ⊘ it
 /// was "one host mapping per leaf, the leaf being the host unit"), and the cut leaf's lower part
 /// becomes its own row with the largest leaf its edges allow — never the 4 KiB fallback over the
@@ -2101,7 +2101,7 @@ mod tests {
                     kind: 1 << (bit - 16),
                     ..plain
                 },
-                // ★ 2026-10-09: the page-size code is the leaf size (bits 8..11).
+                // The page-size code is the leaf size (bits 8..11).
                 8..=11 => DiffRun {
                     leaf: leaf_bytes(1 << (bit - 8)),
                     ..plain

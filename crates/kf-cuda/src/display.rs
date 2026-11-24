@@ -278,7 +278,7 @@ pub struct DisplayGpu {
     color_event: EventHandle,
     color_recorded: bool,
     color_snapshots: [Option<ColorLut>; 65],
-    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): recorded with every completion signal, so a copy whose
+    /// Recorded with every completion signal, so a copy whose
     /// signal is late can be asked "still queued, or failed?" without blocking.
     signal_event: EventHandle,
     /// ★ The expanded cursor (an `A1R5G5B5` image the VMM converted to 32 bits): two slots of
@@ -551,7 +551,7 @@ pub struct YuvLayer {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U.
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage (`kf_disp::scanout::YUV_SEMI_PLANAR_8` = 0, `_16` = 1, packed
+    /// The storage (`kf_disp::scanout::YUV_SEMI_PLANAR_8` = 0, `_16` = 1, packed
     /// YUYV = 2, UYVY = 3; a packed layout reads its chroma from the luma plane).
     pub layout: u32,
     /// 0 = nearest, 1 = bilinear.
@@ -577,7 +577,7 @@ impl YuvLayer {
         {
             return Err(format!("{l:?}: source geometry outside the kernel's range"));
         }
-        // ⊘ 2026-10-14: the destination may extend past the frame (its scale is the window's); the
+        // The destination may extend past the frame (its scale is the window's); the
         // kernel skips every write outside it, and the launch covers only the visible rows
         if l.ox >= fw || l.oy >= fh {
             return Err(format!("{l:?} starts outside the {fw}x{fh} frame"));
@@ -613,7 +613,7 @@ impl YuvLayer {
                 Ok((ye - 1) * u64::from(pitch) + row)
             }
         };
-        // ★ 2026-11-14 (security review 3 F-6 / review 2 D-09): a packed 4:2:2 row is read in whole
+        // A packed 4:2:2 row is read in whole
         // 4-byte macropixels — the last luma pixel's chroma is the second half of its macropixel, so
         // an odd `x_end` reads 2 bytes past `x_end * 2`. ⊘ Was `x_end * 2`. Same formula as
         // `kf_disp::scanout::YuvFormat::plane0_row_bytes`, re-derived here on purpose.
@@ -671,7 +671,7 @@ impl DisplayGpu {
              bound is a host-memory-safety obligation, OWNER_RULINGS S1-05)",
             pageable.map_or("unknown", |p| if p { "yes" } else { "no" })
         );
-        // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below destroys the context (and
+        // Guarded — a `?` below destroys the context (and
         // the stream, events and modules made in it) instead of leaking them.
         let ctx = cu.ctx_create_guarded(device)?;
         let stream = cu.stream_create()?;
@@ -1078,7 +1078,7 @@ impl DisplayGpu {
         let ys = self.at(l.y_src, ny, what)?;
         let cs = self.at(l.c_src, nc, what)?;
         let u = |x: u32| x.to_le_bytes().to_vec();
-        // ★ 2026-10-14: `dst` first, then `KF_YUV_PARAMS` (`cuda/display/kf_yuv.cu`)
+        // `dst` first, then `KF_YUV_PARAMS` (`cuda/display/kf_yuv.cu`)
         let mut params = vec![
             dst.kernel_arg(),
             ys.kernel_arg(),
@@ -1412,7 +1412,7 @@ impl DisplayGpu {
         self.cu.launch_host_signal(&self.stream, &self.done)
     }
 
-    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): the state of the work before the last
+    /// The state of the work before the last
     /// [`Self::compose_signal`] — **never blocks**. `Ok(false)`: still queued (the GPU, or the host
     /// RM in front of it, has not run it yet); `Ok(true)`: done, its signal is on its way; `Err`:
     /// the stream failed, by name — the only answer that means the completion will never come.
@@ -2348,7 +2348,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-11-14 (security review 3 F-6, review 2 D-09): a packed 4:2:2 window with an ODD right
+    /// A packed 4:2:2 window with an ODD right
     /// edge reads the last pixel's chroma 2 bytes past `x_end * 2` (the second half of its 4-byte
     /// macropixel). The launch check counts whole macropixels: an extent that ends at `x_end * 2`
     /// is refused, one that ends at `x_end.div_ceil(2) * 4` is accepted; an even edge is unchanged.
@@ -2444,7 +2444,7 @@ mod tests {
             ..ok
         };
         assert_eq!(ok.check(120, 90), Ok(()));
-        // ⊘ 2026-10-14: a destination past the frame edge is drawn clipped (the kernel guards the
+        // A destination past the frame edge is drawn clipped (the kernel guards the
         // writes); one that STARTS outside the frame is refused
         assert_eq!(ok.check(109, 69), Ok(()), "right and bottom edges cut");
         assert!(ok.check(10, 90).is_err(), "starts right of the frame");

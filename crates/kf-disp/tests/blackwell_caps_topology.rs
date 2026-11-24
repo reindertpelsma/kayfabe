@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`): the GB20x capabilities page
+//! The GB20x capabilities page
 //! (`NVCA73`, BAR0 `0x640000`) has three EXISTENCE registers that no earlier caps class has —
 //! `SYS_CAPC.TILE_EXISTS(i)`, `SYS_CAPE.VIRWIN_EXISTS(i)` (`clca73.h` 0x34) and `LINK_CAP.PHYCTRL_EXISTS(i)`
 //! (`clca73.h` 0x30). The derived page stated only the first (one tile per head); the other two stayed 0,

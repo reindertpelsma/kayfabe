@@ -933,7 +933,7 @@ fn the_report_constants_match_the_header() {
         u64::from(kf_cuda::abi::KFWR_HF_RESYNC)
     );
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
-    // ★ 2026-11-14 (S1-69): the validator's op set and format version
+    // The validator's op set and format version
     assert_eq!(parse("KFWR_VERSION"), u64::from(kf_cuda::abi::KFWR_VERSION));
     assert_eq!(parse("KFWR_OP_MAP"), u64::from(kf_cuda::abi::KFWR_OP_MAP));
     assert_eq!(
@@ -1118,7 +1118,7 @@ fn the_report_constants_match_the_header() {
     }
 }
 
-/// ★ 2026-11-14 (fixcuda2): the two VER3 PCF enumerants the host checks a descriptor against
+/// The two VER3 PCF enumerants the host checks a descriptor against
 /// (`kf_cuda::walk::KF_VER3_*`) are the values the kernel COMPILES (`kf_walk.cu`'s defines, which
 /// `scripts/ci/walk_ptx_repro.py` ties to ogkm's `gh100/dev_mmu.h`), and the Rust VER3 descriptor
 /// carries them. A drift on either side fails here, without a GPU.

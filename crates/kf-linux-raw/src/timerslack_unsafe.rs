@@ -1,7 +1,7 @@
 //! Two syscall wrappers: `prctl(PR_SET_TIMERSLACK)` and `prctl(PR_GET_TIMERSLACK)`, for the
 //! calling thread. Nothing else belongs in this file.
 //!
-//! ★ 2026-11-03 (walk wake, `traces/walk_wake_20261103/`): a thread that sleeps for tens of
+//! A thread that sleeps for tens of
 //! microseconds — the VA worker looking at a pending GPU walk — is otherwise woken up to the
 //! kernel's default **50 us** late (`timer_slack_ns`, applied to every `epoll_wait`-family
 //! timeout of a normal-priority thread). That slack is as large as the wait itself. It is a

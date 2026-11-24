@@ -69,7 +69,7 @@ impl Pool {
         Some(Region { off: r.off, cap })
     }
 
-    /// ★ 2026-11-18: grow `r` in place to `new_cap` runs by taking the free run that starts exactly at its
+    /// Grow `r` in place to `new_cap` runs by taking the free run that starts exactly at its
     /// end. Returns the grown region (same `off`), or `None` — with the pool untouched — when no free
     /// run starts there or it is too short. Never moves, never overlaps another region, never leaves
     /// the pool: the extension is carved out of a free run, which lies inside `[0, size)`.
@@ -139,7 +139,7 @@ pub struct Move {
 }
 
 impl Move {
-    /// ★ 2026-11-18: the device-to-device copy this move needs, as `(dst_off, src_off, runs)`, or `None`.
+    /// The device-to-device copy this move needs, as `(dst_off, src_off, runs)`, or `None`.
     /// A relocation copies the WHOLE old region (the counts in `KfSlot` say how much is live) to the new
     /// one. Growth in place (`to.off == from.off`, into the free run after the slot) moves nothing and
     /// needs no copy: the old and new regions would overlap, and a copy onto itself is never issued.
@@ -222,7 +222,7 @@ impl Capacity {
         })
     }
 
-    /// ★ 2026-11-16 (**replay seam**, `docs/design/V3_REPLAY_TESTS.md`): a walker whose slot pool
+    /// (**replay seam**, `docs/design/V3_REPLAY_TESTS.md`): a walker whose slot pool
     /// already holds `held` — `(slot, region)` pairs — and is free everywhere else. For regression
     /// fixtures that rebuild a LOGGED pool geometry (`slot_geometry`) and replay one decision on it;
     /// production only ever reaches a layout through [`Capacity::plan`], [`Capacity::slot_needed`]
@@ -433,7 +433,7 @@ impl Capacity {
         // requirement: a free region holding the actual demand is sufficient. Failed alloc
         // leaves the pool untouched, so both attempts retain the source until a move exists.
         //
-        // ★ 2026-11-18 (the slot-pool ceiling death, `docs/design/V3_REPLAY_TESTS.md`): when NO free
+        // (the slot-pool ceiling death, `docs/design/V3_REPLAY_TESTS.md`): when NO free
         // block holds a new region, the slot grows IN PLACE into the free run that starts at its
         // end (preferred size if that run holds it, else the required size). That is a fallback, so
         // every growth that relocated before relocates the same way; it needs no copy (the device
@@ -476,7 +476,7 @@ impl Capacity {
         }))
     }
 
-    /// ★ 2026-11-16 (observation only, `docs/design/V3_VA_PROFILE.md`): the slot pool's geometry
+    /// (observation only, `docs/design/V3_VA_PROFILE.md`): the slot pool's geometry
     /// around slot `s` when its growth to `need` placements hit the ceiling (2026-11-18: since the
     /// in-place fallback, "would fit" is printed at a ceiling only if the pool changed in between) — what a fragmentation
     /// fix must know (whether the tail after the slot is free, the largest free blocks, who sits
@@ -581,7 +581,7 @@ mod tests {
         Capacity::new(8, 1 << 16, 1 << 16, 1 << 15, 1024).expect("config")
     }
 
-    /// ★ 2026-11-16: a ceiling with enough free runs in total but no block large enough names the
+    /// A ceiling with enough free runs in total but no block large enough names the
     /// slot's region, the largest free blocks, its neighbours and that in-place growth would not fit.
     #[test]
     fn ceiling_geometry_names_the_blocks_and_the_neighbours() {
@@ -627,7 +627,7 @@ mod tests {
         assert!(!g2.contains("would not fit"), "{g2}");
     }
 
-    /// ★ 2026-11-16: a free tail too small for the required size is named, and in-place growth
+    /// A free tail too small for the required size is named, and in-place growth
     /// is said NOT to fit.
     #[test]
     fn ceiling_geometry_names_a_free_tail_too_small() {
@@ -647,8 +647,8 @@ mod tests {
         }
     }
 
-    /// ★ 2026-11-16: a free tail directly after the slot is named, with whether growth in place fits.
-    /// 2026-11-18: that growth now SUCCEEDS in place (it was refused at a ceiling), so the geometry is read
+    /// A free tail directly after the slot is named, with whether growth in place fits.
+    /// That growth now SUCCEEDS in place (it was refused at a ceiling), so the geometry is read
     /// before the growth, as an observation of the state the decision starts from.
     #[test]
     fn ceiling_geometry_names_a_free_tail_that_would_fit() {
@@ -690,7 +690,7 @@ mod tests {
         assert_eq!(m.copy(), None, "growth in place issues no copy");
     }
 
-    /// ★ 2026-11-18: `Move::copy` is the device copy the walker issues: none in place, the whole OLD region
+    /// `Move::copy` is the device copy the walker issues: none in place, the whole OLD region
     /// for a relocation (the destination may be larger, the source length is what is live).
     #[test]
     fn a_move_copies_the_whole_old_region_unless_it_grew_in_place() {
@@ -715,7 +715,7 @@ mod tests {
         assert_eq!(inplace.copy(), None);
     }
 
-    /// ★ 2026-11-18: `Pool::grow_in_place` takes only the free run that starts at the region's end, exactly,
+    /// `Pool::grow_in_place` takes only the free run that starts at the region's end, exactly,
     /// keeps the free list sorted and non-adjacent, and leaves the pool untouched when it refuses.
     #[test]
     fn grow_in_place_takes_only_the_run_at_the_end() {

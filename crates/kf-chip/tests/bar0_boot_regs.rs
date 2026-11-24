@@ -180,7 +180,7 @@ fn the_vbios_carries_the_hosts_version_and_the_generated_geometry() {
     }
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 4): Turing's `kgspExecuteHsFalcon_TU102` runs
+/// Turing's `kgspExecuteHsFalcon_TU102` runs
 /// `BOOT_WITH_LOADER` / `BOOT_DIRECT` only ⇒ its ROM carries a V2 descriptor; GA10x / AD10x keep V3
 /// (`kgspExecuteHsFalcon_GA102` asserts `BOOT_FROM_HS`), byte for byte what they were served.
 #[test]
@@ -227,7 +227,7 @@ fn the_neutral_vbios_version_is_named_and_not_a_die_row() {
     );
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the FSP families' boot-complete gate and the
+/// The FSP families' boot-complete gate and the
 /// config-cycle link capabilities — per die group, from the host's architecture; nothing on
 /// Turing … Ada (GA106 unchanged).
 #[test]

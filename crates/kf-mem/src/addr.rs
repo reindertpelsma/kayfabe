@@ -32,6 +32,7 @@ pub struct Gva(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HostToken(pub u64);
 
+/// The 4 KiB page size every address in this crate is aligned and counted against.
 pub const PAGE: u64 = 0x1000;
 
 /// ★ Round a range out to page boundaries.

@@ -2,7 +2,7 @@
 //! ★★★ Build kf3's boot-display GOP driver (`firmware/kf-gop`) from source during the ordinary cargo
 //! build, and hand its bytes to `src/lib.rs` (`include_bytes!` from `OUT_DIR`).
 //!
-//! ## Why (`docs/OWNER_RULINGS.md` §K, 2026-10-03)
+//! ## Why
 //!
 //! *"We aren't going to put compiled stuff in the repo right? … the efi driver is compiled when
 //! building the repo."* Until that ruling the release `kf-gop.efi` was committed beside its source and

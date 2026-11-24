@@ -180,7 +180,7 @@
 //! `Disposition` is computed in `kf_gsp::GspFsm::answer` from the arriving function
 //! alone, `CommandPolicy::respond` returns `Option<Reply>` with no "post nothing" value,
 //! and making a fragment inherit its head's disposition would put a second copy of the
-//! reassembly state inside the FSM. **Recorded as a `kayfabe-gsp` question, not silently
+//! reassembly state inside the FSM. **Recorded as a `kf-gsp` question, not silently
 //! absorbed.**
 //!
 //! ★ **B3 is the class table** ([`kf_abi::versions::DriverAbiTable::alloc_params`]):
@@ -1681,7 +1681,7 @@ fn translate_published_pdes(
     // re-encodes it), and no page-directory statement is made. Added 2026-10-07 (run37
     // refused it with 0x56 where vfio-10 answers `NV_OK`).
     if pdes.is_server_context_only() {
-        // ★ 2026-10-07 (run44 setup): name the level instance the guest moved, so the walk
+        // Name the level instance the guest moved, so the walk
         // that follows can be read against it (run43: the space's ALL_VA walk right before this
         // call found nothing under the moved level). Bounded: at most GMMU_FMT_MAX_LEVELS rows,
         // and only for this rare form.
@@ -1738,7 +1738,7 @@ fn translate_published_pdes(
 /// both vendored trees (`ogkm-610: g_sdk-structures.h:368-377`, `ogkm-580: :366-375`). So the
 /// existing ioctl-side decoder applies **verbatim**, which is what
 /// `gsp_core_bridge.md` §1.4 claims and what
-/// `crates/kayfabe-abi/tests/mean_wire.rs` pins.
+/// `crates/kf-abi/tests/mean_wire.rs` pins.
 ///
 /// ## ★★ The one place a params field legitimately names a namespace
 ///

@@ -6,7 +6,7 @@
 //! on a line above the block (the crate's house rule) — none has a precondition a caller
 //! is trusted to have met.
 //!
-//! ★ 2026-09-26 (`V3_BATCHED_MAP.md`): [`MappedRegion::stitch`] adds one `MAP_FIXED` `mmap`,
+//! (`V3_BATCHED_MAP.md`): [`MappedRegion::stitch`] adds one `MAP_FIXED` `mmap`,
 //! one address computation and one `munmap` of a stray result — the same shape, and the same
 //! argument, as [`Reservation::map_fixed_in`].
 //!
@@ -1432,6 +1432,7 @@ impl VolatileRegion {
         Ok(())
     }
 
+    /// Load the `u32` at `offset` (`Relaxed`).
     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
         Ok(self.word_at::<AtomicU32>(offset)?.load(Ordering::Relaxed))
     }

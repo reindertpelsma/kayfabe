@@ -784,7 +784,7 @@ impl HostRing {
         self.gr_context
     }
 
-    /// ★ 2026-10-19: the CE class this ring's host channel holds a real object of — `Some` only
+    /// The CE class this ring's host channel holds a real object of — `Some` only
     /// for a copy-engine ring (`on_engine_layout` allocates it at birth), `None` for a graphics
     /// or video ring. The class a guest-KERNEL CE ring's methods decode against when the guest
     /// sends no `SET_OBJECT` ([`crate::tmode::TState::ce_object`]).
@@ -830,7 +830,7 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when there is no free space until a completion; `Err` for a store failure.
     pub fn push(&mut self, words: &[u32]) -> Result<Result<(), Busy>, String> {
-        // ★ 2026-10-14: a video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
+        // A video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
         // authored semaphore rows and host methods only. No codec or CE execution reaches it —
         // the decoder refuses `EXECUTE`, every codec operand and every CE method by name — and
         // its private fence remains authored here, never supplied by the guest.
@@ -2030,7 +2030,7 @@ mod graphics_route_tests {
     }
 }
 
-/// 2026-10-31 — the wrap contract of the host fence compare, ported from the retired
+/// The wrap contract of the host fence compare, ported from the retired
 /// `kayfabe-completion` `fence_arm_is_wrap_correct` / `fence_arm_fires_at_or_after_target_exactly_once`.
 ///
 /// The fence every compare below reads is the HOST ring's own (`HostRing::completed`: a word in an

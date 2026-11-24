@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — **the USER-ring relay as an event loop** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
+//! **The USER-ring relay as an event loop** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
 //!
 //! The pure vocabulary the relay's turn (`crates/kf-qemu/src/userpump.rs`), the worker loop
 //! ([`crate::worker`]) and the exhaustive model (`tests/user_loop_model.rs`) share. No I/O, no clock
@@ -107,7 +107,7 @@ pub enum Peek {
     Backstop,
 }
 
-/// ★ 2026-10-20 (owner design): what a relay can hold that the worker must not sleep through, and what will announce it. A relay that lost a
+/// What a relay can hold that the worker must not sleep through, and what will announce it. A relay that lost a
 /// `try_lock` (a busy `pt` map, USERD / RM-graph admission, source swap) is NOT re-rung by any look, on a budget or otherwise: that would be a
 /// poll. It registers with the lock holder ([`crate::handoff::Handoff`]) BEFORE giving up and the holder rings it after releasing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -295,10 +295,10 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
-    /// ★ 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
+    /// The USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
     /// line (`USER_RING_LIFECYCLE SUMMARY`).
     pub life: crate::user_lifecycle::LifecycleStats,
-    /// ★ 2026-10-17: lazy observe's counters (`crate::user_lazy`), printed on their own line
+    /// Lazy observe's counters (`crate::user_lazy`), printed on their own line
     /// (`USER_RING_LAZY_OBSERVE SUMMARY`).
     pub lazy: crate::user_lazy::LazyStats,
 }

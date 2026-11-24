@@ -25,9 +25,9 @@ use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-/// ★ 2026-11-03: the VA-manager thread's timer slack — small against its 50 us pending-walk
+/// The VA-manager thread's timer slack — small against its 50 us pending-walk
 /// wait (`Device::va_loop`); the kernel's default is 50 us.
-/// ★ 2026-11-14 (security review 1 F-13 / S1-86): the drainer's per-doorbell refusal lines (a GSP
+/// The drainer's per-doorbell refusal lines (a GSP
 /// write refused, a command service refused, a held reply post refused — `QueueFull` when the guest
 /// stops draining its status queue, once per doorbell) are counted per site and printed only when
 /// [`crate::reset::loud`] picks the count (first 16, then powers of two): the drainer may not write
@@ -35,7 +35,7 @@ use std::sync::{Mutex, OnceLock};
 static DRAINER_REFUSALS: [AtomicU64; 3] = [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
 
 const VA_TIMER_SLACK_NS: u64 = 5_000;
-/// ★ 2026-11-16: split tickets whose enqueue time the VA thread keeps at once (observation only).
+/// Split tickets whose enqueue time the VA thread keeps at once (observation only).
 const SPLIT_PROFILE_BOUND: usize = 4096;
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -83,14 +83,14 @@ pub struct Config {
     /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
     /// Validated by [`Config::check`]; needs `display=on`.
     pub display_max_fps: u32,
-    /// ★ 2026-10-11: `channel-budget=<N>` — channels PER RUNLIST: the count the guest is told
+    /// `channel-budget=<N>` — channels PER RUNLIST: the count the guest is told
     /// (`GET_NUM_CHANNELS`) AND the enforced twin cap. 0 (unset) = derived from the host
     /// ([`kf_abi::chanbudget`]); refused at realize above what the host can give or below the minimum.
     pub channel_budget: u32,
-    /// ★ 2026-10-04 (`v3-windows`): `gop-efi=<path>`, a signed copy of the embedded GOP driver to
+    /// `gop-efi=<path>`, a signed copy of the embedded GOP driver to
     /// serve instead of the unsigned one ([`crate::gop::SignedGop`]). Needs `gop=on`.
     pub gop_efi: Option<String>,
-    /// ★ 2026-10-08: `gpu-uuid=` — the guest-visible GPU UUID: `auto` (unset; stable per VM and
+    /// `gpu-uuid=` — the guest-visible GPU UUID: `auto` (unset; stable per VM and
     /// host GPU, distinct across VMs), `random`, `host`, or an explicit `GPU-xxxxxxxx-…` value.
     /// Parsed by [`Config::check`]; resolved at realize ([`crate::gpuuid`], [`kf_rm::gpuuid`]).
     pub gpu_uuid: Option<String>,
@@ -108,7 +108,7 @@ pub struct Config {
     /// then fails by name at its first Windows-only control). The only opt-out; never an environment
     /// variable and never inferred from the guest.
     pub windows_support: bool,
-    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization`
+    /// The `report-utilization`
     /// property, default ON. On, the guest's GPU-utilisation controls (NVML / `nvidia-smi`
     /// `utilization.gpu` and friends) are answered with the PHYSICAL GPU's whole-device load, read by ONE fixed,
     /// host-authored, unprivileged host control on the `kf3-util` thread; no guest byte is ever sent to the host
@@ -238,7 +238,7 @@ struct Gsp {
 pub struct Counters {
     /// Privileged BAR0 writes applied by the drainer.
     pub applied: AtomicU64,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): privileged writes applied in THIS device
+    /// (`docs/design/V3_S3_RESUME.md`): privileged writes applied in THIS device
     /// life — restarted by every logged reset ([`crate::reset::loud`]), so the first writes of
     /// each life (a reboot's boot, an S3 resume) are logged like the first boot's. A reset that is
     /// not logged parks it past the cap: a guest resetting in a loop gets no lines.
@@ -281,7 +281,7 @@ pub const MSIX_VECTORS: usize = 32;
 pub struct Device {
     /// The host RM session (process-lifetime: the memory plane's views borrow it).
     pub rm: &'static kf_host::HostRm,
-    /// ★ 2026-11-17: GPU-utilisation reporting (`report-utilization`); `None` with the property off, or when the
+    /// GPU-utilisation reporting (`report-utilization`); `None` with the property off, or when the
     /// host has no unprivileged source ([`crate::utilhost::enable`]).
     pub util: Option<crate::utilhost::UtilRuntime>,
     /// Opt-in native timer backing; present only after host/guest layout and map validation.
@@ -315,7 +315,7 @@ pub struct Device {
     /// register on the page that is NOT a read side effect is served from here by the read exit,
     /// with the read-back-what-was-written semantics a `B` page has.
     holes: Vec<HoleShadow>,
-    /// ★ 2026-09-26: the FSP families' RM EMEM channel (`kf_trap::fspemem`) — its page is a hole,
+    /// The FSP families' RM EMEM channel (`kf_trap::fspemem`) — its page is a hole,
     /// and its data port and cursor are served here, on the vCPU. `None` on the falcon families.
     fsp: Option<kf_trap::fspemem::FspEmem>,
     /// The NVDM type of the last command FSP acknowledged (status line).
@@ -329,7 +329,7 @@ pub struct Device {
     /// instant the guest's write lands, when the write alone decides it).
     store_model: std::sync::Arc<dyn GspModel>,
     boot: Vec<BootReg>,
-    /// ★ 2026-09-26: config-space words read by config cycle (Hopper+; `kf_chip::bar0::config_words`).
+    /// Config-space words read by config cycle (Hopper+; `kf_chip::bar0::config_words`).
     pub config_words: Vec<ConfigWord>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
@@ -339,7 +339,7 @@ pub struct Device {
     /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm
     /// ([`crate::tspace`]; always, since 2026-10-10).
     pub tspace: crate::tspace::TSpaceCell,
-    /// ★ 2026-09-30: the doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
+    /// The doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
     /// ioeventfd per live token, serviced by THIS device's register drainer. Off (every doorbell
     /// trapped) until the C device's `doorbell-ioeventfd` property hands it the KVM verb.
     pub dbfast: &'static DbFast,
@@ -375,11 +375,11 @@ pub struct Device {
     pub gop: Option<crate::gop::BootPlan>,
     /// The option ROM packed for this device at realize (`kf3_option_rom`); `None` with `gop=off`.
     gop_rom: Option<Vec<u8>>,
-    /// ★ 2026-10-03 (B5): the register the guest's RM writes to give BAR1 back to PHYSICAL mode
+    /// The register the guest's RM writes to give BAR1 back to PHYSICAL mode
     /// (`kf_chip::bar1mode`) — observed on the drainer, never trapped specially. `None`: the die
     /// group does not resolve it (named at realize).
     bar1_mode: Option<kf_chip::bar1mode::Bar1ModeReg>,
-    /// ★ 2026-10-03 (B5): the `UNLOADING_GUEST_DRIVER` (fn 47) body's layout at the declared guest
+    /// The `UNLOADING_GUEST_DRIVER` (fn 47) body's layout at the declared guest
     /// version (`kf_abi` generated matrix) — to tell a teardown from a PM transition.
     unload_layout: Option<&'static kf_abi::matrix::Layout>,
     /// Lines logged by the B5 observers of the BAR1-mode register (bounded).
@@ -458,7 +458,7 @@ impl Device {
         let mut host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
-        // ★ 2026-10-11: the VM's channel budget — told to the guest AND enforced as the twin cap (one number).
+        // The VM's channel budget — told to the guest AND enforced as the twin cap (one number).
         let budget = crate::rmfacts::channel_budget(rm, &host.engines, cfg.channel_budget)?;
         match std::sync::Arc::get_mut(&mut host) {
             Some(h) => {
@@ -476,7 +476,7 @@ impl Device {
             "kf3: channel budget {} per runlist ({:?}; derived default {}, host limit {}; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)",
             budget.per_runlist, budget.source, budget.derived, budget.limit
         );
-        // ★ 2026-10-08: the guest-visible GPU UUID — resolved ONCE, here, from the properties and the
+        // The guest-visible GPU UUID — resolved ONCE, here, from the properties and the
         // host GPU's own UUID (`HostFacts::host_gid`), before anything is reserved. It travels in
         // `BoardFacts::gpu_gid`, which every chain rebuild shares, so fn 65's encoders cannot differ.
         let gpu_uuid =
@@ -628,7 +628,7 @@ impl Device {
                     at += n;
                 }
             }
-            // ★ 2026-10-18: AWAIT the completion of what was written above. `cuMemcpyHtoD` from
+            // AWAIT the completion of what was written above. `cuMemcpyHtoD` from
             // pageable memory may return once the data is staged, before the DMA reached device
             // memory (the CUDA programming guide's API synchronization behaviour); the display
             // worker's own context reads the boot range later, and the guest's first BAR1 write
@@ -819,7 +819,7 @@ impl Device {
         let drainer_efd: &'static Notifier = Box::leak(Box::new(
             Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
         ));
-        // ★ 2026-09-30: the doorbell fast path. Its poller IS the drainer's readiness set (the drainer
+        // The doorbell fast path. Its poller IS the drainer's readiness set (the drainer
         // waits on doorbell eventfds with its other work); its kick is the drainer's own wake. The
         // guest's token layout comes from the die group's HAL + the hwref table; unresolved ⇒ every
         // doorbell stays trapped (named here).
@@ -827,7 +827,7 @@ impl Device {
         let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
-        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the BAR1-mode register of this die group.
+        // The BAR1-mode register of this die group.
         let bar1_mode = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_chip::bar1mode::bar1_mode_reg);
@@ -854,7 +854,7 @@ impl Device {
         let mirrors = crate::mem::Mirrors::default();
         // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
         let tspace = crate::tspace::TSpaceCell::default();
-        // ★ 2026-10-10 (OWNER_RULINGS §AB): always ON — `KF3_TSPACE` is deleted. The line keeps
+        // Always ON — `KF3_TSPACE` is deleted. The line keeps
         // its words (`ON: built at prewarm`), which the box-log gate reads.
         eprintln!(
             "kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies"
@@ -895,7 +895,7 @@ impl Device {
         // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
-        // ★ 2026-10-08 (owner ruling §X): the relay wakes a guest for the non-stall events IT armed
+        // The relay wakes a guest for the non-stall events IT armed
         // — read from the same os-event registry the served chain records them in.
         chans.set_os_events(&chain_logs.os_events);
         let census = kf_rm::census::ControlCensusLog::new();
@@ -931,11 +931,11 @@ impl Device {
         // ★ v3-display step (3): the plane — the shared model the served chain answers from across
         // `ReselectAtFn1` rebuilds, and its own GPU context over the store (a second export: the
         // walker's context keeps its own import).
-        // ★ 2026-11-15: the Windows support profile — ONE value per VM, shared by the chain (which
+        // The Windows support profile — ONE value per VM, shared by the chain (which
         // records the guest's fn-1 identity), the memory plane (the mirror-space start) and the display
         // plane (the SDR colour path).
         let windows = kf_rm::winprofile::WindowsProfile::new(cfg.windows_support);
-        // ★ 2026-11-17: GPU-utilisation reporting. One host reading on THIS thread (realize, never a vCPU) says
+        // GPU-utilisation reporting. One host reading on THIS thread (realize, never a vCPU) says
         // whether the host has an unprivileged source; the `kf3-util` thread (`ffi_unsafe`) then samples.
         let util = crate::utilhost::enable_if(cfg.report_utilization, || {
             Box::new(crate::utilhost::HostUtil::new(rm))
@@ -1167,7 +1167,7 @@ impl Device {
         .with_per_map_kind(per_map_kind)
         // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): leaves into the firmware carve-out are
         // COUNTED (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` on the status line). ★ Review fix
-        // 2026-10-04 (HIGH): REFUSED — hardwired 2026-10-10 (§AB) with the T-space, in every GPU
+        // REFUSED — hardwired 2026-10-10 (§AB) with the T-space, in every GPU
         // mirror, guest-kernel spaces included (`V3_WINDOW_EXPOSURE_REVIEW.md` row 6); count-only
         // only under the positive control `KF3_NEGCTL_CARVE`.
         .with_carve(carve_base, carve_refuse);
@@ -1455,7 +1455,7 @@ impl Device {
             _ => (u32::MAX, val as u32),
         };
         if let Some(w) = h.word(aligned) {
-            let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+            let _ = w.try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
                 Some((old & !mask) | v)
             });
         }
@@ -1708,7 +1708,7 @@ impl Device {
         // will poll, the request counter moves AFTER it, and one wake — the VA thread performs the
         // host op and publishes idle. ⊘ Nothing blocks here. The write also goes on to the plane
         // below (a plain privileged register), exactly as before.
-        // ★ 2026-09-26: the FSP EMEM channel moves its cursor NOW (RM reads it back right after
+        // The FSP EMEM channel moves its cursor NOW (RM reads it back right after
         // the burst) and posts FSP's reply at the queue HEAD write. The write ALSO goes on to the
         // plane below, unchanged: the GSP FSM reads the COT from its own copy of the window.
         if width == 4
@@ -2063,7 +2063,7 @@ impl Device {
         const WAKE: u64 = 1;
         const WALK: u64 = 2;
         let Ok(poller) = Poller::create() else { return };
-        // ★ 2026-11-03 (walk wake, `traces/walk_wake_20261103/`): no host callback signals a
+        // No host callback signals a
         // finished walk (R34, one nonstall interrupt per walk), so this thread LOOKS, waiting
         // tens of microseconds while a walk is pending. The kernel's default 50 us timer slack
         // would be as long as the wait; this thread's own slack is cut to 5 us. One line says
@@ -2097,7 +2097,7 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
-        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
+        // BAR1 back to its physical view — the request
         // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
         // each with its own bound: what the boot range shows (a line only when it changes), and the
@@ -2106,7 +2106,7 @@ impl Device {
         // alone with a back-off, the reset acknowledged only when every step completed
         let mut mem_reset = crate::memreset::Driver::default();
         let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
-        // ★ 2026-10-18: the seed placed -> retired edge taints the boot range (`crate::bootclean`)
+        // The seed placed -> retired edge taints the boot range (`crate::bootclean`)
         let mut seed_watch = crate::bootclean::SeedWatch::default();
         let mut bar1_view_last: Option<u64> = None;
         let mut bar1_view_lines = 0u64;
@@ -2121,7 +2121,7 @@ impl Device {
         let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
-        // ★ 2026-11-16 (observation only, `V3_VA_PROFILE.md`): each taken split's worker enqueue time,
+        // (observation only, `V3_VA_PROFILE.md`): each taken split's worker enqueue time,
         // until its result is published (this thread only; bounded — past the bound a ticket is
         // simply not profiled).
         let mut split_queued: std::collections::HashMap<u64, std::time::Instant> =
@@ -2158,7 +2158,7 @@ impl Device {
             if prof {
                 self.prof.vamgr.busy(tw.saturating_sub(va_busy_from));
             }
-            // ★ 2026-11-03: a pending walk is looked at on its own time scale (50 us..1 ms,
+            // A pending walk is looked at on its own time scale (50 us..1 ms,
             // `WalkKernel::completion_poll_us`); only its GPU event proves it finished.
             let got = poller.wait(
                 &mut ready,
@@ -2247,7 +2247,7 @@ impl Device {
                         }
                         crate::memreset::Step::Done { line, boot_zeroed } => (line, boot_zeroed),
                     };
-                    // ★ 2026-10-18: the boot layer is shown again only once the boot framebuffer's
+                    // The boot layer is shown again only once the boot framebuffer's
                     // zero COMPLETED (the display worker skips it while the range is tainted).
                     if let Some(dp) = self.display {
                         crate::bootclean::after_memory_stage(dp, boot_zeroed);
@@ -2391,7 +2391,7 @@ impl Device {
                     r.unreconciled
                 );
             }
-            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): what BAR1's boot-framebuffer range shows
+            // What BAR1's boot-framebuffer range shows
             // after a BAR1 change — the guest's views, the seed, or scratch — logged when it differs
             // from the last line (about two per RM life), with its own bound.
             if r.collected
@@ -2454,7 +2454,7 @@ impl Device {
                     .target(crate::mem::K_BAR1)
                     .and_then(crate::mem::Target::cpu_window)
                     .and_then(|w| {
-                        // ★ 2026-10-18: the boot range is zeroed on the GPU — complete — BEFORE the
+                        // The boot range is zeroed on the GPU — complete — BEFORE the
                         // seed returns (`bar1phys::restore_physical_view_scrubbed`); the boot layer
                         // may be shown again only once that completed, and only if no newer RM life
                         // began since this unload (fn 72 moves the generation on).
@@ -2570,7 +2570,7 @@ impl Device {
                 }
             }
         }
-        // ★ 2026-11-16 (`V3_VA_PROFILE.md`): the slow records not printed live, and the ring summary
+        // (`V3_VA_PROFILE.md`): the slow records not printed live, and the ring summary
         // (bounded: the ring's size plus one line).
         for line in m.slow_ring_dump() {
             eprintln!("{line}");
@@ -2646,7 +2646,7 @@ impl Device {
     /// ★ The register drainer's loop: apply the privileged ring in order, park on its own wake
     /// word when empty. Runs on ONE thread (an ordered ring drained by many is not ordered).
     pub fn drainer_loop(&self) {
-        // ★ 2026-09-30: ONE readiness set for the drainer's wake AND every doorbell eventfd the fast
+        // ONE readiness set for the drainer's wake AND every doorbell eventfd the fast
         // path registers (`DbFast::poller`, tags >= `DB_TAG_BASE`): a doorbell wakes the drainer
         // exactly as a privileged write does, and is never queued behind a timer.
         let poller = self.dbfast.poller();
@@ -2684,13 +2684,13 @@ impl Device {
         let mut last_delivery: Option<std::time::Instant> = None;
         let mut snap_at = std::time::Instant::now();
         while !self.stop.load(Ordering::Acquire) {
-            // ★ 2026-11-15 (flag cleanup, Stage 1): the caps page follows the guest's declared identity
+            // The caps page follows the guest's declared identity
             // (the Windows profile's SDR page), on this thread, before the next command is served. An
             // atomic compare when nothing changed; never on a vCPU.
             if let Some(dp) = self.display {
                 dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));
             }
-            // ★ 2026-11-17: the guest's RUSD utilisation record (`report-utilization`), on this thread (never a
+            // The guest's RUSD utilisation record (`report-utilization`), on this thread (never a
             // vCPU): relaxed loads when nothing is wanted or due, otherwise three guarded writes of one 56-byte
             // record into a guest page the guest named. No host call, no lock a vCPU takes.
             // Not while a reset is pending: the reset request has come in, the guest life that offered the page is
@@ -2936,7 +2936,7 @@ impl Device {
             }
             Err(_) => (va.timing.clone(), delivery),
         };
-        // ★ 2026-11-13: the boot's worst VA-thread values, ALSO on disk without a clean shutdown
+        // The boot's worst VA-thread values, ALSO on disk without a clean shutdown
         // (the stop() summary is lost when the VM is killed): printed when a whole-ms worst changed.
         {
             static PRINTED_MS: (AtomicU64, AtomicU64) = (AtomicU64::new(0), AtomicU64::new(0));
@@ -2964,7 +2964,7 @@ impl Device {
         }
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
-        // ★ 2026-11-16 (`V3_VA_PROFILE.md`): the old `vat[...]` fields unchanged and first
+        // (`V3_VA_PROFILE.md`): the old `vat[...]` fields unchanged and first
         // (`kf_mem::vaprof::vat_old_fields`), then the phase profile, then the result delivery.
         let timing = format!(
             " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[{} {} {}]",
@@ -3067,7 +3067,7 @@ impl Device {
             .iter()
             .filter(|e| e.wakes.load(o) > 0)
             .map(|e| {
-                // ★ 2026-10-08: `raised` also counts the Translated rings' relays; `nolive`/`novec`
+                // `raised` also counts the Translated rings' relays; `nolive`/`novec`
                 // name why a wake was not raised (no live guest twin on the engine / no vector).
                 format!(
                     "{}:{}/{}raised(nolive={},novec={})",
@@ -3244,7 +3244,7 @@ impl Device {
                 }
             }
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
-            // ★ 2026-10-18: fn 72 is the first RPC of every guest RM life — before it can allocate
+            // fn 72 is the first RPC of every guest RM life — before it can allocate
             // heap. From here store [0, G) is the RM's memory, not the firmware console's.
             if let Some(dp) = self.display {
                 crate::bootclean::on_rpc(dp, c.function);
@@ -3259,7 +3259,7 @@ impl Device {
         pm_suspend
     }
 
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13), on the drainer: the guest's fn 47 — GSP-RM's
+    /// On the drainer: the guest's fn 47 — GSP-RM's
     /// own unload. Decoded with the generated layout; logged.
     /// Returns whether this fn 47 was a PM transition that is not a GC6 entry (a suspend whose
     /// GSP-RM state a resume restores, `docs/design/V3_S3_RESUME.md`).
@@ -3300,7 +3300,7 @@ impl Device {
                     }
                     self.mem.inbox.request_bar1_physical();
                 }
-                // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §3): the
+                // the
                 // display goes back to the boot framebuffer — GSP-RM's unload ends the display's
                 // guest life, and BAR1 `[0, G)` reaches store `[0, G)` again from here.
                 if a.display_life_end
@@ -3339,7 +3339,7 @@ impl Device {
         }
     }
 
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`), on the drainer: the fn 47 just served was a
+    /// (`docs/design/V3_S3_RESUME.md`), on the drainer: the fn 47 just served was a
     /// PM transition — the FSM keeps this life's GSP-RM state for a resume.
     fn note_pm_suspend(&self, fsm: &mut kf_gsp::GspFsm) {
         let kept = fsm.note_pm_suspend();
@@ -3357,7 +3357,7 @@ impl Device {
         }
     }
 
-    /// ★ 2026-10-03 (B5), on the drainer: a guest write of its BAR1-mode register
+    /// On the drainer: a guest write of its BAR1-mode register
     /// (`kf_chip::bar1mode`). Logged (bounded); the shadow already holds the guest's value.
     fn observe_bar1_mode(
         &self,
@@ -3640,7 +3640,7 @@ impl Device {
         }
     }
 
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, default off), on the drainer (the GSP queue's owner): post
+    /// On the drainer (the GSP queue's owner): post
     /// each completed async preempt as the GSP does (vfio-10 RPC 3308): a LIST `POST_EVENT`,
     /// `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`, `eventData` = the guest's own
     /// `pRunlistPreemptEvent` value, addressed to the calling client's live registration for that
@@ -3648,7 +3648,7 @@ impl Device {
     /// derived from a real host completion, never forged. With no live registration nothing is
     /// posted (a post to a dead pair wedges the RPC path) — logged by name.
     fn deliver_preempt_complete(&self) {
-        // ★ 2026-10-08 (after run84): taken under the GSP lock, and only when no reply is held — the
+        // Taken under the GSP lock, and only when no reply is held — the
         // event follows its control's reply ([`crate::chan::preempt_posts_ready`]).
         let Ok(mut guard) = self.gsp.lock() else {
             return;
@@ -3721,13 +3721,13 @@ impl Device {
 
     /// Stop the device's threads.
     pub fn stop(&self) {
-        // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
+        // The USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;
         if rs.life.any() {
             eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
         }
-        // ★ 2026-11-13: the boot's worst VA-thread values, always (the per-line logs are capped).
+        // The boot's worst VA-thread values, always (the per-line logs are capped).
         if let Ok(v) = self.va_stats.lock() {
             let t = &v.timing;
             eprintln!(
@@ -3805,7 +3805,7 @@ impl Device {
                 self.chans.rc_scan();
                 return;
             }
-            // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`, default off): the park tick refreshes every
+            // The park tick refreshes every
             // relayed twin's engine-written GP_GET in its guest slot (nothing with the switch off).
             if tag == kf_chan::worker::TICK_TAG {
                 let _ = self.chans.relay_refresh_all("the worker tick");
@@ -3818,12 +3818,12 @@ impl Device {
                 return;
             };
             let wake = e.wakes.fetch_add(1, Ordering::Relaxed) + 1;
-            // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): the notifier is GPU-wide, and RM
+            // The notifier is GPU-wide, and RM
             // wakes every client registered on it — so does this: the engine's vector is raised
             // whenever the guest ARMED this engine's non-stall event, whoever's work it was.
             // Never dropped (an owed paced raise goes out on the worker's tick).
             let verdict = self.chans.nsi_engine_edge(e, |v| {
-                // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
+                // The relayed twins' GP_GET first, so the
                 // guest's handler reads the engine's value (nothing with the switch off).
                 let _ = self.chans.relay_refresh_all("a host non-stall wake");
                 self.latch_and_deliver(v);
@@ -3847,7 +3847,7 @@ impl Device {
             &self.stop,
             &on_other,
             &|| {
-                // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): a REAL host FIFO_EVENT_MTHD edge
+                // A REAL host FIFO_EVENT_MTHD edge
                 // (on the 4070 a COPY0 copy's completion arrives here and on GR0's notifier, never
                 // on CE0's — measured at f589ab23, bare metal) — raised on a vector whose service
                 // fires the guest's own FIFO_EVENT_MTHD (`host_notify_vector`), if the guest armed
@@ -3859,7 +3859,7 @@ impl Device {
                 self.chans.nsi_tick(|v| self.latch_and_deliver(v))
                     || self.chans.user_ring_poll_due()
             },
-            // ★ 2026-10-14: the USER-ring relays' event hooks (spin / event / safety-net looks) and
+            // The USER-ring relays' event hooks (spin / event / safety-net looks) and
             // their bounded counters (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
             &*self.chans,
             &self.chans.relay_stats,
@@ -3972,7 +3972,7 @@ impl Device {
 /// on the register drainer, none blocking (`docs/design/V3_DEVICE_RESET.md` §3).
 impl crate::reset::Owners for Device {
     fn reset_drainer_state(&self, epoch: u64, wake: bool) -> crate::reset::Life {
-        // ★★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the platform's S3 WAKE of a life a
+        // (`docs/design/V3_S3_RESUME.md`): the platform's S3 WAKE of a life a
         // PM-transition suspend saved. On silicon the power cycle loses the registers and the
         // interrupt state; GSP-RM's state survives in Booter's suspend/resume data and the guest
         // resumes it (`KGSP_BOOT_MODE_SR_RESUME`). Here everything GSP-RM owned is tier-B state the
@@ -4058,7 +4058,7 @@ impl crate::reset::Owners for Device {
     }
 
     fn begin_memory(&self, epoch: u64, scrub: bool) {
-        // ★ 2026-10-18 (`crate::scrub`): the reset decided a NEW OS follows a dirty store — the
+        // The reset decided a NEW OS follows a dirty store — the
         // memory stage scrubs the guest-allocatable store.
         self.mem.inbox.memory_stage_asked(scrub);
         self.mem.inbox.life_reset.request(epoch);
@@ -4077,7 +4077,7 @@ impl crate::reset::Owners for Device {
         // ⊘ Not while a worker owns a token (the review of 2026-10-13): its release would put the
         // word back IDLE with the old route. Nothing below runs until the sweep is complete; the
         // drainer asks again next pass (a stall is reported after `reset::STALL_AFTER`).
-        // ★ 2026-10-14: a KEPT life keeps its tokens — they are its live channels' doorbells.
+        // A KEPT life keeps its tokens — they are its live channels' doorbells.
         if life == crate::reset::Life::Ended {
             let busy = self.plane.reset_tokens();
             if busy > 0 {
@@ -4109,7 +4109,7 @@ impl crate::reset::Owners for Device {
         for l in &self.irq_lines {
             stale += l.drain().unwrap_or(0);
         }
-        // ★ 2026-10-14: the next life's first writes are logged like the first boot's (bounded).
+        // The next life's first writes are logged like the first boot's (bounded).
         self.counters.life_applied.store(
             if crate::reset::loud(epoch) {
                 0
@@ -4216,7 +4216,7 @@ impl GuestRam for Ram<'_> {
     }
 }
 
-/// ★★ 2026-09-30 — **a doorbell the fast path delivered, handled exactly as the trap handles it**
+/// **A doorbell the fast path delivered, handled exactly as the trap handles it**
 /// (`docs/design/V3_DOORBELL_IOEVENTFD.md` §4). The register drainer calls this with the value the
 /// guest stored (the ioeventfd's DATAMATCH guarantees it): the SAME doorbell arm of the SAME trap
 /// path decides — a Passthrough token rings its twin inline HERE on the drainer; a Translated/
@@ -4252,7 +4252,7 @@ impl kf_chan::dbfast::Sink for Device {
 }
 
 impl Device {
-    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: count a doorbell on a worker-served (Translated)
+    /// `KF3_USER_RING_TRACE` only: count a doorbell on a worker-served (Translated)
     /// token for the USER ring trace (`ChanPlane::note_queued`, `doorbell_census`). With the trace
     /// off this is one cached flag load on the doorbell path.
     fn note_worker_doorbell(&self, value: u32) {
@@ -4294,7 +4294,7 @@ impl HostOps for Device {
                 );
             }
         }
-        // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`, default off): the same relay for a Translated
+        // The same relay for a Translated
         // copy-engine ring, to the vector of the ring's own guest engine, after its host fence.
         self.chans.for_each_ce_relay(|v, name, n| {
             self.latch_and_deliver(v);
@@ -4308,7 +4308,7 @@ impl HostOps for Device {
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
-        // ★ 2026-09-30: every doorbell already signalled is delivered BEFORE this privileged write
+        // Every doorbell already signalled is delivered BEFORE this privileged write
         // is applied — a vCPU's doorbell and its later register write keep their order, as the trap
         // kept it (`docs/design/V3_DOORBELL_IOEVENTFD.md` §4). Before the GSP lock: never under it.
         self.dbfast.service_ready(self);
@@ -4519,7 +4519,7 @@ fn inject_fwsec_fail_take() -> bool {
                 .unwrap_or(0),
         )
     });
-    left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+    left.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
         .is_ok()
 }
 

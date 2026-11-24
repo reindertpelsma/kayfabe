@@ -1,4 +1,4 @@
-//! ★ 2026-11-15 (review of PR #438, F2): **the use sites of the Windows profile's gates**.
+//! **The use sites of the Windows profile's gates**.
 //!
 //! The gates themselves (`WindowsBirth`, `BirthPlan`, `new_mirror_space`, `take_spare_for`, `ColorPath`, the
 //! served chain's channel link, ...) are tested behaviourally with the real profile. A handful of call sites

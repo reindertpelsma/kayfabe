@@ -867,7 +867,7 @@ pub struct WindowOps {
     ram: &'static RamMap,
     /// PRAMIN only: nodes opened ahead of time and the reaper that releases retired views.
     trap: Option<&'static TrapNodes>,
-    /// ★ 2026-10-03: whether this window's sinks and guest-RAM placements carry
+    /// Whether this window's sinks and guest-RAM placements carry
     /// [`kf_linux_raw::WINDOW_ADVICE`]. BAR1 and BAR2: yes (VA thread). PRAMIN: no, its verbs run
     /// on the vCPU, which gets one `mmap` per move and no `madvise`. It
     /// needs none, since every move re-places all 16 slots.
@@ -952,7 +952,7 @@ fn sink_with(
 /// ioctl), and a reaper thread that releases retired views and refills the node pool — both OFF
 /// the vCPU.
 ///
-/// ★ 2026-11-14 (security review 1 F-07a = S1-45): **bounded, and nothing opens on the vCPU.** The
+/// **bounded, and nothing opens on the vCPU.** The
 /// retire queue was an unbounded channel and an empty pool made the vCPU `openat` a node inline,
 /// so a guest moving the window from several vCPUs faster than the reaper ran grew pending views
 /// (each an fd and a host BAR1 aperture, shared by tenants) without limit. Now:
@@ -985,7 +985,7 @@ fn sink_with(
 pub struct TrapPool<N, V> {
     nodes: Mutex<std::sync::mpsc::Receiver<N>>,
     retire: Mutex<std::sync::mpsc::SyncSender<Reap<V>>>,
-    /// ★ 2026-11-14: a wake is already queued for the reaper (takes coalesce into one).
+    /// A wake is already queued for the reaper (takes coalesce into one).
     wake_queued: std::sync::atomic::AtomicBool,
     /// Nodes in the pool now (the reaper refills only below the cap, so an idle refill opens
     /// nothing).
@@ -1011,7 +1011,7 @@ pub struct Reaper<N, V> {
     nodes_cap: usize,
 }
 
-/// ★ 2026-11-14: how long the reaper waits for a retired view before it tops the pool up anyway,
+/// How long the reaper waits for a retired view before it tops the pool up anyway,
 /// so a refill the host refused once (an `openat` failure) heals without a view to reap.
 const REAPER_IDLE: std::time::Duration = std::time::Duration::from_millis(100);
 
@@ -1029,7 +1029,7 @@ pub enum Reap<V> {
 /// with margin; a node is an open descriptor with no aperture until it is armed.
 const TRAP_NODES: usize = 32;
 
-/// ★ 2026-11-14: the retire queue's bound: the pool plus the 16 PRAMIN slots' kept views (every
+/// The retire queue's bound: the pool plus the 16 PRAMIN slots' kept views (every
 /// pending view owns a node, see [`TrapPool`]), doubled for headroom.
 pub const RETIRE_QUEUE: usize = 2 * (TRAP_NODES + 16);
 
@@ -1251,7 +1251,7 @@ impl ViewOps for WindowOps {
                 },
             )
             .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))?;
-        // ★ 2026-10-03: the window's flags (VA thread only). `DONTDUMP` keeps a guest-RAM page
+        // The window's flags (VA thread only). `DONTDUMP` keeps a guest-RAM page
         // out of QEMU's core dump through this alias too (`dump-guest-core=off`). A refusal is
         // counted, not returned: the placement landed, and a RAM mapping never merges with scratch
         // (another file), so a missing flag costs no mapping once it is sunk.
@@ -1292,9 +1292,9 @@ impl ViewOps for WindowOps {
         let Some(t) = self.trap else {
             return self.arm_store(off, len);
         };
-        // ★ 2026-11-14 (review 1 F-07a): never an `openat` on the vCPU; an empty pool refuses.
+        // Never an `openat` on the vCPU; an empty pool refuses.
         let Some(node) = t.take_node() else {
-            // ★ 2026-11-14: never silent (see `TrapPool`: the window shows scratch for this move).
+            // Never silent (see `TrapPool`: the window shows scratch for this move).
             let n = t.pool_empty.load(Ordering::Relaxed);
             if crate::reset::loud(n) {
                 eprintln!(
@@ -1417,7 +1417,7 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
         .flatten()
 }
 
-/// ★ 2026-10-07 (Windows Code43, run38: a kernel copy channel died reading GP entry 2 of a ring
+/// (Windows Code43, run38: a kernel copy channel died reading GP entry 2 of a ring
 /// whose entries 0 and 1 it had read): the rows next to an unplaced `va`, for the death message —
 /// the nearest row starting at or below `va` and the next one above, plus the row count. Read
 /// once, on the error path only.
@@ -1480,7 +1480,7 @@ impl RowsLog {
         self.epoch.load(Ordering::Acquire)
     }
 
-    /// ★ 2026-10-07 (diagnostic, error path only): the last `n` commits, as `(epoch, lo, hi, ms
+    /// The last `n` commits, as `(epoch, lo, hi, ms
     /// ago)`, newest last — which change took a dead channel's rows away.
     #[must_use]
     pub fn recent(&self, n: usize) -> Vec<(u64, u64, u64, u128)> {
@@ -2000,7 +2000,7 @@ impl MapTarget for GpuMirror {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         self.user_regions.check(d.va, d.len)?;
         let t = std::time::Instant::now();
-        // ★ 2026-10-09: through the batch layer, which records every host mapping of ours
+        // Through the batch layer, which records every host mapping of ours
         // (`kf_mem::batch::OwnMaps`) — a range unmap covers exactly those, never a gap.
         let m = self.bv.map(d, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
@@ -2034,7 +2034,7 @@ impl MapTarget for GpuMirror {
             self.rows_follow_ledger(a.va, b.va.saturating_add(b.len));
         }
         if let Err(e) = placed {
-            // ★ 2026-10-09: `NOT_BATCHED` = rows outside a guest reservation, placed per run by
+            // `NOT_BATCHED` = rows outside a guest reservation, placed per run by
             // design (`BatchedVas` rule 2) — not a refused batch.
             if e != kf_mem::ledger::NOT_BATCHED {
                 self.calls.batch_refused.fetch_add(1, Ordering::Relaxed);
@@ -2128,7 +2128,7 @@ impl MapTarget for GpuMirror {
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
-        // ★ 2026-10-09: NOT gated by `KF3_NO_BATCHED_MAP` — an exact range over OUR placements
+        // NOT gated by `KF3_NO_BATCHED_MAP` — an exact range over OUR placements
         // (`BatchedVas::unmap_range`: owned spans only, never a split in the NV01 range) is how the
         // apply's net diff unmaps a changed sub-range of a placement without touching its
         // unchanged pages. The opt-out disables batched MAPS only.
@@ -2218,7 +2218,7 @@ pub fn new_ledger(vas: HostVas<'static>) -> kf_mem::batch::BatchedVas<'static> {
 }
 
 /// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space and our rows.
-/// ⊘ 2026-10-10 (`OWNER_RULINGS.md` §AB rule 2): it carries NO window and NO ring. Every mapping
+/// It carries NO window and NO ring. Every mapping
 /// in it is a row derived from a guest page-table leaf; the legacy store/RAM windows and ring
 /// region (P5 §12, "in EVERY host VAS we create", audit S1-21) are deleted with `KF3_TSPACE`.
 /// The only other mapping that can exist is the positive control's ([`negctl_twin_window`]).
@@ -2226,7 +2226,7 @@ pub fn new_ledger(vas: HostVas<'static>) -> kf_mem::batch::BatchedVas<'static> {
 pub struct Mirror {
     /// The host VA space.
     pub space: kf_host::VaSpace,
-    /// ★ 2026-11-15: where the space starts ([`MirrorVaStart`]): [`MirrorVaStart::GuestFloor`] only for
+    /// Where the space starts ([`MirrorVaStart`]): [`MirrorVaStart::GuestFloor`] only for
     /// a space created while the guest's declared identity was Windows. A retired space recycles only
     /// to a guest that wants the same start ([`Spare::start`]).
     pub start: MirrorVaStart,
@@ -2276,7 +2276,7 @@ pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
 #[derive(Debug, Clone)]
 pub struct Spare {
     space: kf_host::VaSpace,
-    /// ★ 2026-11-15: the start this space was created with; a spare is handed out only for the
+    /// The start this space was created with; a spare is handed out only for the
     /// start the new guest VA space wants ([`take_spare`]), so a space created for a Windows guest
     /// is never recycled to a Linux one and vice versa.
     start: MirrorVaStart,
@@ -2298,7 +2298,7 @@ pub fn mirror_start_for(profile: &kf_rm::winprofile::WindowsProfile) -> MirrorVa
     MirrorVaStart::select(profile.active())
 }
 
-/// ★ 2026-11-15 (review of PR #438, F2): the three places a guest VA space gets its host space, as functions of
+/// The three places a guest VA space gets its host space, as functions of
 /// the REAL profile so the choice is tested where it is made: a fresh mirror space...
 ///
 /// # Errors
@@ -2494,7 +2494,7 @@ impl MapTarget for Target {
 /// holding a CUDA context, plus UVM's one kernel view. One more is refused by name.
 pub const BAR1_OVERLAY_SLOTS: usize = 64;
 
-/// ★ 2026-11-14 (security review 2 C-08, the Rust side): the most overlay changes queued to QEMU's
+/// The most overlay changes queued to QEMU's
 /// main loop and not yet acknowledged before a NEW install is refused (by name, counted in
 /// [`Bar1Overlay::refused`]). The C queue (`kf3.c` `kf3_bar1_overlay`, `g_new0` per request) has no
 /// cap of its own; guest BAR1 PTE churn (install, unmap, install …) within one VA-thread loop
@@ -2504,7 +2504,7 @@ pub const BAR1_OVERLAY_SLOTS: usize = 64;
 /// review proposed for the C side.
 pub const BAR1_OVERLAY_INFLIGHT: usize = 4 * BAR1_OVERLAY_SLOTS;
 
-/// ★ 2026-11-14: whether a change may be queued with `inflight` changes unacknowledged: a removal
+/// Whether a change may be queued with `inflight` changes unacknowledged: a removal
 /// always, an install only below [`BAR1_OVERLAY_INFLIGHT`].
 #[must_use]
 pub const fn overlay_change_admitted(install: bool, inflight: usize) -> bool {
@@ -2527,7 +2527,7 @@ pub struct Bar1Overlay {
     pub removed: AtomicU64,
     /// Views refused (by the tracker or the C device), each named in the VA stats.
     pub refused: AtomicU64,
-    /// ★ 2026-09-26: doorbell writes (`+0x90`) that arrived through a BAR1 view (T1 evidence).
+    /// Doorbell writes (`+0x90`) that arrived through a BAR1 view (T1 evidence).
     pub rings: AtomicU64,
 }
 
@@ -2748,7 +2748,7 @@ impl Bar1Target {
             };
             match (f.install, rc) {
                 (true, 0) => {
-                    // ★ 2026-09-26 (T1 evidence, `V3_BAR1_DOORBELL.md` §7): one bounded line per
+                    // One bounded line per
                     // view, on the VA thread — the heartbeat misses an arm shorter than its period.
                     let n = self
                         .overlay
@@ -2843,7 +2843,7 @@ pub struct Inbox {
     /// The VA thread's wake.
     pub wake: Notifier,
     /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, target)`,
-    /// ★ 2026-11-16: and when the worker queued it (observation only, `V3_VA_PROFILE.md`).
+    /// And when the worker queued it (observation only, `V3_VA_PROFILE.md`).
     splits: Mutex<Vec<(u64, u32, SplitTarget, std::time::Instant)>>,
     /// The host gate a split opens once it commits: ticket →
     /// `(the ring's gate, the payload its acquire waits for)`.
@@ -2853,13 +2853,13 @@ pub struct Inbox {
     /// ★ P6: finished splits waiting for their channel's next pump (★ 2026-11-16: with the
     /// enqueue and publication times when known — observation only).
     split_results: Mutex<SplitResults>,
-    /// ★ 2026-11-16 (observation only): result delivery — enqueue -> publication -> the worker's take.
+    /// Result delivery — enqueue -> publication -> the worker's take.
     pub delivery: SplitDelivery,
     next_ticket: AtomicU64,
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
+    /// How many times the guest's RM gave BAR1 up
     /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
     bar1_physical: AtomicU64,
-    /// ★ 2026-10-18: the next memory stage scrubs the whole guest heap (a NEW OS follows: set by the
+    /// The next memory stage scrubs the whole guest heap (a NEW OS follows: set by the
     /// reset's trigger, taken by the VA thread; deliberately NOT cleared by [`Inbox::reset_life`]).
     full_scrub: std::sync::atomic::AtomicBool,
     /// ★ Review (2): the guest RM life the newest unload (fn 47) was seen in.
@@ -2879,7 +2879,7 @@ pub struct Inbox {
 /// Finished splits by ticket: the outcome and, when known, its [`SplitStamp`].
 type SplitResults = std::collections::HashMap<u64, (Result<(), String>, Option<SplitStamp>)>;
 
-/// ★ 2026-11-16 (observation only): when a split's worker queued it and when its result was published.
+/// When a split's worker queued it and when its result was published.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SplitStamp {
     /// The worker's enqueue.
@@ -2892,7 +2892,7 @@ fn ns_between(a: std::time::Instant, b: std::time::Instant) -> u64 {
     u64::try_from(b.saturating_duration_since(a).as_nanos()).unwrap_or(u64::MAX)
 }
 
-/// ★ 2026-11-16 (observation only): a lock-free duration accumulator — count, sum, maximum and a
+/// A lock-free duration accumulator — count, sum, maximum and a
 /// log2 histogram ([`kf_mem::vaprof::Log2Hist`]'s buckets). Relaxed atomics; written by the VA
 /// thread or a worker, read by the status line.
 #[derive(Debug)]
@@ -2969,7 +2969,7 @@ impl DurSnap {
     }
 }
 
-/// ★ 2026-11-16 (observation only): split result delivery, for splits whose enqueue time is known.
+/// Split result delivery, for splits whose enqueue time is known.
 #[derive(Debug, Default)]
 pub struct SplitDelivery {
     /// Worker enqueue -> result published by the VA thread.
@@ -3100,7 +3100,7 @@ impl Inbox {
         }
         self.walk_busy.store(false, Ordering::Release);
         // The VA thread's BAR1 physical-view notice restarts from 0 with it (the review of
-        // 2026-10-13: a non-zero count read as a fresh request).
+        // A non-zero count read as a fresh request).
         self.bar1_physical.store(0, Ordering::Release);
         n
     }
@@ -3140,7 +3140,7 @@ impl Inbox {
             .unwrap_or_default()
     }
 
-    /// ★ 2026-10-03 (B5), the drainer: the guest's RM gave BAR1 up — ask the VA thread to show the
+    /// The drainer: the guest's RM gave BAR1 up — ask the VA thread to show the
     /// boot framebuffer's physical view again (`kf_mem::cpuwin::CpuWindow::reseed`). ⊘ Never waits.
     pub fn request_bar1_physical(&self) {
         self.bar1_physical.fetch_add(1, Ordering::AcqRel);
@@ -3167,7 +3167,7 @@ impl Inbox {
         self.unload_life.load(Ordering::Acquire)
     }
 
-    /// ★ 2026-10-18: the reset's trigger — a NEW OS follows, the memory stage scrubs the heap.
+    /// The reset's trigger — a NEW OS follows, the memory stage scrubs the heap.
     pub fn set_full_scrub(&self) {
         self.full_scrub.store(true, Ordering::SeqCst);
         let _ = self.wake.signal();
@@ -3211,7 +3211,7 @@ impl Inbox {
     ) -> Result<u64, UserSplitError> {
         let t = self
             .next_ticket
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_SEQUENCE"))?;
         {
             let mut q = self.splits.try_lock().map_err(|e| match e {
@@ -3265,7 +3265,7 @@ impl Inbox {
             .collect()
     }
 
-    /// ★ 2026-11-16: [`Inbox::take_split_requests`] with each request's worker enqueue time
+    /// [`Inbox::take_split_requests`] with each request's worker enqueue time
     /// (observation only; the same lock, the same bookkeeping).
     pub fn take_split_requests_timed(&self) -> Vec<(u64, SplitTarget, std::time::Instant)> {
         let taken = self
@@ -3292,7 +3292,7 @@ impl Inbox {
         self.finish_split_timed(ticket, r, None)
     }
 
-    /// ★ 2026-11-16: [`Inbox::finish_split`] with the worker's enqueue time (observation only: the
+    /// [`Inbox::finish_split`] with the worker's enqueue time (observation only: the
     /// publication time is stamped with the result, and the worker's take is profiled).
     pub fn finish_split_timed(
         &self,
@@ -3339,7 +3339,7 @@ impl Inbox {
             .ok()
             .and_then(|mut m| m.remove(&ticket))?;
         if let Some(st) = stamp {
-            // ★ 2026-11-16 (observation only): relaxed atomics after the lock is released.
+            // Relaxed atomics after the lock is released.
             let now = std::time::Instant::now();
             self.delivery.resume.record(ns_between(st.published, now));
             self.delivery.e2e.record(ns_between(st.enqueued, now));
@@ -3507,7 +3507,7 @@ pub struct MemPlane {
     pub fb_len: u64,
     /// ★ P5c: retired host spaces ready for reuse (VA thread only).
     spares: Mutex<Vec<Spare>>,
-    /// ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile, shared with the chain that
+    /// The Windows support profile, shared with the chain that
     /// records the guest's fn-1 identity. It decides where every NEW mirror space starts
     /// ([`MemPlane::mirror_start`]).
     windows: kf_rm::winprofile::WindowsProfile,
@@ -3960,7 +3960,7 @@ fn create_mirror(
     let t_mirror = std::time::Instant::now();
     let us = |t: std::time::Instant| t.elapsed().as_micros();
     let t_step = std::time::Instant::now();
-    // ★ 2026-11-15: the start follows the guest's DECLARED identity at this moment ([`new_mirror_space`]).
+    // The start follows the guest's DECLARED identity at this moment ([`new_mirror_space`]).
     let (space, start) = match new_mirror_space(rm, &plane.windows) {
         Ok(v) => v,
         Err(e) => {
@@ -4145,7 +4145,7 @@ pub fn reset_memory_prepare(m: &mut Manager, plane: &MemPlane, rm: &'static Host
     )
 }
 
-/// ★ 2026-10-18 (`crate::scrub`): a guest REBOOT — the whole store `[0, fb_length)` zeroed on the
+/// A guest REBOOT — the whole store `[0, fb_length)` zeroed on the
 /// GPU and the completion awaited (the guest's CPU views were sunk by [`reset_memory_prepare`]; the
 /// walker's own structures live in host GPU memory outside the store). `Err`: the store is NOT
 /// clean.
@@ -4658,7 +4658,7 @@ mod tests {
         }));
     }
 
-    // ★ 2026-11-16 (`V3_VA_PROFILE.md`, observation only): split enqueue and delivery timing.
+    // (`V3_VA_PROFILE.md`, observation only): split enqueue and delivery timing.
 
     #[test]
     fn profiling_split_enqueue_time_is_the_workers() {
@@ -5496,7 +5496,7 @@ mod tests {
         assert!(!ts.is_empty());
     }
 
-    /// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): the mirror space of
+    /// The mirror space of
     /// a guest starts at the 64 KiB floor ONLY while the guest's declared identity is Windows and
     /// `windows-support` is on; a Linux guest, an undeclared guest and an `off` VM always get host RM's
     /// default start.
@@ -5575,7 +5575,7 @@ mod tests {
         p
     }
 
-    /// ★ 2026-11-15 (review of PR #438, F2): the functions the memory plane calls where it makes a space,
+    /// The functions the memory plane calls where it makes a space,
     /// with the REAL profile. A fresh mirror space of a guest that did not declare Windows (Linux, nothing
     /// declared, `windows-support=off`) is allocated at host RM's default start; a declared Windows guest's
     /// at the floor; and the start the host is asked for is the start the space is recorded with.
@@ -5960,7 +5960,7 @@ mod tests {
         f.split_whitespace().any(|w| w == x)
     }
 
-    /// ★★★ 2026-10-03 (review finding 1), through the PRODUCTION doors: `window_with_scratch`, then
+    /// Through the PRODUCTION doors: `window_with_scratch`, then
     /// QEMU 10.2.4's `ram_block_add` advice (`system/physmem.c:2294-2304`), then guest-driven
     /// place-then-sink cycles at distinct offsets through `window_sink` as BAR1 and BAR2 call it.
     /// The scratch must be back to `ceil(W / T)` mappings after every sink.
@@ -6077,7 +6077,7 @@ mod tests {
         }
     }
 
-    /// ★★ 2026-10-03 (third review, finding 6): once a sink's cover landed, the guest can no longer
+    /// Once a sink's cover landed, the guest can no longer
     /// reach the view behind it, and a refused advice costs only the merge. Returned as a refused
     /// sink, it made `CpuWindow::unmap` keep the view (and its host aperture) and left the guest's
     /// invalidate armed until a re-walk. Now the unmap lands, the view is released, and the
@@ -6358,7 +6358,7 @@ mod memory_list_tests {
     }
 }
 
-/// ★ 2026-11-14 (security review 2 C-08): the overlay queue's admission.
+/// The overlay queue's admission.
 #[cfg(test)]
 mod overlay_cap_tests {
     use super::{BAR1_OVERLAY_INFLIGHT, BAR1_OVERLAY_SLOTS, overlay_change_admitted};
@@ -6387,7 +6387,7 @@ mod overlay_cap_tests {
     }
 }
 
-/// ★ 2026-11-14 (security review 1 F-07a = S1-45): the PRAMIN trap pool is bounded and the vCPU
+/// The PRAMIN trap pool is bounded and the vCPU
 /// never opens a node. Deterministic: the reaper is driven by hand (no thread, no sleeps).
 #[cfg(test)]
 mod trap_pool_tests {
@@ -6491,7 +6491,7 @@ mod trap_pool_tests {
         assert_eq!(pool.take_node(), Some(7));
     }
 
-    /// ★ 2026-11-14: a take wakes the reaper at once (no 100 ms idle wait, no retired view
+    /// A take wakes the reaper at once (no 100 ms idle wait, no retired view
     /// needed), and many takes queue ONE wake.
     #[test]
     fn a_take_wakes_the_reaper_once() {
@@ -6516,7 +6516,7 @@ mod trap_pool_tests {
         );
     }
 
-    /// ★ 2026-11-14: the reaper refills BEFORE the (slow) release.
+    /// The reaper refills BEFORE the (slow) release.
     #[test]
     fn the_reaper_refills_before_it_releases() {
         let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 4);
@@ -6589,7 +6589,7 @@ mod trap_pool_tests {
         assert!(std::hint::black_box(queue) > nodes + 16);
     }
 
-    /// ★ 2026-11-14 (PC finding on #397): a device reset, then the next life's whole burst of
+    /// A device reset, then the next life's whole burst of
     /// window moves back to back while the reaper does not run at all (the worst case of "falls
     /// behind"). Every move must get a node (a refused move leaves the window on scratch) and
     /// every replaced view must fit the retire queue.

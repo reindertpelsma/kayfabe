@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! 2026-10-23: exercise the GPU-free capability construction used by DisplayPlane::build.
+//! Exercise the GPU-free capability construction used by DisplayPlane::build.
 use kf_chip::DieId;
 use kf_disp::capsderive::{Die, HostFacts, Tier};
 use kf_qemu::display::DisplayPlane;

@@ -1,4 +1,4 @@
-//! # kayfabe-crec — the C↔Rust trace differential
+//! # kf-crec — the C↔Rust trace differential
 //!
 //! `docs/design/c_rust_trace_differential.md`: the C artifact is **not** history. It is a
 //! second implementation of the same contract and the only one a real NVIDIA driver has
@@ -10,7 +10,7 @@
 //! | module | owns |
 //! |---|---|
 //! | [`format`] | the C recorder's binary format, decoded — cross-validated against `rec_dump.py` |
-//! | [`ga10x`] | the **GA10x** register model: the first real `GspModel`, and the reason `kayfabe-gsp` needs none |
+//! | [`ga10x`] | the **GA10x** register model: the first real `GspModel`, and the reason `kf-gsp` needs none |
 //! | [`oracle`] | the guest RAM a recorded capture can answer, and precisely the part it cannot |
 //! | [`replay`] | the transaction-segmented replay against `GspFsm`, and both sides' decoded projection |
 //! | [`ledger`] | the reader of §6.3's MUST-DIFFER table: expected-differ vs **finding** |
@@ -129,12 +129,12 @@ pub const FUNCTIONS: kf_gsp::FunctionCodes = kf_gsp::FunctionCodes {
 /// full `major.minor.patch` through `kf_abi::versions`, never on a literal.
 ///
 /// This is a *value*, and [`replay::Replay::new`] takes it as an argument: a second driver
-/// version is a second value here and never a second code path in `kayfabe-gsp`.
+/// version is a second value here and never a second code path in `kf-gsp`.
 ///
 /// # Panics
 ///
 /// If `kf_abi::versions::BENCH_DRIVER` has no wire table, or if the table describes
-/// an element layout `kayfabe-gsp` rejects. Both are build-time facts about the version
+/// an element layout `kf-gsp` rejects. Both are build-time facts about the version
 /// tables, not run-time conditions.
 #[must_use]
 pub fn bench_abi() -> kf_gsp::GspAbi {

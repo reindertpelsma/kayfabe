@@ -6,7 +6,7 @@
 //!
 //! 1. That `InitTablePolicy` hands `answer_fb_get_info_v2` the **right slice** of the
 //!    payload and puts the answer back at the right offset, inside the right envelope, with
-//!    the right inner status. `kayfabe-abi` sees a bare params buffer and could not tell.
+//!    the right inner status. `kf-abi` sees a bare params buffer and could not tell.
 //! 2. ★★ That the four served words really are the **same values** the port already serves
 //!    to `NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG` (`0x20800a1c`). This is the
 //!    whole design claim of the rung — *"this control states no new number"* — and it is a
@@ -362,7 +362,7 @@ fn a_floorswept_hosts_fb_masks_are_served_verbatim_never_rebuilt_from_a_count() 
     );
 }
 
-/// ★ 2026-10-08 (Windows 580.88): the one boot-time `FB_GET_INFO_V2` Windows sends — the 19 indices of
+/// The one boot-time `FB_GET_INFO_V2` Windows sends — the 19 indices of
 /// vfio-8/9/10 (`[measured, run53 at 80169b57, 2026-10-08]`) — is served whole once the host facts carry
 /// the seven extra rows (`kf_rm::hostquery::FORWARDED_FB_EXTRA_INDICES`), each word the host's own, in
 /// the guest's order. Values: the real RTX 4070's replies (`vfio8-9-10-fb-bus-info.txt`).

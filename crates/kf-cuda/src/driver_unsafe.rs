@@ -36,7 +36,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// ★★★★★ 2026-11-13 (security review 2, D-01/D-02/D-04; owner rule "every safe-to-unsafe boundary
+// (security review 2, D-01/D-02/D-04; owner rule "every safe-to-unsafe boundary
 // validates"): THE PERIMETER CHECKS ITS OWN INPUTS. A safe caller in this crate is assumed to be
 // wrong some day; what it can then cause is a PANIC (as the standard library does), never a
 // driver call on a dead handle, an out-of-allocation device range, or a short parameter array.
@@ -212,7 +212,7 @@ pub struct Cuda {
     /// fastest-first and `CUDA_VISIBLE_DEVICES` reorders them). Present since CUDA 4.1, so a
     /// missing symbol refuses the binding by name.
     pub(crate) cuDeviceGetByPCIBusId: unsafe extern "C" fn(*mut c_int, *const c_char) -> CUresult,
-    /// ★ 2026-11-14 (security review 3 F-7 / S1-05): `cuDeviceGetAttribute(int*, attr, dev)`,
+    /// `cuDeviceGetAttribute(int*, attr, dev)`,
     /// for the one question the display and walk contexts must answer about the host: can a
     /// kernel reach PAGEABLE host memory (HMM / ATS)? `Option`: absent is an answer, not a failure.
     pub(crate) cuDeviceGetAttribute:
@@ -320,12 +320,12 @@ pub struct Cuda {
     pub(crate) cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
     pub(crate) cuMemSetAccess:
         Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
-    // ★ 2026-11-14 (security review 2 D-15): the three undo steps of an import that failed half
+    // The three undo steps of an import that failed half
     // way — `import_and_map` gives back what it took instead of leaking it into the context.
     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
     pub(crate) cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
-    // ★ 2026-10-03 (display step 3, the broker relay): page-lock memory WE mapped (a sealed
+    // Page-lock memory WE mapped (a sealed
     // memfd the broker also receives) so the display's async D2H copy can land in it.
     // ⊘ `Option`, like the VMM set: a driver without them loses the broker path BY NAME at its
     // first frame, never the walker at load.
@@ -440,7 +440,7 @@ impl Cuda {
                 unsafe { core::mem::transmute(p) }
             }};
         }
-        // ⊘ 2026-11-13: through `sym_or_null` (it repeated that function's `dlsym` in a closure).
+        // Through `sym_or_null` (it repeated that function's `dlsym` in a closure).
         let err_name = sym_or_null(handle, "cuGetErrorName");
 
         Ok(Cuda {
@@ -614,7 +614,7 @@ impl Cuda {
     /// dereference PAGEABLE host memory (`CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`, 88: HMM or
     /// ATS). Where they can, a kernel address that leaves its buffer may reach the VMM's own memory,
     /// not just a fault — which is why every kernel bound here is a host-memory-safety obligation
-    /// (OWNER_RULINGS: "HMM is not refused"). `None` when the driver has no entry or refuses the
+    ///. `None` when the driver has no entry or refuses the
     /// question; the caller logs the answer once, at bring-up.
     #[must_use]
     pub fn pageable_memory_access(&self, dev: i32) -> Option<bool> {
@@ -673,7 +673,7 @@ impl Cuda {
         })
     }
 
-    /// ★ 2026-11-14 (security review 2 D-15): [`Self::ctx_create`] behind a guard that DESTROYS
+    /// [`Self::ctx_create`] behind a guard that DESTROYS
     /// the context when it drops — so a bring-up that fails after the context exists (a `?` on any
     /// later step) gives back the context and with it every allocation, stream, event and module
     /// made in it, instead of leaking them for the life of the process. [`CtxGuard::disarm`] hands
@@ -1268,7 +1268,7 @@ impl Cuda {
     /// `cuMemFreeHost` — give back a [`Self::pinned_alloc`] buffer. ★ Consumes it and ends its
     /// token, so a device view of it ([`Self::pinned_device_view`]) refuses from now on.
     ///
-    /// ⊘⊘ 2026-11-14 (security review 2 D-05(b)), above the contract it replaces: this used to
+    /// Above the contract it replaces: this used to
     /// carry a CALLER-CONTRACT ("no queued copy may still target the buffer"). Now the binding
     /// knows ([`PinnedDma`]): while the last queued copy's event has not completed, or completion
     /// is unknowable, or a device view was lent to a kernel, the pages are NOT freed — the buffer
@@ -1442,11 +1442,11 @@ impl Cuda {
     }
 
     // ⊘ `memcpy_h2d_async` (no caller since P4b, "kept as the audited spelling") was removed
-    // 2026-11-13: dead code in the audited file is review surface with no test reaching it.
+    // Dead code in the audited file is review surface with no test reaching it.
 
     /// `cuMemcpyDtoHAsync_v2` of the whole of `src` into `buf[off..off + src.len()]`, in `stream`.
     ///
-    /// ★ 2026-11-14 (D-05(b)): an event is recorded on `s` right after the copy and kept in `buf`
+    /// An event is recorded on `s` right after the copy and kept in `buf`
     /// ([`PinnedDma`]), so `buf` cannot be given back while the copy may still land. ⊘ Was a
     /// CALLER-CONTRACT ("do not free `buf` until the stream passed this copy").
     ///
@@ -2117,13 +2117,13 @@ impl<'a> DevSpan<'a> {
 pub(crate) struct PinnedBuf {
     ptr: usize,
     len: usize,
-    /// ★ 2026-11-13: the context it lives in. `cuCtxDestroy` reclaims the memory, so every
+    /// The context it lives in. `cuCtxDestroy` reclaims the memory, so every
     /// access refuses (panics) once that token ended (D-05(a): a `display::Frame` read after its
     /// `DisplayGpu` dropped used to copy from reclaimed memory).
     ctx: Arc<Life>,
     /// Its own token, ended by `pinned_free` / `host_unregister` (device views check it).
     own: Arc<Life>,
-    /// ★ 2026-11-14 (D-05(b)): what the GPU may still write here — the fence after the last queued
+    /// What the GPU may still write here — the fence after the last queued
     /// copy, and whether a device view was ever handed out. Consulted before the pages go back.
     dma: PinnedDma,
 }
@@ -2768,7 +2768,7 @@ pub fn abi_bytes<T: AbiField>(v: &T) -> Vec<u8> {
 }
 
 // ⊘ `read_struct` (a raw `copy_nonoverlapping` of device bytes into any `Copy` type) was removed
-// 2026-09-27: its only callers decoded the walk report, which now has ONE safe decoder per
+// Its only callers decoded the walk report, which now has ONE safe decoder per
 // struct (`abi.rs`, `report_codec!`, by `offset_of!`). One fewer unsafe block in the audited file.
 // ⊘ `view_bytes` was removed 2026-11-13 for the same reason, replaced by `abi_bytes`.
 
@@ -2780,7 +2780,7 @@ pub fn abi_bytes<T: AbiField>(v: &T) -> Vec<u8> {
 /// literal leaves padding **undefined** — so the 216 bytes `view_bytes` handed `cuLaunchKernel`
 /// contained whatever was on the stack, and the ABI differential's byte comparison failed at
 /// **byte 58** against a `.cu` that begins its own builder with `memset(&F, 0, sizeof(F))`.
-/// ⊘ 2026-11-13: the bytes are now produced by [`abi_bytes`], which writes padding as zero
+/// The bytes are now produced by [`abi_bytes`], which writes padding as zero
 /// whatever the value's padding holds; the zeroed base stays so every field starts at zero, as
 /// the `.cu`'s does.
 #[must_use]
@@ -2796,7 +2796,7 @@ const CU_MEM_LOCATION_TYPE_DEVICE: u32 = 0x1;
 /// `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`.
 const CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR: u32 = 0x1;
 
-// ⊘ 2026-11-13: `export_device_allocation` / `ExportedAllocation` (w755i: a CUDA allocation
+// `export_device_allocation` / `ExportedAllocation` (w755i: a CUDA allocation
 // exported to an fd) were removed. No caller in the tree; it returned a raw fd number nothing owned
 // and never released the allocation handle — an unsound-shaped public API kept for an experiment
 // whose answer (RM refuses to import CUDA's fd, w755v) is recorded. Four unsafe blocks fewer.
@@ -2861,7 +2861,7 @@ impl Cuda {
         if rc != 0 {
             return Err(format!("cuMemImportFromShareableHandle rc={rc} fd={fd}"));
         }
-        // ★ 2026-11-14 (D-15): from here on a failed step gives back what the earlier steps took
+        // From here on a failed step gives back what the earlier steps took
         // (`import_unwind`), instead of leaking the imported handle and the reservation into the
         // context for its life.
         let mut ptr: u64 = 0;
@@ -3868,7 +3868,7 @@ mod perimeter_tests {
 
     #[test]
     fn d07_a_queued_signal_keeps_the_fd_open_after_its_owner_dropped_it() {
-        // ⊘ 2026-11-14: deterministic. The first version looked the fd NUMBER up in /proc after
+        // deterministic. The first version looked the fd NUMBER up in /proc after
         // the close, and a parallel test's new eventfd could take the same number (flaky 3/30).
         // Now the eventfd OBJECT is observed: a `Weak` to the shared `OwnedFd` (alive exactly while
         // a reference exists) and a dup of the descriptor (same open file description), which must

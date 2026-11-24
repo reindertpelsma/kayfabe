@@ -18,7 +18,7 @@ const BYTES: u64 = 64 << 10;
 const VIEWS: usize = (kf_chan::user_storage::BYTES / BYTES) as usize;
 const SPANS: usize = crate::mem::userread::MAX_BYTES / 4096 + 1;
 
-// ★ 2026-10-15 (perf campaign, `docs/design/V3_WINDOWS_PERF_20261015.md`): the cache KEEPS its views
+// (perf campaign, `docs/design/V3_WINDOWS_PERF_20261015.md`): the cache KEEPS its views
 // across snapshots. Before, `prepare` released every ready view the NEXT snapshot did not need, so a
 // channel that alternates between two 64 KiB store windows (a Windows D3D11 channel alternates its
 // pushbuffer windows on almost every submission) armed and released one window per snapshot: ~16 000
@@ -79,11 +79,11 @@ fn note(kind: &str, n: u64, why: &str) {
 }
 
 /// An arm can fail after the RM mapping exists. Never discard that ownership.
-struct ArmError<V> {
+pub(crate) struct ArmError<V> {
     retained: Option<V>,
 }
 
-trait Host {
+pub(crate) trait Host {
     type View;
     fn arm(&self, off: u64, len: u64) -> Result<Self::View, ArmError<Self::View>>;
     fn release(&self, view: &mut Self::View) -> Result<(), Refusal>;
@@ -370,7 +370,7 @@ pub(crate) struct Native {
     store: u32,
 }
 
-struct NativeView {
+pub(crate) struct NativeView {
     cpu: Option<VolatileRegion>,
     _node: CharDevice,
     cookie: Option<u64>,

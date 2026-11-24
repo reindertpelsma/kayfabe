@@ -1,4 +1,4 @@
-//! ★ Lane C 2026-10-14 — a GPU-free ORACLE for the host-first cudart gate, from the measurement on
+//! A GPU-free ORACLE for the host-first cudart gate, from the measurement on
 //! the home AD104 at host 595.91.07 (`traces/constants_night_20261014/host_cudart_probe_595.txt`,
 //! `probe_8162_595.txt`): what libcudart's own requests got from the real host, word for word.
 //!

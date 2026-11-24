@@ -64,7 +64,7 @@
 //! ⚠ `[measured]` in `cap1b` the guest asks this control at `rpc.sequence` **13** (txn 989,
 //! `paylen 42` = 40 header + 2 params) and again at `rpc.sequence` **44** (txn 1020), both
 //! inside the replay's closure limit of 1028 — so
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs` exercises this reply twice.
+//! `crates/kf-crec/tests/cap1b_differential.rs` exercises this reply twice.
 
 /// `NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:3648`).

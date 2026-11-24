@@ -20,7 +20,7 @@
 //!   and not retired;
 //! - run31's CE segment (software subchannel 5 bound to 1) completes on a CE T-mode ring with the
 //!   inert-bind rule, and a later software method on subchannel 5 is refused by name;
-//! - ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): that CE completion wakes one of the fds kf3's worker
+//! - That CE completion wakes one of the fds kf3's worker
 //!   parks on (`FIFO_EVENT_MTHD`, the host CE's non-stall notifier; measured separately) — the wake
 //!   that lets the worker relay it to the guest's CE vector;
 //! - ★ OWNER_RULINGS §U.2 (2026-10-07): the host GATE of a deferred TLB invalidate — an equality

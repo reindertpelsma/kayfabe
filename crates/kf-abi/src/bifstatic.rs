@@ -56,7 +56,7 @@
 //!
 //! ⚠ `[measured]` in `cap1b` the guest asks this control at `rpc.sequence` **14** (txn 990,
 //! `paylen 44` = 40 header + 4 params), inside the replay's closure limit of 1028 — so
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs` exercises this reply.
+//! `crates/kf-crec/tests/cap1b_differential.rs` exercises this reply.
 
 /// `NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:2176`).

@@ -9,7 +9,7 @@
 //!   (its `unmap_range` never fails);
 //! - a guard keyed on the TRANSLATION only (backing + permission + kind), not on the leaf size.
 //!
-//! ★ 2026-10-10 (branch `claude/batched-map-review-fixes-20261010`): every test that FAILED at
+//! Every test that FAILED at
 //! 6fafcc6e passes and is in the DEFAULT suite (`// FAILED at 6fafcc6e …`); the huge-row test is
 //! rewritten for the new bound (one mapping per leaf up to `MAX_LEAF_PIECES`, beyond it a micro
 //! reservation or a refusal by name), and section 6 adds targeted tests for findings 4, 5, 6.
@@ -1707,7 +1707,7 @@ fn a_staged_order_prefix_breaks_the_same_checks() {
     );
 }
 
-/// ★ 2026-11-16 (`V3_VA_PROFILE.md`, observation only): every host verb `BatchedVas` makes is timed
+/// (`V3_VA_PROFILE.md`, observation only): every host verb `BatchedVas` makes is timed
 /// once in its phase, and each landed unmap call's ledger retirement once.
 #[test]
 fn profiling_each_host_verb_is_timed_once_and_each_landed_unmap_retired_once() {
@@ -1752,7 +1752,7 @@ fn profiling_each_host_verb_is_timed_once_and_each_landed_unmap_retired_once() {
     assert_eq!(verbs(&p), f.calls.get() - before);
 }
 
-/// ★ 2026-11-16: a refused unmap call is timed but nothing is retired for it.
+/// A refused unmap call is timed but nothing is retired for it.
 #[test]
 fn profiling_a_refused_unmap_call_is_timed_and_not_retired() {
     use kf_host::phase::{Phase, take};

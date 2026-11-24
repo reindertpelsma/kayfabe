@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 (PHASE 1b) — **unit tests of the production per-entry turn** (`kf_chan::user_turn::Relay`) with a
+//! **Unit tests of the production per-entry turn** (`kf_chan::user_turn::Relay`) with a
 //! small programmable [`Io`]: the order of the loads, what is read and what is not, what is published, and what each
 //! refusal does. A second angle on the invariants the interleaving model, the property tests and the thread stress
 //! check by exploration (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md` sections 0a and 3): every test here is
@@ -879,7 +879,7 @@ fn the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_st
     );
 }
 
-/// ★ 2026-10-24 (GB205 round B1n, lease 57472433, arm `on_urt`, B1 binary cb80cbd29) — a CHARACTERIZATION of the
+/// A CHARACTERIZATION of the
 /// relay on a family whose engine writes no USERD words back (`kf_chip::Family::engine_writes_userd_gp_get`): the
 /// private `GP_GET` and `REFERENCE` the observe phase reads stay 0, as the trace read them on the GR ring
 /// `0xc1d00126:0xff04000b` (`STALL_USERD ... gp_get=0 gp_put=0 ref=0x0`). The first SYNC_WAIT gate's marker can then

@@ -93,7 +93,7 @@ pub struct YuvFormat {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (`Y8___V8U8`), else U then V.
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage — [`YUV_SEMI_PLANAR_8`], [`YUV_SEMI_PLANAR_16`], [`YUV_PACKED_YUYV`],
+    /// The storage — [`YUV_SEMI_PLANAR_8`], [`YUV_SEMI_PLANAR_16`], [`YUV_PACKED_YUYV`],
     /// [`YUV_PACKED_UYVY`].
     pub layout: u32,
 }
@@ -116,7 +116,7 @@ impl YuvFormat {
             _ => 2,
         }
     }
-    /// ★ 2026-11-14 (security review 3 F-6 / review 2 D-09): the bytes of one plane-0 row the
+    /// The bytes of one plane-0 row the
     /// kernel may read for luma columns `[0, x_end)`. Semi-planar: `x_end` luma samples. Packed
     /// 4:2:2: whole 4-byte macropixels, `x_end.div_ceil(2) * 4` — the chroma of the last luma
     /// pixel is in the second half of its macropixel, so with an odd `x_end` the kernel's chroma
@@ -163,7 +163,7 @@ impl ScanFormats {
         ];
         // ★ derived from the class's own names, like the RGB table: a family without one simply
         // has no console YUV format (and the window is left out of the console copy, by name)
-        // ★ 2026-10-14 (the Linux plane oracle): plus the 10/12-bit semi-planar formats (P010 ...)
+        // Plus the 10/12-bit semi-planar formats (P010 ...)
         // and the packed 4:2:2 ones (YUY2/UYVY) — everything a semi-planar-capable page lets NVKMS
         // offer (`caps::page`); 3-plane formats stay out (left out by name).
         let yuv_names = [
@@ -717,7 +717,7 @@ pub struct YuvPlan {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (after `SWAP_UV`).
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage ([`YuvFormat::layout`]).
+    /// The storage ([`YuvFormat::layout`]).
     pub layout: u32,
     /// 0 = nearest, 1 = bilinear (chosen when the window scales).
     pub filter: u32,
@@ -1255,7 +1255,7 @@ pub const CURSOR_LAYER: u32 = u32::MAX - 1;
 /// frame on every side; blended by `HEAD_SET_CONTROL_CURSOR_COMPOSITION` with the window factor
 /// numbering. `Ok(None)` when it lies wholly outside the frame.
 ///
-/// ★ **`MODE_XOR`** (2026-10-04, `OWNER_RULINGS.md` §O: "the compose kernel gains an XOR blend") is
+/// ★ **`MODE_XOR`** is
 /// composed with [`COMPOSE_XOR`]: `out = below XOR colour`, alpha and the factors ignored. ⊘ This
 /// is a DEFINITION, not a measurement, and here is why it had to be one: NVKMS never programs it.
 /// Its cursor composition table (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6646-6702`, the
@@ -1605,7 +1605,7 @@ fn cursor_blend(c: &CursorScan) -> Option<((i32, i32), (i32, i32))> {
     Some((factor(cur_sel, k1, 0)?, factor(vp_sel, k1, 0)?))
 }
 
-/// ★★ **The host cursor** (`OWNER_RULINGS.md` §O, hover mode; `docs/design/V3_DISPLAY.md` §8.12):
+/// ★★ **The host cursor**:
 /// head `c.head`'s WHOLE cursor image as the host pointer's — the store span to copy (never clipped
 /// to a frame: the host pointer may be anywhere) and the blend that turns its pixels into
 /// premultiplied `ARGB8888` ([`HostCursorSrc::image`]). The GPU copies the span into a buffer the
@@ -2195,7 +2195,7 @@ mod tests {
         );
         assert!(f.of(0x38).is_none(), "not an RGB console format");
         assert!(f.yuv_of(0xE6).is_none());
-        // ★ 2026-10-14: 16-bit-container semi-planar (P010 = Y10___V10U10_N420, 0x58) and packed
+        // 16-bit-container semi-planar (P010 = Y10___V10U10_N420, 0x58) and packed
         // 4:2:2 (YUY2 0x28, UYVY 0x29), by the class's own names; 3-plane (0x3B) stays out
         let t = crate::class::for_version("580.159.04").unwrap();
         let v = |n: &str| t.v(0xC67E, n).unwrap();
@@ -2250,7 +2250,7 @@ mod tests {
                 .unwrap()
                 .vu_first
         );
-        // ⊘ 2026-10-14: the destination keeps its size past the frame edge (the kernel skips the
+        // The destination keeps its size past the frame edge (the kernel skips the
         // writes outside the frame; clipping it here squeezed the scale); a window past the frame is none;
         // it scales (720x1280 -> 1295x986), so it is filtered
         let clipped = plan_yuv(&s, yf, &dma, &dma, 800, 600).unwrap().unwrap();
@@ -2371,7 +2371,7 @@ mod tests {
         assert!(plan_yuv(&Scanout { pitch: 11, ..sb }, yf, &bl, &bl, 1920, 1080).is_err());
     }
 
-    /// ★ 2026-11-14 (security review 3 F-6, review 2 D-09): a packed 4:2:2 window whose right
+    /// A packed 4:2:2 window whose right
     /// edge `x + width` is ODD. The kernel reads the last pixel's chroma from the second half of
     /// its 4-byte macropixel, 2 bytes past `x_end * 2`. The plan's extent covers whole macropixels
     /// and a context DMA that ends at `x_end * 2` is refused (the review's model example: x 37,
@@ -3126,7 +3126,7 @@ mod tests {
         assert!(h.image(&raw[1..]).unwrap_err().0.contains("bytes copied"));
     }
 
-    // ---- 2026-10-15: A1R5G5B5 cursors (Windows' text I-beam) ----
+    // A1R5G5B5 cursors (Windows' text I-beam)
 
     /// A 16-bit pixel: alpha bit, then 5-bit red, green, blue.
     fn px16(a: u16, r: u16, g: u16, b: u16) -> u16 {

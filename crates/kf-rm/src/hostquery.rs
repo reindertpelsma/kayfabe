@@ -208,7 +208,7 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
     query_arch_die(host).map(|(f, s, _)| (f, s))
 }
 
-/// ★ Lane C 2026-10-14: `MC_GET_ARCH_INFO` → `(family, subRevision, die)` from ONE host answer.
+/// `MC_GET_ARCH_INFO` → `(family, subRevision, die)` from ONE host answer.
 ///
 /// # Errors
 /// [`FieldCause`].
@@ -386,7 +386,7 @@ pub fn keep_statable_ofa(family: Family, kinds: Vec<EngineKind>) -> Vec<EngineKi
         .collect()
 }
 
-/// ★ 2026-11-15 — **how the device is realized, beyond what the host says.** Declared by whoever
+/// **How the device is realized, beyond what the host says.** Declared by whoever
 /// realizes the device (kf-qemu reads the run profile), never detected from the guest: the guest OS
 /// is not on the wire (`kf_abi::guest_os`, section 2). [`Default`] is the pre-2026-11-15 behaviour.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -501,7 +501,7 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
     for row in kf_abi::gssreplay::ROWS {
         let mut p = row.request();
         match host.control(row.cmd, &mut p) {
-            // ★ Lane C 2026-10-14: an EXACT row (layout unknown, real request measured all-zero)
+            // An EXACT row (layout unknown, real request measured all-zero)
             // is asked once, zero only — a background fill would be a different, unmeasured
             // question to the host. The guest's request must then be all-zero too, so the bytes
             // the host changed are the whole answer.
@@ -527,7 +527,7 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
     out
 }
 
-/// ★ 2026-10-07 `fifo_latency` — the host's `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`
+/// `fifo_latency` — the host's `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`
 /// (NON_PRIVILEGED, ROUTE_TO_PHYSICAL: the host's GSP answers it, `kf_abi::fifoctl`) on kayfabe's
 /// own host DEVICE, once per engine the device advertises (the host's `GET_ENGINES_V2` types that
 /// [`classify_engine`] keeps), with requests we author at the bench layout (the host carry moves
@@ -627,7 +627,7 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
     query_lce_pce_masks_over(host, None)
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): [`query_lce_pce_masks`] over the host's
+/// [`query_lce_pce_masks`] over the host's
 /// `CE_GET_ALL_CAPS` `present` mask. `[measured GB203]` the host presents LCEs `{0,1,4,5}`
 /// (floorswept LCE2/3): asking "until the first refusal" stopped at LCE2 and the guest's UVM got
 /// `NoMaskForEngine {COPY4}` → `UVM_REGISTER_GPU` `0x56`. A NON-present index below the highest
@@ -1202,14 +1202,14 @@ pub fn query_zbc_table_sizes(
 }
 
 /// ★ v3-gfx: the extra `FB_GET_INFO_V2` indices [`HostFacts::forwarded_fb_extra`] carries.
-/// ★ 2026-10-08 (Windows 580.88, run53): plus the seven indices of Windows' one boot-time request that
+/// Plus the seven indices of Windows' one boot-time request that
 /// were refused (`[measured, run53 at 80169b57, 2026-10-08]` the request is exactly the 19 indices of
 /// vfio-8/9/10). Each row's reasons are in [`FB_EXTRA_EXPOSURE`].
 pub const FORWARDED_FB_EXTRA_INDICES: [u32; 12] = [
     0x04, 0x14, 0x37, 0x2b, 0x38, 0x01, 0x02, 0x0c, 0x1c, 0x21, 0x25, 0x35,
 ];
 
-/// ★ 2026-10-08 — the exposure table of [`FORWARDED_FB_EXTRA_INDICES`] (owner rule: a query with no
+/// The exposure table of [`FORWARDED_FB_EXTRA_INDICES`] (owner rule: a query with no
 /// params, or with limited params that can be checked, may carry the host's answer to the guest; no
 /// tenant-visible host-wide quantity; the VRAM size stays the single store size). Columns: index,
 /// ogkm name (`ctrl2080fb.h`), what the word is, why passing the host's word is safe. The request
@@ -1342,7 +1342,7 @@ pub fn query_gpu_cache_info(host: &mut dyn HostControls) -> Result<Option<[u32; 
         }))
 }
 
-/// ★ 2026-09-26: `gr_sm_issue_rate_modifier` — the host's nine speed selects from its unprivileged
+/// `gr_sm_issue_rate_modifier` — the host's nine speed selects from its unprivileged
 /// `GR_GET_SM_ISSUE_RATE_MODIFIER` (GR0, default route); any refusal is `None`, never a realize
 /// failure.
 #[must_use]
@@ -1832,7 +1832,7 @@ pub fn query_host_facts_with(
     let ce_caps = query_ce_caps(host);
     let grce = ce_caps.as_ref().map(kf_abi::cecaps::HostCeCaps::grce_mask);
     let kinds = query_engine_list(host);
-    // ★ 2026-11-15: an engine with no derived method table is dropped HERE, before the falcon table is
+    // An engine with no derived method table is dropped HERE, before the falcon table is
     // asked for and before any other statement is derived from the list.
     let kinds = if policy.hide_untabled_video {
         kinds.map(|k| hide_untabled_video(asked, k))
@@ -2110,7 +2110,7 @@ pub fn query_host_facts_with(
 mod fb_exposure_tests {
     use super::*;
 
-    /// ★ 2026-10-08: every forwarded extra index has exactly one exposure row, and no row is a
+    /// Every forwarded extra index has exactly one exposure row, and no row is a
     /// size, usage or placement of FB/BAR1 (the VM's FB is the single store).
     #[test]
     fn every_forwarded_fb_extra_index_has_one_exposure_row_and_none_is_tenant_visible() {
@@ -2137,7 +2137,7 @@ mod fb_exposure_tests {
         );
     }
 
-    /// ★ 2026-10-08: the forwarded sets cover Windows 580.88's one boot-time request
+    /// The forwarded sets cover Windows 580.88's one boot-time request
     /// (`[measured, run53 at 80169b57, 2026-10-08]` = vfio-8/9/10's 19 indices).
     #[test]
     fn the_forwarded_sets_cover_windows_58088s_fb_request() {

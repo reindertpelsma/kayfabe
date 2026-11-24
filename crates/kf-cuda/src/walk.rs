@@ -27,7 +27,7 @@
 //!   bounded harness-only `poll(2)` between queries. No `cuCtxSynchronize` is added;
 //!   [`WalkKernel::ctx_sync_calls`] is the counter gate 8 reads to prove it.
 //!
-//! # ★★★★★ 2026-09-25 — THE WALK EMITS A DIFF, COMMITTED ON ACK
+//! THE WALK EMITS A DIFF, COMMITTED ON ACK
 //!
 //! Owner design + ruling (COMMIT-ON-ACK), `crate::diffmodel` for the full statement: the GPU
 //! holds, per VA-space object (a **slot**), the placements the host confirmed it made; every walk
@@ -95,7 +95,7 @@ const KF_SCAN_BLOCK: u32 = 1024;
 const KF_WARP: u32 = 32;
 const KF_MAX_ENT: u32 = 512;
 const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
-/// ★ 2026-11-14: the two VER3 PCF enumerants the committed kernel COMPILES
+/// The two VER3 PCF enumerants the committed kernel COMPILES
 /// (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `KF_VER3_PDE_PCF_SPARSE_BIT` in `kf_walk.cu`, tied to
 /// ogkm's `gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py`; pinned to the `.cu` here by
 /// `tests/walk_abi_matches_the_cu.rs`). A VER3 descriptor must carry exactly these
@@ -105,7 +105,7 @@ pub const KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE: u8 = 0x3;
 /// See [`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`].
 pub const KF_VER3_PDE_PCF_SPARSE_BIT: u8 = 0x1;
 
-/// ★★ 2026-11-14 (security review 3 F-10, host half; fixcuda2): the descriptor's GEOMETRY and
+/// The descriptor's GEOMETRY and
 /// field positions, checked on the host before CUDA is opened — the Rust port of the kernel's
 /// `kf_dev_format_ok` (#387), rule for rule, plus the VER3 PCF values the kernel compiles. ⊘ The
 /// bring-up used to check only `abi_version`: a family row with a dual level above
@@ -476,28 +476,28 @@ pub enum ReportError {
         /// The header flags seen.
         flags: u16,
     },
-    /// ★ 2026-11-14 (S1-69): the header's format version is not [`crate::abi::KFWR_VERSION`].
+    /// The header's format version is not [`crate::abi::KFWR_VERSION`].
     BadVersion(u16),
-    /// ★ 2026-11-14 (S1-69): the header's page-size table names a size outside 4 KiB..1 TiB, so
+    /// The header's page-size table names a size outside 4 KiB..1 TiB, so
     /// no alignment below could be checked against it.
     BadPageSizes([u8; 4]),
-    /// ★ 2026-11-14 (S1-69): more refusal samples claimed than the header carries.
+    /// More refusal samples claimed than the header carries.
     TooManySamples(u32),
-    /// ★ 2026-11-14 (S1-69): a run whose op is not MAP, UNMAP or REMAP.
+    /// A run whose op is not MAP, UNMAP or REMAP.
     BadOp {
         /// Which run.
         index: usize,
         /// The op it carried.
         op: u16,
     },
-    /// ★ 2026-11-14 (S1-69): a run whose page-size code is not one of the format's four.
+    /// A run whose page-size code is not one of the format's four.
     BadPageSize {
         /// Which run.
         index: usize,
         /// The code it carried.
         code: u8,
     },
-    /// ★ 2026-11-14 (S1-69): a run whose VA, length, or (for a mapping) GPGA is not a multiple
+    /// A run whose VA, length, or (for a mapping) GPGA is not a multiple
     /// of its own page size — a mapping no MMU could install as described.
     Misaligned {
         /// Which run.
@@ -599,7 +599,7 @@ impl Report {
         if h.magic != KFWR_MAGIC {
             return Err(ReportError::BadMagic(h.magic));
         }
-        // ★ 2026-11-14 (security review 3 F-11 / S1-69): the properties the `.cu`'s own
+        // The properties the `.cu`'s own
         // `kf_validate_report` checks and this one did not — format version, sample count, op,
         // page-size code and alignment. The page sizes come from the REPORT's own table (the
         // header carries `ps_log2` so the host needs no format knowledge), bounded first.
@@ -794,7 +794,7 @@ struct InFlight {
     gpga: u64,
 }
 
-// ⊘ 2026-11-13: the walker's own `DevBuf { ptr }` (Copy, address only) is gone; its buffers are
+// The walker's own `DevBuf { ptr }` (Copy, address only) is gone; its buffers are
 // the driver perimeter's `DevBuf` (address + length, not Copy). They are never freed one by one:
 // `cuCtxDestroy` reclaims the lot (see `Drop for WalkKernel`).
 
@@ -952,7 +952,7 @@ pub enum WalkDevice<'a> {
 /// ⊘ A copy and not a cast: `launch` needs `&mut [u8]`, and handing it a view over a live
 /// `KfArgs` would alias. The copy is 216 bytes once per launch.
 fn param_bytes<T: crate::driver_unsafe::AbiField>(v: &T) -> Vec<u8> {
-    // ⊘ 2026-11-13: field by field (`abi_bytes`), padding zero; no view over the value is formed.
+    // Field by field (`abi_bytes`), padding zero; no view over the value is formed.
     crate::driver_unsafe::abi_bytes(v)
 }
 
@@ -1028,10 +1028,10 @@ impl WalkKernel {
         // descriptor is pinned byte for byte against the `.cu` (`kf_format_ver3`), every field
         // re-checked against ogkm-580's `hopper/gh100/dev_mmu.h`, and `kf-gate7` walks REAL VER3
         // tables on any GPU — the walker decodes guest bytes; the host's own MMU never sees them.
-        // ⊘ 2026-11-14: the "KNOWN GAP (w826)" note that stood here (the big-PTE veto was VER2-only)
+        // The "KNOWN GAP (w826)" note that stood here (the big-PTE veto was VER2-only)
         // is closed by #386 (`kf_big_pte_unmapped` / `kf_pde_sparse` have VER3 arms); the two PCF
         // values those arms use are carried in the descriptor and checked just below.
-        // ★★ 2026-11-14 (review 3 F-10, host half): the whole descriptor, before CUDA is opened.
+        // The whole descriptor, before CUDA is opened.
         if let Err(name) = check_format(&fmt) {
             return Err(refused(
                 "the walk kernel's setup data (KfFormat)",
@@ -1063,7 +1063,7 @@ impl WalkKernel {
             cu.pageable_memory_access(dev_ord)
                 .map_or("unknown", |p| if p { "yes" } else { "no" })
         );
-        // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below, before the walker owns
+        // Guarded — a `?` below, before the walker owns
         // the context, destroys it and everything made in it instead of leaking them.
         let ctx = cu.ctx_create_guarded(dev_ord)?;
 
@@ -1184,7 +1184,7 @@ impl WalkKernel {
         let mut pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report + stages)")?;
         // Zeroed: the commit node's first read of "the previous report" must find no magic.
         pin.write(0, &vec![0u8; pin_at.total]);
-        // ★ 2026-11-13: each device view is exactly its region of the pinned buffer (D-02).
+        // Each device view is exactly its region of the pinned buffer (D-02).
         let view = |off: usize, len: usize| cu.pinned_device_view(&pin, off, len);
         let pdbs = view(pin_at.pdbs, KF_MAX_PDB * 8)?;
         let slots = view(pin_at.slots, KF_MAX_PDB * 4)?;
@@ -1599,7 +1599,7 @@ impl WalkKernel {
         crate::completion::poll_ms(self.in_flight())
     }
 
-    /// ★ 2026-11-03: the VA worker's event-loop sleep, in **microseconds**, before it next
+    /// The VA worker's event-loop sleep, in **microseconds**, before it next
     /// queries this walk's GPU event: on the walk's own time scale while one is pending
     /// (50 us..1 ms, `completion::poll_us`), the 50 ms idle backstop otherwise. Replaces the
     /// fixed 1 ms pending wait that put ~0.9 ms on every walk (Ada lane, 2026-11-03).
@@ -1722,7 +1722,7 @@ impl WalkKernel {
             KFWR_V_PARTIAL,
         };
         let h = &r.header;
-        // ★★ 2026-11-14 (review 3 F-2/F-3 host half, with #387's per-space budget): a space at its
+        // A space at its
         // own limit is CUT — KFWR_R_BUDGET / KFWR_R_FRONTIER_CAP in ITS entry bits (and in the
         // header's mask, which ORs every refusal), its diff withheld — and the walk goes on for the
         // others. Only a refusal NO entry owns is a walk abort (a shared ceiling, the report's
@@ -1764,7 +1764,7 @@ impl WalkKernel {
                     }
                     Err(e) => {
                         self.events.push(format!("capacity ceiling: {e}"));
-                        // ★ 2026-11-16 (observation only): the pool's geometry at the ceiling,
+                        // The pool's geometry at the ceiling,
                         // bounded to the first 16 ceilings of the walker.
                         if self.cap.stats.ceilings <= 16 {
                             self.events.push(format!(
@@ -1794,7 +1794,7 @@ impl WalkKernel {
         let run = core::mem::size_of::<KfMapRun>() as u64;
         for m in &moves {
             // Copy the whole old region: the counts (in `KfSlot`) say how much of it is live.
-            // ★ 2026-11-18: growth in place (the free run after the slot) has no copy to issue:
+            // Growth in place (the free run after the slot) has no copy to issue:
             // `Move::copy` is `None` and the placements stay where they are.
             if let Some((dst, src, runs)) = m.copy() {
                 let n = (u64::from(runs) * run) as usize;
@@ -2381,7 +2381,7 @@ impl WalkKernel {
         self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_store)")
     }
 
-    /// ★ 2026-10-18 (the scrub, `kf-qemu`'s `scrub` module): QUEUE a device-side zero of store
+    /// QUEUE a device-side zero of store
     /// `[off, off+len)` — `cuMemsetD8` on the store's own device mapping, no host buffer and no
     /// PCIe traffic (the GPU's memory bandwidth bounds it). Bounds-checked against the store.
     /// ⊘ NOT complete when this returns: the memset is ordered on the legacy stream but a CUDA
@@ -2550,7 +2550,7 @@ impl Drop for WalkKernel {
 /// ⚠ **Not freed on drop**, and that is deliberate: freeing needs the [`Cuda`] that allocated
 /// it, and a guard holding a borrow of the kernel could not coexist with `&mut self` on
 /// `refresh`. Hand it to [`WalkKernel::release`], or let `cuCtxDestroy` reclaim it.
-/// ★ 2026-11-13 (D-04): not `Copy`/`Clone` — `release` consumes it, so it cannot be released
+/// Not `Copy`/`Clone` — `release` consumes it, so it cannot be released
 /// twice or written after release; and it refuses once the walker's context is destroyed.
 #[derive(Debug)]
 pub struct DeviceImage {

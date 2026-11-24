@@ -53,6 +53,7 @@ pub enum Step {
     CloseDescriptor = 8,
 }
 
+/// The teardown steps in the only order they may run.
 pub const ORDER: [Step; 9] = [
     Step::QuiesceWorkers,
     Step::ResetRing,
@@ -65,10 +66,16 @@ pub const ORDER: [Step; 9] = [
     Step::CloseDescriptor,
 ];
 
+/// Why a teardown step was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TeardownError {
     /// A step ran before one that must precede it.
-    OutOfOrder { attempted: Step, expected: Step },
+    OutOfOrder {
+        /// The step that was run.
+        attempted: Step,
+        /// The step [`ORDER`] required next.
+        expected: Step,
+    },
     /// ⊘ `close` was reached without the explicit free. §9's central refusal.
     ClosedWithoutExplicitFree,
 }
@@ -80,10 +87,12 @@ pub struct Teardown {
 }
 
 impl Teardown {
+    /// A teardown at its first step.
     pub fn new() -> Teardown {
         Teardown { next: 0 }
     }
 
+    /// Run step `s`, which must be the next one in [`ORDER`].
     pub fn run(&mut self, s: Step) -> Result<(), TeardownError> {
         let expected = ORDER[self.next.min(ORDER.len() - 1)];
         if s != expected {
@@ -101,6 +110,7 @@ impl Teardown {
         Ok(())
     }
 
+    /// Have all steps of [`ORDER`] run?
     pub fn complete(&self) -> bool {
         self.next == ORDER.len()
     }
@@ -116,6 +126,7 @@ pub struct WalkerState {
     has_snapshot: bool,
 }
 
+/// The result of [`WalkerState`]'s diff against its previous snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Diff {
     /// Mappings to apply.

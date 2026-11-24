@@ -145,10 +145,10 @@ pub struct CeState {
     pub mem_op_a: u32,
     /// ★ P6b: `MEM_OP_B` as last written.
     pub mem_op_b: u32,
-    /// ★ 2026-09-26: the CE class last bound by `SET_OBJECT` — `LAUNCH_DMA` bit 23 is
+    /// The CE class last bound by `SET_OBJECT` — `LAUNCH_DMA` bit 23 is
     /// `MEMORY_SCRUB_ENABLE` only from `HOPPER_DMA_COPY_A` (`0xC8B5`) on (on `NVC7B5` it is `VPRMODE`).
     pub ce_class: u32,
-    /// ★ 2026-09-26: `SET_REMAP_CONST_A` as the guest wrote it (restored after a converted scrub).
+    /// `SET_REMAP_CONST_A` as the guest wrote it (restored after a converted scrub).
     pub const_a: u32,
     /// ★ v3-initrace (diagnostic record only): the semaphore state the guest's methods set, and
     /// the releases its launches asked for — see [`Releases`]. Nothing here changes a word the
@@ -439,13 +439,28 @@ pub enum Piece {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
     /// A header this codec cannot decode.
-    BadHeader { at: usize, word: u32 },
+    BadHeader {
+        /// Word index in the segment.
+        at: usize,
+        /// The word that did not decode.
+        word: u32,
+    },
     /// A method's arguments run past the segment.
-    Truncated { at: usize },
+    Truncated {
+        /// Word index of the method whose arguments are cut off.
+        at: usize,
+    },
     /// A physical operand in `PEERMEM`.
     PeerOperand,
     /// A physical operand no window covers contiguously.
-    Untranslatable { target: Target, phys: u64, len: u64 },
+    Untranslatable {
+        /// The aperture the operand names.
+        target: Target,
+        /// Its physical address.
+        phys: u64,
+        /// Its byte length.
+        len: u64,
+    },
     /// A physical operand in BLOCK-LINEAR layout: its footprint is a function of the block
     /// geometry, which a kernel scrub never uses — refused rather than bounded by a guess.
     BlockLinearPhysical,
@@ -512,7 +527,7 @@ pub enum Refusal {
         /// The method.
         method: u32,
     },
-    /// ★ 2026-10-14 — the VIDEO tier (`crate::vtables`): a method the video class's public header
+    /// The VIDEO tier (`crate::vtables`): a method the video class's public header
     /// names that the tier does not admit (codec work, a codec operand, a context or monitored-fence
     /// address) — refused by name.
     VideoMethod {

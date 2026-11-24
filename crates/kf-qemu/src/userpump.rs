@@ -88,7 +88,7 @@ fn stage_plan(scan: &Scan, software: &Option<Software>, words: &[u32]) -> Turn<(
     while let Some(t) = scan
         .segment(words.get(at..).ok_or("USER_RING_SCAN_BOUND")?, sw)
         .map_err(|e| {
-            // ★ 2026-10-14 diagnostic (owner Win11 runs 2980/2990: every reset follows a refusal
+            // Diagnostic (owner Win11 runs 2980/2990: every reset follows a refusal
             // whose header looks like data — `Legacy`, `SubDeviceMask(0x107af0e0)`, `MethodOverflow`).
             // Name WHERE the scan stopped, so the next run tells a parser desync (a packet sized
             // differently from hardware) from a real legacy/mask packet. Bounded: one line per
@@ -299,7 +299,7 @@ pub(super) struct Trace {
     /// Idle detector: when the pump last had a turn, and whether an idle stall was reported.
     last_turn: std::time::Instant,
     idle_reported: bool,
-    /// ★ 2026-10-14 (Minecraft Xid 32): what each private-ring descriptor was, by its issue
+    /// What each private-ring descriptor was, by its issue
     /// sequence (the last [`TRACE_SLOTS`]), so a STALL can name the descriptor the PBDMA stopped at.
     slots: std::collections::VecDeque<(u64, String)>,
 }
@@ -489,13 +489,13 @@ pub(super) struct Pump {
     cache: crate::userstore::Cache,
     ram_generation: u64,
     source_admitted: bool,
-    /// ★ 2026-10-16 (PHASE 1b): the per-entry turn and the state it shares with the segment machinery
+    /// The per-entry turn and the state it shares with the segment machinery
     /// (`kf_chan::user_turn`): lifecycle, scan, gate, markers, fetch receipts, cursor, generation, `need`.
     core: kf_chan::user_turn::Relay,
     shadow: Option<super::usershadow::Shadow>,
     key: (u32, u32),
     segment: Option<Segment>,
-    /// ★ 2026-10-14 (`kf_chan::user_loop`): what this relay is waiting for (an event, a look, or the safety net --
+    /// What this relay is waiting for (an event, a look, or the safety net --
     /// never a tick).
     pub(super) wait: Option<kf_chan::user_loop::Wait>,
     /// The loaded entry's guards and the turn's reporting state (see [`Aux`]).
@@ -527,10 +527,10 @@ struct Aux {
     sync_carried: u64,
     /// Measurement only: when the last Pointer-mode backstop wake was counted (ms since the first).
     pointer_backstop_ms: Option<u64>,
-    /// ★ 2026-11-14 (security review, userpump pass F1): lifecycle notices this channel reported
+    /// Lifecycle notices this channel reported
     /// (one per guest `GP_PUT` mid-packet inside a Window): logged first 16, then powers of two.
     notices: u64,
-    /// ★ 2026-11-14 (userpump pass F2): ring migrations of this channel (one per guest trigger).
+    /// Ring migrations of this channel (one per guest trigger).
     migrations: u64,
 }
 
@@ -556,7 +556,7 @@ struct Wait {
     /// ★ The trigger's suffix was published with its prefix ([`gapless_remainder`]).
     gapless: bool,
 }
-/// ★ 2026-11-13 (`USER_RING_SPLIT_WAIT`): whether a held invalidate that has waited `ns` is to be
+/// Whether a held invalidate that has waited `ns` is to be
 /// named now. `waiting` once while it is still held, `done` once when it ends; never below the
 /// threshold ([`kf_mem::vasmgr::SLOW_SPLIT_MS`]). Pure.
 fn split_wait_state(ns: u64, named: bool, finished: bool) -> Option<&'static str> {
@@ -589,7 +589,7 @@ enum PendingAction {
     Invalidate {
         ticket: u64,
         plan: crate::defapi::Planned,
-        /// ★ 2026-11-13: when the invalidate was held (`USER_RING_SPLIT_WAIT`'s clock).
+        /// When the invalidate was held (`USER_RING_SPLIT_WAIT`'s clock).
         since: std::time::Instant,
         /// The wait was already named (once per held invalidate).
         named: bool,
@@ -1625,7 +1625,7 @@ impl Pump {
             self.core.grace.retrying(),
             self.core.guest_get
         );
-        // ★ 2026-10-14: where the PBDMA stopped — our private USERD as last written back, the
+        // Where the PBDMA stopped — our private USERD as last written back, the
         // descriptors around the private GP_GET, and the scanned segment holding the PB GET.
         let userd = r
             .lease
@@ -1700,7 +1700,7 @@ impl Pump {
                     r.key.0, r.key.1
                 ),
             }
-            // ★ 2026-10-14 (Heaven D3D11 Xid 13): the last segments the relay scanned, words as
+            // The last segments the relay scanned, words as
             // scanned (head and tail, bounded: 8 segments x 56 words, once per stall).
             for h in t
                 .history
@@ -2131,7 +2131,7 @@ impl Pump {
         );
     }
 
-    /// ★ 2026-10-14 (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.2): a turn ends in a
+    /// A turn ends in a
     /// [`Need`](kf_chan::user_loop::Need) -- progress (`Again`), nothing (`Idle`), or what it waits
     /// for. No tick: the caller arms the wake ([`ChanPlane::user_ring_serve`]).
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
@@ -2169,7 +2169,7 @@ impl Pump {
         use kf_chan::user_lifecycle::Notice;
         for n in self.core.life.take_notices() {
             let key = self.key;
-            // ★ 2026-11-14: a guest `GP_PUT` mid-packet or a Window flip is a guest event; the
+            // A guest `GP_PUT` mid-packet or a Window flip is a guest event; the
             // worker may not write a line per guest event. The once-per-VM latch is always said.
             if !matches!(n, Notice::MarkersLatchedOff { .. }) {
                 self.aux.notices = self.aux.notices.saturating_add(1);
@@ -2229,7 +2229,7 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
-        // ★ 2026-10-16 (PHASE 1b): observe, write back, read GP_PUT, load, plan, gate, publish / read / scan all run
+        // observe, write back, read GP_PUT, load, plan, gate, publish / read / scan all run
         // in `kf_chan::user_turn::Relay` (the same code the interleaving model drives); the pump takes over for a
         // segment in flight and for a scanned segment (`segment_turn`).
         self.core.segment_pending = self.segment.is_some();
@@ -2719,7 +2719,7 @@ impl Pump {
                     since,
                     mut named,
                 } => {
-                    // ★ 2026-11-13: name a held invalidate once it has waited over a second —
+                    // Name a held invalidate once it has waited over a second —
                     // once while it waits, and with the total when it ends (never per poll).
                     let result = me.inbox.split_result(ticket);
                     let ns = u64::try_from(since.elapsed().as_nanos()).unwrap_or(u64::MAX);
@@ -2932,7 +2932,7 @@ impl Pump {
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
             .map_err(|e| access_error(e, "USER_RING_MIGRATION_USERD_ADMISSION"))??;
-        // ★ 2026-11-14 (userpump pass F2): one migration per guest trigger; logged first 16, then
+        // One migration per guest trigger; logged first 16, then
         // powers of two.
         self.aux.migrations = self.aux.migrations.saturating_add(1);
         let loud = crate::reset::loud(self.aux.migrations);
@@ -3107,7 +3107,7 @@ impl ChanPlane {
     pub(super) fn user_ring_serve(&self, ht: u32) -> Option<bool> {
         let record = self.user_ring_record(ht)?;
         record.touch();
-        // ★ 2026-10-20 (owner design, section 10): the epoch BEFORE the first attempt. A lock holder bumps it after releasing, so a loser that
+        // The epoch BEFORE the first attempt. A lock holder bumps it after releasing, so a loser that
         // registers late learns that a release already happened (`HandoffHub::lost`).
         let e0 = self.handoff.prepare();
         let Ok(mut r) = record.enter() else {
@@ -3199,7 +3199,7 @@ impl ChanPlane {
         }
     }
 
-    /// ★ 2026-10-14 (`kf_chan::user_loop`): arm what the turn ended needing. Progress rings the
+    /// Arm what the turn ended needing. Progress rings the
     /// token again (bounded by `REACT_ROUNDS`, so the worker stays fair); a wait is recorded for the
     /// worker's spin / event / safety-net looks ([`ChanPlane::user_ring_peek`]); nothing else.
     /// No tick, no clock: the relay is rung by its doorbell, by an event, or by a look.
@@ -3254,14 +3254,14 @@ impl ChanPlane {
         })
     }
 
-    /// ★ 2026-10-20 (owner): some relay holds an obligation no registered wake source announces. Cheap: one atomic per relay.
+    /// Some relay holds an obligation no registered wake source announces. Cheap: one atomic per relay.
     pub(crate) fn user_ring_unannounced(&self) -> bool {
         self.user_rings.try_lock().map_or(true, |rings| {
             rings.values().any(|record| record.is_unannounced())
         })
     }
 
-    /// ★ 2026-10-14 -- the worker's LOOK at the relays (`kf_chan::worker::RelayLoop::peek`): read each
+    /// The worker's LOOK at the relays (`kf_chan::worker::RelayLoop::peek`): read each
     /// waiting relay's private `GP_GET` and ring the token of those whose wait is satisfied (or whose
     /// lock was busy). Never a wait, never a scan, never a publication: it only rings. `why` names the
     /// caller; a BACKSTOP look that finds a satisfied wait an interrupt should have announced is the
@@ -3575,7 +3575,7 @@ impl ChanPlane {
     }
 }
 
-/// ★ 2026-10-14: the worker's hooks for the event loop (`kf_chan::worker::run_with_relay`).
+/// The worker's hooks for the event loop (`kf_chan::worker::run_with_relay`).
 impl kf_chan::worker::RelayLoop for ChanPlane {
     fn waiting(&self) -> bool {
         self.user_ring_waiting()
@@ -3590,7 +3590,7 @@ impl kf_chan::worker::RelayLoop for ChanPlane {
 
 #[cfg(test)]
 mod tests {
-    /// ★ 2026-11-13 `USER_RING_SPLIT_WAIT`: silent up to and including 1 s, named just over it.
+    /// `USER_RING_SPLIT_WAIT`: silent up to and including 1 s, named just over it.
     #[test]
     fn split_wait_is_silent_up_to_one_second() {
         assert_eq!(split_wait_state(1_000_000_000, false, false), None);
@@ -3801,7 +3801,7 @@ mod tests {
         assert!(!old.matches(1));
         assert!(old.matches(crate::defapi::NV50_DEFERRED_API_CLASS));
     }
-    /// ★ 2026-10-14: the measured migration trigger (Edge, run 2990 at f163b85e: the last 8 words of a
+    /// The measured migration trigger (Edge, run 2990 at f163b85e: the last 8 words of a
     /// 56-word segment) sits inside an FE atomic sequence on the compute subchannel. The gapless remainder
     /// is the whole segment: BEGIN, WFI, the trigger as two DMA_NOPs, END — no split between BEGIN and END.
     /// Before this, the staged prefix ended at the trigger and END followed only after the action.
@@ -4069,7 +4069,7 @@ mod tests {
             "one machine per pump"
         );
     }
-    // ---- 2026-10-17: lazy observe (rules A and B, `kf_chan::user_lazy`) in the Windows USER-ring relay only
+    // Lazy observe (rules A and B, `kf_chan::user_lazy`) in the Windows USER-ring relay only
 
     /// D2: lazy observe lives in the pure relay of the Windows USER-ring pump. Linux passthrough, Translated, Emulated and
     /// the USERD relay never name it.
@@ -4585,7 +4585,7 @@ mod tests {
         assert!(admit < installed);
     }
 
-    /// ★ 2026-10-20 (section 10.0): a relay that loses a lock REGISTERS with the holder before it gives up, and reads the epoch BEFORE its
+    /// A relay that loses a lock REGISTERS with the holder before it gives up, and reads the epoch BEFORE its
     /// first attempt (the lost-registration race). Source pin (whitespace-insensitive).
     #[test]
     fn a_relay_that_loses_a_lock_registers_with_the_holder_before_giving_up() {

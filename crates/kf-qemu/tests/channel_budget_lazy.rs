@@ -1,5 +1,5 @@
 //! ★ The channel budget is an UPPER BOUND enforced lazily at guest channel birth — never a pool, never a
-//! reservation (owner, 2026-10-11, `docs/design/V3_CHANNEL_BUDGET.md`). A VM with a huge budget and no guest
+//! reservation. A VM with a huge budget and no guest
 //! activity holds no host channel attributable to it. Two structural checks, no GPU needed.
 
 use kf_core::{Twin, VmCaps};

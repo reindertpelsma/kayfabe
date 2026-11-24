@@ -387,7 +387,7 @@ pub fn capability_tables() -> impl Iterator<Item = &'static CapabilityTable> {
 
 /// ★★ The facts a guest has CONSUMED by the time it sends fn 1 (`SET_GUEST_SYSTEM_INFO`), as
 /// two driver versions state them — the precondition for re-selecting a device's table at fn 1
-/// (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6, 2026-09-26).
+///.
 ///
 /// Before fn 1 is answered the guest has: booted the GSP through the queue framing
 /// (`GSP_MSG_QUEUE_ELEMENT`, `MESSAGE_QUEUE_INIT_ARGUMENTS`, the element size maximum), read

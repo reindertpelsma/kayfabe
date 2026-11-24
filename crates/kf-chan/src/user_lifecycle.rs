@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 — **the Windows USER-ring lifecycle: Scan, Pointer, Window**
+//! **The Windows USER-ring lifecycle: Scan, Pointer, Window**
 //! (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`).
 //!
 //! The pure state machine the relay (`crates/kf-qemu/src/userpump.rs`), the exhaustive model

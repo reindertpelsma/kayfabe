@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-trap` — the vCPU trap path and the doorbell plane** (`THE_ARCHITECTURE_v3.md` §2).
+//! **v3 `kf-trap` — the vCPU trap path and the doorbell plane** (`THE_ARCHITECTURE_v3.md` §2).
 //!
 //! Copied from the old tree's `kayfabe-doorbell` (built v3-native at w823: 48 tests, 0/60 flake,
 //! an exhaustive interleaving model) — only the modules the trap path needs:

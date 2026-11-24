@@ -62,7 +62,7 @@ const DISCHARGE: &[&str] = &[
 /// ⊘ Crates whose undischarged count is PINNED. Tighten one at a time; a crate absent here is
 /// censused, not gated.
 ///
-/// ★ `kayfabe-abi` is deliberately NOT pinned despite having the most claims: its claims are
+/// ★ `kf-abi` is deliberately NOT pinned despite having the most claims: its claims are
 /// transcription facts pinned by `const _: () = assert!(offset_of!(..) == N)`, so a false one
 /// **breaks the build**. That is the safe kind — and the pattern the logic crates lack.
 const PINNED: &[(&str, usize)] = &[];

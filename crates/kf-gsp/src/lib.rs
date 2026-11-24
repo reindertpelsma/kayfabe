@@ -1,4 +1,4 @@
-//! # kayfabe-gsp — the faked GSP
+//! # kf-gsp — the faked GSP
 //!
 //! The guest runs the **stock** NVIDIA driver against an emulated GPU whose GSP does not
 //! exist. This crate is that GSP's side of the conversation: the falcon boot FSM, the
@@ -56,8 +56,8 @@
 //!
 //! ## ★★ The fourth axis: the guest **OS** is not the guest **driver version**
 //!
-//! Three axes were already named — GPU architecture (`kayfabe-arch`), *guest* driver
-//! version (`kayfabe-abi::DriverVersion`), and *host* driver version (abstract by
+//! Three axes were already named — GPU architecture (`kf-arch`), *guest* driver
+//! version (`kf-abi::DriverVersion`), and *host* driver version (abstract by
 //! construction, since `VerbPlan` is named intents the adapter lowers). The fourth is the
 //! guest **operating system**, and today it lives nowhere: `DriverVersion` silently means
 //! "Linux, ogkm-shaped". Collapsing it into the version key would be the C's major-only

@@ -266,7 +266,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         format!("{SUBMITS} I2M literal writes through the mirrored process VAS"),
     );
     let gp_get = word(&walk, U_MEM + USERD + USERD_GP_GET)?;
-    // ★ 2026-09-26: only a family whose engine writes USERD GP_GET can be held to it — Blackwell's
+    // Only a family whose engine writes USERD GP_GET can be held to it — Blackwell's
     // channel classes have no such word (`kf_chip::Family::engine_writes_userd_gp_get`).
     let (arch, implementation, _) = rm.arch_info();
     let family = kf_chip::Family::from_arch(arch, implementation).map_err(|e| format!("{e:?}"))?;
