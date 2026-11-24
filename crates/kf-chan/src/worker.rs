@@ -93,9 +93,9 @@ impl RelayLoop for NoRelay {
     }
 }
 
-/// How long a worker that may block sleeps. `infinite` is the knob the owner asked for (design and test as if the timeout were infinite):
-/// nothing may depend on the finite value, a firing that finds work is a counted bug (`backstop_found_*`). `owed` is the paced Passthrough
-/// relay's trailing raise: its wake source IS the timer, a different subsystem.
+/// How long a worker that may block sleeps. Correctness must hold with the backstop timeout
+/// disabled (`infinite`). A backstop firing that finds work is a counted bug (`backstop_found_*`).
+/// `owed` takes precedence for the paced Passthrough relay's trailing raise, which uses a separate timer.
 #[must_use]
 pub const fn park_timeout(owed: bool, infinite: bool) -> PollTimeout {
     if owed {
@@ -150,7 +150,7 @@ pub fn run(
     );
 }
 
-/// [`run`] with the USER-ring relays' event hooks ([`RelayLoop`]) and their counters. ONE loop, level-triggered (owner, 2026-10-20): every
+/// [`run`] with the USER-ring relays' event hooks ([`RelayLoop`]) and their counters. One level-triggered loop: every
 /// iteration serves the flagged tokens with a per-visit bound, drains every ready fd (`epoll_wait(timeout=0)`) and evaluates every relay's
 /// recorded wait; the worker then BLOCKS (no timeout with the `KF3_WORKER_PARK_INFINITE` knob, else [`PARK_MS`] as a safety net whose
 /// every firing that finds work is a counted bug) only when every obligation any relay holds has a registered wake source
@@ -211,7 +211,7 @@ pub fn run_with_relay(
             }
         }
         after_timeout = false;
-        // ★ ONE LEVEL-TRIGGERED EVALUATION per iteration (owner, 2026-10-20): drain every ready fd, then evaluate every relay's recorded
+        // One level-triggered evaluation per iteration: drain every ready fd, then evaluate every relay's recorded
         // wait against the private words. Interrupts are hints; the state is what is read. A hot neighbour cannot keep this away
         // (no "every Nth pass", no budget, no spin scattered elsewhere).
         let mut ready = ReadyTokens::new();

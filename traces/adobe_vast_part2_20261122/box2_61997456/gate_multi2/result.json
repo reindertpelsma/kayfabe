@@ -1,0 +1,40 @@
+{
+    "app":  "gate_multi",
+    "started":  1795317072.008,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "final_shot":  "1920x1080-\u003e1280x720",
+    "final_titles":  [
+                         "AfterFX | UI_MessageBox",
+                         "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                         "explorer | Program Manager"
+                     ],
+    "apps":  {
+                 "aftereffects":  {
+                                      "exe_name":  "AfterFX.exe",
+                                      "cwd":  "C:\\Program Files\\Adobe\\Adobe After Effects 2027\\Support Files",
+                                      "window_secs":  38,
+                                      "alive":  true,
+                                      "responding":  true,
+                                      "private_mb":  115,
+                                      "shot_info":  "1920x1080-\u003e1280x720",
+                                      "titles":  [
+                                                     "AfterFX | UI_MessageBox",
+                                                     "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                                     "explorer | Program Manager"
+                                                 ],
+                                      "ui_lines":  10,
+                                      "ui_signin_hits":  [
+
+                                                         ],
+                                      "main_window":  true,
+                                      "quit":  "forced"
+                                  }
+             },
+    "ended":  1795317234.062,
+    "dismissed":  [
+
+                  ]
+}

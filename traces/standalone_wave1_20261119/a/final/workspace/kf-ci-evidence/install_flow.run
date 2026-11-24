@@ -1,0 +1,30 @@
+[xid-watch] tag=ci68f0a4b0b926c1ae_install_flow  host=ubuntu  utc=2026-11-20T01:03:57Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/install_flow.py run --sha 7fb1c98a00cb79e825e4390f910141a6d4fe45a7 --checkout /workspace/kf-ci-src --prefix /workspace/kf-install-flow --out /workspace/kf-ci-evidence/install_flow.json
+[xid-watch] host_dmesg_lines=1229  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_DOCSTEP_START doc=building.md step=clone user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=clone rc=0 ms=16842
+KF_DOCSTEP_START doc=building.md step=packages_list user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_list rc=0 ms=32
+KF_DOCSTEP_START doc=building.md step=packages_install user=root timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_install rc=0 ms=73635
+KF_DOCSTEP_START doc=building.md step=rust_toolchain user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=rust_toolchain rc=0 ms=57812
+KF_DOCSTEP_START doc=building.md step=workspace_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=workspace_build rc=0 ms=47261
+KF_DOCSTEP_START doc=building.md step=qemu_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=qemu_build rc=0 ms=77636
+KF_DOCSTEP_START doc=building.md step=raw_client user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=raw_client rc=0 ms=25613
+KF_DOCSTEP_ARGS doc=attach-to-existing-vm.md step=qemu_args words=12
+KF_DOCSTEP_START doc=- step=boot_and_probe user=unpriv timeout=1800
+KF_DOCSTEP_END doc=- step=boot_and_probe rc=0 ms=132349
+KF_INSTALL_FLOW_RESULT {"binary":{"rev":"7fb1c98a","source":"compiled"},"docs":{"attach-to-existing-vm.md":"0c7c4454fcbc54f9a93db5c0634cccdde3e192b4abe61c0209d7392339da333b","building.md":"aa16ba0e2296af1a6ad8cd978ac2d496634e1e26dbba7fa3e14f3cf6a519ec05","installing.md":"1563048d03fb0f47f6371c8f371afb7613b19a83766e15f5c0a965478d0ebc2b","linux-guest.md":"6945366c739c3e270d8f6145062dfbcc88ca0cdea6925e62016a9843eb8af94c","requirements.md":"d17672df437d8be6280013bf163a0f3c005ae433cdb79cb9ab49ce147db2f552"},"guest":{"boot_s":83,"cup8":"PASS","kf3_log_line":true,"nvidia_smi_rc":0,"qemu_args_source":"attach-to-existing-vm.md"},"root_steps":["packages_install","root_setup","copy_ssh_key","device_nodes"],"schema":1,"sha":"7fb1c98a00cb79e825e4390f910141a6d4fe45a7","steps":[{"cap_eff":"0000000000000000","doc":"building.md","ms":16842,"rc":0,"step":"clone","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":32,"rc":0,"step":"packages_list","uid":1002,"user":"unpriv"},{"cap_eff":"000001ffffffffff","doc":"building.md","ms":73635,"rc":0,"step":"packages_install","uid":0,"user":"root"},{"cap_eff":"0000000000000000","doc":"building.md","ms":57812,"rc":0,"step":"rust_toolchain","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":47261,"rc":0,"step":"workspace_build","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":77636,"rc":0,"step":"qemu_build","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":25613,"rc":0,"step":"raw_client","uid":1002,"user":"unpriv"}],"substitutions":[{"literal":"https://github.com/reindertpelsma/kayfabe.git","step":"clone"},{"literal":"<a fixed uuid for this VM>","step":"qemu_args"}],"verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1229 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci68f0a4b0b926c1ae_install_flow.log

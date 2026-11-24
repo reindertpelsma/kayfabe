@@ -39,6 +39,7 @@ pub mod osevent;
 pub mod pmsr;
 pub mod precomp;
 pub mod preempt_bind_probe;
+pub mod queuepriority;
 pub mod rmgraph;
 pub mod rmrpc;
 pub mod rowserve;
@@ -50,6 +51,7 @@ pub mod sw_runlist_probe;
 pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
+pub mod utilization;
 pub mod vfguest;
 pub mod winprofile;
 pub mod zbc;
@@ -168,6 +170,11 @@ pub struct ObjectLinks {
     /// measured Windows build at fn 1, and by no other. Shared by `Clone`, so the device's display and
     /// memory planes read the same declaration the chain records.
     pub windows: winprofile::WindowsProfile,
+    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization` device
+    /// property. `Some` seats [`utilization::UtilizationPolicy`], which answers the GPU-utilisation controls from
+    /// a cache of one fixed host read; `None` (the property off, and the `Default`) seats nothing, so those
+    /// controls reach the ledger and are refused, exactly as before the feature existed.
+    pub utilization: Option<utilization::UtilizationSeat>,
 }
 
 /// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
@@ -228,6 +235,7 @@ impl core::fmt::Debug for ObjectLinks {
                 &self.console.as_ref().map(|c| (c.bar1_bytes, c.boot_fb)),
             )
             .field("windows_support", &self.windows.support())
+            .field("utilization", &self.utilization.is_some())
             .finish()
     }
 }
@@ -386,6 +394,40 @@ impl ReselectAtFn1 {
     }
 }
 
+impl ReselectAtFn1 {
+    /// The log line for an outcome of [`Self::on_fn1`] (`None` for [`Reselection::Kept`]).
+    ///
+    /// A refusal for a defaulted device across a pre-fn-1 surface difference names the fix: the
+    /// exact `guest-driver=` pin to add, which is the version the GUEST reported (the one the
+    /// device cannot take on its own, since the guest never selects the host side), and the
+    /// version the device defaulted to. Which pairs are refused is decided by [`Self::on_fn1`],
+    /// not here.
+    #[must_use]
+    pub fn describe(&self, outcome: &Reselection) -> Option<String> {
+        Some(match outcome {
+            Reselection::Kept => return None,
+            Reselection::Reselected { from, to } => format!(
+                "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
+                 own; pre-fn-1 surface identical)"
+            ),
+            Reselection::RefusedDeclared { reported } => format!(
+                "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
+                 not re-selecting a declared version",
+                self.current
+            ),
+            Reselection::RefusedUnserved { reported, why } => format!(
+                "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
+            ),
+            Reselection::RefusedSurface { reported, what } => format!(
+                "kf-rm: the guest says it is driver {reported}; cannot re-select from {} (the \
+                 version the device defaulted to): {what} differs and the guest already consumed \
+                 it. To serve this guest add guest-driver={reported} to the kf3-gpu device",
+                self.provisional.driver_version()
+            ),
+        })
+    }
+}
+
 /// The outcome of [`ReselectAtFn1::on_fn1`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reselection {
@@ -423,25 +465,11 @@ pub enum Reselection {
 impl kf_gsp::CommandPolicy for ReselectAtFn1 {
     fn respond(&mut self, cmd: &kf_gsp::RpcCommand) -> Option<kf_gsp::Reply> {
         if cmd.function == kf_gsp::RpcFunction::SetGuestSystemInfo {
-            match self.on_fn1(&cmd.payload) {
-                Reselection::Kept => {}
-                Reselection::Reselected { from, to } => eprintln!(
-                    "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
-                     own; pre-fn-1 surface identical)"
-                ),
-                Reselection::RefusedDeclared { reported } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
-                     not re-selecting a declared version",
-                    self.current
-                ),
-                Reselection::RefusedUnserved { reported, why } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
-                ),
-                Reselection::RefusedSurface { reported, what } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}; cannot re-select from {}: \
-                     {what} differs and the guest already consumed it",
-                    self.current
-                ),
+            let outcome = self.on_fn1(&cmd.payload);
+            if let Some(line) = self.describe(&outcome) {
+                // ★ A hostile guest can send fn 1 again and again, so the line is rate-limited
+                // (`docs/design/V3_BOUNDARY_FUZZING.md`, BF-2); a plain `eprintln!` here was debt.
+                kf_arch::rate_eprintln!("{line}");
             }
         }
         self.inner.respond(cmd)
@@ -500,6 +528,7 @@ pub fn served_chain(
         display,
         console,
         windows,
+        utilization,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines))
@@ -551,6 +580,14 @@ pub fn served_chain(
         chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
     }
     chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
+    // ★ 2026-11-17: GPU utilisation (`report-utilization`, default on): claims the GPUMON samples control and the
+    // two RUSD controls, for a guest driver version that has a generated layout row; nothing is seated with the
+    // property off. Ahead of `InitTablePolicy`/the ledger, which would refuse the three ids.
+    if let Some(seat) = &utilization
+        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)
+    {
+        chain.push(Box::new(link));
+    }
     // ★ 2026-11-15 (OWNER_RULINGS §W, reversed 2026-11-15: "set the measured Windows profile as the
     // default"; was `KF3_SW_RUNLIST_HOST_OWNED`): the software-runlist submit as host-owned
     // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel of a declared
@@ -685,7 +722,7 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 9]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 10]>([
         // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
         // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
         // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
@@ -696,6 +733,10 @@ pub fn served_chain(
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),
+        // ★ 2026-11-18: queue priority (`VK_KHR_global_priority`): the runlist scheduling policy and the
+        // two interleave-level SETs, accepted as the VM's own virtual state, never forwarded and never
+        // applied on the host (`queuepriority.rs`, `docs/design/V3_QUEUE_PRIORITY.md`).
+        Box::new(queuepriority::QueuePriorityPolicy::new(driver)),
         Box::new(kf_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
         ))),

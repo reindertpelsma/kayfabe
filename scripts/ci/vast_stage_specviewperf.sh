@@ -40,10 +40,13 @@ rcfile=$private/specviewperf_$tag.rc
 : > "$log"
 # the STATUS patterns (one alternative per line kind; anchored; no free text)
 status='^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=[0-9]{1,2}$'
-status+='|^SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$'
+status+='|^SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=([A-Z_]{1,24}|-) failed=([A-Za-z0-9_,]{1,120}|-)$'
 status+='|^[a-z][a-z_]*_[0-9]{2} --- FAILED$'
 status+='|^SPEC_STAGE_COUNTS pass=[0-9]{1,2} fail=[0-9]{1,2} not_run=[0-9]{1,2} of=[0-9]{1,2}$'
 status+='|^SPEC_COPY_DELETED removed=(archive|overlay|archive,overlay|nothing)$'
+# the licence readout of the guest (2026-11-17): state text only, in the alphabet of scripts/bench/specviewperf/licence.py (no key, no account)
+status+='|^SPEC_LICENCE_STATE at=[A-Za-z0-9_]{1,40}( [a-z0-9_]{1,12}=[A-Za-z0-9_.,:;()/+-]{1,160}){1,12}$'
+status+='|^SPEC_GUEST_SHUTDOWN_LICENCE viewset=[a-z][a-z_]*-[0-9]{2} event=1074 time=[0-9TZ:-]{1,24} process=[A-Za-z0-9_.-]{1,40} text=[A-Za-z0-9_.,:;()/+-]{1,240}$'
 { bash "$lane" "$tag" "$prov" 2>&1; echo "$?" > "$rcfile"; } | tee -a "$log" | grep --line-buffered -E "$status"
 rc=$(cat "$rcfile" 2>/dev/null || echo 1)
 rm -f "$rcfile"

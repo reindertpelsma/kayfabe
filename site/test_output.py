@@ -314,7 +314,8 @@ class LandingAndDocsIndex(unittest.TestCase):
         self.assertIn("Goals and plans", goals)
         self.assertIn("/edit/master/docs/howto/goals.md", goals)
         self.assertIn("only QEMU is supported", goals)
-        self.assertIn('class="kf-label kf-measured"', (book / "windows-guest.html").read_text())
+        # the manual no longer carries bracket evidence labels (2026-11-20); mark_evidence is unit-tested in test_build.py
+        self.assertNotIn('class="kf-label', (book / "windows-guest.html").read_text())
         self.assertIn('class="kf-gap"', (book / "security.html").read_text())
 
     def test_about_and_security_pages_exist_and_are_indexable(self):

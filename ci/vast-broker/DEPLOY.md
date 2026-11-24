@@ -48,7 +48,7 @@ redaction, storage bounds and API-outage limits. This source change does not dep
   of someone else's run.
   There is no attempt-3 ceiling. Admission does not cache this read; the latest-run resource
   can describe a previous attempt during a rerun. A 401 logs a fixed `github:run:<field>` code,
-  without the field value. See [rerun diagnosis](../../docs/howto/vast-rerun-auth.md).
+  without the field value. See [rerun diagnosis](../../docs/howto/ops/vast-rerun-auth.md).
 - **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
   OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
   `github/docs` `pull_request_target` runs, PR #46406): the
@@ -101,7 +101,7 @@ leaves the box to the Worker's timers (paid work survives a Worker outage).
 ## Build and test
 
 [CODE READ: package.json, package-lock.json] Install first: `npm ci --ignore-scripts` in
-`ci/vast-broker` (tests alone need `npm ci --omit=dev --ignore-scripts`: only `jose`). In
+`ci/vast-broker` (the tests need the dev dependency `wrangler` too, or `test/bundle.test.js` skips; CI installs it). In
 `ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
 (the CI form). Both run the same suite.
 `--ignore-scripts` skips the install scripts of esbuild and workerd; their platform binaries
@@ -111,9 +111,10 @@ arrive as optional dependencies, and `npm ci` checks every tarball against the l
 output: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` writes `<dir>/index.js`
 (byte-identical across runs and checkout paths), and its SHA-256 is `bundle_sha256` in
 `deployment.json` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` (vars are not part of the
-module). `test/bundle.test.js` re-checks this when the dev dependencies are installed; GitHub CI
-installs only `--omit=dev` and skips it, so a `src/` change without a hash update is caught by the
-deploy helper at deploy time, not by CI (final review C1). After any
+module). `test/bundle.test.js` re-checks this when the dev dependencies are installed. Until 2026-11-23
+GitHub CI installed only `--omit=dev` and skipped it, so a stale pin reached `next` (see "Bundle pin
+regenerated 2026-11-23" at the end). CI now installs the dev dependencies in `worker-tests` and runs
+`scripts/check-bundle-pin.mjs`, which fails instead of skipping, and `scripts/bundle-pin-mutants.mjs`. After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
@@ -403,6 +404,15 @@ The Worker uses no R2 binding and has no write capability to the bucket. The box
 `scripts/bench/box/fetch_bench_data.sh` (token via `curl --config` on stdin, the 302 target
 captured with `-w '%{redirect_url}'` and handed to the download on stdin, so neither the token
 nor the presigned URL reaches a command line or a log).
+
+#### Private objects (`GET /bench-data/<run>-<attempt>/private/<prefix>/<path>`, 2026-11-17, NOT deployed)
+
+[CODE READ: src/privatedata.js, src/trust.js, private-objects.json, trust.json] A second namespace of the route above, for the licence-restricted
+objects (the proprietary images; private is not sensitive). It needs no new secret or var: it uses the same read-only key pair and `R2_ACCOUNT_ID` /
+`R2_BUCKET`. It answers only a run token that carries the `private` scope, decided when the token was issued; a run that was admitted before this
+Worker was deployed has a token without the claim and is refused `TRUST_SCOPE_MISSING`. The one new public var, `PROPIMAGES_ENABLED` (exactly `true`
+or `false`, default off), makes release legs build and serve their instruction (`GET /instruction/<run>-<attempt>`); leave it unset until the
+payload accepts a release leg. The change alters the bundle, and the pin (`deployment.json`, `DEPLOYED_BUNDLE_SHA256`) is NOT regenerated in it: a dry run on the coordinator box did not reproduce the committed pin even for unmodified source, so regenerate it in the reviewed deployment environment before deploying (the deploy helper refuses a mismatch). Details: `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`.
 
 [CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
 public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH, and optional
@@ -763,7 +773,7 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 
 ## Same-tree gate reuse
 
-CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/ops/gpu-gate-reuse.md).
 
 ## Result store (D1)
 
@@ -1180,3 +1190,20 @@ is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
   the full URL) in every private and public log, report and evidence path it writes, including the
   values the box held at rent time. Boxes receive them by design; they are not capabilities beyond
   reaching the Worker's edge, because every route still needs a run token.
+
+## Bundle pin regenerated 2026-11-23
+
+STATUS: LIVE, 2026-11-23 as source; NOT DEPLOYED. Local dry-runs only: no upload, no Worker call, no rental.
+
+[MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`] The pin on `next` was `afdcfe985b901192210da35ad661bc13ec96df189583d3cc22c3e8e98d88d369`
+(set at `cbf74eb81`, which a dry-run of that commit reproduces). `next` at `90a658c31` bundles to
+`6df4c71856b6ca53feeb773c04b78a186fa88939b6821a69d036398799ceb57b` (two dry-runs, identical), which is the new pin in `deployment.json`
+and `wrangler.toml`. The source changed after the old pin without a regeneration: #375, #447, #446, #455, #459, #521, #483, #526, #528, #539
+(`src/`, `defaults.json` and the new JSON tables the bundle imports changed; `package-lock.json` and `wrangler.toml` vars did not). Why CI missed it:
+`worker-tests` installed with `--omit=dev`, so `test/bundle.test.js` skipped (INFERRED from the workflow; CI was green).
+
+CI check (`worker-tests`): the install includes the dev dependencies, `node ci/vast-broker/scripts/check-bundle-pin.mjs` fails when either pin differs from a fresh
+dry-run bundle or when wrangler is missing, and `node ci/vast-broker/scripts/bundle-pin-mutants.mjs` shows it killing a one-byte change of `src/index.js`, a
+one-byte change of `defaults.json`, and a pin edited in one of the two files. [MEASURED 2026-11-23] On `next` before the pin change the check exits 1.
+
+Order: master must carry the new pin before the coordinator deploys the Worker (rule above); set `RELEASE_ENABLED=false` before any rollback.

@@ -9,7 +9,7 @@
 //!
 //! A permitted completion mechanism in a restricted user space is still a
 //! design/measurement gate: do not map the Translated runner's writable private
-//! fence there. OWNER_RULINGS §AI authorizes only read-only commands/staging.
+//! fence there. Commands and staging are limited to read-only access.
 //! The prototype is deliberately conservative and may not yet make progress
 //! on a real migration; no timeout substitutes for a missing proof.
 

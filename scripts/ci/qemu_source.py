@@ -11,15 +11,22 @@ form of the "artifacts pinnable" ruling, docs/OWNER_RULINGS.md section AR): it i
   qemu_source.py version                          print the pinned version (10.2.4)
   qemu_source.py fetch DEST_DIR [--from-file P]   print the verified path DEST_DIR/qemu-<ver>.tar.xz
   qemu_source.py verify FILE                      exit 0 only if FILE matches the pin
+
+2026-11-17 (docs/design/V3_STANDALONE_TRUST.md, audit row 4): the transfer and the anchor check are scripts/ci/kf_trust.py's. The pin of
+this file is the entry's `upstream-pin` (a source tarball whose sha256 was measured from download.qemu.org; scripts/ci/trust_manifest.json
+holds the same value and trust_lint.py holds the two together). Behaviour is unchanged: the same refusals, the same names. A `--from-file`
+copy is still held to the pin here (the owner has not ruled that this one flag should become a plain user input), and kf_trust.py records
+it as `user` with the pin as `--expect-sha256`; the record is one line in trust.jsonl (KF_TRUST_EVIDENCE_DIR) and on stderr.
 """
 import argparse
 import hashlib
 import os
 from pathlib import Path
 import re
-import shutil
 import sys
-import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import kf_trust  # noqa: E402
 
 PIN = Path(__file__).resolve().parents[1] / "bench" / "qemu.pin"
 BASE_URL = "https://download.qemu.org/"
@@ -66,27 +73,20 @@ def check(path, sha256, size):
         raise Refused(f"{path} sha256 {h.hexdigest()} is not the pinned {sha256}")
 
 
-def _discard(p):
-    try:
-        os.unlink(p)
-    except FileNotFoundError:
-        pass
+def _discard(*paths):
+    for p in paths:
+        try:
+            os.unlink(p)
+        except FileNotFoundError:
+            pass
 
 
-def _fill(tmp, src, url, size):
-    """Write the bytes to tmp, never more than size+1 (an oversize response is refused without filling the disk)."""
-    with open(tmp, "wb") as out:
-        if src:
-            with open(src, "rb") as f:
-                shutil.copyfileobj(f, out, BLOCK)
-            return
-        with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
-            left = size + 1
-            for block in iter(lambda: r.read(min(BLOCK, left)), b""):
-                out.write(block)
-                left -= len(block)
-                if left <= 0:
-                    return
+def _manifest(name, sha256, size, base_url):
+    """The pin file as a one-entry trust manifest: scripts/bench/qemu.pin stays the single place the value is written."""
+    return {"schema": kf_trust.SCHEMA, "artifacts": {"qemu-source": {
+        "kind": "file", "origin": base_url + name,
+        "anchors": [{"class": kf_trust.CLASS_PIN, "sha256": sha256, "size": size, "pin_origin": "measured-from-upstream", "scope": "source",
+                     "pin_source_url": BASE_URL + name, "status": "CARRIED", "carried_from": "scripts/bench/qemu.pin"}]}}}
 
 
 def fetch(dest_dir, pin=PIN, from_file=None, base_url=BASE_URL):
@@ -108,15 +108,24 @@ def fetch(dest_dir, pin=PIN, from_file=None, base_url=BASE_URL):
         _discard(out)
     tmp = Path(str(out) + ".unverified")
     _discard(tmp)
+    manifest = _manifest(name, sha256, size, base_url)
     try:
-        _fill(tmp, from_file, base_url + name, size)
-        check(tmp, sha256, size)
-        os.replace(tmp, out)
+        if from_file is not None:
+            check(from_file, sha256, size)  # the local copy is held to the pin exactly like a download
+            kf_trust.resolve("qemu-source", out, manifest=manifest, user_source=str(from_file), expect_sha256=sha256, mode=kf_trust.MODE_GIT_ONLY)
+        else:
+            # the loopback exception exists for the tests that pass --base-url; the default origin is https only
+            kf_trust.resolve("qemu-source", out, manifest=manifest, mode=kf_trust.MODE_GIT_ONLY,
+                             transport=kf_trust.HttpTransport(allow_loopback_http=base_url != BASE_URL))
+        check(out, sha256, size)
+    except kf_trust.TrustError as e:
+        _discard(tmp, out)
+        raise Refused(f"obtaining {name} failed: {e.code}") from None
     except Refused:
-        _discard(tmp)
+        _discard(tmp, out)
         raise
-    except (OSError, ValueError) as e:  # URLError, timeouts and HTTP errors are OSError subclasses
-        _discard(tmp)
+    except (OSError, ValueError) as e:
+        _discard(tmp, out)
         raise Refused(f"obtaining {name} failed: {type(e).__name__}") from None
     return out
 

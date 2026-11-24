@@ -11,6 +11,7 @@ does not carry the doc hashes and the root steps.
 import hashlib
 import importlib.util
 import json
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -407,7 +408,7 @@ class Stage(unittest.TestCase):
         for tier in ("small", "middle", "adhoc"):
             self.assertNotIn("install_flow", m.plan_stage_names(self.inst(tier=tier), ("install_flow",)))
         # it runs after the Linux guests and before the Windows gate, which owns the GPU last
-        names = m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("install_flow",))
+        names = [n for n in m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("install_flow",)) if n != "kfml"]  # kfml is a default stage since 2026-11-17
         self.assertEqual(names[names.index("install_flow") - 1], "apps")
         self.assertEqual(names[names.index("install_flow") + 1], "windows_gate")
         with patch.object(m, "INSTALL_FLOW_IN_LARGE", True):
@@ -429,9 +430,9 @@ class Stage(unittest.TestCase):
             cmd = [sys.executable, str(HERE / "vast_payload.py"), "--dry-run", "--instruction", str(path)]
             ok = subprocess.run([*cmd, "--only", "install_flow"], env=env, capture_output=True, text=True, cwd=d)
             self.assertEqual(ok.returncode, 0, ok.stderr)
-            self.assertIn("KF_PAYLOAD_PLAN stages=install_flow planned=provision:cuda_host:merge_bar:cuda_guest:install_flow", ok.stdout)
+            self.assertIn("KF_PAYLOAD_PLAN stages=install_flow planned=provision:cuda_host:merge_bar:cuda_guest:kfml:install_flow", ok.stdout)
             plain = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=d)
-            self.assertIn("planned=provision:cuda_host:merge_bar:cuda_guest\n", plain.stdout)
+            self.assertIn("planned=provision:cuda_host:merge_bar:cuda_guest:kfml\n", plain.stdout)
             pi.write(self.inst(tier="small"), str(path))
             bad = subprocess.run([*cmd, "--only", "install_flow"], env=env, capture_output=True, text=True, cwd=d)
             self.assertEqual(bad.returncode, 1)
@@ -964,7 +965,7 @@ class SecondAngle(unittest.TestCase):
     def test_the_stage_comes_after_cuda_guest(self):
         m = self.payload_module()
         doc = dict(tier="large", windows=False, windows_runs=1, stages=(), spec=None, winapps=None, linux_apps=None, rehearsal=False)
-        names = m.plan_stage_names(pi.Instruction(**doc), ("install_flow",))
+        names = [n for n in m.plan_stage_names(pi.Instruction(**doc), ("install_flow",)) if n != "kfml"]
         self.assertEqual(names[-2:], ["cuda_guest", "install_flow"])
 
     def test_the_stage_needs_hours_left(self):
@@ -1032,7 +1033,11 @@ class Budget(unittest.TestCase):
         self.assertIn("manual-only stage is in a default plan: install_flow", errors)
 
     def test_a_stage_that_is_neither_budgeted_nor_manual_only_is_refused(self):
-        errors = self.pr.validate(self.data, self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', 'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE"}'))
+        # the literal table is read from the source (not spelled here), so a stage added to it by another change does not break this test
+        table = re.search(r"^MANUAL_ONLY_STAGES = \{.*\}$", self.source, re.M)[0]
+        without = re.sub(r', "install_flow": "INSTALL_FLOW_IN_LARGE"', "", table)
+        self.assertNotEqual(table, without)
+        errors = self.pr.validate(self.data, self.source.replace(table, without))
         self.assertEqual(errors, ["unbudgeted payload stage: install_flow"])
 
     def test_a_manual_only_stage_that_also_has_a_row_is_refused(self):
@@ -1058,7 +1063,7 @@ class Budget(unittest.TestCase):
 
     def test_a_non_literal_table_is_refused(self):
         with self.assertRaises(ValueError):
-            self.pr.manual_only(self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', "MANUAL_ONLY_STAGES = dict(a=1)"))
+            self.pr.manual_only(self.source.replace(re.search(r"^MANUAL_ONLY_STAGES = \{.*\}$", self.source, re.M)[0], "MANUAL_ONLY_STAGES = dict(a=1)"))
 
 
 def shutil_which(tool):

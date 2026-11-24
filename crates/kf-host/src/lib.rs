@@ -150,6 +150,31 @@ pub const CHANNEL_CLASS_OUTSIDE_BIRTH: u32 = 0x4B75;
 /// refusals above, and the two lanes met in `v3-cand-1` (2026-10-04). A status is a name only while
 /// it is unique.
 pub const DISP_SW_CLASS_ID_UNREADABLE: u32 = 0x4B76;
+/// (`V3_GUEST_INFLUENCE_AUDIT.md` G-3): the session's handle counter reached
+/// `u32::MAX`; no handle is ever minted twice, so every later alloc is refused before any ioctl.
+pub const HOST_HANDLES_EXHAUSTED: u32 = 0x4B7A;
+
+/// ★ G-3: the next handle from `next`, never wrapping: after `u32::MAX` the counter stays at `0`
+/// (`NV01_NULL_OBJECT`), which [`admit_want`] refuses by name.
+fn next_handle(next: &mut u32) -> u32 {
+    let h = *next;
+    if h != 0 {
+        *next = h.checked_add(1).unwrap_or(0);
+    }
+    h
+}
+
+/// ★ G-3: an alloc asking for handle `0` would let host RM pick one; kayfabe only asks for that
+/// when its counter is exhausted, so it is refused by name before any ioctl.
+fn admit_want(want: u32) -> Result<(), RmError> {
+    if want == 0 {
+        kf_arch::rate_eprintln!(
+            "kf-host: HOST HANDLES EXHAUSTED: the session minted u32::MAX handles; alloc refused"
+        );
+        return Err(RmError::Other(HOST_HANDLES_EXHAUSTED));
+    }
+    Ok(())
+}
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
@@ -268,6 +293,32 @@ const PASSED_THROUGH: &[&kf_abi::matrix::StructRuns] = &[
 ];
 
 /// Print a host-ABI refusal once, by name, and turn it into the status class callers see.
+/// ★ The host-ABI decision for one control, before any ioctl: how `cmd` crosses to this host
+/// ([`kf_abi::hostabi::HostAbi::control_carry`]), and — for an opaque row with a fixed size
+/// (`MeasuredOpaque`, `BranchSized`) — a refusal of any body that is not exactly that size. The
+/// HOST row decides the size; a request only selects the control. `Ok(None)` = pass through.
+///
+/// # Errors
+/// The [`kf_abi::hostabi::HostAbiError`] to refuse by name.
+pub fn control_plan(
+    abi: &kf_abi::hostabi::HostAbi,
+    cmd: u32,
+    payload_len: usize,
+) -> Result<Option<kf_abi::hostabi::Carry>, kf_abi::hostabi::HostAbiError> {
+    let carry = abi.control_carry(cmd)?;
+    if let Some(kf_abi::hostabi::Carry::Same { size }) = carry {
+        let row = kf_abi::hostabi::host_control(cmd);
+        if payload_len != size && row.is_some_and(|r| r.params.is_opaque_sized()) {
+            return Err(kf_abi::hostabi::HostAbiError::Size {
+                strukt: row.map_or("host control", |r| r.name),
+                want: size,
+                got: payload_len,
+            });
+        }
+    }
+    Ok(carry)
+}
+
 fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
     kf_arch::rate_eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
     RmError::Other(HOST_ABI_REFUSED)
@@ -484,6 +535,10 @@ pub struct HostRm {
     /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
     /// bring-up; read by no behaviour yet.
     tier: tier::HostTier,
+    /// ★ 2026-11-18: what an unmapped VA of the static guest ranges reads as in every mirror space
+    /// allocated after it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property).
+    /// `false` = [`channel::GuestVaFill::Fault`], the default.
+    guest_va_zero: std::sync::atomic::AtomicBool,
 }
 
 impl HostRm {
@@ -579,6 +634,7 @@ impl HostRm {
                 display_slots: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
+            guest_va_zero: std::sync::atomic::AtomicBool::new(false),
             views: Default::default(),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
@@ -923,7 +979,11 @@ impl HostRm {
             Some(HostParams::Renamed { before, after }) => {
                 (before.name, self.abi.carry_renamed(before, after))
             }
-            Some(HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. }) => {
+            Some(
+                HostParams::NoHeader { .. }
+                | HostParams::MeasuredOpaque { .. }
+                | HostParams::BranchSized { .. },
+            ) => {
                 kf_arch::rate_eprintln!(
                     "kf-host: HOST-ABI REFUSED {what}: allocation params with no header"
                 );
@@ -959,6 +1019,7 @@ impl HostRm {
         params: &mut [u8],
         inside: Option<&birth::InsideBirthPath>,
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, inside)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1017,6 +1078,7 @@ impl HostRm {
         class: u32,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, None)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1072,6 +1134,7 @@ impl HostRm {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, None)?;
         // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
         // at the bench layout, which is only known correct on the interval the encoders were
@@ -1114,9 +1177,7 @@ impl HostRm {
     pub fn mint(&self) -> u32 {
         let _leaf = leafwitness::Held::enter();
         let mut o = self.objects.lock().expect("objects");
-        let h = o.next;
-        o.next = o.next.wrapping_add(1);
-        h
+        next_handle(&mut o.next)
     }
 
     /// Record `child`'s parent, so [`HostRm::free`] can name it.
@@ -1136,9 +1197,7 @@ impl HostRm {
     pub fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         // ★ The host-driver axis: the payload is the bench layout; carry it to the host's own
         // measured layout and back (`kf_abi::hostabi::HOST_CONTROLS`). Same layout ⇒ untouched.
-        let carry = self
-            .abi
-            .control_carry(cmd)
+        let carry = control_plan(&self.abi, cmd, payload.len())
             .map_err(|e| abi_refused(&format!("control {cmd:#010x}"), &e))?;
         match carry {
             Some(c @ kf_abi::hostabi::Carry::Carried { .. }) => {
@@ -1154,22 +1213,6 @@ impl HostRm {
                     .map_err(|e| abi_refused(&format!("control {cmd:#010x} ({name}) reply"), &e))?;
                 payload.copy_from_slice(&back);
                 Ok(())
-            }
-            Some(kf_abi::hostabi::Carry::Same { size })
-                if payload.len() != size
-                    && kf_abi::hostabi::host_control(cmd).is_some_and(|row| {
-                        matches!(
-                            row.params,
-                            kf_abi::hostabi::HostParams::MeasuredOpaque { .. }
-                        )
-                    }) =>
-            {
-                let err = kf_abi::hostabi::HostAbiError::Size {
-                    strukt: kf_abi::hostabi::host_control(cmd).map_or("host control", |r| r.name),
-                    want: size,
-                    got: payload.len(),
-                };
-                Err(abi_refused(&format!("control {cmd:#010x}"), &err))
             }
             _ => self.raw_control_exact(object, cmd, payload),
         }
@@ -2043,6 +2086,7 @@ impl HostRm {
         }
         birth::admit_alloc_class(NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, None)?;
         let want = self.mint();
+        admit_want(want)?;
         let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
         Nvos02ParametersWithFd {
             h_root: self.client.raw(),
@@ -2432,5 +2476,442 @@ mod display_slot_tests {
             !super::display_slot_exportable(Some(1 << 30), 1 << 30),
             "the store's size"
         );
+    }
+}
+
+#[cfg(test)]
+mod control_plan_tests {
+    //! ★★ 2026-11-18: kf-host refused 852e/853a/a618/853b by name at realize on every 595 host, so a
+    //! guest's 595-sized F-4 question was never answered (host-ABI coverage; not a CUDA fix, see
+    //! `kf_abi::hostabi` HOST_CONTROLS). The decision
+    //! `raw_control` takes before its ioctl, through the real `kf_abi::hostabi` table.
+    use super::control_plan;
+    use kf_abi::gssreplay::{Answer, ROWS, answer};
+    use kf_abi::host_driver::HostDriverVersion;
+    use kf_abi::hostabi::{Carry, HostAbi, HostAbiError};
+
+    fn abi(v: &str) -> HostAbi {
+        HostAbi::for_host(HostDriverVersion::parse(v).expect("parse")).expect("measured")
+    }
+
+    /// The five rows and their 595-branch sizes (`kf_abi::hostabi`, traces/constants_measure_20261014b/tier2/).
+    const ROWS_595: [(u32, usize); 5] = [
+        (0x2080_852e, 596),
+        (0x2080_853a, 15352),
+        (0x2080_a618, 8632),
+        (0x2080_853b, 14320),
+        (0x2080_852a, 1784),
+    ];
+
+    #[test]
+    fn a_595_host_is_asked_exactly_the_measured_size() {
+        for v in ["595.84", "595.91.07"] {
+            let h = abi(v);
+            for (cmd, size) in ROWS_595 {
+                assert!(
+                    matches!(control_plan(&h, cmd, size), Ok(Some(Carry::Same { size: s })) if s == size),
+                    "{cmd:#x} at {v}"
+                );
+                for other in [
+                    0,
+                    4,
+                    528,
+                    1432,
+                    1456,
+                    1716,
+                    1832,
+                    8620,
+                    size - 4,
+                    size + 4,
+                    16384,
+                ] {
+                    if other == size {
+                        continue;
+                    }
+                    assert!(
+                        matches!(
+                            control_plan(&h, cmd, other),
+                            Err(HostAbiError::Size { want, got, .. }) if want == size && got == other
+                        ),
+                        "{cmd:#x} at {v}: a {other} B body must be refused before the ioctl"
+                    );
+                }
+            }
+        }
+    }
+
+    /// ⊘ No regression: a 580 host keeps getting the 580 sizes, untouched.
+    #[test]
+    fn a_580_host_still_passes_the_580_sizes() {
+        for v in [
+            "580.105.08",
+            "580.126.09",
+            "580.159.04",
+            "580.173.02",
+            "580.178.04",
+        ] {
+            let h = abi(v);
+            for (cmd, size) in [(0x2080_852e, 528), (0x2080_853a, 1456), (0x2080_a618, 8620)] {
+                assert!(
+                    matches!(control_plan(&h, cmd, size), Ok(None)),
+                    "{cmd:#x} at {v}"
+                );
+            }
+            assert!(matches!(
+                control_plan(&h, 0x2080_852a, 1784),
+                Ok(Some(Carry::Same { size: 1784 }))
+            ));
+        }
+    }
+
+    /// An unmeasured host outside the encoded interval is still refused by name.
+    #[test]
+    fn an_unmeasured_branch_stays_refused() {
+        for v in ["575.57.08", "590.48.01", "610.43.02"] {
+            for (cmd, size) in ROWS_595 {
+                assert!(
+                    matches!(
+                        control_plan(&abi(v), cmd, size),
+                        Err(HostAbiError::NoHeader { .. })
+                    ),
+                    "{cmd:#x} at {v}"
+                );
+            }
+        }
+    }
+
+    /// ★ The guest cannot pick the size. Realize asks every `gssreplay::ROWS` row through the plan;
+    /// only rows the HOST row admits get an answer (the device itself is faked as echoing NV_OK,
+    /// which is generous: the plan, not the device, must be what refuses). A guest request is then
+    /// answered only at the host's size; the 580-branch body of the same control is not.
+    #[test]
+    fn the_guest_request_selects_the_control_never_the_size() {
+        for v in ["595.84", "595.91.07"] {
+            let h = abi(v);
+            let answers: Vec<Answer> = ROWS
+                .iter()
+                .filter(|r| control_plan(&h, r.cmd, r.size).is_ok())
+                .map(|r| Answer::from_host(*r, &r.request()))
+                .collect();
+            for (cmd, size) in ROWS_595 {
+                let admitted: Vec<usize> = answers
+                    .iter()
+                    .filter(|a| a.row.cmd == cmd)
+                    .map(|a| a.row.size)
+                    .collect();
+                assert_eq!(admitted, vec![size], "{cmd:#x} at {v}");
+                let row = ROWS
+                    .iter()
+                    .find(|r| r.cmd == cmd && r.size == size)
+                    .expect("guest-facing row");
+                assert!(answer(&answers, cmd, &mut row.request()), "{cmd:#x} at {v}");
+            }
+            for (cmd, size) in [
+                (0x2080_852e, 528),
+                (0x2080_853a, 1456),
+                (0x2080_a618, 8620),
+                (0x2080_852a, 1716),
+                (0x2080_852e, 1432),
+            ] {
+                assert!(
+                    !answer(&answers, cmd, &mut vec![0u8; size]),
+                    "{cmd:#x} {size} B at {v}: another branch's size must not be answered"
+                );
+            }
+        }
+    }
+
+    /// What `control_plan` must decide for one (host, control): the golden outcome.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Want {
+        /// The old 580 contract: the body passes through untouched (any size).
+        Pass,
+        /// Asked at exactly this size.
+        Size(usize),
+        /// Refused by name (`NoHeader`): the host's layout for it is not known.
+        Refused,
+    }
+
+    /// The host tags inside the encoded interval `[580.65.06, 581)` (`kf_abi::host_driver`).
+    const HOSTS_580: [&str; 9] = [
+        "580.65.06",
+        "580.82.07",
+        "580.94.02",
+        "580.95.05",
+        "580.105.08",
+        "580.126.09",
+        "580.159.04",
+        "580.173.02",
+        "580.178.04",
+    ];
+    /// The 595 GSP branch profile (`kf_abi::hostabi::GSP_BRANCH_595`).
+    const HOSTS_595: [&str; 2] = ["595.84", "595.91.07"];
+    /// Every other matrix tag: no row for these five, so each is refused by name.
+    const HOSTS_REFUSED: [&str; 19] = [
+        "535.309.01",
+        "545.23.08",
+        "550.40.07",
+        "550.54.14",
+        "550.90.07",
+        "555.42.02",
+        "560.28.03",
+        "565.57.01",
+        "570.86.15",
+        "570.124.06",
+        "570.148.08",
+        "575.51.02",
+        "575.51.03",
+        "575.57.08",
+        "575.64.05",
+        "590.48.01",
+        "610.43.02",
+        "610.57.04",
+        "615.71.09",
+    ];
+
+    /// The golden table: per host class, per control. 580 rows equal the pre-2026-11-18 behaviour
+    /// (NoHeader/unlisted ⇒ pass-through inside the interval; 852a size-checked at 1784).
+    fn want(host: &str, cmd: u32) -> Want {
+        let size_595 = ROWS_595
+            .iter()
+            .find(|r| r.0 == cmd)
+            .expect("one of the five")
+            .1;
+        if HOSTS_595.contains(&host) {
+            Want::Size(size_595)
+        } else if HOSTS_580.contains(&host) {
+            if cmd == 0x2080_852a {
+                Want::Size(1784)
+            } else {
+                Want::Pass
+            }
+        } else {
+            assert!(HOSTS_REFUSED.contains(&host), "{host} is not classified");
+            Want::Refused
+        }
+    }
+
+    /// ★★ 2026-11-18 (owner: "across ALL supported versions"): every host tag of the driver matrix
+    /// (`kf_abi::generated::matrix::MEASURED`, 29 tags) x the five controls, through `control_plan`.
+    /// The three lists must cover MEASURED exactly, so a new matrix tag fails here until classified.
+    #[test]
+    fn every_matrix_host_gets_its_golden_outcome_for_the_five_controls() {
+        let listed: std::collections::BTreeSet<String> = HOSTS_580
+            .iter()
+            .chain(&HOSTS_595)
+            .chain(&HOSTS_REFUSED)
+            .map(|s| s.to_string())
+            .collect();
+        let measured: std::collections::BTreeSet<String> = kf_abi::generated::matrix::MEASURED
+            .iter()
+            .map(|v| abi(&v.to_string()).version().to_string())
+            .collect();
+        let listed_norm: std::collections::BTreeSet<String> = listed
+            .iter()
+            .map(|s| abi(s).version().to_string())
+            .collect();
+        assert_eq!(
+            listed_norm, measured,
+            "the golden table must cover every matrix tag"
+        );
+        for host in HOSTS_580.iter().chain(&HOSTS_595).chain(&HOSTS_REFUSED) {
+            let h = abi(host);
+            for (cmd, size_595) in ROWS_595 {
+                let w = want(host, cmd);
+                // Probe with the 595 size, the 580 size and the size the outcome names.
+                for len in [size_595, 528, 1456, 8620, 1716, 1832] {
+                    let got = control_plan(&h, cmd, len);
+                    let ok = match w {
+                        Want::Pass => matches!(got, Ok(None)),
+                        Want::Size(s) if len == s => {
+                            matches!(got, Ok(Some(Carry::Same { size })) if size == s)
+                        }
+                        Want::Size(s) => matches!(
+                            got,
+                            Err(HostAbiError::Size { want, .. }) if want == s
+                        ),
+                        Want::Refused => matches!(
+                            got,
+                            Err(HostAbiError::NoHeader { cmd: c, .. }) if c == cmd
+                        ),
+                    };
+                    assert!(ok, "host {host} {cmd:#x} {len} B: want {w:?}, got {got:?}");
+                }
+            }
+        }
+    }
+
+    /// ⊘ Adjacent UNMEASURED hosts are refused by name before any control is planned.
+    #[test]
+    fn adjacent_unmeasured_hosts_are_refused_by_name() {
+        for v in [
+            "581.0.0",
+            "580.159.05",
+            "594.0.0",
+            "595.0.0",
+            "595.84.1",
+            "595.91.06",
+            "595.91.08",
+            "595.99.0",
+            "596.0.0",
+            "610.0.0",
+        ] {
+            let parsed = HostDriverVersion::parse(v).expect("parse");
+            assert!(
+                matches!(
+                    HostAbi::for_host(parsed),
+                    Err(HostAbiError::Unmeasured { .. })
+                ),
+                "{v}"
+            );
+        }
+    }
+
+    /// ★ The guest-driver axis: what a guest of each branch sends for these controls (its GSP
+    /// branch's size: `kf_abi::gssreplay` comments, Windows captures in
+    /// traces/constants_measure_20261014b/ga106_*, ga104_596.51; for Linux guests that the size
+    /// equals the Windows one at the same branch is an inference from F-4) meets a 580.159.04
+    /// host. The selection must be what it was before 2026-11-18: four pass-through, 852a only at
+    /// 1784 — the matrix passed these pairs.
+    #[test]
+    fn guest_branches_against_the_bench_host_select_the_same_rows_as_before() {
+        let h = abi("580.159.04");
+        // (guest, [(cmd, size the guest sends)])
+        let guests: [(&str, [(u32, usize); 5]); 6] = [
+            (
+                "575.57.08",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "580.105.08",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "580.159.04",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "590.48.01",
+                [
+                    (0x2080_852e, 596),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "595.84",
+                [
+                    (0x2080_852e, 596),
+                    (0x2080_853a, 15352),
+                    (0x2080_a618, 8632),
+                    (0x2080_853b, 14320),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "610.57.04",
+                [
+                    (0x2080_852e, 1432),
+                    (0x2080_853a, 15352),
+                    (0x2080_a618, 20000),
+                    (0x2080_853b, 14320),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+        ];
+        for (guest, sends) in guests {
+            for (cmd, len) in sends {
+                let got = control_plan(&h, cmd, len);
+                if cmd == 0x2080_852a {
+                    assert!(
+                        matches!(got, Ok(Some(Carry::Same { size: 1784 }))),
+                        "guest {guest} {cmd:#x}: {got:?}"
+                    );
+                } else {
+                    assert!(
+                        matches!(got, Ok(None)),
+                        "guest {guest} {cmd:#x} {len} B: {got:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-3, LOW): the session's handle counter
+/// never wraps. A guest drives one mint per host object it causes; before this the counter wrapped
+/// after about 889 million mints, through `0` (`NV01_NULL_OBJECT`: "RM picks") to kayfabe's own
+/// client handle and every handle it had issued.
+#[cfg(test)]
+mod mint_tests {
+    use super::{FIRST_HANDLE, HOST_HANDLES_EXHAUSTED, RmError, admit_want, next_handle};
+
+    #[test]
+    fn mint_refuses_at_exhaustion_and_never_reissues_a_handle() {
+        let mut next = u32::MAX - 1;
+        assert_eq!(next_handle(&mut next), u32::MAX - 1);
+        assert_eq!(next_handle(&mut next), u32::MAX);
+        for _ in 0..3 {
+            assert_eq!(
+                next_handle(&mut next),
+                0,
+                "exhausted: the null handle, forever"
+            );
+        }
+        assert!(next < FIRST_HANDLE, "never back into the issued range");
+    }
+
+    #[test]
+    fn an_exhausted_counter_stays_exhausted() {
+        let mut next = 0;
+        assert_eq!(next_handle(&mut next), 0);
+        assert_eq!(next, 0, "the null handle never advances into 1, 2, ...");
+    }
+
+    #[test]
+    fn an_exhausted_session_refuses_the_next_alloc_by_name() {
+        let mut next = u32::MAX;
+        assert!(admit_want(next_handle(&mut next)).is_ok());
+        assert!(matches!(
+            admit_want(next_handle(&mut next)),
+            Err(RmError::Other(HOST_HANDLES_EXHAUSTED))
+        ));
+    }
+
+    #[test]
+    fn the_first_handles_are_consecutive_from_the_first() {
+        let mut next = FIRST_HANDLE;
+        assert_eq!(next_handle(&mut next), FIRST_HANDLE);
+        assert_eq!(next_handle(&mut next), FIRST_HANDLE + 1);
+    }
+
+    #[test]
+    fn a_null_wanted_handle_is_refused_by_name_before_any_ioctl() {
+        assert!(matches!(
+            admit_want(0),
+            Err(RmError::Other(HOST_HANDLES_EXHAUSTED))
+        ));
+        assert!(admit_want(FIRST_HANDLE).is_ok());
+        assert!(admit_want(u32::MAX).is_ok());
     }
 }

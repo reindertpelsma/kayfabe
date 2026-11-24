@@ -1,6 +1,6 @@
 # The Windows axis — what a Windows guest actually changes
 
-**STATUS: LIVE, 2026-09-21 (w823).** ★ §1.1 extended: the no-GSP-on-Windows default is now MEASURED on **two architectures** (Turing + Ada) and on a **current** driver (591.86); Blackwell consumer remains the only unmeasured consumer row. First survey of the `OS` axis (§0 of
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is a survey of the Windows axis from external sources (all 26 dead references are source files of ogkm, nouveau or the Linux kernel's mmiotrace, which a default checkout does not contain). `docs/STATUS_DETAIL.md` and `THE_V3_PLAN.md` already treat it as research. Nothing in it was re-verified on 2026-11-20. Later Windows measurements are in `V3_WINDOWS_DISCOVERY.md`, which was not compared against this file on 2026-11-20. ⊘ Original status line, kept as written: *LIVE, 2026-09-21 (w823).* ★ §1.1 extended: the no-GSP-on-Windows default is now MEASURED on **two architectures** (Turing + Ada) and on a **current** driver (591.86); Blackwell consumer remains the only unmeasured consumer row. First survey of the `OS` axis (§0 of
 `THE_ARCHITECTURE_v3.md`), which until now carried **zero coverage**. Sources: ogkm 610.43.02
 and 580.159.04 (the shared RM core), plus lawfully published Microsoft/NVIDIA documentation,
 vendor bulletins, open-source projects and conference talks.

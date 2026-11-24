@@ -111,8 +111,10 @@ const cases = [
   [
     'host media guard bypassed',
     'scripts/bench/provision_host_driver.sh',
-    'if [ -n "${KF_RELEASE_DRIVER_PINS:-}" ]; then',
-    'if false; then',
+    // [2026-11-19] the guard line now appears twice (the trust helper's download branch tests the same variable), so the anchor
+    // names the guard that runs release_driver_media.py, the one this mutant bypasses.
+    'if [ -n "${KF_RELEASE_DRIVER_PINS:-}" ]; then\n  python3 -I "$(dirname "$0")/../ci/release_driver_media.py"',
+    'if false; then\n  python3 -I "$(dirname "$0")/../ci/release_driver_media.py"',
     'python',
   ],
   [

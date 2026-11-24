@@ -5969,4 +5969,225 @@ mod device_reset_from_every_phase {
             assert!(!d.fsm.events_outstanding);
         }
     }
+
+    /// ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the command queue is
+    /// guest memory, so every byte the drain reads is the guest kernel's to choose. A running device,
+    /// then a hostile guest: well-formed messages with any function and payload (multi-element and
+    /// large ones included), the same with bytes flipped and the checksum made good again (so the
+    /// mutation reaches the decoders behind it), raw garbage in elements, a `writePtr` anywhere, a
+    /// status ring the guest never drains, and the odd reset. Properties: nothing panics, every call
+    /// returns within a bound, the held set stays within `MAX_HELD`, and a replay of the same
+    /// script is byte-identical (RAM and observable state).
+    ///
+    /// Campaign: `KF_FUZZ_GSP_ROUNDS=200000 cargo test --release -p kf-gsp hostile_queue -- --ignored --nocapture`.
+    mod hostile_queue {
+        use super::*;
+
+        struct Rng(u64);
+        impl Rng {
+            fn next(&mut self) -> u64 {
+                let mut x = self.0;
+                x ^= x >> 12;
+                x ^= x << 25;
+                x ^= x >> 27;
+                self.0 = x;
+                x.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            }
+            fn below(&mut self, n: u64) -> u64 {
+                if n == 0 { 0 } else { self.next() % n }
+            }
+        }
+
+        /// Re-seal the message at ring slot `slot` after a mutation: zero the checksum, fold, store.
+        fn reseal(d: &mut Dev, slot: u64) {
+            let abi = d.fsm.abi;
+            let base = REGION + CMD_OFF + ELEM + slot * ELEM;
+            // a page the guest never wrote reads as zeros here (the fake refuses it; the test's own
+            // bookkeeping must not)
+            let mut first = vec![0u8; ELEM as usize];
+            let _ = d.ram.read(base, &mut first);
+            let len_at = abi.element.hdr_size() + 8;
+            let rpc_len = u32::from_le_bytes(first[len_at..len_at + 4].try_into().unwrap());
+            let msg_len = abi.element.hdr_size() + rpc_len as usize;
+            let n = msg_len.div_ceil(ELEM as usize).clamp(1, COUNT as usize);
+            let mut run = vec![0u8; n * ELEM as usize];
+            for i in 0..n as u64 {
+                let at = REGION + CMD_OFF + ELEM + ((slot + i) % COUNT) * ELEM;
+                let from = (i * ELEM) as usize;
+                let _ = d.ram.read(at, &mut run[from..from + ELEM as usize]);
+            }
+            let c = abi.element.checksum_off();
+            run[c..c + 4].fill(0);
+            let sum = crate::element::checksum32(&run, msg_len.min(run.len()));
+            d.ram.put32(base + c as u64, sum);
+        }
+
+        /// One script: `rounds` guest actions against a running device. Returns everything an outside
+        /// reader can see afterwards.
+        fn script(seed: u64, rounds: u32) -> (String, u64) {
+            let mut r = Rng(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1);
+            let mut d = drive(BootPhase::Running, false, None);
+            let codes = d.fsm.abi.rpc.codes;
+            let code_pool = [
+                codes.gsp_rm_control,
+                codes.gsp_rm_alloc,
+                codes.free,
+                codes.dup_object,
+                codes.continuation_record,
+                codes.gsp_set_system_info,
+                codes.set_registry,
+                codes.update_bar_pde,
+                codes.get_gsp_static_info,
+                codes.unloading_guest_driver,
+            ];
+            let max_payload = d.fsm.abi.element_size_max as usize
+                - d.fsm.abi.element.hdr_size()
+                - crate::large::RPC_HEADER;
+            let mut slowest = 0u64;
+            for _ in 0..rounds {
+                let t = std::time::Instant::now();
+                match r.below(16) {
+                    0..=5 => {
+                        let code = if r.below(4) == 0 {
+                            r.below(128) as u32
+                        } else {
+                            code_pool[r.below(code_pool.len() as u64) as usize]
+                        };
+                        let len = match r.below(4) {
+                            0 => r.below(64),
+                            1 => r.below(4096),
+                            2 => max_payload as u64 - r.below(64).min(max_payload as u64),
+                            _ => r.below(max_payload as u64 + 1),
+                        } as usize;
+                        let mut payload: Vec<u8> = (0..len).map(|_| r.next() as u8).collect();
+                        // a large control's head: paramsSize past what one message carries
+                        if code == codes.gsp_rm_control && r.below(4) == 0 {
+                            let w = d.fsm.abi.driver.rm_control_wire();
+                            if payload.len() >= w.params_size_off + 4 {
+                                let ps = [1u32 << 16, u32::MAX, (len as u32) * 3, r.next() as u32]
+                                    [r.below(4) as usize];
+                                payload[w.params_size_off..w.params_size_off + 4]
+                                    .copy_from_slice(&ps.to_le_bytes());
+                            }
+                        }
+                        let slot = u64::from(d.guest_wp);
+                        d.send(code, payload);
+                        if r.below(3) == 0 {
+                            // flip bytes anywhere in the first element (header included), reseal
+                            for _ in 0..1 + r.below(8) {
+                                let off = r.below(ELEM);
+                                let b = r.next() as u8;
+                                d.ram.put(REGION + CMD_OFF + ELEM + slot * ELEM + off, &[b]);
+                            }
+                            if r.below(4) != 0 {
+                                reseal(&mut d, slot);
+                            }
+                        }
+                    }
+                    6 => {
+                        // raw garbage in a random element
+                        let slot = r.below(COUNT);
+                        let bytes: Vec<u8> = (0..ELEM).map(|_| r.next() as u8).collect();
+                        d.ram.put(REGION + CMD_OFF + ELEM + slot * ELEM, &bytes);
+                    }
+                    7 => {
+                        let wp = [
+                            r.next() as u32,
+                            r.below(COUNT) as u32,
+                            COUNT as u32,
+                            u32::MAX,
+                        ][r.below(4) as usize];
+                        d.ram.put32(REGION + CMD_OFF + 16, wp);
+                        if wp < COUNT as u32 {
+                            d.guest_wp = wp;
+                        }
+                    }
+                    8 => {
+                        // the guest's own command-queue header fields, rewritten after bind
+                        let off = 4 * r.below(8);
+                        d.ram.put32(REGION + CMD_OFF + off, r.next() as u32);
+                    }
+                    9 => {
+                        // the guest's status-ring readPtr: anywhere
+                        d.ram.put32(REGION + CMD_OFF + RX_HDR_OFF, r.next() as u32);
+                    }
+                    10 | 11 => d.guest_drains_status(),
+                    12 => {
+                        let _ = d.fsm.release_held(&mut d.ram);
+                    }
+                    13 if r.below(64) == 0 => {
+                        d.fsm.device_reset();
+                        d = drive(BootPhase::Running, false, None);
+                    }
+                    _ => {
+                        d.ring();
+                    }
+                }
+                d.ring();
+                assert!(
+                    d.fsm.held_len() <= MAX_HELD,
+                    "seed {seed}: held {}",
+                    d.fsm.held_len()
+                );
+                slowest = slowest.max(t.elapsed().as_micros() as u64);
+            }
+            (format!("{} ram={}", d.snapshot(), d.ram.0.len()), slowest)
+        }
+
+        fn campaign(seeds: std::ops::Range<u64>, rounds: u32) {
+            for seed in seeds {
+                let got = std::panic::catch_unwind(|| script(seed, rounds));
+                let (state, slowest) = match got {
+                    Ok(v) => v,
+                    Err(e) => panic!(
+                        "seed {seed}: PANIC {:?}",
+                        e.downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    ),
+                };
+                assert!(
+                    slowest < 2_000_000,
+                    "seed {seed}: one action took {slowest} us"
+                );
+                if seed % 8 == 0 {
+                    assert_eq!(script(seed, rounds).0, state, "seed {seed}: replay differs");
+                }
+            }
+        }
+
+        #[test]
+        fn a_hostile_guest_cannot_break_the_drain() {
+            campaign(0..8, 80);
+        }
+
+        #[test]
+        #[ignore = "campaign: KF_FUZZ_GSP_ROUNDS=<n> KF_FUZZ_GSP_SEEDS=<n> [KF_FUZZ_SECONDS=<s>] cargo test --release -p kf-gsp hostile_queue -- --ignored --nocapture"]
+        fn campaign_hostile_queue() {
+            let env = |k: &str, d: u64| {
+                std::env::var(k)
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(d)
+            };
+            let seeds = env("KF_FUZZ_GSP_SEEDS", 2000);
+            let rounds = env("KF_FUZZ_GSP_ROUNDS", 400) as u32;
+            let base = env("KF_FUZZ_BASE", 1000);
+            // ★ Time mode: KF_FUZZ_SECONDS=<s> keeps running batches of `seeds` until the deadline.
+            let deadline = std::time::Instant::now()
+                + std::time::Duration::from_secs(env("KF_FUZZ_SECONDS", 0));
+            let mut next = base;
+            loop {
+                campaign(next..next + seeds, rounds);
+                next += seeds;
+                if std::time::Instant::now() >= deadline {
+                    break;
+                }
+            }
+            eprintln!(
+                "campaign: {} scripts x {rounds} actions, no finding",
+                next - base
+            );
+        }
+    }
 }

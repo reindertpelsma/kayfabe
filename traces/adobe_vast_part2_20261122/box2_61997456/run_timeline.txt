@@ -1,0 +1,16 @@
+RENT_UTC 2026-11-22T14:36:45Z box 61986386 offer 57853737
+PROV_START 2026-11-22T14:39:55Z
+2026-11-22T14:42:32Z download restarted with 3 conns after apt contention
+2026-11-22T14:55:48Z DRIVER_RC=8 (WPR2 already up after 575->580 swap); trying one VM reboot of box 61986386
+2026-11-22T14:58:26Z reboot fixed GPU; provision_full rerun + download resumed
+2026-11-22T15:37:29Z hold boot g1 launched (image sha256 ok, unpacked)
+2026-11-22T15:56:05Z RENT box2 61997456 offer 60312671 (24GB die, California AMD Eng Sample) as replacement; box1 61986386 = 48GB 4090 (gpu_ram 49140) display copy never completes
+2026-11-22T15:58:08Z box2 provision_full started; R2 ~198 MB/s (4x256MiB ranges)
+2026-11-22T16:06:03Z destroying box1 61986386 (guest boot >10min, power step timed out at 120 s)
+2026-11-22T16:14:01Z box2 hold boot g1 launched
+2026-11-22T16:31:35Z g1 verify PASS, hold begins (boot started 16:13:51)
+2026-11-22T16:50:59Z gate launched in parallel (PS still loading since 16:40): LR, AI, PPro, AE
+2026-11-22T17:01:08Z g1 guest shut itself down at 16:59:00 (~45 min after boot) with the apps gate unfinished (guest very slow: nvlddmkm 153 bursts, Defender scan); g2 fresh boot launched
+2026-11-22T17:12:59Z g2 verify PASS; gate_multi wave 1 (PS+ACR dng, AI, LR, PPro) launched
+2026-11-22T17:27:29Z gate_multi1 finished; painter_cwd launched
+2026-11-22T17:28:52Z painter_cwd (fixed) + gate_multi2 (AE) launched

@@ -1,0 +1,123 @@
+SPEC_NOTE stage=preflight 2026-11-21T12:14:05+00:00 left_s=24819
+SPEC_STAGE_LIST lane=both n=9
+SPEC_NOTE rev=9b3d1651 tag=ci50cc0f2d21a57148 lane=both release=15.0.0 deadline_left_s=24819
+SPEC_NOTE guest network=online (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=1
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 3090" cpus=13 ram_gb=98 disk_free_gb=243 need_gb=190
+SPEC_NOTE stage=fetch 2026-11-21T12:14:11+00:00 left_s=24813
+SPEC_NOTE stage=hostref_before 2026-11-21T12:14:11+00:00 left_s=24813
+SPEC_NOTE hostref before green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-21T12:14:16+00:00 left_s=24808
+SPEC_NOTE stage=boot_copy 2026-11-21T12:14:16+00:00 left_s=24808
+SPEC_NOTE ssh up after 0s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=180
+SPEC_NOTE stage=copy 2026-11-21T12:15:40+00:00 left_s=24724
+SPEC_NOTE copy budget 24724s (derived: 100716983091 bytes at the floor of 5 MB/s (MEASURED 2026-11-20 on one box), +20% and 600 s; clamped to the time left (wanted 24773s))
+SPEC_NOTE copy progress bytes=2628612096 rate_mb_s=43.8 elapsed_s=60 budget_s=24724
+SPEC_NOTE copy progress bytes=5321840640 rate_mb_s=44.3 elapsed_s=120 budget_s=24724
+SPEC_NOTE copy progress bytes=8380387328 rate_mb_s=46.5 elapsed_s=180 budget_s=24724
+SPEC_NOTE copy progress bytes=11097413632 rate_mb_s=46.2 elapsed_s=240 budget_s=24724
+SPEC_NOTE copy progress bytes=13984768000 rate_mb_s=46.6 elapsed_s=300 budget_s=24724
+SPEC_NOTE copy progress bytes=16943953920 rate_mb_s=47.0 elapsed_s=360 budget_s=24724
+SPEC_NOTE copy progress bytes=19835207680 rate_mb_s=47.2 elapsed_s=420 budget_s=24724
+SPEC_NOTE copy progress bytes=22810873856 rate_mb_s=47.5 elapsed_s=480 budget_s=24724
+SPEC_NOTE copy progress bytes=25865605120 rate_mb_s=47.8 elapsed_s=540 budget_s=24724
+SPEC_NOTE copy progress bytes=29057806336 rate_mb_s=48.4 elapsed_s=600 budget_s=24724
+SPEC_NOTE copy progress bytes=32155904000 rate_mb_s=48.7 elapsed_s=660 budget_s=24724
+SPEC_NOTE copy progress bytes=35160424448 rate_mb_s=48.8 elapsed_s=720 budget_s=24724
+SPEC_NOTE copy progress bytes=38054174720 rate_mb_s=48.8 elapsed_s=780 budget_s=24724
+SPEC_NOTE copy progress bytes=41029386240 rate_mb_s=48.8 elapsed_s=840 budget_s=24724
+SPEC_NOTE copy progress bytes=43922739200 rate_mb_s=48.8 elapsed_s=900 budget_s=24724
+SPEC_NOTE copy progress bytes=46348738560 rate_mb_s=48.3 elapsed_s=960 budget_s=24724
+SPEC_NOTE copy progress bytes=46710394880 rate_mb_s=45.8 elapsed_s=1020 budget_s=24724
+SPEC_NOTE copy progress bytes=49113477120 rate_mb_s=45.5 elapsed_s=1080 budget_s=24724
+SPEC_NOTE copy progress bytes=52131184640 rate_mb_s=45.7 elapsed_s=1140 budget_s=24724
+SPEC_NOTE copy progress bytes=54965944320 rate_mb_s=45.8 elapsed_s=1200 budget_s=24724
+SPEC_NOTE copy progress bytes=57794105344 rate_mb_s=45.9 elapsed_s=1260 budget_s=24724
+SPEC_NOTE copy progress bytes=60714762240 rate_mb_s=46.0 elapsed_s=1320 budget_s=24724
+SPEC_NOTE copy progress bytes=63647109120 rate_mb_s=46.1 elapsed_s=1380 budget_s=24724
+SPEC_NOTE copy progress bytes=66520981504 rate_mb_s=46.2 elapsed_s=1440 budget_s=24724
+SPEC_NOTE copy progress bytes=69430609920 rate_mb_s=46.3 elapsed_s=1500 budget_s=24724
+SPEC_NOTE copy progress bytes=72315375616 rate_mb_s=46.4 elapsed_s=1560 budget_s=24724
+SPEC_NOTE copy progress bytes=75320381440 rate_mb_s=46.5 elapsed_s=1620 budget_s=24724
+SPEC_NOTE copy progress bytes=78292019200 rate_mb_s=46.6 elapsed_s=1680 budget_s=24724
+SPEC_NOTE copy progress bytes=81244805120 rate_mb_s=46.7 elapsed_s=1740 budget_s=24724
+SPEC_NOTE copy progress bytes=84137994240 rate_mb_s=46.7 elapsed_s=1800 budget_s=24724
+SPEC_NOTE copy progress bytes=86955851776 rate_mb_s=46.7 elapsed_s=1860 budget_s=24724
+SPEC_NOTE copy progress bytes=89873850368 rate_mb_s=46.8 elapsed_s=1920 budget_s=24724
+SPEC_NOTE copy progress bytes=92817899520 rate_mb_s=46.9 elapsed_s=1980 budget_s=24724
+SPEC_NOTE copy progress bytes=94190929920 rate_mb_s=46.9 elapsed_s=2009 budget_s=24724 final=1
+SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 progress=0 ssh_tar=0 
+SPEC_NOTE your archive: sha256=ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a bytes=42002015727 our git pin match (enforced=0; docs/OWNER_RULINGS.md section AX)
+KF_TRUST name=specviewperf-15.0.0.tar.zst anchor=user sha256=ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a size=42002015727 mode=trust-git-only gating=yes
+SPEC_NOTE copy verified: 9 viewset directories match the manifest
+SPEC_NOTE guest post: SPEC_POST cli=present SPEC_POST icacls_rc=0 SPEC_POST vcredist_rc=0 
+SPEC_COPY_DELETED removed=archive
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stage=boot_run 2026-11-21T12:51:02+00:00 left_s=22602
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot1_start up_min=1 status=Licensed remaining=129563_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 257s)
+SPEC_NOTE settle_wait_s=257
+SPEC_NOTE stage=viewset_energy-04 2026-11-21T12:57:10+00:00 left_s=22234
+SPEC_NOTE run energy-04 (budget 1200s, mode full, left 22223s)
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_energy_04 up_min=14 status=Licensed remaining=129549_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:25_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_creo-04 2026-11-21T13:06:28+00:00 left_s=21676
+SPEC_NOTE run creo-04 (budget 3900s, mode full, left 21670s)
+SPEC_LICENCE_STATE at=boot1_up29m up_min=30 status=Licensed remaining=129534_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up44m up_min=45 status=Licensed remaining=129518_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:15_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_LICENCE_STATE at=after_creo_04 up_min=53 status=Licensed remaining=129511_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:58_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_blender-01 2026-11-21T13:45:01+00:00 left_s=19363
+SPEC_NOTE run blender-01 (budget 5700s, mode full, left 19357s)
+SPEC_LICENCE_STATE at=boot1_up67m up_min=68 status=Licensed remaining=129495_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up83m up_min=84 status=Licensed remaining=129480_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:40_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up98m up_min=99 status=Licensed remaining=129464_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up114m up_min=115 status=Licensed remaining=129449_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:30_PM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_ROW name=blender-01 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_blender_01 up_min=130 status=Licensed remaining=129433_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:20_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_enscape-01 2026-11-21T15:02:23+00:00 left_s=14721
+SPEC_NOTE run enscape-01 (budget 6300s, mode full, left 14714s)
+SPEC_LICENCE_STATE at=boot1_up145m up_min=146 status=Licensed remaining=129418_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:48_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up160m up_min=161 status=Licensed remaining=129402_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up176m up_min=177 status=Licensed remaining=129387_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:28_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up191m up_min=192 status=Licensed remaining=129371_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up207m up_min=208 status=Licensed remaining=129356_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:34_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up222m up_min=223 status=Licensed remaining=129341_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:52_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
+enscape_01 --- FAILED
+SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_medical-04 2026-11-21T16:48:40+00:00 left_s=8344
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129325_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:16:03_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 257s)
+SPEC_NOTE settle_wait_s=257
+SPEC_NOTE run medical-04 (budget 1200s, mode full, left 7941s)
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_maya-07 2026-11-21T17:03:35+00:00 left_s=7449
+SPEC_NOTE run maya-07 (budget 1200s, mode full, left 7442s)
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_catia-07 2026-11-21T17:16:24+00:00 left_s=6680
+SPEC_NOTE run catia-07 (budget 2700s, mode full, left 6675s)
+SPEC_LICENCE_STATE at=boot2_up41m up_min=42 status=Licensed remaining=129284_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:45_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_catia_07 up_min=53 status=Licensed remaining=129272_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:27_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_solidworks-08 2026-11-21T17:43:29+00:00 left_s=5055
+SPEC_NOTE run solidworks-08 (budget 3000s, mode full, left 5049s)
+SPEC_LICENCE_STATE at=boot2_up68m up_min=69 status=Licensed remaining=129256_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up84m up_min=85 status=Licensed remaining=129241_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up99m up_min=100 status=Licensed remaining=129225_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=solidworks-08 result=FAIL subtests=7/8 reason=TIMEOUT failed=08_NASACrawlerShadedEdges
+solidworks_08 --- FAILED
+SPEC_LICENCE_STATE at=after_solidworks_08 up_min=105 status=Licensed remaining=129221_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:46_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_unreal_engine-01 2026-11-21T18:34:48+00:00 left_s=1976
+SPEC_NOTE time guard: unreal_engine-01 not started (1976s left)
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=TIME failed=-
+SPEC_NOTE stage=conclude 2026-11-21T18:34:48+00:00 left_s=1976
+SPEC_LICENCE_STATE at=end up_min=105 status=Licensed remaining=129220_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:08_PM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stop returned non-zero (stop_cleanup.txt)
+SPEC_NOTE graceful stop of the guest

@@ -1,0 +1,1 @@
+fb-mb=16384 (QEMU -device kf3-gpu property of the stage boot, from the run command line; other properties omitted)

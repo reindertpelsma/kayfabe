@@ -29,10 +29,12 @@ LANE_A = ["energy-04", "creo-04", "blender-01", "enscape-01"]
 LANE_B = ["medical-04", "maya-07", "catia-07", "solidworks-08", "unreal_engine-01"]
 PUBLIC = re.compile(
     r"^(?:SPEC_STAGE_LIST lane=(?:lanea|laneb|both) n=[0-9]{1,2}"
-    r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
+    r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,24}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
     r"|[a-z][a-z_]*_[0-9]{2} --- FAILED"
     r"|SPEC_STAGE_COUNTS pass=[0-9]+ fail=[0-9]+ not_run=[0-9]+ of=[0-9]+"
     r"|SPEC_COPY_DELETED removed=(?:archive|overlay|archive,overlay|nothing)"
+    r"|SPEC_LICENCE_STATE at=[A-Za-z0-9_]{1,40}(?: [a-z0-9_]{1,12}=[A-Za-z0-9_.,:;()/+-]{1,160}){1,12}"
+    r"|SPEC_GUEST_SHUTDOWN_LICENCE viewset=[a-z][a-z_]*-[0-9]{2} event=1074 time=[0-9TZ:-]{1,24} process=[A-Za-z0-9_.-]{1,40} text=[A-Za-z0-9_.,:;()/+-]{1,240}"
     r"|SPEC_STAGE_START lane=(?:lanea|laneb|both|none)"
     r"|SPEC_NOTE .*"
     r"|SPECVIEWPERF_STAGE_(?:PASS|FAIL|RETRY class=[A-Z0-9_]+)|SPECVIEWPERF_STAGE_EXIT rc=[0-9]+)$"
@@ -165,6 +167,90 @@ class HappyPath(StageCase):
         for lane in ("lanea", "laneb"):
             walls = [t["viewsets"][n]["native_s"] for n in t["lanes"][lane]]
             self.assertEqual(walls, sorted(walls), lane)
+
+
+class UserUrlFile(StageCase):
+    """2026-11-17 (OWNER_RULINGS section AX): a standalone user's own URL file is trusted and recorded; our git pin is the Worker's and strict's."""
+
+    def serve(self, sb):
+        import http.server
+        import json
+        import threading
+
+        body = (sb.root / "archive.tar.zst").read_bytes()
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        self.addCleanup(srv.server_close)
+        uf = sb.root / "urls.json"
+        uf.write_text(json.dumps({"schema": "kayfabe.download-urls/1", "urls": {"specviewperf-15.0.0.tar.zst": "http://127.0.0.1:%d/o" % srv.server_port}}))
+        return uf
+
+    def run_user(self, pin=None, **extra):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"), pin=pin is not False)
+        if pin not in (None, False):
+            (sb.src / "scripts/bench/box/specviewperf.pin").write_text("specviewperf-15.0.0.tar.zst sha256=%s\n" % pin)
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        p = sb.run("lanea", KF_SPEC_URL_FILE=self.serve(sb), **extra)
+        return sb, p
+
+    def test_a_user_url_file_whose_archive_differs_from_our_pin_is_not_refused(self):
+        sb, p = self.run_user(pin="a" * 64)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        self.assertIn("your archive: sha256=" + sb.sha, p.stdout)
+        self.assertIn("our git pin differs (enforced=0", p.stdout)
+
+    def test_the_same_archive_is_refused_when_the_mode_is_strict(self):
+        sb, p = self.run_user(pin="a" * 64, KF_TRUST_MODE="strict")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+        self.assertEqual(p.returncode, 3)
+
+    def test_a_user_url_file_needs_no_pin_file_at_all(self):
+        sb, p = self.run_user(pin=False)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        self.assertIn("our git pin none", p.stdout)
+
+    def test_without_a_url_file_a_missing_pin_is_still_refused(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"), pin=False)
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        self.assertEqual(fk.verdict_of(sb.run("lanea").stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+
+    def test_the_users_own_expect_sha256_is_enforced_in_every_mode(self):
+        sb, p = self.run_user(pin="a" * 64, KF_SPEC_EXPECT_SHA256="b" * 64)
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+        sb, p = self.run_user(pin="a" * 64, KF_SPEC_EXPECT_SHA256=None)
+        sb2, p2 = self.run_user(pin="a" * 64)
+        self.assertNotIn("RETRY class=MEDIA", p2.stdout)
+
+    def test_the_matching_expect_sha256_passes_and_a_malformed_one_is_refused_by_name(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        p = sb.run("lanea", KF_SPEC_URL_FILE=self.serve(sb), KF_SPEC_EXPECT_SHA256=sb.sha)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        sb, p = self.run_user(KF_SPEC_EXPECT_SHA256="XYZ")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+
+    def test_the_users_archive_is_recorded_in_the_trust_evidence(self):
+        import json
+
+        sb, p = self.run_user(pin="a" * 64)
+        lines = [json.loads(l) for f in sb.prov.rglob("trust.jsonl") for l in f.read_text().splitlines()]
+        self.assertEqual([(r["anchor"], r["sha256"], r["name"]) for r in lines], [("user", sb.sha, "specviewperf-15.0.0.tar.zst")])
+
+    def test_a_trust_mode_outside_the_two_is_refused_by_name(self):
+        sb, p = self.run_user(KF_TRUST_MODE="whatever")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
 
 
 class Inputs(StageCase):
@@ -1112,6 +1198,192 @@ class Wrapper(StageCase):
         seen = out.splitlines()
         self.assertIn("SPEC_ROW name=energy-04 result=PASS subtests=3/3 reason=- failed=-", seen)
         self.assertNotIn("SPECVIEWPERF_STAGE_PASS", seen)
+
+
+class CopyBudget(StageCase):
+    """2026-11-20: the budget of the copy into the guest is the lane's size at a floor rate (never a typed number), the knob
+    KF_SPEC_COPY_BUDGET_S sets it, the stage says how the copy goes, and a copy that runs out of time says how far it got.
+    (The incident: a Vast box moved the tree at 5 MB/s and the fixed 70 minutes ended the stage with every row NOT_RUN SETUP,
+    with nothing in the log about the rate or the bytes.) Lane sizes at 5 MB/s, +20 %, +600 s: A 13460 s, B 11913 s, both 24773 s.
+    Most tests stop after the copy (KF_SPEC_COPY_ONLY: the guest is stopped, no viewset runs); the end-to-end runs of the lane
+    (HappyPath and the others) go through the same five-stage pipeline."""
+
+    def sandbox(self, **kw):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"), **kw)
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        return sb
+
+    def copy_only(self, lane="lanea", budget=40000, sb=None, **extra):
+        sb = sb or self.sandbox()
+        p = sb.run(lane, budget, KF_SPEC_COPY_ONLY="1", **extra)
+        return sb, p
+
+    def copy_timeout(self, sb):
+        """The seconds the guest's tar ran under: the first argument of the `timeout` that wraps the ssh tar."""
+        lines = [l for l in sb.read("timeouts.log").splitlines() if "tar -xf -" in l]
+        self.assertEqual(len(lines), 1, lines)
+        return int(lines[0].split()[0])
+
+    def log(self, sb):
+        return sb.read("prov/%s_spec/stage.log" % sb.tag)
+
+    def budget_note(self, sb):
+        return next(l for l in self.log(sb).splitlines() if l.startswith("SPEC_NOTE copy budget"))
+
+    def progress(self, sb):
+        return [l for l in self.log(sb).splitlines() if l.startswith("SPEC_NOTE copy progress ")]
+
+    def test_the_default_budget_is_derived_from_the_lane_and_no_fixed_70_minutes(self):
+        for lane, want in (("lanea", 13460), ("laneb", 11913), ("both", 24773)):
+            with self.subTest(lane=lane):
+                sb, p = self.copy_only(lane)
+                self.assertEqual(p.returncode, 0, p.stdout[-400:])
+                self.assertEqual(self.copy_timeout(sb), want)
+
+    def test_the_log_says_where_the_budget_comes_from(self):
+        sb, _ = self.copy_only()
+        line = self.budget_note(sb)
+        self.assertIn("13460s", line)
+        self.assertIn("derived", line)
+        self.assertIn("53579717018 bytes", line)
+        self.assertIn("5 MB/s", line)
+        self.assertNotIn("knob", line)
+
+    def test_the_knob_sets_the_budget(self):
+        sb, p = self.copy_only(KF_SPEC_COPY_BUDGET_S="7777")
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(self.copy_timeout(sb), 7777)
+        self.assertIn("7777s", self.budget_note(sb))
+        self.assertIn("KF_SPEC_COPY_BUDGET_S", self.budget_note(sb))
+
+    def test_a_larger_knob_than_the_default_is_honoured_too(self):
+        sb, _ = self.copy_only("laneb", KF_SPEC_COPY_BUDGET_S="30000")
+        self.assertEqual(self.copy_timeout(sb), 30000)
+
+    def test_the_budget_never_exceeds_the_time_left(self):
+        for extra in ({}, {"KF_SPEC_COPY_BUDGET_S": "86400"}):
+            with self.subTest(extra=extra):
+                sb, _ = self.copy_only("lanea", 6000, **extra)
+                got = self.copy_timeout(sb)
+                self.assertTrue(5000 <= got <= 6000, got)
+                self.assertIn("clamped to the time left", self.budget_note(sb))
+
+    def test_a_bad_budget_knob_is_refused_by_name_before_anything_starts(self):
+        for bad in ("599", "86401", "abc", "1e3", "-5", "0x10"):
+            with self.subTest(bad=bad):
+                sb = self.sandbox()
+                p = sb.run("lanea", KF_SPEC_COPY_BUDGET_S=bad)
+                self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+                self.assertEqual(p.returncode, 3)
+                self.assertIn("KF_SPEC_COPY_BUDGET_S", p.stdout)
+                self.assertEqual(sb.calls(), "")  # no guest was touched
+                self.assertEqual(sb.read("fetch.log"), "")  # nothing was downloaded
+                self.assertEqual(sb.runs(), [])
+
+    def test_a_bad_progress_interval_knob_is_refused_by_name_before_anything_starts(self):
+        for bad in ("0", "3601", "x"):
+            with self.subTest(bad=bad):
+                sb = self.sandbox()
+                p = sb.run("lanea", KF_SPEC_COPY_NOTE_S=bad)
+                self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+                self.assertIn("KF_SPEC_COPY_NOTE_S", p.stdout)
+                self.assertEqual(sb.calls(), "")
+                self.assertEqual(sb.read("fetch.log"), "")
+
+    def test_an_empty_knob_is_the_default(self):
+        sb, p = self.copy_only(KF_SPEC_COPY_BUDGET_S="", KF_SPEC_COPY_NOTE_S="")
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(self.copy_timeout(sb), 13460)
+
+    def test_a_copy_leaves_a_progress_line_with_every_byte_it_moved(self):
+        sb, _ = self.copy_only(KF_SPEC_COPY_BUDGET_S="7777")
+        lines = self.progress(sb)
+        self.assertGreaterEqual(len(lines), 1)
+        size = (sb.root / "guest_stream.tar").stat().st_size
+        self.assertRegex(lines[-1], r"^SPEC_NOTE copy progress bytes=%d rate_mb_s=[0-9]+\.[0-9] elapsed_s=[0-9]+ budget_s=7777 final=1$" % size)
+
+    def test_progress_lines_come_while_the_copy_runs(self):
+        # a 3 MB tree that does not fit the pipes, and a guest that does not read for 3.5 s: lines every second in between
+        sb = self.sandbox(pad=3_000_000)
+        sb.set("tar_pause", "3.5")
+        sb, p = self.copy_only(sb=sb, KF_SPEC_COPY_NOTE_S="1")
+        self.assertEqual(p.returncode, 0)
+        lines = self.progress(sb)
+        periodic = [l for l in lines if not l.endswith(" final=1")]
+        self.assertGreaterEqual(len(periodic), 2, lines)
+        size = (sb.root / "guest_stream.tar").stat().st_size
+        counts = [int(re.search(r"bytes=([0-9]+)", l).group(1)) for l in periodic]
+        self.assertTrue(all(n < size for n in counts), (counts, size))  # the guest was not reading yet
+        self.assertTrue(any(n > 0 for n in counts), counts)  # what the pipes held is counted
+        self.assertIn("bytes=%d " % size, lines[-1])
+
+    def test_the_pipeline_status_of_each_stage_is_named_in_the_log(self):
+        sb, _ = self.copy_only()
+        self.assertIn("SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 progress=0 ssh_tar=0", self.log(sb))
+
+    def test_the_status_of_the_guests_tar_is_the_last_of_five(self):
+        sb = self.sandbox()
+        sb.set("tar_rc", "3")
+        p = sb.run("lanea")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=TRANSPORT")
+        self.assertIn("SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 progress=0 ssh_tar=3", self.log(sb))
+        self.assertIn("the copy into the guest failed (src=0 zstd=0 tarfilter=0 progress=0 ssh_tar=3)", p.stdout)
+
+    def stalled(self, take="150000"):
+        """A copy that does not end: the guest's tar takes `take` bytes and stops reading; the stage's deadline is 6 s.
+        One run per scenario, read by several tests (a run costs seconds)."""
+        key = ("copybudget-stalled", take)
+        if key not in _CACHE:
+            sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-keep-"), pad=4_000_000)
+            sb.set("tar_stall", take)
+            _CACHE[key] = (sb, sb.run("lanea", 6, timeout=120))
+        return _CACHE[key]
+
+    def abort_line(self, sb):
+        return next(l for l in self.log(sb).splitlines() if "abort class=TIME stage=copy" in l)
+
+    def test_a_copy_that_runs_out_of_time_is_retry_time_with_every_row_not_run_setup(self):
+        sb, p = self.stalled()
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=TIME")
+        self.assertEqual(p.returncode, 3)
+        rows, order = fk.rows_of(p.stdout)
+        self.assertEqual(order, LANE_A)
+        self.assertEqual({(r["result"], r["reason"]) for r in rows.values()}, {("NOT_RUN", "SETUP")})
+        self.assertNotIn("launch ", sb.calls())
+
+    def test_the_abort_line_names_the_bytes_the_rate_and_the_budget_that_would_have_sufficed(self):
+        sb, _ = self.stalled()
+        line = self.abort_line(sb)
+        self.assertIn("did not finish inside its budget", line)
+        n = int(re.search(r" bytes=([0-9]+)", line).group(1))
+        self.assertTrue(150000 <= n <= 150000 + 4 * 65536, n)  # what the guest took plus what the pipes held, far from the 4 MB
+        self.assertIn("expected_bytes=53579717018", line)
+        self.assertRegex(line, r"rate_mb_s=[0-9]+\.[0-9]")
+        self.assertRegex(line, r"elapsed_s=[0-9]+")
+        self.assertRegex(line, r"budget_s=[0-9]+")
+        self.assertRegex(line, "needed_s\u2248[0-9]+")
+        self.assertIn("KF_SPEC_COPY_BUDGET_S", line)
+
+    def test_the_budget_that_would_have_sufficed_is_more_than_the_time_already_spent(self):
+        sb, _ = self.stalled()
+        line = self.abort_line(sb)
+        spent = int(re.search(r"elapsed_s=([0-9]+)", line).group(1))
+        needed = int(re.search("needed_s\u2248([0-9]+)", line).group(1))
+        self.assertGreater(needed, spent)
+
+    def test_a_copy_that_never_moved_a_byte_says_so(self):
+        sb, p = self.stalled("0")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=TIME")
+        line = self.abort_line(sb)
+        n = int(re.search(r" bytes=([0-9]+)", line).group(1))
+        self.assertLessEqual(n, 4 * 65536)
+        self.assertRegex(line, r"rate_mb_s=[0-9]+\.[0-9]")
+
+    def test_a_timed_out_copy_deletes_the_archive_and_stops_the_guest_like_every_other_abort(self):
+        sb, _ = self.stalled()
+        self.assertFalse((sb.root / "store/specviewperf-15.0.0.tar.zst").exists())
+        self.assertFalse((sb.vm / "disk/spec_ci0123abcd.qcow2").exists())
+        self.assertIn("win_vm stop", sb.calls())
 
 
 class Interrupted(StageCase):

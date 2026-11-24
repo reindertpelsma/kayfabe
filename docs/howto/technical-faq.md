@@ -20,7 +20,7 @@ There is **no CPU executor for GPU work.** Completions of work that reached the 
 
 ## Why only the GSP path? Which GPUs can that cover?
 
-Turing and newer. Below Turing there is no GSP at all: the guest driver would run its resource manager on the CPU and drive the hardware directly, and there would be no firmware interface to impersonate. On Windows the stock GeForce driver runs its resource manager on the CPU by default [measured: Code 43 without the setting], which is why the Windows guest needs the `EnableGpuFirmware` setting. <!-- src: docs/design/THE_ARCHITECTURE_v3.md section 0.0.1, docs/WINDOWS_GUEST_SETUP.md -->
+Turing and newer. Below Turing there is no GSP at all: the guest driver would run its resource manager on the CPU and drive the hardware directly, and there would be no firmware interface to impersonate. On Windows the stock GeForce driver runs its resource manager on the CPU by default (without the setting the guest shows Code 43), which is why the Windows guest needs the `EnableGpuFirmware` setting. <!-- src: docs/design/THE_ARCHITECTURE_v3.md section 0.0.1, docs/WINDOWS_GUEST_SETUP.md -->
 
 ## How does the guest's memory get to the host GPU?
 
@@ -41,7 +41,7 @@ Every call kayfabe makes to the host driver is built by kayfabe from named value
 
 "Derive, never capture." A GPU's facts are read from the host through unprivileged controls; register offsets and class sets are generated from NVIDIA's open driver headers; only a small family table is maintained by hand. A captured per-GPU table is the thing the design exists to avoid. <!-- src: AGENTS.md, ARCHITECTURE.md -->
 
-The generated parts come from NVIDIA's open-gpu-kernel-modules (MIT) and open-gpu-doc; some capability allowlists derive from gVisor's `nvproxy`. See [Credits and notices](credits.md). <!-- src: THIRD_PARTY_NOTICES.md -->
+The generated parts come from NVIDIA's open-gpu-kernel-modules (MIT) and open-gpu-doc; the guest-ingress allowlist is generated from them too, and its default-deny design follows gVisor's `nvproxy`. See [Credits and notices](credits.md). <!-- src: THIRD_PARTY_NOTICES.md -->
 
 ## Do I need to patch the host or guest driver or kernel?
 
@@ -64,7 +64,7 @@ To the host driver, kayfabe is a GPU client that also holds `/dev/kvm`, so no ho
 
 ## What does the guest see?
 
-The model and architecture stay truthful: the device takes its PCI identity and die facts from the host GPU. The GPU UUID is a per-VM value so that two VMs do not report the same one (`gpu-uuid=`; as of 2026-10-08 that was code and GPU-free tests only). <!-- src: docs/design/V3_GPU_UUID.md, qemu/hw/misc/kf3/kf3.c -->
+The model and architecture stay truthful: the device takes its PCI identity and die facts from the host GPU. The GPU UUID is a per-VM value so that two VMs do not report the same one (`gpu-uuid=`; not yet run on hardware). <!-- src: docs/design/V3_GPU_UUID.md, qemu/hw/misc/kf3/kf3.c -->
 
 ## Why do the results come from rented, nested hosts?
 
@@ -91,4 +91,4 @@ The `kf-*` crates are the product. The older `kayfabe-*` tree is frozen referenc
 
 Windows sleep/wake, host-side fault containment between VMs, and a public install path. See the status list on the [introduction](index.md) and in [Requirements](requirements.md).
 
-Verified on: the descriptions come from the architecture page and the FAQ (master at 2026-10-21, kayfabe `89fc8a222`); the gates and suite are recorded for `afb552ea` (2026-09-30, RTX 3060). Not verified end to end: this page explains design and was not tested.
+Not verified end to end: this page explains design and was not tested. <!-- src: master at 2026-10-21, kayfabe 89fc8a222; gates and suite recorded for afb552ea (2026-09-30, RTX 3060) -->

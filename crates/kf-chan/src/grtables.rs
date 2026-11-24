@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ **The kernel-GR tier's method allowlists** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S,
-//! items 2-4; `traces/windows_code43_walls_20261007/README.md`, run 32 onward).
+//! **The kernel-GR tier's method allowlists** (see
+//! `traces/windows_code43_walls_20261007/README.md`, run 32 onward).
 //!
 //! Windows' guest kernel puts graphics work on its kernel GR channel during StartDevice: run31
 //! (c15c2628) logged `SET_OBJECT` of `KEPLER_INLINE_TO_MEMORY_B` (`0xA140`) and `FERMI_TWOD_A`
@@ -142,7 +142,7 @@ pub const NOTIFY_ALLOWED: [Row; 2] = [
 /// `STRUCTURE_SIZE_ONE_WORD`) at `A:B`, which is resolved through the placement rows like a
 /// notifier. It is the completion of Windows' GR work, written by the real engine (§S item 7).
 ///
-/// ⊘ A family row, by hand (allowed: `AGENTS.md`, *Derive, never capture*): the method offsets and
+/// This is a hand-maintained family row. The method offsets and
 /// every `D` field are identical in the public `TURING_A`, `AMPERE_A`, `AMPERE_B`, `ADA_A` and
 /// `HOPPER_A` headers (`clc597.h`, `clc697.h`, `clc797.h`, `clc997.h`, `clcb97.h`, compared field by
 /// field 2026-10-07); `BLACKWELL_A/B`'s OGKM headers (`clcd97.h`, `clce97.h`) name only the class id.

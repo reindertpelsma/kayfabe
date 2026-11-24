@@ -211,6 +211,26 @@ the four no spec reached). The rule is one encoder, carried at the boundary:
   wrapper kf-host sends without a carry (`NVOS00/02/21/33/34/54`, the fd wrappers, `REGISTER_FD`,
   `CARD_INFO`, `ALLOC_OS_EVENT`, the version query — identical at all 29 tags) must have the
   bench's layout there (H1).
+- ⊘ **CORRECTION 2026-11-18 (above the text it corrects), and why these rows are tier 2, not tier 1 (OWNER_RULINGS §AH).**
+  Four GSS-legacy controls, 0x2080852e/853a/a618/853b, now have per-branch rows (`hostabi::BranchSized`, profile
+  `GSP_BRANCH_595`: exact tags 595.84 and 595.91.07); 0x2080852a now also lists 595.84. Inside the old interval they still
+  pass through. **Tier 1 (derive from ogkm) is not available for these sizes, for this reason.** None of the five ids
+  appears anywhere in ogkm at 535.309.01, 550.54.14, 570.86.15, 575.51.03, 580.65.06, 580.159.04, 590.48.01, 595.84,
+  610.43.02 or 615.71.09 (`git grep`, 2026-11-18). That includes every generated `g_*` file, the NVOC exported-method
+  tables and the SDK headers. ogkm-595 `ctrl2080base.h:46,72` names only their interfaces: THERMAL_LEGACY_NON_PRIVILEGED
+  (0x85) and PMGR_LEGACY_NON_PRIVILEGED (0xa6). CPU-RM never checks their size against a table. A bit-15 command goes
+  to `RmGssLegacyRpcCmd` (ogkm-595 `interface/deprecated/rmapi_deprecated_control.c:133-136`). That function copies
+  the caller's `paramsSize` and forwards it as given. It is commented "forward all of them to GSP and let it deal with
+  what is or isn't valid" (`rmapi_gss_legacy_control.c:33-37`, `:64-73`, `:119-127`). At 610.43.02 it adds only a
+  null/zero consistency check (`:63-68`). `rpcRmApiControl_GSP` produces INVALID_ARGUMENT only for that null/zero
+  mismatch (`src/kernel/vgpu/rpc.c:11179-11200`). Otherwise it returns `rpc_params->status`, "returned by the actual
+  ctrl handler on GSP" (`rpc.c:11227-11234`, `:11258-11259`). The handler's `rmapiutilGetControlInfo` lookup (`:11065`)
+  fails for these ids and only disables caching. So the branch-dependent INVALID_ARGUMENT is produced by the GSP
+  firmware, which is closed (not verified at source), and ogkm only forwards it. The same CPU-RM code forwards every
+  size, yet the tier-2 traces show NV_OK only at one branch size per host
+  (`traces/constants_measure_20261014b/tier2/`). That fits a firmware-side check; it is consistent, not proven. Not
+  checked: nouveau/nova (not vendored here). The rows therefore stay tier 2 (unprivileged host ioctl, committed traces),
+  each with its trace path. Probing these sizes at startup is a possible later design and is not implemented.
 - **Controls** — `raw_control` looks the command up in `HOST_CONTROLS` (53 rows; a test pins every
   id to the SDK's measured value at every tag and requires the struct wherever the id exists) and
   carries the payload out and the reply back (H2, H5, H8). GSS-legacy ids (no header) pass only on

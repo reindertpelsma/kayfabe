@@ -16,7 +16,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get -o Acquire::Retries=3 update -qq >/dev/null 2>&1
 apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends ffmpeg vulkan-tools libvulkan1 clinfo ocl-icd-libopencl1 hashcat \
   libegl1 libgles2 libgl1 python3-venv python3-pip curl ca-certificates unzip xz-utils libxi6 libxxf86vm1 libxfixes3 \
-  libxrender1 libxkbcommon0 libsm6 libice6 >/tmp/setup_apt.log 2>&1; ok apt $?
+  libxrender1 libxkbcommon0 libsm6 libice6 python3-dev >/tmp/setup_apt.log 2>&1; ok apt $?
 # ⊘ the NVIDIA OpenCL ICD file is installed by the driver .run; assert it rather than assume it
 ICD_DIR=${OPENCL_VENDORS_DIR:-/etc/OpenCL/vendors}
 mkdir -p "$ICD_DIR" && { [ -f "$ICD_DIR/nvidia.icd" ] || echo "libnvidia-opencl.so.1" > "$ICD_DIR/nvidia.icd"; } && [ -s "$ICD_DIR/nvidia.icd" ]; ok icd $?
@@ -67,7 +67,13 @@ fi
 # KF_APPS_GEEKBENCH=1 fetches it for a manual, owner-approved run.
 GB=$D/geekbench; mkdir -p "$GB"
 if [ "${KF_APPS_GEEKBENCH:-0}" = 1 ]; then
-  [ -x "$GB/geekbench6" ] || curl -fsSL https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz | tar xz -C "$GB" --strip-components=1
+  if [ ! -x "$GB/geekbench6" ]; then
+    # [2026-11-17] pinned like every other download here (pins.sh, audit row 25): the digest is checked before tar sees the bytes
+    GBT=$(mktemp -d /tmp/geekbench.XXXXXX)
+    pin_fetch_file "$PIN_GEEKBENCH_URL" "$GBT/geekbench.tar.gz" "$PIN_GEEKBENCH_SHA256" "$PIN_GEEKBENCH_SIZE" \
+      && tar xzf "$GBT/geekbench.tar.gz" -C "$GB" --strip-components=1
+    rm -rf "$GBT"
+  fi
   [ -x "$GB/geekbench6" ]; ok geekbench $?
 else
   echo "SETUP_geekbench=SKIPPED (policy: docs/DOWNLOADS.md)"

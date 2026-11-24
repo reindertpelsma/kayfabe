@@ -1,0 +1,73 @@
+{
+ "cycle": 1,
+ "boot0": "2026-11-23T14:56:59.5000000+00:00",
+ "suspended": true,
+ "kf3_before": {
+  "s3wake": 0,
+  "kept": 0,
+  "gsp_resume": 0,
+  "cold": 0,
+  "unserviced": 247,
+  "ram_add_kept": 9,
+  "ram_changed": 0,
+  "ram_del": 8,
+  "user_ring_topology": 0,
+  "user_ring_refused": 0,
+  "fn47_unload": 0,
+  "lines": 6339,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "wake_words": 0,
+  "wake_puts": 0
+ },
+ "ssh_back": true,
+ "back_after_s": 18,
+ "boot1": "2026-11-23T14:56:59.5000000+00:00",
+ "kf3_after": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 1,
+  "cold": 0,
+  "unserviced": 471,
+  "ram_add_kept": 10,
+  "ram_changed": 0,
+  "ram_del": 10,
+  "user_ring_topology": 0,
+  "user_ring_refused": 0,
+  "fn47_unload": 1,
+  "lines": 14816,
+  "disp_stopped": 1,
+  "disp_stall": 9,
+  "wake_words": 1,
+  "wake_puts": 8
+ },
+ "status_end": "running",
+ "judged_after_wake_s": 120,
+ "event_window_s": 164,
+ "nvidia_smi": "NVIDIA GeForce RTX 4090",
+ "events": [
+  "2026-11-23T15:03:04.2352198+00:00 153 nvlddmkm",
+  "2026-11-23T15:03:04.2168321+00:00 153 nvlddmkm",
+  "2026-11-23T15:02:34.6427021+00:00 153 nvlddmkm",
+  "2026-11-23T15:01:43.5707746+00:00 1 Microsoft-Windows-Power-Troubleshooter",
+  "2026-11-23T15:01:17.5252339+00:00 1 Microsoft-Windows-Kernel-General",
+  "2026-11-23T15:01:09.3715776+00:00 107 Microsoft-Windows-Kernel-Power",
+  "2026-11-23T15:00:57.3048059+00:00 42 Microsoft-Windows-Kernel-Power",
+  "2026-11-23T22:47:51.6669965+00:00 1 Microsoft-Windows-Kernel-General",
+  "2026-11-23T22:46:22.1388366+00:00 1 Microsoft-Windows-FilterManager",
+  "2026-11-23T22:44:25.7851536+00:00 14 Microsoft-Windows-Wininit",
+  "2026-11-23T22:43:37.6740437+00:00 153 Microsoft-Windows-Kernel-Boot"
+ ],
+ "verdict": "FAIL",
+ "reasons": [
+  "event 153"
+ ],
+ "event_153_nvlddmkm": [
+  "2026-11-23T15:03:04.2352198+00:00 153 nvlddmkm",
+  "2026-11-23T15:03:04.2168321+00:00 153 nvlddmkm",
+  "2026-11-23T15:02:34.6427021+00:00 153 nvlddmkm"
+ ],
+ "event_153_other": [
+  "2026-11-23T22:43:37.6740437+00:00 153 Microsoft-Windows-Kernel-Boot"
+ ]
+}

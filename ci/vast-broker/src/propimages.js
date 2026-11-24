@@ -1,6 +1,6 @@
 // The Worker's knowledge of the proprietary Windows images (docs/design/V3_WORKER_PROPIMAGES.md).
-// STATUS: DESIGN-ONLY, 2026-11-16. Nothing in src/index.js imports this file: it is pure, tested, and not wired into any
-// rental. The deployed Worker is unchanged. Owner decision 2026-11-16: the Worker knows image A and image B from
+// STATUS: DESIGN-ONLY, 2026-11-17. Pure and tested. src/index.js does not import this file; src/legs.js does, and runs only behind
+// PROPIMAGES_ENABLED (default off), so no rental changes until the owner switches it on. The deployed Worker is unchanged. Owner decision 2026-11-16: the Worker knows image A and image B from
 // configuration (propimages.json), with the applications on them, and builds the instruction from it; the Worker/CI run is
 // STRICT (everything in the configuration must run, zero skips); an application is in the gate lane (must pass) or the
 // discovery lane (may fail; the failure is a listed finding), and standalone runs take the same instruction shape.
@@ -29,7 +29,21 @@ const APP = /^[a-z0-9][a-z0-9_]{0,31}$/; // propimage_runspec.APP_RE
 const REF = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 const ID = /^[a-z][a-z0-9]{0,15}$/;
-const ROLES = ['image', 'gop'];
+const ROLES = ['image', 'gop', 'linux_image'];
+const MAX_LINUX_IMAGES = 4;
+// The row ids of scripts/bench/linux/matlab_rows.py (ROW_ORDER); test/propimages.test.js compares this list with the box's own table.
+// The lane of every row of an image on a family it has not run on.
+const LANE_UNMEASURED = 'discovery';
+export const MATLAB_ROWS = Object.freeze([
+  'gpu_info',
+  'gpu_matmul',
+  'gpu_fft',
+  'gpu_solve',
+  'dl_train',
+  'parpool_gpu',
+  'cuda_kernel',
+  'mem_oversub',
+]);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const only = (v, allowed) => isObject(v) && Object.keys(v).every((k) => allowed.includes(k));
 
@@ -45,7 +59,16 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
   if (
     !bad(
       'SCHEMA',
-      only(value, ['schema', 'status', 'strict', 'swap', 'unmeasured_note', 'objects', 'images']),
+      only(value, [
+        'schema',
+        'status',
+        'strict',
+        'swap',
+        'unmeasured_note',
+        'objects',
+        'images',
+        'linux_images',
+      ]),
     )
   )
     return problems;
@@ -140,7 +163,61 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
       );
     }
   }
+  if (value.linux_images !== undefined) linuxImageProblems(value, objects, labels, families, bad);
   return problems;
+}
+
+// The Linux images (the MATLAB image): validated beside the Windows images but outside the slot rule. An entry names its private
+// object (role `linux_image`), says that no per-family list is kept (`families: 'generic'`), how its boots are isolated, how it is
+// scheduled, and its rows with their lanes. `measured_families` (optional) is the families a lane is trusted on; elsewhere every row
+// is emitted in the discovery lane, exactly as for the Windows images.
+function linuxImageProblems(value, objects, labels, families, bad) {
+  const list = value.linux_images;
+  if (
+    !bad('LINUX_IMAGES', Array.isArray(list) && list.length > 0 && list.length <= MAX_LINUX_IMAGES)
+  )
+    return;
+  for (const li of list) {
+    if (
+      !bad(
+        'LINUX_IMAGE_SCHEMA',
+        only(li, [
+          'label',
+          'object',
+          'families',
+          'isolation',
+          'scheduling',
+          'measured_families',
+          'rows',
+        ]),
+      )
+    )
+      continue;
+    const label = String(li.label);
+    bad('LABEL:' + label.slice(0, 32), typeof li.label === 'string' && LABEL.test(li.label));
+    bad('DUPLICATE_LABEL:' + label.slice(0, 32), !labels.has(li.label));
+    labels.add(li.label);
+    bad('LINUX_OBJECT:' + label, objects.get(li.object)?.role === 'linux_image');
+    bad('LINUX_FAMILIES:' + label, li.families === 'generic');
+    bad('LINUX_ISOLATION:' + label, ['row', 'shared'].includes(li.isolation));
+    bad('LINUX_SCHEDULING:' + label, typeof li.scheduling === 'string' && li.scheduling.length > 0);
+    if (li.measured_families !== undefined)
+      bad(
+        'MEASURED_FAMILIES:' + label,
+        Array.isArray(li.measured_families) &&
+          new Set(li.measured_families).size === li.measured_families.length &&
+          li.measured_families.every((f) => families.includes(f)),
+      );
+    const rows = li.rows;
+    if (!bad('NO_ROWS:' + label, isObject(rows) && Object.keys(rows).length > 0)) continue;
+    for (const [id, row] of Object.entries(rows)) {
+      bad('ROW_ID:' + label + ':' + id.slice(0, 32), MATLAB_ROWS.includes(id));
+      bad(
+        'LANE:' + label + ':' + id.slice(0, 32),
+        only(row, ['lane', 'basis']) && LANES.includes(row?.lane),
+      );
+    }
+  }
 }
 export function checkPropimagesConfig(value = PROPIMAGES, options) {
   const problems = propimagesConfigProblems(value, options);
@@ -277,6 +354,60 @@ export function propimagePlan(
   };
   return { part, assignment: { ...assignment, family, images: chosen.map((i) => i.label) }, lines };
 }
+// The `matlab` part of the instruction for ONE release leg (the stage `matlab` of scripts/ci/vast_payload.py, validated by the box's schema and
+// by scripts/ci/matlab_stage.py instruction_refusal). A Linux image needs a KVM box with a GPU; it is NOT part of the Windows A/B slot rotation:
+// the part depends on the leg's die only (its pinned guest driver from the release matrix) and is emitted for the large-tier leg of a release.
+// Always strict: the image is a pin, the rows are the configured ones, and a family the image has not run on gets every row in the discovery lane.
+export function matlabPlan(
+  { profile, tierName, die, label = 'matlab' } = {},
+  { config: value = PROPIMAGES, cfg = {}, releaseMatrix = RELEASE_MATRIX } = {},
+) {
+  checkPropimagesConfig(value);
+  if (profile !== PROPIMAGES_PROFILE) throw Error('matlab release only');
+  if (tierName !== 'large') throw Error('matlab tier');
+  const family = familyOf(die, cfg);
+  if (family === 'unknown') throw Error('matlab die');
+  const li = (value.linux_images ?? []).find((i) => i.label === label);
+  if (li === undefined) throw Error('matlab unknown image:' + String(label).slice(0, 32));
+  const version = releaseMatrix.dies.find((d) => d.die === die)?.drivers?.linux_guest_driver;
+  const pin = (releaseMatrix.driver_installers ?? []).find(
+    (p) => p.os === 'linux' && p.version === version && p.status === 'PINNED',
+  );
+  if (pin === undefined) throw Error('matlab driver:' + String(die).slice(0, 16));
+  const object = value.objects.find((o) => o.id === li.object);
+  const measured = (li.measured_families ?? []).includes(family);
+  const part = {
+    matlab: {
+      label: li.label,
+      image: { from: 'pin', ref: object.ref, sha256: object.sha256 },
+      driver: { version: pin.version },
+      rows: Object.fromEntries(
+        Object.entries(li.rows).map(([id, row]) => [
+          id,
+          { lane: measured ? row.lane : LANE_UNMEASURED },
+        ]),
+      ),
+      isolation: li.isolation,
+    },
+  };
+  const lines = [
+    li.label +
+      ' on ' +
+      die +
+      ' (' +
+      family +
+      '): guest driver ' +
+      pin.version +
+      ', ' +
+      (measured
+        ? 'lanes as configured'
+        : value.unmeasured_note + ': every row in the discovery lane') +
+      '; ' +
+      li.scheduling,
+  ];
+  return { part, lines };
+}
+
 // The `propimages` / `propimages_strict` part of the instruction for ONE leg (see propimagePlan for the rule and the refusals).
 export const propimagesForLeg = (leg, options) => propimagePlan(leg, options).part;
 // Which images a leg takes, or [] when it takes none (the planner asks this before it asks for the instruction).
@@ -310,7 +441,15 @@ export function instructionFromEnvironment(env) {
 // this release has. A one-die rehearsal is a single-die leg. Returns the instruction; `buildLeg` also returns the plan text.
 export function buildLeg(
   profile,
-  { propimages = false, propimageImages, die, releaseSeq, familyDies, ...tierOptions } = {},
+  {
+    propimages = false,
+    propimageImages,
+    matlab = false,
+    die,
+    releaseSeq,
+    familyDies,
+    ...tierOptions
+  } = {},
   { config: value = PROPIMAGES, cfg = {}, releaseMatrix = RELEASE_MATRIX } = {},
 ) {
   if (tierOptions.releaseMatrix !== undefined) throw Error('instruction release matrix');
@@ -334,6 +473,16 @@ export function buildLeg(
     );
     Object.assign(instruction, plan.part);
   } else if (propimageImages !== undefined) throw Error('propimages images without the flag');
+  if (matlab !== false) {
+    if (matlab !== true) throw Error('matlab flag');
+    const m = matlabPlan(
+      { profile, tierName: tierOptions.tierName, die },
+      { config: value, cfg, releaseMatrix },
+    );
+    Object.assign(instruction, m.part);
+    plan =
+      plan === undefined ? { lines: m.lines } : { ...plan, lines: [...plan.lines, ...m.lines] };
+  }
   return { instruction, plan };
 }
 export const buildInstruction = (profile, options, config) =>

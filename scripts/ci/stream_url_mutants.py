@@ -28,6 +28,16 @@ CASES = [
      "test_stream_refuses_a_standalone_file_without_the_object", "test_stream_refuses_a_standalone_file_without_the_object"),
     ("flat-map-lost", "    return doc[key]\n", "    return doc['urls'][key]\n",
      "test_stream_match", "test_stream_mismatch"),
+    ("noted-pin-is-enforced", "ok = a.sha256 is None or h.hexdigest() == a.sha256", "ok = h.hexdigest() == (a.sha256 or a.note_pin or h.hexdigest())",
+     "test_a_noted_pin_that_differs_is_recorded_and_never_a_refusal", "test_a_noted_pin_that_differs_still_delivers_every_byte_and_the_hash_of_what_was_delivered"),
+    ("no-pin-is-a-refusal", "ok = a.sha256 is None or h.hexdigest() == a.sha256", "ok = h.hexdigest() == a.sha256",
+     "test_no_pin_at_all_records_the_computed_hash_and_exits_zero", "test_a_noted_pin_that_matches_is_recorded_as_a_match"),
+    ("enforced-pin-ignored", "ok = a.sha256 is None or h.hexdigest() == a.sha256", "ok = True",
+     "test_an_enforced_pin_still_refuses_beside_a_noted_one", "test_stream_mismatch"),
+    ("noted-pin-never-differs", 'else ("match" if h.hexdigest() == a.note_pin else "differs")', 'else "match"',
+     "test_a_noted_pin_that_differs_is_recorded_and_never_a_refusal", "test_an_enforced_pin_that_matches_passes_beside_a_wrong_noted_one"),
+    ("computed-hash-not-recorded", 'time.time() - t0, h.hexdigest(), noted))', 'time.time() - t0, "-", noted))',
+     "test_no_pin_at_all_records_the_computed_hash_and_exits_zero", "test_a_noted_pin_that_differs_is_recorded_and_never_a_refusal"),
 ]
 
 

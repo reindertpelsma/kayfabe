@@ -72,10 +72,10 @@ pub trait HostControls {
         })
     }
 
-    /// ★ Does the HOST's driver version have no such control at all — measured, not inferred from
-    /// a refusal (`kf_abi::hostabi`: the control's params struct is absent at that version)? Only
-    /// then may a field fall back to a family rule (owner ruling 3). Default `false`: a test double
-    /// speaks for one driver version.
+    /// Whether the host driver lacks this control. Use the versioned `kf_abi::hostabi` table
+    /// to establish absence of the control's params struct before falling back to a family
+    /// rule. A refusal alone is insufficient. Default `false`: a test double speaks for
+    /// one driver version.
     fn lacks_control(&self, _cmd: u32) -> bool {
         false
     }
@@ -1702,7 +1702,7 @@ pub fn query_ce_caps(
 
 /// ★ `vbios_version` — `BIOS_GET_INFO_V2 [REVISION, OEM_REVISION]` (`0x20800810`, NON_PRIVILEGED).
 ///
-/// ⊘ **Cosmetic, so it never refuses realize** (coordinator, 2026-09-26): a host refusal OR a reply
+/// ⊘ **Cosmetic, so it never refuses realize**: a host refusal OR a reply
 /// that does not decode is `None` — the ROM then declares `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and
 /// the guest's own ask is refused. The composition root logs the `None` by name.
 ///

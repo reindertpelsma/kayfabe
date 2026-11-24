@@ -1,0 +1,1669 @@
+kf3: device reset #2 (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): [(0, "0x860", "0x860", "0x860", "0x0"), (1, "0xf60", "0xf60", "0xf60", "0x0"), (2, "0xed0", "0xed0", "0xed0", "0x0"), (3, "0x7f0", "0x7f0", "0x7f0", "0x0"), (4, "0xed0", "0xed0", "0xed0", "0x0"), (5, "0x7f0", "0x7f0", "0x7f0", "0x0"), (6, "0xed0", "0xed0", "0xed0", "0x0"), (7, "0x7f0", "0x7f0", "0x7f0", "0x0"), (8, "0xed0", "0xed0", "0xed0", "0x0"), (33, "0x630", "0x630", "0x630", "0x0"), (34, "0x0", "0x0", "0x0", "0x0"), (35, "0x0", "0x0", "0x0", "0x0"), (36, "0x0", "0x
+kf3: device reset #2: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0) [#2, rate-limited]
+kf3: device reset #2 complete before the vCPUs resume (the main loop waited 217 us)
+kf3: RAM add gpa=0x0 len=0x93000 fd_off=0x0: translation kept (generation 1) [#32, rate-limited]
+kf3: RAM del gpa=0x97000 [#32, rate-limited]
+kf3: family=Ada phase=Cold trapped=146650 applied=3021 refused=0 serviced=1924 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=4132 walks=7609/7609 cleared=4132 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=69884 unmapped=61680 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=23 sked=12/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=15 root_moves=0 stmts=24/24 refused=3 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=308 (map 233 mmap 129) pramin_m
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.05 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Cold trapped=146650 applied=3021 refused=0 serviced=1924 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=4132 walks=7609/7609 cleared=4132 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=69884 unmapped=61680 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=23 sked=12/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=15 root_moves=0 stmts=24/24 refused=3 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=308 (map 233 mmap 129) pramin_m
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Cold trapped=146650 applied=3021 refused=0 serviced=1924 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=4132 walks=7609/7609 cleared=4132 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=69884 unmapped=61680 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=23 sked=12/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=15 root_moves=0 stmts=24/24 refused=3 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=308 (map 233 mmap 129) pramin_m
+kf3: w#0 bar0 @0x100c40 = 0x0 phase=Cold
+kf3: w#1 bar0 @0x100c10 = 0x27e7da0 phase=Cold
+kf3: w#2 bar0 @0x8403c0 = 0x1 phase=Cold
+kf3: w#3 bar0 @0x8403c0 = 0x0 phase=Cold
+kf3: w#4 bar0 @0x840084 = 0x192000a1 phase=Cold
+kf3: w#5 bar0 @0x840624 = 0x80 phase=Cold
+kf3: w#6 bar0 @0x84010c = 0x0 phase=Cold
+kf3: w#7 bar0 @0x840600 = 0x5 phase=Cold
+kf3: w#8 bar0 @0x840110 = 0x2798cc0 phase=Cold
+kf3: w#9 bar0 @0x840128 = 0x0 phase=Cold
+kf3: w#10 bar0 @0x840114 = 0x0 phase=Cold
+kf3: w#11 bar0 @0x84011c = 0x100 phase=Cold
+kf3: w#12 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#13 bar0 @0x840114 = 0x100 phase=Cold
+kf3: w#14 bar0 @0x84011c = 0x200 phase=Cold
+kf3: w#15 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#16 bar0 @0x840114 = 0x200 phase=Cold
+kf3: w#17 bar0 @0x84011c = 0x300 phase=Cold
+kf3: w#18 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#19 bar0 @0x840114 = 0x300 phase=Cold
+kf3: w#20 bar0 @0x84011c = 0x400 phase=Cold
+kf3: w#21 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#22 bar0 @0x840114 = 0x400 phase=Cold
+kf3: w#23 bar0 @0x84011c = 0x500 phase=Cold
+kf3: w#24 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#25 bar0 @0x840114 = 0x500 phase=Cold
+kf3: w#26 bar0 @0x84011c = 0x600 phase=Cold
+kf3: w#27 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#28 bar0 @0x840114 = 0x600 phase=Cold
+kf3: w#29 bar0 @0x84011c = 0x700 phase=Cold
+kf3: w#30 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#31 bar0 @0x840114 = 0x700 phase=Cold
+kf3: w#32 bar0 @0x84011c = 0x800 phase=Cold
+kf3: w#33 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#34 bar0 @0x840114 = 0x800 phase=Cold
+kf3: w#35 bar0 @0x84011c = 0x900 phase=Cold
+kf3: w#36 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#37 bar0 @0x840114 = 0x900 phase=Cold
+kf3: w#38 bar0 @0x84011c = 0xa00 phase=Cold
+kf3: w#39 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#40 bar0 @0x840114 = 0xa00 phase=Cold
+kf3: w#41 bar0 @0x84011c = 0xb00 phase=Cold
+kf3: w#42 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#43 bar0 @0x840114 = 0xb00 phase=Cold
+kf3: w#44 bar0 @0x84011c = 0xc00 phase=Cold
+kf3: w#45 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#46 bar0 @0x840114 = 0xc00 phase=Cold
+kf3: w#47 bar0 @0x84011c = 0xd00 phase=Cold
+kf3: w#48 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#49 bar0 @0x840114 = 0xd00 phase=Cold
+kf3: w#50 bar0 @0x84011c = 0xe00 phase=Cold
+kf3: w#51 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#52 bar0 @0x840114 = 0xe00 phase=Cold
+kf3: w#53 bar0 @0x84011c = 0xf00 phase=Cold
+kf3: w#54 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#55 bar0 @0x840114 = 0xf00 phase=Cold
+kf3: w#56 bar0 @0x84011c = 0x1000 phase=Cold
+kf3: w#57 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#58 bar0 @0x840114 = 0x1000 phase=Cold
+kf3: w#59 bar0 @0x84011c = 0x1100 phase=Cold
+kf3: w#60 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#61 bar0 @0x840114 = 0x1100 phase=Cold
+kf3: w#62 bar0 @0x84011c = 0x1200 phase=Cold
+kf3: w#63 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#64 bar0 @0x840114 = 0x1200 phase=Cold
+kf3: w#65 bar0 @0x84011c = 0x1300 phase=Cold
+kf3: w#66 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#67 bar0 @0x840114 = 0x1300 phase=Cold
+kf3: w#68 bar0 @0x84011c = 0x1400 phase=Cold
+kf3: w#69 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#70 bar0 @0x840114 = 0x1400 phase=Cold
+kf3: w#71 bar0 @0x84011c = 0x1500 phase=Cold
+kf3: w#72 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#73 bar0 @0x840114 = 0x1500 phase=Cold
+kf3: w#74 bar0 @0x84011c = 0x1600 phase=Cold
+kf3: w#75 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#76 bar0 @0x840114 = 0x1600 phase=Cold
+kf3: w#77 bar0 @0x84011c = 0x1700 phase=Cold
+kf3: w#78 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#79 bar0 @0x840114 = 0x1700 phase=Cold
+kf3: w#80 bar0 @0x84011c = 0x1800 phase=Cold
+kf3: w#81 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#82 bar0 @0x840114 = 0x1800 phase=Cold
+kf3: w#83 bar0 @0x84011c = 0x1900 phase=Cold
+kf3: w#84 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#85 bar0 @0x840114 = 0x1900 phase=Cold
+kf3: w#86 bar0 @0x84011c = 0x1a00 phase=Cold
+kf3: w#87 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#88 bar0 @0x840114 = 0x1a00 phase=Cold
+kf3: w#89 bar0 @0x84011c = 0x1b00 phase=Cold
+kf3: w#90 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#91 bar0 @0x840114 = 0x1b00 phase=Cold
+kf3: w#92 bar0 @0x84011c = 0x1c00 phase=Cold
+kf3: w#93 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#94 bar0 @0x840114 = 0x1c00 phase=Cold
+kf3: w#95 bar0 @0x84011c = 0x1d00 phase=Cold
+kf3: w#96 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#97 bar0 @0x840114 = 0x1d00 phase=Cold
+kf3: w#98 bar0 @0x84011c = 0x1e00 phase=Cold
+kf3: w#99 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#100 bar0 @0x840114 = 0x1e00 phase=Cold
+kf3: w#101 bar0 @0x84011c = 0x1f00 phase=Cold
+kf3: w#102 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#103 bar0 @0x840114 = 0x1f00 phase=Cold
+kf3: w#104 bar0 @0x84011c = 0x2000 phase=Cold
+kf3: w#105 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#106 bar0 @0x840114 = 0x2000 phase=Cold
+kf3: w#107 bar0 @0x84011c = 0x2100 phase=Cold
+kf3: w#108 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#109 bar0 @0x840114 = 0x2100 phase=Cold
+kf3: w#110 bar0 @0x84011c = 0x2200 phase=Cold
+kf3: w#111 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#112 bar0 @0x840114 = 0x2200 phase=Cold
+kf3: w#113 bar0 @0x84011c = 0x2300 phase=Cold
+kf3: w#114 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#115 bar0 @0x840114 = 0x2300 phase=Cold
+kf3: w#116 bar0 @0x84011c = 0x2400 phase=Cold
+kf3: w#117 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#118 bar0 @0x840114 = 0x2400 phase=Cold
+kf3: w#119 bar0 @0x84011c = 0x2500 phase=Cold
+kf3: w#120 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#121 bar0 @0x840114 = 0x2500 phase=Cold
+kf3: w#122 bar0 @0x84011c = 0x2600 phase=Cold
+kf3: w#123 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#124 bar0 @0x840114 = 0x2600 phase=Cold
+kf3: w#125 bar0 @0x84011c = 0x2700 phase=Cold
+kf3: w#126 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#127 bar0 @0x840114 = 0x2700 phase=Cold
+kf3: w#128 bar0 @0x84011c = 0x2800 phase=Cold
+kf3: w#129 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#130 bar0 @0x840114 = 0x2800 phase=Cold
+kf3: w#131 bar0 @0x84011c = 0x2900 phase=Cold
+kf3: w#132 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#133 bar0 @0x840114 = 0x2900 phase=Cold
+kf3: w#134 bar0 @0x84011c = 0x2a00 phase=Cold
+kf3: w#135 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#136 bar0 @0x840114 = 0x2a00 phase=Cold
+kf3: w#137 bar0 @0x84011c = 0x2b00 phase=Cold
+kf3: w#138 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#139 bar0 @0x840114 = 0x2b00 phase=Cold
+kf3: w#140 bar0 @0x84011c = 0x2c00 phase=Cold
+kf3: w#141 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#142 bar0 @0x840114 = 0x2c00 phase=Cold
+kf3: w#143 bar0 @0x84011c = 0x2d00 phase=Cold
+kf3: w#144 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#145 bar0 @0x840114 = 0x2d00 phase=Cold
+kf3: w#146 bar0 @0x84011c = 0x2e00 phase=Cold
+kf3: w#147 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#148 bar0 @0x840114 = 0x2e00 phase=Cold
+kf3: w#149 bar0 @0x84011c = 0x2f00 phase=Cold
+kf3: w#150 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#151 bar0 @0x840114 = 0x2f00 phase=Cold
+kf3: w#152 bar0 @0x84011c = 0x3000 phase=Cold
+kf3: w#153 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#154 bar0 @0x840114 = 0x3000 phase=Cold
+kf3: w#155 bar0 @0x84011c = 0x3100 phase=Cold
+kf3: w#156 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#157 bar0 @0x840114 = 0x3100 phase=Cold
+kf3: w#158 bar0 @0x84011c = 0x3200 phase=Cold
+kf3: w#159 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#160 bar0 @0x840114 = 0x3200 phase=Cold
+kf3: w#161 bar0 @0x84011c = 0x3300 phase=Cold
+kf3: w#162 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#163 bar0 @0x840114 = 0x3300 phase=Cold
+kf3: w#164 bar0 @0x84011c = 0x3400 phase=Cold
+kf3: w#165 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#166 bar0 @0x840114 = 0x3400 phase=Cold
+kf3: w#167 bar0 @0x84011c = 0x3500 phase=Cold
+kf3: w#168 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#169 bar0 @0x840114 = 0x3500 phase=Cold
+kf3: w#170 bar0 @0x84011c = 0x3600 phase=Cold
+kf3: w#171 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#172 bar0 @0x840114 = 0x3600 phase=Cold
+kf3: w#173 bar0 @0x84011c = 0x3700 phase=Cold
+kf3: w#174 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#175 bar0 @0x840114 = 0x3700 phase=Cold
+kf3: w#176 bar0 @0x84011c = 0x3800 phase=Cold
+kf3: w#177 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#178 bar0 @0x840114 = 0x3800 phase=Cold
+kf3: w#179 bar0 @0x84011c = 0x3900 phase=Cold
+kf3: w#180 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#181 bar0 @0x840114 = 0x3900 phase=Cold
+kf3: w#182 bar0 @0x84011c = 0x3a00 phase=Cold
+kf3: w#183 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#184 bar0 @0x840114 = 0x3a00 phase=Cold
+kf3: w#185 bar0 @0x84011c = 0x3b00 phase=Cold
+kf3: w#186 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#187 bar0 @0x840114 = 0x3b00 phase=Cold
+kf3: w#188 bar0 @0x84011c = 0x3c00 phase=Cold
+kf3: w#189 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#190 bar0 @0x840114 = 0x3c00 phase=Cold
+kf3: w#191 bar0 @0x84011c = 0x3d00 phase=Cold
+kf3: w#192 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#193 bar0 @0x840114 = 0x3d00 phase=Cold
+kf3: w#194 bar0 @0x84011c = 0x3e00 phase=Cold
+kf3: w#195 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#196 bar0 @0x840114 = 0x3e00 phase=Cold
+kf3: w#197 bar0 @0x84011c = 0x3f00 phase=Cold
+kf3: w#198 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#199 bar0 @0x840114 = 0x3f00 phase=Cold
+kf3: w#200 bar0 @0x84011c = 0x4000 phase=Cold
+kf3: w#201 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#202 bar0 @0x840114 = 0x4000 phase=Cold
+kf3: w#203 bar0 @0x84011c = 0x4100 phase=Cold
+kf3: w#204 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#205 bar0 @0x840114 = 0x4100 phase=Cold
+kf3: w#206 bar0 @0x84011c = 0x4200 phase=Cold
+kf3: w#207 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#208 bar0 @0x840114 = 0x4200 phase=Cold
+kf3: w#209 bar0 @0x84011c = 0x4300 phase=Cold
+kf3: w#210 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#211 bar0 @0x840114 = 0x4300 phase=Cold
+kf3: w#212 bar0 @0x84011c = 0x4400 phase=Cold
+kf3: w#213 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#214 bar0 @0x840114 = 0x4400 phase=Cold
+kf3: w#215 bar0 @0x84011c = 0x4500 phase=Cold
+kf3: w#216 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#217 bar0 @0x840114 = 0x4500 phase=Cold
+kf3: w#218 bar0 @0x84011c = 0x4600 phase=Cold
+kf3: w#219 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#220 bar0 @0x840114 = 0x4600 phase=Cold
+kf3: w#221 bar0 @0x84011c = 0x4700 phase=Cold
+kf3: w#222 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#223 bar0 @0x840114 = 0x4700 phase=Cold
+kf3: w#224 bar0 @0x84011c = 0x4800 phase=Cold
+kf3: w#225 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#226 bar0 @0x840114 = 0x4800 phase=Cold
+kf3: w#227 bar0 @0x84011c = 0x4900 phase=Cold
+kf3: w#228 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#229 bar0 @0x840114 = 0x4900 phase=Cold
+kf3: w#230 bar0 @0x84011c = 0x4a00 phase=Cold
+kf3: w#231 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#232 bar0 @0x840114 = 0x4a00 phase=Cold
+kf3: w#233 bar0 @0x84011c = 0x4b00 phase=Cold
+kf3: w#234 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#235 bar0 @0x840114 = 0x4b00 phase=Cold
+kf3: w#236 bar0 @0x84011c = 0x4c00 phase=Cold
+kf3: w#237 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#238 bar0 @0x840114 = 0x4c00 phase=Cold
+kf3: w#239 bar0 @0x84011c = 0x4d00 phase=Cold
+kf3: w#240 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#241 bar0 @0x840114 = 0x4d00 phase=Cold
+kf3: w#242 bar0 @0x84011c = 0x4e00 phase=Cold
+kf3: w#243 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#244 bar0 @0x840114 = 0x4e00 phase=Cold
+kf3: w#245 bar0 @0x84011c = 0x4f00 phase=Cold
+kf3: w#246 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#247 bar0 @0x840114 = 0x4f00 phase=Cold
+kf3: w#248 bar0 @0x84011c = 0x5000 phase=Cold
+kf3: w#249 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#250 bar0 @0x840114 = 0x5000 phase=Cold
+kf3: w#251 bar0 @0x84011c = 0x5100 phase=Cold
+kf3: w#252 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#253 bar0 @0x840114 = 0x5100 phase=Cold
+kf3: w#254 bar0 @0x84011c = 0x5200 phase=Cold
+kf3: w#255 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#256 bar0 @0x840114 = 0x5200 phase=Cold
+kf3: w#257 bar0 @0x84011c = 0x5300 phase=Cold
+kf3: w#258 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#259 bar0 @0x840114 = 0x5300 phase=Cold
+kf3: w#260 bar0 @0x84011c = 0x5400 phase=Cold
+kf3: w#261 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#262 bar0 @0x840114 = 0x5400 phase=Cold
+kf3: w#263 bar0 @0x84011c = 0x5500 phase=Cold
+kf3: w#264 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#265 bar0 @0x840114 = 0x5500 phase=Cold
+kf3: w#266 bar0 @0x84011c = 0x5600 phase=Cold
+kf3: w#267 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#268 bar0 @0x840114 = 0x5600 phase=Cold
+kf3: w#269 bar0 @0x84011c = 0x5700 phase=Cold
+kf3: w#270 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#271 bar0 @0x840114 = 0x5700 phase=Cold
+kf3: w#272 bar0 @0x84011c = 0x5800 phase=Cold
+kf3: w#273 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#274 bar0 @0x840114 = 0x5800 phase=Cold
+kf3: w#275 bar0 @0x84011c = 0x5900 phase=Cold
+kf3: w#276 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#277 bar0 @0x840114 = 0x5900 phase=Cold
+kf3: w#278 bar0 @0x84011c = 0x5a00 phase=Cold
+kf3: w#279 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#280 bar0 @0x840114 = 0x5a00 phase=Cold
+kf3: w#281 bar0 @0x84011c = 0x5b00 phase=Cold
+kf3: w#282 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#283 bar0 @0x840114 = 0x5b00 phase=Cold
+kf3: w#284 bar0 @0x84011c = 0x5c00 phase=Cold
+kf3: w#285 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#286 bar0 @0x840114 = 0x5c00 phase=Cold
+kf3: w#287 bar0 @0x84011c = 0x5d00 phase=Cold
+kf3: w#288 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#289 bar0 @0x840114 = 0x5d00 phase=Cold
+kf3: w#290 bar0 @0x84011c = 0x5e00 phase=Cold
+kf3: w#291 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#292 bar0 @0x840114 = 0x5e00 phase=Cold
+kf3: w#293 bar0 @0x84011c = 0x5f00 phase=Cold
+kf3: w#294 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#295 bar0 @0x840114 = 0x5f00 phase=Cold
+kf3: w#296 bar0 @0x84011c = 0x6000 phase=Cold
+kf3: w#297 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#298 bar0 @0x840114 = 0x6000 phase=Cold
+kf3: w#299 bar0 @0x84011c = 0x6100 phase=Cold
+kf3: w#300 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#301 bar0 @0x840114 = 0x6100 phase=Cold
+kf3: w#302 bar0 @0x84011c = 0x6200 phase=Cold
+kf3: w#303 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#304 bar0 @0x840114 = 0x6200 phase=Cold
+kf3: w#305 bar0 @0x84011c = 0x6300 phase=Cold
+kf3: w#306 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#307 bar0 @0x840114 = 0x6300 phase=Cold
+kf3: w#308 bar0 @0x84011c = 0x6400 phase=Cold
+kf3: w#309 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#310 bar0 @0x840114 = 0x6400 phase=Cold
+kf3: w#311 bar0 @0x84011c = 0x6500 phase=Cold
+kf3: w#312 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#313 bar0 @0x840114 = 0x6500 phase=Cold
+kf3: w#314 bar0 @0x84011c = 0x6600 phase=Cold
+kf3: w#315 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#316 bar0 @0x840114 = 0x6600 phase=Cold
+kf3: w#317 bar0 @0x84011c = 0x6700 phase=Cold
+kf3: w#318 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#319 bar0 @0x840114 = 0x6700 phase=Cold
+kf3: w#320 bar0 @0x84011c = 0x6800 phase=Cold
+kf3: w#321 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#322 bar0 @0x840114 = 0x6800 phase=Cold
+kf3: w#323 bar0 @0x84011c = 0x6900 phase=Cold
+kf3: w#324 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#325 bar0 @0x840114 = 0x6900 phase=Cold
+kf3: w#326 bar0 @0x84011c = 0x6a00 phase=Cold
+kf3: w#327 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#328 bar0 @0x840114 = 0x6a00 phase=Cold
+kf3: w#329 bar0 @0x84011c = 0x6b00 phase=Cold
+kf3: w#330 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#331 bar0 @0x840114 = 0x6b00 phase=Cold
+kf3: w#332 bar0 @0x84011c = 0x6c00 phase=Cold
+kf3: w#333 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#334 bar0 @0x840114 = 0x6c00 phase=Cold
+kf3: w#335 bar0 @0x84011c = 0x6d00 phase=Cold
+kf3: w#336 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#337 bar0 @0x840114 = 0x6d00 phase=Cold
+kf3: w#338 bar0 @0x84011c = 0x6e00 phase=Cold
+kf3: w#339 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#340 bar0 @0x840114 = 0x6e00 phase=Cold
+kf3: w#341 bar0 @0x84011c = 0x6f00 phase=Cold
+kf3: w#342 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#343 bar0 @0x840114 = 0x6f00 phase=Cold
+kf3: w#344 bar0 @0x84011c = 0x7000 phase=Cold
+kf3: w#345 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#346 bar0 @0x840114 = 0x7000 phase=Cold
+kf3: w#347 bar0 @0x84011c = 0x7100 phase=Cold
+kf3: w#348 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#349 bar0 @0x840114 = 0x7100 phase=Cold
+kf3: w#350 bar0 @0x84011c = 0x7200 phase=Cold
+kf3: w#351 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#352 bar0 @0x840114 = 0x7200 phase=Cold
+kf3: w#353 bar0 @0x84011c = 0x7300 phase=Cold
+kf3: w#354 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#355 bar0 @0x840114 = 0x7300 phase=Cold
+kf3: w#356 bar0 @0x84011c = 0x7400 phase=Cold
+kf3: w#357 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#358 bar0 @0x840114 = 0x7400 phase=Cold
+kf3: w#359 bar0 @0x84011c = 0x7500 phase=Cold
+kf3: w#360 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#361 bar0 @0x840114 = 0x7500 phase=Cold
+kf3: w#362 bar0 @0x84011c = 0x7600 phase=Cold
+kf3: w#363 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#364 bar0 @0x840114 = 0x7600 phase=Cold
+kf3: w#365 bar0 @0x84011c = 0x7700 phase=Cold
+kf3: w#366 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#367 bar0 @0x840114 = 0x7700 phase=Cold
+kf3: w#368 bar0 @0x84011c = 0x7800 phase=Cold
+kf3: w#369 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#370 bar0 @0x840114 = 0x7800 phase=Cold
+kf3: w#371 bar0 @0x84011c = 0x7900 phase=Cold
+kf3: w#372 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#373 bar0 @0x840114 = 0x7900 phase=Cold
+kf3: w#374 bar0 @0x84011c = 0x7a00 phase=Cold
+kf3: w#375 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#376 bar0 @0x840114 = 0x7a00 phase=Cold
+kf3: w#377 bar0 @0x84011c = 0x7b00 phase=Cold
+kf3: w#378 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#379 bar0 @0x840114 = 0x7b00 phase=Cold
+kf3: w#380 bar0 @0x84011c = 0x7c00 phase=Cold
+kf3: w#381 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#382 bar0 @0x840114 = 0x7c00 phase=Cold
+kf3: w#383 bar0 @0x84011c = 0x7d00 phase=Cold
+kf3: w#384 bar0 @0x840118 = 0x614 phase=Cold
+kf3: w#385 bar0 @0x840110 = 0x2798d3e phase=Cold
+kf3: w#386 bar0 @0x840128 = 0x0 phase=Cold
+kf3: w#387 bar0 @0x840114 = 0x0 phase=Cold
+kf3: w#388 bar0 @0x84011c = 0x0 phase=Cold
+kf3: w#389 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#390 bar0 @0x840114 = 0x100 phase=Cold
+kf3: w#391 bar0 @0x84011c = 0x100 phase=Cold
+kf3: w#392 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#393 bar0 @0x840114 = 0x200 phase=Cold
+kf3: w#394 bar0 @0x84011c = 0x200 phase=Cold
+kf3: w#395 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#396 bar0 @0x840114 = 0x300 phase=Cold
+kf3: w#397 bar0 @0x84011c = 0x300 phase=Cold
+kf3: w#398 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#399 bar0 @0x840114 = 0x400 phase=Cold
+kf3: w#400 bar0 @0x84011c = 0x400 phase=Cold
+kf3: w#401 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#402 bar0 @0x840114 = 0x500 phase=Cold
+kf3: w#403 bar0 @0x84011c = 0x500 phase=Cold
+kf3: w#404 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#405 bar0 @0x840114 = 0x600 phase=Cold
+kf3: w#406 bar0 @0x84011c = 0x600 phase=Cold
+kf3: w#407 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#408 bar0 @0x840114 = 0x700 phase=Cold
+kf3: w#409 bar0 @0x84011c = 0x700 phase=Cold
+kf3: w#410 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#411 bar0 @0x840114 = 0x800 phase=Cold
+kf3: w#412 bar0 @0x84011c = 0x800 phase=Cold
+kf3: w#413 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#414 bar0 @0x840114 = 0x900 phase=Cold
+kf3: w#415 bar0 @0x84011c = 0x900 phase=Cold
+kf3: w#416 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#417 bar0 @0x840114 = 0xa00 phase=Cold
+kf3: w#418 bar0 @0x84011c = 0xa00 phase=Cold
+kf3: w#419 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#420 bar0 @0x840114 = 0xb00 phase=Cold
+kf3: w#421 bar0 @0x84011c = 0xb00 phase=Cold
+kf3: w#422 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#423 bar0 @0x840114 = 0xc00 phase=Cold
+kf3: w#424 bar0 @0x84011c = 0xc00 phase=Cold
+kf3: w#425 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#426 bar0 @0x840114 = 0xd00 phase=Cold
+kf3: w#427 bar0 @0x84011c = 0xd00 phase=Cold
+kf3: w#428 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#429 bar0 @0x840114 = 0xe00 phase=Cold
+kf3: w#430 bar0 @0x84011c = 0xe00 phase=Cold
+kf3: w#431 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#432 bar0 @0x840114 = 0xf00 phase=Cold
+kf3: w#433 bar0 @0x84011c = 0xf00 phase=Cold
+kf3: w#434 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#435 bar0 @0x840114 = 0x1000 phase=Cold
+kf3: w#436 bar0 @0x84011c = 0x1000 phase=Cold
+kf3: w#437 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#438 bar0 @0x840114 = 0x1100 phase=Cold
+kf3: w#439 bar0 @0x84011c = 0x1100 phase=Cold
+kf3: w#440 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#441 bar0 @0x840114 = 0x1200 phase=Cold
+kf3: w#442 bar0 @0x84011c = 0x1200 phase=Cold
+kf3: w#443 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#444 bar0 @0x840114 = 0x1300 phase=Cold
+kf3: w#445 bar0 @0x84011c = 0x1300 phase=Cold
+kf3: w#446 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#447 bar0 @0x840114 = 0x1400 phase=Cold
+kf3: w#448 bar0 @0x84011c = 0x1400 phase=Cold
+kf3: w#449 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#450 bar0 @0x840114 = 0x1500 phase=Cold
+kf3: w#451 bar0 @0x84011c = 0x1500 phase=Cold
+kf3: w#452 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#453 bar0 @0x840114 = 0x1600 phase=Cold
+kf3: w#454 bar0 @0x84011c = 0x1600 phase=Cold
+kf3: w#455 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#456 bar0 @0x840114 = 0x1700 phase=Cold
+kf3: w#457 bar0 @0x84011c = 0x1700 phase=Cold
+kf3: w#458 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#459 bar0 @0x840114 = 0x1800 phase=Cold
+kf3: w#460 bar0 @0x84011c = 0x1800 phase=Cold
+kf3: w#461 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#462 bar0 @0x840114 = 0x1900 phase=Cold
+kf3: w#463 bar0 @0x84011c = 0x1900 phase=Cold
+kf3: w#464 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#465 bar0 @0x840114 = 0x1a00 phase=Cold
+kf3: w#466 bar0 @0x84011c = 0x1a00 phase=Cold
+kf3: w#467 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#468 bar0 @0x840114 = 0x1b00 phase=Cold
+kf3: w#469 bar0 @0x84011c = 0x1b00 phase=Cold
+kf3: w#470 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#471 bar0 @0x840114 = 0x1c00 phase=Cold
+kf3: w#472 bar0 @0x84011c = 0x1c00 phase=Cold
+kf3: w#473 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#474 bar0 @0x840114 = 0x1d00 phase=Cold
+kf3: w#475 bar0 @0x84011c = 0x1d00 phase=Cold
+kf3: w#476 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#477 bar0 @0x840114 = 0x1e00 phase=Cold
+kf3: w#478 bar0 @0x84011c = 0x1e00 phase=Cold
+kf3: w#479 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#480 bar0 @0x840114 = 0x1f00 phase=Cold
+kf3: w#481 bar0 @0x84011c = 0x1f00 phase=Cold
+kf3: w#482 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#483 bar0 @0x840114 = 0x2000 phase=Cold
+kf3: w#484 bar0 @0x84011c = 0x2000 phase=Cold
+kf3: w#485 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#486 bar0 @0x840114 = 0x2100 phase=Cold
+kf3: w#487 bar0 @0x84011c = 0x2100 phase=Cold
+kf3: w#488 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#489 bar0 @0x840114 = 0x2200 phase=Cold
+kf3: w#490 bar0 @0x84011c = 0x2200 phase=Cold
+kf3: w#491 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#492 bar0 @0x840114 = 0x2300 phase=Cold
+kf3: w#493 bar0 @0x84011c = 0x2300 phase=Cold
+kf3: w#494 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#495 bar0 @0x840114 = 0x2400 phase=Cold
+kf3: w#496 bar0 @0x84011c = 0x2400 phase=Cold
+kf3: w#497 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#498 bar0 @0x840114 = 0x2500 phase=Cold
+kf3: w#499 bar0 @0x84011c = 0x2500 phase=Cold
+kf3: w#500 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#501 bar0 @0x840114 = 0x2600 phase=Cold
+kf3: w#502 bar0 @0x84011c = 0x2600 phase=Cold
+kf3: w#503 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#504 bar0 @0x840114 = 0x2700 phase=Cold
+kf3: w#505 bar0 @0x84011c = 0x2700 phase=Cold
+kf3: w#506 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#507 bar0 @0x840114 = 0x2800 phase=Cold
+kf3: w#508 bar0 @0x84011c = 0x2800 phase=Cold
+kf3: w#509 bar0 @0x840118 = 0x600 phase=Cold
+kf3: w#510 bar0 @0x840114 = 0x2900 phase=Cold
+kf3: w#511 bar0 @0x84011c = 0x2900 phase=Cold
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=2008 cmd_seq=1924 cmd_read_ptr=32 peer_stat_read=20 [#1, rate-limited]
+kf3: GSP phase Cold -> Booted [#6, rate-limited]
+kf3: GSP phase Booted -> Running [#7, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166391995629580) mirror space=0xcafe0022: windows=none rings=none (recycled)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf-host: channel birth h=0xcafe05eb engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e00051:0x2 BORN Translated: token 0x801 -> host 0x10028 in VasKey(13970166391995629580) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8316649472, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(2664), Some(2664)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (3447 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00051:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10028)
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmAlloc seq=0
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #16384: Raise(1) (guest armed=true, vector Some(1))
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.99 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: TSPACE-RETIRE tok=0x801 host=0x10028 key=VasKey(13970166391995629580) ring_va=0xff00000000 released=true stale_binds=0/2871 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2664 host=0x10028 fast=0
+kf3: chan token 0x801 (host 0x10028) RETIRED, forwarded=2664 submissions=2664 splits=0/0 serves=4561 last_put=Some(2664) gp_get=Some(2664) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e00051:0x2: translated host 0x10028 (2760 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166399423348802) mirror space=0xcafe0022: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=0
+kf-host: channel birth h=0xcafe05f1 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-chan: GR tier admitted host channel 0xcafe05f1 (token 0x28) reply_flags=0x00000080 privilege=USER objects=[(902d, cafe05f5), (a140, cafe05f6), (c997, cafe05f7), (c9c0, cafe05f3)]
+kf3: act birth translated: chan 0xc1e00052:0xbaba0045 BORN Translated: token 0x1 -> host 0x28 in VasKey(13970166399423348802) gpfifo=0x0x32 userd=Some(Framebuffer { base: 8314486784, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (7917 us, off the GSP lock)
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166399423348802) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: act promote translated context: 0xc1e00052:0xbaba0045 GPU_PROMOTE_CTX satisfied by Translated host 0x28 GR=Some((cafe05f3, c9c0)) VIDEO=None entries=8 init_ids=0x5 va_ids=0xa7d bound=true — no guest buffer touched (4 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: TSPACE-RETIRE tok=0x1 host=0x28 key=VasKey(13970166399423348802) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x28 fast=0
+kf3: chan token 0x1 (host 0x28) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=0 inert_binds=0 objects=[(902d, cafe05f5), (a140, cafe05f6), (c997, cafe05f7), (c9c0, cafe05f3)]] gp_get_by_engine=(true, 0)
+kf3: act free: 0xc1e00052:0xbaba0045: translated host 0x28 (3939 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166400585564170) mirror space=0xcafe0022: windows=none rings=none (recycled)
+kf-mem: leaf 0x120000000+0x1efc00000 (store 0x0) CLIPPED at the firmware carve-out 0x1efbe0000: 0x120000000+0x1efbe0000 placed, 0x30fbe0000+0x20000 left absent (§Q)
+kf3: VA_SLOW n=65 kind=apply t_ms=284963 ticket=0 walk=7705 key=0xc1e000530000000a pdb=0x1efba4000 slot=19 window=1 apply_us=256678 maps=2 unmaps=0 prep_n=1 prep_us=59 prep_max_us=59 unmapph_n=1 unmapph_us=0 unmapph_max_us=0 mapph_n=1 mapph_us=256563 mapph_max_us=256563 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=50 inval_max_us=50 rm_map_n=2 rm_map_us=256536 rm_map_max_us=254978 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=0 stitch_us=0 stitch
+kf3: mem invalidate seq 4224 CLEARED OVER ABSENCE (Some(VasKey(13970166400585564170))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=284.963s REFUSED VasKey(13970166400585564170) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 4228 CLEARED OVER ABSENCE (Some(VasKey(13970166400585564170))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=284.970s REFUSED VasKey(13970166400585564170) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 4229 CLEARED OVER ABSENCE (Some(VasKey(13970166400585564170))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=284.971s REFUSED VasKey(13970166400585564170) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP rpc RmAlloc seq=0
+kf-host: channel birth h=0xcafe05fb engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e00053:0x2 BORN Translated: token 0x801 -> host 0x10028 in VasKey(13970166400585564170) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8246198272, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (3142 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00053:0x2 BIND engine=0xb (host 0x10028)
+kf3: chan 0xc1e00053:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10028)
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: family=Ada phase=Running trapped=150429 applied=3797 refused=0 serviced=1988 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.10 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150429 applied=3797 refused=0 serviced=1988 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.95 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150429 applied=3797 refused=0 serviced=1988 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: display: after the S3 wake, chn 0 PUT 0x870: engine decoded 0x860, published GET 0x860, GET word the guest reads 0x0 [#1, rate-limited]
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.09 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150476 applied=3799 refused=0 serviced=1990 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display: after the S3 wake, chn 1 PUT 0x1270: engine decoded 0xf60, published GET 0xf60, GET word the guest reads 0x0 [#2, rate-limited]
+kf3: display: channel 1 STOPPED at 0xf60: PUT 0x1270 / GET 0xf60 outside the 4096-byte pushbuffer [#1, rate-limited]
+kf3: display: after the S3 wake, chn 3 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x0 [#3, rate-limited]
+kf3: display: after the S3 wake, chn 5 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x0 [#4, rate-limited]
+kf3: display: after the S3 wake, chn 7 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x0 [#5, rate-limited]
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.96 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150492 applied=3799 refused=0 serviced=1990 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.10 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150505 applied=3799 refused=0 serviced=1990 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display: after the S3 wake, chn 2 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0x0 [#6, rate-limited]
+kf3: display: after the S3 wake, chn 4 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0x0 [#7, rate-limited]
+kf3: display: after the S3 wake, chn 6 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0x0 [#8, rate-limited]
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150539 applied=3799 refused=0 serviced=1990 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.05 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=150552 applied=3799 refused=0 serviced=1990 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4233 walks=7713/7713 cleared=4233 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=69963 unmapped=61932 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=5851 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=9 over=0]
+kf3: family=Ada phase=Running trapped=172768 applied=3803 refused=0 serviced=1994 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=5538 walks=9018/9018 cleared=5538 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=70037 unmapped=62006 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=31796 priv_withheld_bytes=0x74b62e7000 priv_mirrored=29 sked=12/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: mem large apply VasKey(13965662710747105360): 0 maps + 1694 unmaps in 50 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 56 unmap verb(s) (56 range(s) carrying 1694 runs), 0 fallback(s)
+kf3: VA_SLOW n=66 kind=apply t_ms=303108 ticket=3466 walk=9817 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=370050 maps=4572 unmaps=0 prep_n=1 prep_us=1265 prep_max_us=1265 unmapph_n=1 unmapph_us=9 unmapph_max_us=9 mapph_n=1 mapph_us=368178 mapph_max_us=368178 takedown_n=1 takedown_us=20 takedown_max_us=20 inval_n=1 inval_us=79 inval_max_us=79 rm_map_n=12041 rm_map_us=362822 rm_map_max_us=37048 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=1 rm_resv_us=56 rm_resv_max_us=56 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=2 st
+kf3: mem large apply VasKey(13965662599077955664): 4572 maps + 0 unmaps in 370 ms — 4 map verb(s) (2 batch(es) carrying 4570 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: VA_SLOW n=67 kind=ticket t_ms=303109 ticket=3466 walk=9817 key=0x0 pdb=0x1efa3a000 windows=1 req_us=372112 q_inbox_us=30 mgr_us=372082 submit_us=22 walk_us=1810 collect_us=115 apply_own_us=370050 apply_all_us=370050 cap_retries=0
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634237, chid: 35, chan_client: 3251634253, object: 4279107584, virt_memory: 0, phys_address: 8188657664, phys_attr: 0, dma_handle: 0, index: 35, size: 2060288 } on 0xc1d0004d:0xff0e0000 -> Windows user-work Passthrough twin(s) [4a]: satisfied by each twin's own host context (owner ruling B / §U / §V) (22 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634237, chid: 35, chan_client: 3251634253, object: 4279107584, virt_memory: 0, virt_address: 406978560, size: 2060288, entry_count: 0 } on 0xc1d0004d:0xff0e0000 -> Windows user-work Passthrough twin(s) [4a]: satisfied by each twin's own host context (owner ruling B / §U / §V) (16 us, off the GSP lock)
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080852f params_size=776 params_at=40 payload_len=816
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a619 params_size=172080 params_at=40 payload_len=172120
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080853b params_size=1832 params_at=40 payload_len=1872
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem large apply VasKey(13965662599077955664): 0 maps + 4570 unmaps in 23 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 4570 runs), 0 fallback(s)
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: mem large apply VasKey(13965662710747105360): 1671 maps + 0 unmaps in 73 ms — 170 map verb(s) (47 batch(es) carrying 1555 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s); relays before after (372 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s); relays before after (290 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (337 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (325 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s); relays before after (279 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s); relays before after (286 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (370 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (427 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s); relays before after (286 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s); relays before after (282 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00029:0xff04000e->host 0x37] + 0 Translated ring(s); relays before after (372 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d0004f hChannel=0xff040010 va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #13
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d0004f hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #24
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004f:0xff1fe032: engine object host 0xcafe04b1 freed (648 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004f:0xff1fe026: engine object host 0xcafe04b0 freed (493 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004f:0xff1fe034: engine object host 0xcafe04ad freed (399 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004f:0xff1fe01a: engine object host 0xcafe04ae freed (436 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004f:0xff1fe02c: engine object host 0xcafe04af freed (460 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LAZY_OBSERVE (c1d0004f, ff040010) turns=2 put_cache_hits=0 put_fresh_reads=2 obs_skipped=0 obs_unconditional=2 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0 [#3, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x00000012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+kf3: act free: 0xc1d0004f:0xff040010: passthrough 0xc1d0004f:0xff040010 token 0x12 host 0x39 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2551 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=188489 applied=3854 refused=0 serviced=2037 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=6379 walks=9970/9970 cleared=6379 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=76711 unmapped=68665 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=32428 priv_withheld_bytes=0x765a62f000 priv_mirrored=29 sked=13/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=6 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) prami
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004d:0xff040021->host 0x4a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (431 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0004e:0xff040022->host 0x2004b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (343 us, off the GSP lock)
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=902
+kf-mem: split Some(1efa10000) (ticket 3574) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=303.806s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: VA_SLOW n=68 kind=apply t_ms=304211 ticket=3577 walk=9975 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=365166 maps=4138 unmaps=0 prep_n=1 prep_us=977 prep_max_us=977 unmapph_n=1 unmapph_us=10 unmapph_max_us=10 mapph_n=1 mapph_us=363686 mapph_max_us=363686 takedown_n=1 takedown_us=13 takedown_max_us=13 inval_n=1 inval_us=43 inval_max_us=43 rm_map_n=12041 rm_map_us=358951 rm_map_max_us=33099 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=1 rm_resv_us=46 rm_resv_max_us=46 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=2 st
+kf3: mem large apply VasKey(13965662599077955664): 4138 maps + 0 unmaps in 365 ms — 4 map verb(s) (2 batch(es) carrying 4136 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: VA_SLOW n=69 kind=ticket t_ms=304212 ticket=3577 walk=9975 key=0x0 pdb=0x1efa3a000 windows=1 req_us=366936 q_inbox_us=37 mgr_us=366898 submit_us=23 walk_us=1570 collect_us=103 apply_own_us=365166 apply_all_us=365166 cap_retries=0
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634221, chid: 21, chan_client: 3251634230, object: 4279107584, virt_memory: 0, phys_address: 8142905344, phys_attr: 0, dma_handle: 0, index: 21, size: 2060288 } on 0xc1d00036:0xff0e0000 -> Windows user-work Passthrough twin(s) [3c]: satisfied by each twin's own host context (owner ruling B / §U / §V) (75 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634221, chid: 21, chan_client: 3251634230, object: 4279107584, virt_memory: 0, virt_address: 344588288, size: 2060288, entry_count: 0 } on 0xc1d00036:0xff0e0000 -> Windows user-work Passthrough twin(s) [3c]: satisfied by each twin's own host context (owner ruling B / §U / §V) (40 us, off the GSP lock)
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3578) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.275s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem large apply VasKey(13965662599077955664): 0 maps + 4136 unmaps in 23 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 4136 runs), 0 fallback(s)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3582) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.470s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3586) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.492s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3590) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.508s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3594) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.546s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.96 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3598) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.582s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk refusal sample: space=0x1efa10000 va=0x12d00000000 raw=0x06000000173e560d level=3 gpga=0x173e56000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x14200000000 raw=0x06000000153f2f0d level=3 gpga=0x153f2f000 ps=0x20000000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x18021000000 raw=0x06000000153f2f0d level=4 gpga=0x153f2f000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk refusal sample: space=0x1efa10000 va=0x1b3b6800000 raw=0x06000000173e560d level=4 gpga=0x173e56000 ps=0x200000 bit=0x400(MISALIGNED_LEAF)
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3599) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.582s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3603) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.669s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3604) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: mem t=304.669s REFUSED VasKey(13965662642027628624) root 0x1efa10000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3608) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3609) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3613) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3614) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3618) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3622) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3626) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3630) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3634) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3638) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3642) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3646) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3647) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3648) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3649) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3653) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3657) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3661) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3665) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3669) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3673) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3677) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3681) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3685) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3689) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3693) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3697) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3701) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3705) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3709) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3713) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3717) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3721) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3725) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3729) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3733) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3737) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3741) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3745) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3749) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3753) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3757) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3761) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3765) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3769) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3773) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3777) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3781) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3782) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3783) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3787) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3791) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3795) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: split Some(1efa10000) (ticket 3799) completed over UNSETTLED VasKey(13965662642027628624) — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf3: walk report carried refusals=4 refuse_mask=0x400 pdbs=[1efa10000] runs=12
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00036:0xff040013->host 0x3c] + 0 Translated ring(s); relays before after (370 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00037:0xff040014->host 0x2003d] + 0 Translated ring(s); relays before after (224 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=192647 applied=3870 refused=0 serviced=2051 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=6389 walks=10308/10308 cleared=6389 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=82381 unmapped=74490 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=33980 priv_withheld_bytes=0x7a7d1ca000 priv_mirrored=29 sked=14/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=31/31 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004e:0xff1fe034: engine object host 0xcafe03e2 freed (439 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d0004e, ff040022) mode=Pointer Counts { entries_scan: 15, entries_pointer: 171, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 2, segments_window: 0, straddles_scan: 0, straddles_window: 0, window_f
+kf3: USER_RING_LAZY_OBSERVE (c1d0004e, ff040022) turns=220 put_cache_hits=160 put_fresh_reads=56 obs_skipped=176 obs_unconditional=22 obs_forced_wait=11 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=11 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1 [#4, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0
+kf3: act free: 0xc1d0004e:0xff040022: passthrough 0xc1d0004e:0xff040022 token 0x1024 host 0x2004b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1906 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d0004d hChannel=0xff040021 va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #14
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d0004d hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #25
+kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634237, chid: 35, chan_client: 3251634253, object: 4279107584 } on 0xc1d0004d:0xff0e0000 -> Windows user-work Passthrough twin(s) [4a]: host channel(s) off the runlist, context UNBOUND (owner ruling B / §U / §V) (292 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004d:0xff1fe032: engine object host 0xcafe03c5 freed (499 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004d:0xff1fe026: engine object host 0xcafe03c4 freed (394 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004d:0xff1fe034: engine object host 0xcafe03c1 freed (334 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004d:0xff1fe01a: engine object host 0xcafe03c2 freed (390 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004d:0xff1fe02c: engine object host 0xcafe03c3 freed (396 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d0004d, ff040021) mode=Pointer Counts { entries_scan: 17, entries_pointer: 4655, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 3, segments_window: 0, straddles_scan: 0, straddles_window: 0, windo
+kf3: USER_RING_LAZY_OBSERVE (c1d0004d, ff040021) turns=4881 put_cache_hits=4520 put_fresh_reads=358 obs_skipped=4463 obs_unconditional=21 obs_forced_wait=101 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=296 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1 [#5, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x00000023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4a trap=0 fast=0
+kf3: act free: 0xc1d0004d:0xff040021: passthrough 0xc1d0004d:0xff040021 token 0x23 host 0x4a objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 6, evicts: 2 } freed (2197 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00044:0xff1fe034: engine object host 0xcafe022d freed (448 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d00044, ff04001a) mode=Pointer Counts { entries_scan: 15, entries_pointer: 120, pointer_large_entries: 0, pointer_entry_max_bytes: 3048, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 2, segments_window: 0, straddles_scan: 0, straddles_window: 0, window_
+kf3: USER_RING_LAZY_OBSERVE (c1d00044, ff04001a) turns=171 put_cache_hits=113 put_fresh_reads=50 obs_skipped=130 obs_unconditional=18 obs_forced_wait=14 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=9 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1 [#6, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x0000101c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0
+kf3: act free: 0xc1d00044:0xff04001a: passthrough 0xc1d00044:0xff04001a token 0x101c host 0x20043 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1773 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00040 hChannel=0xff040018 va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #15
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d00040 hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #26
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00040:0xff1fe032: engine object host 0xcafe0215 freed (508 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00040:0xff1fe026: engine object host 0xcafe0214 freed (410 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00040:0xff1fe034: engine object host 0xcafe020e freed (327 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00040:0xff1fe01a: engine object host 0xcafe020f freed (370 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00040:0xff1fe02c: engine object host 0xcafe0210 freed (381 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d00040, ff040018) mode=Pointer Counts { entries_scan: 17, entries_pointer: 294, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 3, segments_window: 0, straddles_scan: 0, straddles_window: 0, window
+kf3: USER_RING_LAZY_OBSERVE (c1d00040, ff040018) turns=339 put_cache_hits=283 put_fresh_reads=52 obs_skipped=288 obs_unconditional=23 obs_forced_wait=9 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=19 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1 [#7, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x0000001a route=passthrough rung=0 emulated=0 forwarded=0 host=0x41 trap=0 fast=0
+kf3: act free: 0xc1d00040:0xff040018: passthrough 0xc1d00040:0xff040018 token 0x1a host 0x41 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2050 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+W343GSSCENSUS cmd=0x2080a088 params_size=12 params_at=40 payload_len=52
+kf3: GSS 0x2080a088 answered from the host's realize-time reply
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a088 params_size=12 params_at=40 payload_len=52
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080852f params_size=776 params_at=40 payload_len=816
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a619 params_size=172080 params_at=40 payload_len=172120
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080853b params_size=1832 params_at=40 payload_len=1872
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: family=Ada phase=Running trapped=196624 applied=3984 refused=0 serviced=2165 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=6461 walks=10503/10503 cleared=6461 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=82423 unmapped=76033 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=35476 priv_withheld_bytes=0x7e82524000 priv_mirrored=29 sked=14/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=18 root_moves=0 stmts=32/32 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13965662809531353168) mirror space=0xcafe01fc: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=458 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=208
+kf-host: channel birth h=0xcafe071c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00056:0xff040010 BORN USER private-read-only-ring token 0x12 host 0x39; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (3648 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00056:0xff1fe010, classID1 host 0xcafe071d; no host registrations (356 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00056:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x39 -> host object 0xcafe071e (341 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00056:0xff040010 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x39 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00056:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x39 -> host object 0xcafe071f (2013 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00056:0xff040010 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x39 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (6 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00056:0xff1fe02c class 0x902d (TwoD) on twin host 0x39 -> host object 0xcafe0720 (1189 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00056:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x39 -> host object 0xcafe0721 (649 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00056:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x39 -> host object 0xcafe0722 (622 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00056:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (307 us, off the GSP lock)
+kf3: act schedule: 0xc1d00056:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (474 us, off the GSP lock)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.94 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: VA_SLOW n=70 kind=apply t_ms=308833 ticket=4027 walk=10558 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=324616 maps=2 unmaps=0 prep_n=1 prep_us=5 prep_max_us=5 unmapph_n=1 unmapph_us=0 unmapph_max_us=0 mapph_n=1 mapph_us=324571 mapph_max_us=324571 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=35 inval_max_us=35 rm_map_n=11140 rm_map_us=321487 rm_map_max_us=1446 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=0 stitch_us=0 sti
+kf3: VA_SLOW n=71 kind=ticket t_ms=308833 ticket=4027 walk=10558 key=0x0 pdb=0x1efa3a000 windows=1 req_us=325155 q_inbox_us=68 mgr_us=325087 submit_us=52 walk_us=278 collect_us=12 apply_own_us=324616 apply_all_us=324616 cap_retries=0
+kf3: VA_SLOW n=72 kind=apply t_ms=309454 ticket=4032 walk=10563 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=336235 maps=2 unmaps=0 prep_n=1 prep_us=9 prep_max_us=9 unmapph_n=1 unmapph_us=0 unmapph_max_us=0 mapph_n=1 mapph_us=336177 mapph_max_us=336177 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=44 inval_max_us=44 rm_map_n=11140 rm_map_us=332639 rm_map_max_us=1545 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=0 stitch_us=0 sti
+kf3: VA_SLOW n=73 kind=ticket t_ms=309454 ticket=4032 walk=10563 key=0x0 pdb=0x1efa3a000 windows=1 req_us=336780 q_inbox_us=59 mgr_us=336721 submit_us=82 walk_us=336 collect_us=31 apply_own_us=336235 apply_all_us=336235 cap_retries=0
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634260, chid: 18, chan_client: 3251634262, object: 4279107584, virt_memory: 0, phys_address: 8188665856, phys_attr: 0, dma_handle: 0, index: 18, size: 2060288 } on 0xc1d00056:0xff0e0000 -> Windows user-work Passthrough twin(s) [39]: satisfied by each twin's own host context (owner ruling B / §U / §V) (30 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634260, chid: 18, chan_client: 3251634262, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d00056:0xff0e0000 -> Windows user-work Passthrough twin(s) [39]: satisfied by each twin's own host context (owner ruling B / §U / §V) (14 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d00056 hChannel=0xff0e0000 gfxp=1 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #27
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00056 hChannel=0xff040010 va=0x2b94000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #16
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x1 hClient=0xc1d00056 hChannel=0xff0e0000 gfxp=0 cilp=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #28
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=257 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=67
+kf-host: channel birth h=0xcafe072b engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00057:0xff040012 BORN USER private-read-only-ring token 0x1014 host 0x2003b; OWN VAS; worker-only; source=0x4036000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2578 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00057:0xff1fe010, classID1 host 0xcafe072c; no host registrations (261 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00057:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2003b -> host object 0xcafe072d (268 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00057:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (214 us, off the GSP lock)
+kf3: act schedule: 0xc1d00057:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (345 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=198265 applied=4049 refused=0 serviced=2230 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=6514 walks=10596/10596 cleared=6514 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=82488 unmapped=76077 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=35716 priv_withheld_bytes=0x7f18c84000 priv_mirrored=29 sked=15/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=19 root_moves=0 stmts=33/33 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004a:0xff1fe034: engine object host 0xcafe02f5 freed (481 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d0004a, ff04001e) mode=Pointer Counts { entries_scan: 15, entries_pointer: 52, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 2, segments_window: 0, straddles_scan: 0, straddles_window: 0, window_fr
+kf3: USER_RING_LAZY_OBSERVE (c1d0004a, ff04001e) turns=88 put_cache_hits=48 put_fresh_reads=33 obs_skipped=60 obs_unconditional=20 obs_forced_wait=5 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1 [#8, rate-limited]
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0
+kf3: act free: 0xc1d0004a:0xff04001e: passthrough 0xc1d0004a:0xff04001e token 0x1020 host 0x20047 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1906 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act timeslice: 0xc1d00057:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (342 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act timeslice: 0xc1d00056:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (291 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00048 hChannel=0xff04001c va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #17
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.95 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d00048 hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #29
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00048:0xff1fe032: engine object host 0xcafe0260 freed (574 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00048:0xff1fe026: engine object host 0xcafe025f freed (406 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00048:0xff1fe034: engine object host 0xcafe025a freed (344 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00048:0xff1fe01a: engine object host 0xcafe025c freed (386 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00048:0xff1fe02c: engine object host 0xcafe025e freed (382 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d00048, ff04001c) mode=Pointer Counts { entries_scan: 17, entries_pointer: 342, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0, stream_restarts: 0, stream_restarts_max: 0, stream_publish_retries: 0, to_pointer: 1, to_window_exact: 0, to_window_fresh: 0, to_pointer_from_window: 0, restarts: 0, seeded_gates: 0, window_entries_max: 0, segments_scan: 3, segments_window: 0, straddles_scan: 0, straddles_window: 0, window
+kf3: DOORBELL-LEDGER tok=0x0000001e route=passthrough rung=0 emulated=0 forwarded=0 host=0x45 trap=0 fast=0
+kf3: act free: 0xc1d00048:0xff04001c: passthrough 0xc1d00048:0xff04001c token 0x1e host 0x45 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2257 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004c:0xff1fe034: engine object host 0xcafe03ac freed (481 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00001022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20049 trap=0 fast=0
+kf3: act free: 0xc1d0004c:0xff040020: passthrough 0xc1d0004c:0xff040020 token 0x1022 host 0x20049 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1555 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d0004b hChannel=0xff04001f va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #18
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d0004b hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #30
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004b:0xff1fe032: engine object host 0xcafe0392 freed (577 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004b:0xff1fe026: engine object host 0xcafe0391 freed (404 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004b:0xff1fe034: engine object host 0xcafe038e freed (355 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004b:0xff1fe01a: engine object host 0xcafe038f freed (373 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0004b:0xff1fe02c: engine object host 0xcafe0390 freed (380 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x48 trap=0 fast=0
+kf3: act free: 0xc1d0004b:0xff04001f: passthrough 0xc1d0004b:0xff04001f token 0x21 host 0x48 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2014 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00049:0xff1fe034: engine object host 0xcafe02c1 freed (487 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x0000101f route=passthrough rung=0 emulated=0 forwarded=0 host=0x20046 trap=0 fast=0
+kf3: act free: 0xc1d00049:0xff04001d: passthrough 0xc1d00049:0xff04001d token 0x101f host 0x20046 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1566 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00047 hChannel=0xff04001b va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #19
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d00047 hChannel=0xff0e0000 gfxp=0 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #31
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00047:0xff1fe032: engine object host 0xcafe0252 freed (565 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00047:0xff1fe026: engine object host 0xcafe0251 freed (403 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00047:0xff1fe034: engine object host 0xcafe0239 freed (335 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00047:0xff1fe01a: engine object host 0xcafe023a freed (387 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00047:0xff1fe02c: engine object host 0xcafe024d freed (372 us, off the GSP lock)
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows [#512, rate-limited]
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x0000001d route=passthrough rung=0 emulated=0 forwarded=0 host=0x44 trap=0 fast=0
+kf3: act free: 0xc1d00047:0xff04001b: passthrough 0xc1d00047:0xff04001b token 0x1d host 0x44 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (1856 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#512, rate-limited]
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13965662826711222352) mirror space=0xcafe022e: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=192 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=1256
+kf-host: channel birth h=0xcafe075b engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d0005a:0xff040018 BORN USER private-read-only-ring token 0x1a host 0x41; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (3434 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0005a:0xff1fe010, classID1 host 0xcafe075c; no host registrations (297 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005a:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x41 -> host object 0xcafe075d (273 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0005a:0xff040018 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x41 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (5 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005a:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x41 -> host object 0xcafe075e (1715 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0005a:0xff040018 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x41 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (18 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005a:0xff1fe02c class 0x902d (TwoD) on twin host 0x41 -> host object 0xcafe075f (1217 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005a:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x41 -> host object 0xcafe0760 (540 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005a:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x41 -> host object 0xcafe0761 (571 us, off the GSP lock)
+kf3: act timeslice: 0xc1d0005a:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (270 us, off the GSP lock)
+kf3: act schedule: 0xc1d0005a:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (370 us, off the GSP lock)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: family=Ada phase=Running trapped=202290 applied=4202 refused=0 serviced=2383 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=6685 walks=10935/10936 cleared=6685 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=82975 unmapped=76496 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=36514 priv_withheld_bytes=0x818da1f000 priv_mirrored=29 sked=17/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=20 root_moves=0 stmts=36/36 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: VA_SLOW n=74 kind=apply t_ms=311864 ticket=4230 walk=10936 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=336331 maps=2 unmaps=0 prep_n=1 prep_us=2 prep_max_us=2 unmapph_n=1 unmapph_us=0 unmapph_max_us=0 mapph_n=1 mapph_us=336276 mapph_max_us=336276 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=48 inval_max_us=48 rm_map_n=11140 rm_map_us=332722 rm_map_max_us=1496 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=0 stitch_us=0 sti
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: VA_SLOW n=76 kind=apply t_ms=312899 ticket=4241 walk=10947 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=523706 maps=2 unmaps=4 prep_n=1 prep_us=10 prep_max_us=10 unmapph_n=1 unmapph_us=212046 unmapph_max_us=212046 mapph_n=1 mapph_us=311608 mapph_max_us=311608 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=36 inval_max_us=36 rm_map_n=11140 rm_map_us=308494 rm_map_max_us=1323 rm_unmap_n=4 rm_unmap_us=210507 rm_unmap_max_us=90831 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=4 ledger_us=1020 ledger_max_us=399 
+kf3: mem SLOW-APPLY walk#10947 VasKey(13965662599077955664) maps=2 unmaps=4 ms=523 wants=[Split{ticket=4241,age_ms=524}] carried_total=1 behind=0 behind_splits=0 oldest_behind_ms=0 batch[calls=0 rows=0 -> pieces(mmaps)=0 call_avg_us=0 piece_avg_us=0 call_max_us=141849 piece_max_us=1835] ram_run_maps[n=0 avg_us=0 max_us=12079] store_run_maps[n=11140 avg_us=27 max_us=254977] (n=5; per-piece us = whole batch call / pieces, an upper bound on the mmap)
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634264, chid: 26, chan_client: 3251634266, object: 4279107584, virt_memory: 0, phys_address: 8097120256, phys_attr: 0, dma_handle: 0, index: 26, size: 2060288 } on 0xc1d0005a:0xff0e0000 -> Windows user-work Passthrough twin(s) [41]: satisfied by each twin's own host context (owner ruling B / §U / §V) (63 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634264, chid: 26, chan_client: 3251634266, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d0005a:0xff0e0000 -> Windows user-work Passthrough twin(s) [41]: satisfied by each twin's own host context (owner ruling B / §U / §V) (20 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND 0x20801211 client=0xc1d00002 object=0xff030000 flags=0x2 hClient=0xc1d0005a hChannel=0xff0e0000 gfxp=1 cilp=0: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #32
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d0005a hChannel=0xff040018 va=0x2b94000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #20
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=207 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=54
+kf-host: channel birth h=0xcafe076f engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d0005b:0xff04001a BORN USER private-read-only-ring token 0x101c host 0x20043; OWN VAS; worker-only; source=0x4036000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2619 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0005b:0xff1fe010, classID1 host 0xcafe0770; no host registrations (401 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005b:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20043 -> host object 0xcafe0771 (282 us, off the GSP lock)
+kf3: act timeslice: 0xc1d0005b:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (236 us, off the GSP lock)
+kf3: act schedule: 0xc1d0005b:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (363 us, off the GSP lock)
+kf3: act timeslice: 0xc1d0005b:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (291 us, off the GSP lock)
+kf3: act timeslice: 0xc1d0005a:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (303 us, off the GSP lock)
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080852f params_size=776 params_at=40 payload_len=816
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a619 params_size=172080 params_at=40 payload_len=172120
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080853b params_size=1832 params_at=40 payload_len=1872
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: family=Ada phase=Running trapped=204016 applied=4237 refused=0 serviced=2418 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=6695 walks=11077/11077 cleared=6695 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=83243 unmapped=76621 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=37006 priv_withheld_bytes=0x8300f5a000 priv_mirrored=29 sked=18/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=20 root_moves=0 stmts=36/36 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080b201 params_size=2188 params_at=40 payload_len=2228
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.96 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: PT-NSI host CE2 notifier wake #16384: NotArmed (vector Some(1), live twins 0)
+kf3: VasKey(13965662843891091536) mirror space=0xcafe0222: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13965662856775993424) mirror space=0xcafe00e6: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=440 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=230
+kf-host: channel birth h=0xcafe07e9 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d0005e:0xff04001b BORN USER private-read-only-ring token 0x1d host 0x44; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2322 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: walk capacity: slot 21 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s21:1025); walk pool 1048576 runs, slot pool 2097152 runs (2066944 free), max per space 1048576, slots held 13, grows 7, retries 10, ceilings 0, largest slot 10496, largest walk 10496
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0005e:0xff1fe010, classID1 host 0xcafe07ed; no host registrations (284 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005e:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x44 -> host object 0xcafe07f1 (321 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0005e:0xff04001b GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (13 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005e:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x44 -> host object 0xcafe07f2 (2092 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0005e:0xff04001b GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005e:0xff1fe02c class 0x902d (TwoD) on twin host 0x44 -> host object 0xcafe07f4 (1203 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005e:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x44 -> host object 0xcafe07f6 (657 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0005e:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x44 -> host object 0xcafe07f7 (586 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: act timeslice: 0xc1d0005e:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (303 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act schedule: 0xc1d0005e:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (418 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: family=Ada phase=Running trapped=206763 applied=4310 refused=0 serviced=2491 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb830b0 mem[inval=6767 walks=11282/11283 cleared=6766 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=84293 unmapped=76648 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=38244 priv_withheld_bytes=0x87e9e3b000 priv_mirrored=29 sked=19/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: VA_SLOW n=80 kind=apply t_ms=316016 ticket=4494 walk=11283 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=471999 maps=2 unmaps=4 prep_n=1 prep_us=3 prep_max_us=3 unmapph_n=1 unmapph_us=169507 unmapph_max_us=169507 mapph_n=1 mapph_us=301124 mapph_max_us=301124 takedown_n=1 takedown_us=0 takedown_max_us=0 inval_n=1 inval_us=1356 inval_max_us=1356 rm_map_n=11140 rm_map_us=298210 rm_map_max_us=1368 rm_unmap_n=4 rm_unmap_us=168480 rm_unmap_max_us=62578 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=0 ledger_n=4 ledger_us=730 ledger_max_us=288
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634268, chid: 29, chan_client: 3251634270, object: 4279107584, virt_memory: 0, phys_address: 8051384320, phys_attr: 0, dma_handle: 0, index: 29, size: 2060288 } on 0xc1d0005e:0xff0e0000 -> Windows user-work Passthrough twin(s) [44]: satisfied by each twin's own host context (owner ruling B / §U / §V) (61 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634268, chid: 29, chan_client: 3251634270, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d0005e:0xff0e0000 -> Windows user-work Passthrough twin(s) [44]: satisfied by each twin's own host context (owner ruling B / §U / §V) (17 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=221 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=126
+kf-host: channel birth h=0xcafe080a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00061:0xff04001c BORN USER private-read-only-ring token 0x1e host 0x45; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2604 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00061:0xff1fe010, classID1 host 0xcafe0811; no host registrations (6172 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00061:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x45 -> host object 0xcafe0815 (273 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00061:0xff04001c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00061:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x45 -> host object 0xcafe0819 (1638 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d0005e hChannel=0xff04001b va=0x2b94000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #21
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00061:0xff04001c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00061:0xff1fe02c class 0x902d (TwoD) on twin host 0x45 -> host object 0xcafe081b (1252 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00061:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x45 -> host object 0xcafe081c (542 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00061:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x45 -> host object 0xcafe081d (552 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00061:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (273 us, off the GSP lock)
+kf3: act schedule: 0xc1d00061:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (383 us, off the GSP lock)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=345 ok=true
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: USER_RING_INIT phase=2 elapsed_us=79
+kf-host: channel birth h=0xcafe0822 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00062:0xff04001d BORN USER private-read-only-ring token 0x101f host 0x20046; OWN VAS; worker-only; source=0x4036000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (4646 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00062:0xff1fe010, classID1 host 0xcafe0828; no host registrations (484 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00062:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20046 -> host object 0xcafe082e (57166 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00062:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (54447 us, off the GSP lock)
+kf3: act schedule: 0xc1d00062:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (20322 us, off the GSP lock)
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634271, chid: 30, chan_client: 3251634273, object: 4279107584, virt_memory: 0, phys_address: 8005664768, phys_attr: 0, dma_handle: 0, index: 30, size: 2060288 } on 0xc1d00061:0xff0e0000 -> Windows user-work Passthrough twin(s) [45]: satisfied by each twin's own host context (owner ruling B / §U / §V) (27 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634271, chid: 30, chan_client: 3251634273, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d00061:0xff0e0000 -> Windows user-work Passthrough twin(s) [45]: satisfied by each twin's own host context (owner ruling B / §U / §V) (33 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00061 hChannel=0xff04001c va=0x2b94000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #22
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=175 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=64
+kf-host: channel birth h=0xcafe0842 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00063:0xff04001e BORN USER private-read-only-ring token 0x1020 host 0x20047; OWN VAS; worker-only; source=0x4036000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2521 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00063:0xff1fe010, classID1 host 0xcafe0843; no host registrations (271 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00063:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20047 -> host object 0xcafe0844 (266 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00063:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (218 us, off the GSP lock)
+kf3: act schedule: 0xc1d00063:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (349 us, off the GSP lock)
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: family=Ada phase=Running trapped=209958 applied=4375 refused=0 serviced=2556 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81610 mem[inval=6814 walks=11577/11578 cleared=6814 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=85041 unmapped=76727 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=39474 priv_withheld_bytes=0x8c13cd0000 priv_mirrored=29 sked=21/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-rm: server-context-only PDE copy client=0xc1d0005f vaspace=0xff000850 page_size=0x1000 levels=[shift29 phys=0x1e29ed000 size=0x1000 ap=1] (inert) [#32, rate-limited]
+kf3: act timeslice: 0xc1d0005b:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (341 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act timeslice: 0xc1d0005a:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (350 us, off the GSP lock)
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00029:0xff04000e->host 0x37] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (416 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00036:0xff040013->host 0x3c] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (348 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00037:0xff040014->host 0x2003d] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (293 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00056:0xff040010->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (282 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00057:0xff040012->host 0x2003b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (281 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005a:0xff040018->host 0x41] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (248 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005b:0xff04001a->host 0x20043] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (291 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005e:0xff04001b->host 0x44] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (242 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00062:0xff04001d->host 0x20046] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (304 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00061:0xff04001c->host 0x45] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (282 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00063:0xff04001e->host 0x20047] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (285 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: WINDOWS PROFILE NV0073 0x0073012c client=0xc1d00002 object=0xff0a0000: NV_OK, request echoed — FABRICATED answer (Windows profile) #9
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00029:0xff04000e->host 0x37] + 0 Translated ring(s); relays before after (418 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00036:0xff040013->host 0x3c] + 0 Translated ring(s); relays before after (289 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00037:0xff040014->host 0x2003d] + 0 Translated ring(s); relays before after (302 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00056:0xff040010->host 0x39] + 0 Translated ring(s); relays before after (242 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00057:0xff040012->host 0x2003b] + 0 Translated ring(s); relays before after (363 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005a:0xff040018->host 0x41] + 0 Translated ring(s); relays before after (249 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005b:0xff04001a->host 0x20043] + 0 Translated ring(s); relays before after (244 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005e:0xff04001b->host 0x44] + 0 Translated ring(s); relays before after (244 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00062:0xff04001d->host 0x20046] + 0 Translated ring(s); relays before after (243 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00061:0xff04001c->host 0x45] + 0 Translated ring(s); relays before after (253 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00063:0xff04001e->host 0x20047] + 0 Translated ring(s); relays before after (239 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=211944 applied=4440 refused=0 serviced=2601 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=6824 walks=11769/11770 cleared=6824 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=85821 unmapped=77540 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=40864 priv_withheld_bytes=0x91391bf000 priv_mirrored=29 sked=22/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: VA_SLOW n=86 kind=apply t_ms=320107 ticket=4923 walk=11770 key=0xc1d00023ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=414616 maps=4246 unmaps=0 prep_n=1 prep_us=972 prep_max_us=972 unmapph_n=1 unmapph_us=12 unmapph_max_us=12 mapph_n=1 mapph_us=413258 mapph_max_us=413258 takedown_n=1 takedown_us=15 takedown_max_us=15 inval_n=1 inval_us=36 inval_max_us=36 rm_map_n=12041 rm_map_us=408140 rm_map_max_us=40704 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=0 rm_free_n=0 rm_free_us=0 rm_free_max_us=0 rm_resv_n=1 rm_resv_us=46 rm_resv_max_us=46 ledger_n=0 ledger_us=0 ledger_max_us=0 stitch_n=2 s
+kf3: mem large apply VasKey(13965662599077955664): 4246 maps + 0 unmaps in 414 ms — 4 map verb(s) (2 batch(es) carrying 4244 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634221, chid: 23, chan_client: 3251634232, object: 4279107584, virt_memory: 0, phys_address: 7959855104, phys_attr: 0, dma_handle: 0, index: 23, size: 2060288 } on 0xc1d00038:0xff0e0000 -> Windows user-work Passthrough twin(s) [3e]: satisfied by each twin's own host context (owner ruling B / §U / §V) (26 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634221, chid: 23, chan_client: 3251634232, object: 4279107584, virt_memory: 0, virt_address: 434110464, size: 2060288, entry_count: 0 } on 0xc1d00038:0xff0e0000 -> Windows user-work Passthrough twin(s) [3e]: satisfied by each twin's own host context (owner ruling B / §U / §V) (17 us, off the GSP lock)
+kf3: mem large apply VasKey(13965662599077955664): 0 maps + 4244 unmaps in 24 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 4244 runs), 0 fallback(s)
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=158 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=81
+kf-host: channel birth h=0xcafe08b5 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00064:0xff04001f BORN USER private-read-only-ring token 0x21 host 0x48; OWN VAS; worker-only; source=0x18400000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (5666 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00064:0xff1fe010, classID1 host 0xcafe08b6; no host registrations (300 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00064:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x48 -> host object 0xcafe08b7 (262 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00064:0xff04001f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x48 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00064:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x48 -> host object 0xcafe08bb (8499 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00064:0xff04001f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x48 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00064:0xff1fe02c class 0x902d (TwoD) on twin host 0x48 -> host object 0xcafe08c7 (1161 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00064:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x48 -> host object 0xcafe08c8 (573 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00064:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x48 -> host object 0xcafe08ca (752 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00064:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (256 us, off the GSP lock)
+kf3: act schedule: 0xc1d00064:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (373 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00038:0xff040015->host 0x3e] + 0 Translated ring(s); relays before after (280 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00039:0xff040016->host 0x2003f] + 0 Translated ring(s); relays before after (291 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=241 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=146
+kf-host: channel birth h=0xcafe08e0 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00065:0xff040020 BORN USER private-read-only-ring token 0x22 host 0x49; OWN VAS; worker-only; source=0x149ac000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2334 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00065:0xff1fe010, classID1 host 0xcafe08e1; no host registrations (279 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00065:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x49 -> host object 0xcafe08e2 (281 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00065:0xff040020 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (4 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00065:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x49 -> host object 0xcafe08e3 (1652 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00065:0xff040020 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00065:0xff1fe02c class 0x902d (TwoD) on twin host 0x49 -> host object 0xcafe08e4 (1222 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00065:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x49 -> host object 0xcafe08e5 (590 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00065:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x49 -> host object 0xcafe08e6 (43847 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00065:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (298 us, off the GSP lock)
+kf3: act schedule: 0xc1d00065:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (426 us, off the GSP lock)
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634264, chid: 33, chan_client: 3251634276, object: 4279107584, virt_memory: 0, phys_address: 7914115072, phys_attr: 0, dma_handle: 0, index: 33, size: 2060288 } on 0xc1d00064:0xff0e0000 -> Windows user-work Passthrough twin(s) [48]: satisfied by each twin's own host context (owner ruling B / §U / §V) (47 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634264, chid: 33, chan_client: 3251634276, object: 4279107584, virt_memory: 0, virt_address: 406913024, size: 2060288, entry_count: 0 } on 0xc1d00064:0xff0e0000 -> Windows user-work Passthrough twin(s) [48]: satisfied by each twin's own host context (owner ruling B / §U / §V) (32 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=213821 applied=4540 refused=0 serviced=2701 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xbb0090 mem[inval=6884 walks=11943/11944 cleared=6884 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=90431 unmapped=82028 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=42164 priv_withheld_bytes=0x95d992f000 priv_mirrored=29 sked=22/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634271, chid: 34, chan_client: 3251634277, object: 4279107584, virt_memory: 0, phys_address: 7868391424, phys_attr: 0, dma_handle: 0, index: 34, size: 2060288 } on 0xc1d00065:0xff0e0000 -> Windows user-work Passthrough twin(s) [49]: satisfied by each twin's own host context (owner ruling B / §U / §V) (27 us, off the GSP lock)
+kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634271, chid: 34, chan_client: 3251634277, object: 4279107584, virt_memory: 0, virt_address: 383254528, size: 2060288, entry_count: 0 } on 0xc1d00065:0xff0e0000 -> Windows user-work Passthrough twin(s) [49]: satisfied by each twin's own host context (owner ruling B / §U / §V) (11 us, off the GSP lock)
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00064 hChannel=0xff04001f va=0x2d4e000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #23
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.96 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND 0x20801208 from client=0xc1d00002 names hClient=0xc1d00065 hChannel=0xff040020 va=0x2d4e000 mode=2: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #24
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00038:0xff040015->host 0x3e] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (365 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00039:0xff040016->host 0x2003f] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (290 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00038:0xff040015->host 0x3e] + 0 Translated ring(s); relays before after (281 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00039:0xff040016->host 0x2003f] + 0 Translated ring(s); relays before after (239 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=517 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=152
+kf-host: channel birth h=0xcafe08fa engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00067:0xff040021 BORN USER private-read-only-ring token 0x1023 host 0x2004a; OWN VAS; worker-only; source=0x149e1000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2748 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=398 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=209
+kf-host: channel birth h=0xcafe08fe engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00066:0xff040022 BORN USER private-read-only-ring token 0x1024 host 0x2004b; OWN VAS; worker-only; source=0x1afb3000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2614 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00067:0xff1fe010, classID1 host 0xcafe08ff; no host registrations (332 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00066:0xff1fe010, classID1 host 0xcafe0900; no host registrations (302 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00067:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004a -> host object 0xcafe0901 (305 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d00066:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004b -> host object 0xcafe0902 (281 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00067:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (255 us, off the GSP lock)
+kf3: act schedule: 0xc1d00067:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (390 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00066:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (263 us, off the GSP lock)
+kf3: act schedule: 0xc1d00066:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (362 us, off the GSP lock)
+kf3: family=Ada phase=Running trapped=215294 applied=4585 refused=0 serviced=2744 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=6890 walks=12000/12000 cleared=6890 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=90527 unmapped=82262 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=42884 priv_withheld_bytes=0x98abfbd000 priv_mirrored=29 sked=22/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0005e:0xff04001b->host 0x44] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (429 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00062:0xff04001d->host 0x20046] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (290 us, off the GSP lock)
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.94 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: family=Ada phase=Running trapped=215341 applied=4591 refused=0 serviced=2746 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=6890 walks=12000/12000 cleared=6890 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=90527 unmapped=82262 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=42884 priv_withheld_bytes=0x98abfbd000 priv_mirrored=29 sked=22/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=9612 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=0.0 same=764 ondemand=10 over=0]
+kf3: GSP rpc RmAlloc seq=0
+kf3: family=Ada phase=Running trapped=215363 applied=4592 refused=0 serviced=2747 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=6890 walks=12000/12000 cleared=6890 superseded=0 named_missed=0 unreconciled=0 absent_cleared=6 mapped=90527 unmapped=82262 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=42884 priv_withheld_bytes=0x98abfbd000 priv_mirrored=29 sked=22/0held carve_gpu=0 carve_kernel=8 carve_cpu=1 carve_clipped=0x40000 fn70=1 roots=22 root_moves=0 stmts=38/38 refused=16 pramin_repoints=44 pramin_miss=0 last_miss=0x0 pramin_worst_us=422 (map 234 mmap 312) pr
+kf3: display: STALL Core 0 (chn 0) update 0x0 parked 1016 ms: waiting for its interlock group group/interlock bits 0x2 head None acquire None current None; every parked channel: [(0, 0, true)]
+kf3: display: STALL recent effects (seq, kind, chn, handle, offset, awaken-or-value, ok; oldest first): [(1021, "RELEASE", 1, 4280279472, 256, 337, true), (1022, "NOTIFY-FINISHED", 1, 4280279456, 2624, 0, true), (1023, "NOTIFY-BEGUN", 1, 4280279456, 2560, 0, true), (1024, "RELEASE", 1, 4280279472, 272, 338, true), (1025, "NOTIFY-FINISHED", 1, 4280279456, 2560, 0, true), (1026, "NOTIFY-BEGUN", 1, 4280279456, 2496, 0, true), (1027, "RELEASE", 1, 4280279472, 288, 339, true), (1028, "NOTIFY-FINISHED", 1, 4280279456, 2496, 0, true), (1029, "NOTIFY-BEGUN", 1, 4280279456, 2432, 0, true), (1030, "RELE
+kf3: display: STALL recent events (seq, event; oldest first): [(1972, Latch { group: 8589934592 }), (1973, Flags { chn: 1, window_flags: true, data: 0 }), (1974, Update { chn: 1, update: 0, ilk: 0 }), (1975, Latch { group: 2 }), (1976, Flags { chn: 1, window_flags: true, data: 0 }), (1977, Update { chn: 33, update: 0, ilk: 0 }), (1978, Latch { group: 8589934592 }), (1979, Flags { chn: 1, window_flags: true, data: 0 }), (1980, Update { chn: 1, update: 0, ilk: 0 }), (1981, Latch { group: 2 }), (1982, Flags { chn: 1, window_flags: true, data: 0 }), (1983, Update { chn: 33, update: 0, ilk: 0 }), (
+kf3: display: STALL chn 0: PUT 0xc30 ports-generation 1 engine Some((3120, 3112, 1, false, "interlock")) generation Some(1); ring words from decoded-16: Some([4021c, 1, 40200, 0, 4021c, 0, 40208, ff1fe141, 4020c, 1000, 293ea, 2a051, 2b3f9, 2c3fc, 2d3ea, 2e05b])
+kf3: display: STALL chn 1: PUT 0x2170 ports-generation 1 engine Some((3936, 3936, 0, true, "running")) generation Some(1); ring words from decoded-16: Some([40448, 0, 0, 0, 430002ac, 0, 1000, 23f0, 3090, 4000, 53fb, 6005, 7000, 8000, 93f7, a00b])
+kf3: display: STALL chn 5: PUT 0xe50 ports-generation 1 engine Some((3664, 3664, 0, false, "running")) generation Some(1); ring words from decoded-16: Some([57d101fa, 0, 0, 0, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969])
+kf3: display: STALL chn 33: PUT 0x630 ports-generation 1 engine Some((1584, 1584, 0, false, "running")) generation Some(1); ring words from decoded-16: Some([40200, 0, 0, 0, 40200, 0, 0, 0, 40200, 0, 0, 0, 40200, 0, 0, 0])
+kf3: display: STALL chn 37: PUT 0x0 ports-generation 1 engine Some((0, 0, 0, false, "running")) generation Some(1); ring words from decoded-16: Some([69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969, 69696969])
+kf3: display: STALL context: queue 0/4096 copies started 1309 done 1309 barrier 0 inflight false want false failed false nonflip_pending false vblanks_total 14564 ticks_per_head [14564, 0, 0, 0, 0, 0, 0, 0] heads_armed [(0, 16666666), (1, 0), (2, 0), (3, 0)]

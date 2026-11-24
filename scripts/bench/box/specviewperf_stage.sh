@@ -12,9 +12,23 @@
 # DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
 # Proof runs narrow a lane with KF_SPEC_TABLE=<file shaped like lanes.json> (read by lane.py and tarfilter.py).
 # PC runs (no Vast; 2026-11-12): KF_SPEC_TABLE=scripts/bench/specviewperf/lanes_pc.json KF_SPEC_LANE=pcp1|pcp2|pcp3 (verdicts end in NARROWED), plus the
-# opt-in knobs KF_SPEC_URL_FILE (stream the archive from a presigned-URL JSON, sha256 checked on the fly: scripts/bench/specviewperf/stream_url.py),
+# opt-in knobs KF_SPEC_URL_FILE (stream the archive from a presigned-URL JSON: scripts/bench/specviewperf/stream_url.py; since 2026-11-17 the file is
+# the USER'S input, trusted and recorded (sha256 and size in the stage notes and trust.jsonl), and our git pin is only compared, never a refusal,
+# unless KF_TRUST_MODE=strict; KF_SPEC_EXPECT_SHA256 is the user's own enforced pin; docs/OWNER_RULINGS.md section AX),
 # KF_SPEC_DISK_GB (grow the guest disk), KF_SPEC_COPY_ONLY, KF_SPEC_REUSE, KF_SPEC_KEEP_ON_FAIL (1 default | 0 | always), KF_SPEC_REBOOT_AFTER,
-# KF_SPEC_LICENCE_PROBE, KF_SPEC_PAUSE_FILE. Unset, the Vast path is unchanged.
+# KF_SPEC_PAUSE_FILE, KF_SPEC_COPY_BUDGET_S, KF_SPEC_COPY_NOTE_S. Unset, the Vast path is unchanged.
+# In one Vast run at tree 7fb1c98a0, the copy into the guest ran at about 5 MB/s and hit its old fixed 70-minute budget (RETRY
+# class=TIME, every row NOT_RUN SETUP, nothing in the log about the rate). KF_SPEC_COPY_BUDGET_S=<600..86400 seconds> is the time the copy may take; unset,
+# it is DERIVED (scripts/bench/specviewperf/copy_budget.py: the lane's tree size from lanes.json at a floor rate of 5 MB/s, +20 % and +600 s), and
+# either way never more than the time left. A bad value is refused by name before anything starts (RETRY class=OPERATOR). While the copy runs the
+# stage log gets `SPEC_NOTE copy progress bytes=<n> rate_mb_s=<r> elapsed_s=<t> budget_s=<b>` every KF_SPEC_COPY_NOTE_S seconds (default 60, 1..3600),
+# and one last line (final=1); the TIME abort names the bytes copied, the observed rate and `needed_s` (the budget that would have sufficed).
+# 2026-11-17 (owner): the guest has the network and the real clock. KF_SPEC_NET=online|offline (default online) is the WINVM_NET of every
+# boot of this stage (the copy boot and the lane's boots); online is slirp restrict=off, and the clock rule (docs/design/V3_CLOCK_RULE.md,
+# scripts/bench/windows/clockrule.py) then runs the real clock; offline is restrict=on with the recorded clock. The Windows evaluation guest
+# needs the network and the real time to complete its own start-up validation. KF_SPEC_LICENCE_PROBE (default ON; 0 switches it off) reads
+# the guest's licence state at boot, at least every 15 minutes and at the end (state text only, scripts/bench/specviewperf/licence.py), and
+# classifies a guest that went down with a licence event 1074 as reason=GUEST_SHUTDOWN_LICENCE (docs/design/V3_SPEC_GATE.md).
 #
 # What it does, strictly serial:
 #   1. preflight: root, /dev/kvm, the gate's PASS and overlay, the lane, the deadline, disk and RAM; the sha256 pin
@@ -24,7 +38,7 @@
 #   3. the same-box host GPU reference BEFORE (as the gate);
 #   4. boot A: the gate's overlay, sealed, with a fresh child overlay, WITHOUT kf3 (std VGA: 94 GB of tree through the
 #      kf3 guest would only add risk), 16 GB RAM; the tree is streamed in
-#        zstd -d | tarfilter.py (this lane's viewsets only) | ssh ... tar -xf -
+#        zstd -d | tarfilter.py (this lane's viewsets only) | copy_budget.py pipe (the byte counter) | ssh ... tar -xf -
 #      and compared with the filter's manifest; write access and the shipped vcredist are set; the guest stops;
 #   5. boot B: the child overlay WITH kf3 (the gate's flags and guest driver), the desktop, then the settle wait (no
 #      CLI run sooner than settle_s after the boot: the first run within about 2 minutes of a reboot fails with
@@ -38,7 +52,10 @@
 # Output (stdout; the wrapper lets only these through, strict patterns, no score exists in them):
 #   SPEC_STAGE_LIST lane=<l> n=<n>
 #   SPEC_ROW name=<viewset> result=PASS|FAIL|NOT_RUN subtests=<done>/<total> reason=<WORD|-> failed=<names|->   (one per
-#       viewset, printed as soon as it is known: a killed run still reports what finished)
+#       viewset, printed as soon as it is known: a killed run still reports what finished; a row of a guest that went down
+#       waits for the next boot's licence probe, at most until the end, to learn whether the reason is GUEST_SHUTDOWN_LICENCE)
+#   SPEC_LICENCE_STATE at=<label> up_min=<n> status=<text> ... net=<online|offline>     (each licence probe; state text only)
+#   SPEC_GUEST_SHUTDOWN_LICENCE viewset=<v> event=1074 time=<utc> process=<exe> text=<the event's reason text>
 #   <viewset_with_underscores> --- FAILED                                    (the payload's FINAL SUMMARY lists these)
 #   SPEC_STAGE_COUNTS pass=<n> fail=<n> not_run=<n> of=<n>
 #   SPECVIEWPERF_STAGE_PASS | SPECVIEWPERF_STAGE_FAIL | SPECVIEWPERF_STAGE_RETRY class=<A-Z_>
@@ -61,6 +78,12 @@ PROV=$2
 [[ "$T" =~ ^[A-Za-z0-9][A-Za-z0-9_]*$ ]] || { echo "$USAGE_LINE"; exit 2; }
 LANE=${KF_SPEC_LANE:-}
 case "$LANE" in lanea | laneb | both | pc[a-z0-9]*) ;; *) echo "$USAGE_LINE"; exit 2 ;; esac   # pc*: PC-run lanes of lanes_pc.json (KF_SPEC_TABLE); lane.py refuses a name the table lacks
+# the guest's network (owner, 2026-11-17): online by default, so that the Windows evaluation guest completes its start-up validation
+SPEC_NET=${KF_SPEC_NET:-online}
+case "$SPEC_NET" in online | offline) ;; *) echo "$USAGE_LINE"; exit 2 ;; esac
+# the licence probe: ON by default for this stage; KF_SPEC_LICENCE_PROBE=0 (or empty) switches it off
+LIC_PROBE=${KF_SPEC_LICENCE_PROBE-1}
+case "$LIC_PROBE" in 0 | off | no) LIC_PROBE="" ;; esac
 SOURCE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)
 WIN=$SOURCE/scripts/bench/windows
 WV=$WIN/win_vm.sh
@@ -68,6 +91,8 @@ SPECD=$SOURCE/scripts/bench/specviewperf
 FETCH=$SOURCE/scripts/bench/box/fetch_bench_data.sh
 PINFILE=$SOURCE/scripts/bench/box/specviewperf.pin
 lane_py() { python3 -I "$SPECD/lane.py" "$@"; }
+licence_py() { python3 -I "$SPECD/licence.py" "$@"; }
+copy_py() { python3 -I "$SPECD/copy_budget.py" "$@"; }
 OBJECT=specviewperf-15.0.0.tar.zst
 
 export PATH="$PATH:$HOME/.cargo/bin"
@@ -230,7 +255,7 @@ boot_guest() { # copy|run  -> 0 ssh up, 1 no qemu, 2 no ssh
     GUEST_STARTED=1
     WAIT_KF3=0
     [ "$kind" != run ] || WAIT_KF3=1
-    if ! WINVM_RAM_MB=$GUEST_RAM_MB bash "$WV" "${args[@]}" > "$WORK/launch_$tag.txt" 2>&1 < /dev/null; then
+    if ! WINVM_NET=$SPEC_NET WINVM_RAM_MB=$GUEST_RAM_MB bash "$WV" "${args[@]}" > "$WORK/launch_$tag.txt" 2>&1 < /dev/null; then
         note "win_vm.sh run did not start ($tag): $(tail -2 "$WORK/launch_$tag.txt" | tr '\n' ' ')"
         return 1
     fi
@@ -239,10 +264,30 @@ boot_guest() { # copy|run  -> 0 ssh up, 1 no qemu, 2 no ssh
     BOOT_UP=$(date +%s)
     return 0
 }
-licprobe() { # TAG: read-only licence readout of the guest (PC run, KF_SPEC_LICENCE_PROBE=1), kept in $WORK/licence_<TAG>.txt
-    [ -n "${KF_SPEC_LICENCE_PROBE:-}" ] || return 0
-    timeout 300 bash "$WV" scp-to "$WIN/spec/licence_probe.ps1" 'C:/kf/spec/licence_probe.ps1' < /dev/null > /dev/null 2>&1
-    g 240 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\spec\\licence_probe.ps1" 2> /dev/null | tr -d '\r' > "$WORK/licence_$1.txt"
+LAST_LIC=0               # the epoch of the last licence probe (a probe is due 15 minutes after it)
+PREV_LASTBOOT=""         # the guest's own start time (its clock) of the boot before the last probe's boot
+PENDING_ROW=""           # the row of a guest that went down, held until the next boot's probe has been read
+PENDING_VIEWSET=""
+LIC_SHUTDOWN_LINE=""     # SPEC_GUEST_SHUTDOWN_LICENCE for PENDING_VIEWSET, once a probe found event 1074
+LIC_STATES=$EVD/licence_states.txt
+licprobe() { # LABEL: read-only licence readout of the guest (KF_SPEC_LICENCE_PROBE, default on). The raw readout stays in $WORK/licence_<LABEL>.txt
+    # (private); the state line (state text only) is printed and kept in $EVD/licence_states.txt; a pending dead-guest row asks whether
+    # the readout holds a licence event 1074 from that guest's last minutes
+    [ -n "$LIC_PROBE" ] || return 0
+    qemu_alive || return 0
+    local lbl=${1//[^A-Za-z0-9_]/_} raw line lb   # a label is a word: a viewset's name has a hyphen
+    raw="$WORK/licence_$lbl.txt"
+    timeout "$(cap 120)" bash "$WV" scp-to "$WIN/spec/licence_probe.ps1" 'C:/kf/spec/licence_probe.ps1' < /dev/null > /dev/null 2>&1
+    g "$(cap 150)" "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\spec\\licence_probe.ps1" 2> /dev/null | tr -d '\r' > "$raw"
+    LAST_LIC=$(date +%s)
+    line=$(licence_py state --raw "$raw" --label "$lbl" --net "$SPEC_NET") || line="SPEC_LICENCE_STATE at=probe status=unavailable net=$SPEC_NET"
+    echo "$line" >> "$LIC_STATES"
+    say "$line"
+    if [ -n "$PENDING_VIEWSET" ] && [ -z "$LIC_SHUTDOWN_LINE" ]; then
+        LIC_SHUTDOWN_LINE=$(licence_py shutdown --raw "$raw" --viewset "$PENDING_VIEWSET" ${PREV_LASTBOOT:+--since "$PREV_LASTBOOT"}) || LIC_SHUTDOWN_LINE=""
+    fi
+    lb=$(licence_py last-boot --raw "$raw")
+    [ -z "$lb" ] || PREV_LASTBOOT=$lb
 }
 wait_desktop() { # 0 once dwm and explorer run for the console user
     local w=0 st
@@ -292,7 +337,28 @@ hostref() { # before|after
 # ------------------------------------------------------------------------------------------------
 # verdict and teardown
 # ------------------------------------------------------------------------------------------------
-emit_row() { # a SPEC_ROW line from lane.py
+hold_row() { # ROW VIEWSET: the row of a guest that went down is held until the next boot's licence probe (flush_pending)
+    PENDING_ROW=$1
+    PENDING_VIEWSET=$2
+    LIC_SHUTDOWN_LINE=""
+}
+flush_pending() { # prints the held row; a licence event 1074 found by the probe makes its reason GUEST_SHUTDOWN_LICENCE
+    local row=$PENDING_ROW
+    [ -n "$row" ] || return 0
+    PENDING_ROW=""
+    PENDING_VIEWSET=""
+    if [ -n "$LIC_SHUTDOWN_LINE" ]; then
+        say "$LIC_SHUTDOWN_LINE"
+        row=${row/ reason=GUEST / reason=GUEST_SHUTDOWN_LICENCE }
+        LIC_SHUTDOWN_LINE=""
+    fi
+    emit_row_now "$row"
+}
+emit_row() { # a SPEC_ROW line from lane.py (a held row of an earlier viewset goes first: the order is the lane's)
+    flush_pending
+    emit_row_now "$1"
+}
+emit_row_now() {
     echo "$1" >> "$ROWS"
     say "$1"
     case "$1" in *" result=FAIL "*) say "$(sed -n 's/^SPEC_ROW name=\([a-z_]*\)-\([0-9]*\) .*/\1_\2/p' <<< "$1") --- FAILED" ;; esac
@@ -347,10 +413,24 @@ kill_fetch() { # a download still running is stopped with its curl: killing the 
         pkill -f -- "--output $ZST.part" 2> /dev/null
     fi
 }
+final_licence_read() { # the licence state at the end; a held row of a guest that went down gets one more boot to be read, if one is allowed
+    [ -n "$LIC_PROBE" ] && [ "$RUN_BOOTS" -gt 0 ] && [ "$(left)" -gt 300 ] || return 0
+    if [ -n "$PENDING_ROW" ] && ! qemu_alive; then
+        if [ "$RUN_BOOTS" -lt "$MAX_BOOTS" ] && [ "$(left)" -gt 1200 ]; then
+            note "one more boot to read why the guest went down during $PENDING_VIEWSET (licence probe)"
+            teardown_guest
+            boot_guest run && licprobe "forensic_boot${RUN_BOOTS}"
+        fi
+    elif qemu_alive && guest_answers; then
+        licprobe "end"
+    fi
+}
 conclude() {
     local xid_delta bar1=0 kind cls pass fail nrun
     stage conclude
     kill_fetch
+    final_licence_read
+    flush_pending
     teardown_guest
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_BEFORE" = green ] && [ "$HOSTREF_AFTER" = unrun ]; then hostref after; fi
     xid_delta=$(sed -n 's/^HOSTREF_XID_DELTA //p' "$EVD/hostref_after.txt" 2> /dev/null)
@@ -389,6 +469,7 @@ on_exit() {
         trap - EXIT
         note "the stage script ended without a verdict (rc=$rc, stage=$STAGE)"
         kill_fetch
+        flush_pending
         if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi
         delete_copy
         echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR$NARROWED"
@@ -436,9 +517,25 @@ if [ -z "${WINVM_KF3_FB_MB:-}" ]; then
         note "host VRAM ${vram_mb} MiB: WINVM_KF3_FB_MB=$WINVM_KF3_FB_MB"
     fi
 fi
+note "guest network=$SPEC_NET (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=${LIC_PROBE:-off}"
 note "host: gpu=\"$GPU_NAME\" cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb need_gb=$need_gb"
 PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p' "$PINFILE" 2> /dev/null | head -1)
-[ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
+# [2026-11-17] The git pin is OUR copy's identity (a repack we host): the Worker/strict path enforces it, a standalone user's own URL file is trusted.
+# strict = the Worker's /bench-data route (no URL file) or KF_TRUST_MODE=strict; a user's URL file in the default mode records instead of refusing.
+case "${KF_TRUST_MODE:-trust-git-only}" in
+    strict | trust-git-only) ;;
+    *) abort OPERATOR "KF_TRUST_MODE must be trust-git-only or strict" ;;
+esac
+PIN_ENFORCED=1
+if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ "${KF_TRUST_MODE:-trust-git-only}" != strict ]; then PIN_ENFORCED=0; fi
+if [ "$PIN_ENFORCED" = 1 ]; then
+    [ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
+fi
+if [ -n "${KF_SPEC_EXPECT_SHA256:-}" ]; then
+    [[ $KF_SPEC_EXPECT_SHA256 =~ ^[0-9a-f]{64}$ ]] || abort OPERATOR "KF_SPEC_EXPECT_SHA256 must be 64 lowercase hex"
+fi
+# KF_SPEC_COPY_BUDGET_S and KF_SPEC_COPY_NOTE_S: a bad value is refused by name here, before anything is fetched or booted
+cb_msg=$(copy_py check --budget "${KF_SPEC_COPY_BUDGET_S:-}" --note-s "${KF_SPEC_COPY_NOTE_S:-}") || abort OPERATOR "${cb_msg:-the copy knobs could not be checked}"
 [ -f "$FETCH" ] || abort OPERATOR "no fetch helper"
 
 # win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
@@ -506,8 +603,14 @@ gspec 120 prep > "$WORK/prep.txt"
 grep -q '^SPEC_PREP ' "$WORK/prep.txt" || abort TRANSPORT "spec_guest.ps1 -Action prep gave no answer"
 note "guest prep: $(grep '^SPEC_PREP ' "$WORK/prep.txt")"
 
-stream_src() { # the archive on stdout: the URL file's stream (sha256 checked on the fly, rc 3 = pin mismatch) or the verified file
-    python3 -I "$SPECD/stream_url.py" --url-file "$KF_SPEC_URL_FILE" --key "specviewperf-15.0.0/$OBJECT" --sha256 "$PIN" --status "$WORK/stream_status.txt"
+stream_src() { # the archive on stdout: the URL file's stream (rc 3 = an ENFORCED pin differs) or the verified file
+    local pins=()
+    if [ "$PIN_ENFORCED" = 1 ]; then pins=(--sha256 "$PIN")        # the Worker/strict path: our pin is the identity
+    else
+        [ -z "$PIN" ] || pins=(--note-pin "$PIN")                  # the user's own file: our pin is only compared
+        [ -z "${KF_SPEC_EXPECT_SHA256:-}" ] || pins+=(--sha256 "$KF_SPEC_EXPECT_SHA256")   # the user's own opt-in is enforced
+    fi
+    python3 -I "$SPECD/stream_url.py" --url-file "$KF_SPEC_URL_FILE" --key "specviewperf-15.0.0/$OBJECT" "${pins[@]}" --status "$WORK/stream_status.txt"
 }
 if [ -z "${KF_SPEC_URL_FILE:-}" ]; then
 stage fetch_wait
@@ -530,17 +633,33 @@ SRC=(stream_src)
 fi
 
 stage copy
+# the time the copy may take: KF_SPEC_COPY_BUDGET_S, else derived from the lane's size at a floor rate (copy_budget.py), never more than the time left
+cb=$(copy_py budget --lane "$LANE" --knob "${KF_SPEC_COPY_BUDGET_S:-}" --left "$(left)") || abort OPERATOR "the copy budget could not be derived (copy_budget.py budget)"
+read -r COPY_BUDGET _COPY_SRC COPY_EXPECTED _COPY_WANT COPY_WHY <<< "$cb"
+note "copy budget ${COPY_BUDGET}s ($COPY_WHY)"
+COPY_PROGRESS=$WORK/copy_progress.txt
+rm -f -- "$COPY_PROGRESS"
 set -o pipefail
+# five stages: src, zstd, tarfilter, the byte counter (progress notes into the stage log), the guest's tar (cps[0] .. cps[4])
 "${SRC[@]}" 2> "$WORK/stream.err" | zstd -d -c --long=31 2> "$WORK/zstd.err" \
     | python3 -I "$SPECD/tarfilter.py" --lane "$LANE" --manifest "$WORK/manifest.txt" 2> "$WORK/tarfilter.err" \
-    | timeout "$(cap 4200)" bash "$WV" ssh 'cmd /c "tar -xf - -C C:/"' > "$WORK/copy_tar.txt" 2>&1
+    | copy_py pipe --status "$COPY_PROGRESS" --log "$LOG" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED" --note-s "${KF_SPEC_COPY_NOTE_S:-}" 2> "$WORK/copy_progress.err" \
+    | timeout "$(cap "$COPY_BUDGET")" bash "$WV" ssh 'cmd /c "tar -xf - -C C:/"' > "$WORK/copy_tar.txt" 2>&1
 cps=("${PIPESTATUS[@]}")
-note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
+note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} progress=${cps[3]} ssh_tar=${cps[4]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
 [ "${cps[0]}" != 3 ] || abort MEDIA "the streamed archive does not match its sha256 pin"
 [ "${cps[2]}" != 3 ] || abort MEDIA "the archive holds a member this tree never holds (tarfilter refused it)"
-[ "${cps[3]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"
-if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ]; then
-    abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]})"
+[ "${cps[4]}" != 124 ] || abort TIME "$(copy_py abort-text --status "$COPY_PROGRESS" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED")"
+if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ -s "$WORK/stream_status.txt" ]; then
+    # the user's URL file: its archive is trusted and RECORDED (sha256, size, how our pin compared), never refused on our pin
+    read -r _kst kbytes _ksecs ksha kpin < "$WORK/stream_status.txt"
+    note "your archive: sha256=${ksha#sha256=} bytes=${kbytes#bytes=} our git pin ${kpin#pin=} (enforced=$PIN_ENFORCED; docs/OWNER_RULINGS.md section AX)"
+    python3 -I "$SOURCE/scripts/ci/kf_trust.py" record --name "$OBJECT" --sha256 "${ksha#sha256=}" --size "${kbytes#bytes=}" \
+        --source user-url-file --mode "${KF_TRUST_MODE:-trust-git-only}" --evidence-dir "$EVD" >> "$LOG" 2>&1 \
+        || note "could not write the trust record (the numbers above are the record)"
+fi
+if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ] || [ "${cps[4]}" != 0 ]; then
+    abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} progress=${cps[3]} ssh_tar=${cps[4]})"
 fi
 gspec 600 verify > "$WORK/guest_view.txt"
 grep -q '^SPEC_VERIFY_DONE' "$WORK/guest_view.txt" || abort TRANSPORT "the guest did not list the copied viewsets"
@@ -605,6 +724,8 @@ poll_viewset() { # W SECONDS -> POLL=ended|expired|dead|silent
         if grep -q 'SPEC_STATE end=1' <<< "$out"; then POLL=ended; return; fi
         if grep -q 'SPEC_STATE end=0' <<< "$out"; then misses=0; else misses=$((misses + 1)); fi
         [ "$misses" -lt 4 ] || { POLL=silent; return; }
+        # the licence state at least every 15 minutes (the evaluation guest's own validation runs in this window)
+        if [ -n "$LIC_PROBE" ] && [ $(($(date +%s) - LAST_LIC)) -ge 900 ]; then licprobe "boot${RUN_BOOTS}_up$((($(date +%s) - BOOT_UP) / 60))m"; fi
         [ $(($(date +%s) - t0)) -lt "$secs" ] || { POLL=expired; return; }
         sleep 20
     done
@@ -683,6 +804,7 @@ for w in "${LANE_IDS[@]}"; do
         fi
         ensure_guest
         erc=$?
+        flush_pending   # the boot (if one came) has been probed: the held row of the guest that went down is known now
         if [ "$erc" = 1 ]; then synthetic_row "$w" NOT_RUN TIME; break; fi
         if [ "$erc" = 2 ]; then
             if [ "$GUEST_DEAD_ROW" = 0 ]; then synthetic_row "$w" FAIL GUEST; GUEST_DEAD_ROW=1; else synthetic_row "$w" NOT_RUN BOOT; fi
@@ -703,7 +825,11 @@ for w in "${LANE_IDS[@]}"; do
             sleep "$(cap "$GATHER_WAIT_S")"
             continue
         fi
-        emit_row "$GRADE_LINE"
+        if [ -n "$LIC_PROBE" ] && [[ "$GRADE_LINE" == *" reason=GUEST "* ]] && ! qemu_alive; then
+            hold_row "$GRADE_LINE" "$w"   # the guest is gone: the next boot's probe may find why (event 1074)
+        else
+            emit_row "$GRADE_LINE"
+        fi
         licprobe "after_$w"
         # PC run hook: a file named by KF_SPEC_PAUSE_FILE holds the stage here (guest stays up) until it is removed; the stage keeps its deadline
         while [ -n "${KF_SPEC_PAUSE_FILE:-}" ] && [ -e "$KF_SPEC_PAUSE_FILE" ] && [ "$(left)" -gt 900 ]; do note "paused after $w (guest up; remove $KF_SPEC_PAUSE_FILE)"; sleep 60; done

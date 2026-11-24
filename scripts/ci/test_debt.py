@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from debt import clippy, compare, identity
+from debt import clippy, compare, identity, logs
 
 
 class DebtTests(unittest.TestCase):
@@ -50,3 +50,46 @@ class DebtTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LogRatchetTests(unittest.TestCase):
+    """The `logs` kind: every plain `eprintln!` of a product crate is pinned; a new one fails."""
+
+    def tree(self, files):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        for rel, text in files.items():
+            p = root / "crates" / "kf-x" / "src" / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text)
+        return root
+
+    def sites(self, files):
+        return logs(self.tree(files), ("kf-x",))
+
+    BASE = 'fn serve() {\n    eprintln!("refused {x}");\n}\n'
+
+    def test_a_new_plain_site_is_new_debt(self):
+        old = self.sites({"lib.rs": self.BASE})
+        new = self.sites({"lib.rs": self.BASE + 'fn other() {\n    eprintln!("refused {x}");\n}\n'})
+        self.assertEqual(len(compare(new, old)), 1)
+
+    def test_a_duplicate_site_in_the_same_fn_is_new_debt(self):
+        old = self.sites({"lib.rs": self.BASE})
+        dup = self.sites({"lib.rs": self.BASE.replace("}\n", '    eprintln!("refused {x}");\n}\n')})
+        self.assertEqual(len(compare(dup, old)), 1)
+
+    def test_rate_limited_and_test_only_sites_are_not_debt(self):
+        found = self.sites({
+            "lib.rs": "#[cfg(test)]\nmod fuzz;\nfn a() {\n    kf_arch::rate_eprintln!(\"x\");\n}\n"
+                      "#[cfg(test)]\nmod tests {\n    fn t() { eprintln!(\"t\"); }\n}\n",
+            "fuzz.rs": 'fn f() { eprintln!("f"); }\n',
+            "chan_tests.rs": 'fn g() { eprintln!("g"); }\n',
+        })
+        self.assertEqual(found, {})
+
+    def test_the_format_string_is_bound_across_a_rustfmt_break(self):
+        a = self.sites({"lib.rs": 'fn s() {\n    eprintln!(\n        "one {x}",\n    );\n}\n'})
+        b = self.sites({"lib.rs": 'fn s() {\n    eprintln!(\n        "two {x}",\n    );\n}\n'})
+        self.assertEqual(len(compare(b, a)), 1)

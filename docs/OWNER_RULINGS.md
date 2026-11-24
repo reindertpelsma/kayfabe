@@ -1,10 +1,157 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-17 (§AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-20 (§BC (2026-11-20): packaging and distribution, the command-line surface, the no-environment rule, guest-driver and host-ABI invariant, trust anchors and public objects, licence prompts, docs split; §AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AY (2026-11-17): the SPEC lanes' open LTSC guest has the network and the real clock; §AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §BC. Packaging and distribution: a QEMU build plus a build kit, the command line is the interface, the guest never dictates the host ABI, trust is git, and the manual is separate, 2026-11-20
+
+**STATUS: LIVE as rulings, 2026-11-20; owner decisions (stated in conversation with the coordinator, recorded from the coordinator's notes). DESIGN-ONLY: nothing below is built unless an item says so. This records the decisions, not the discussion; the design, the table of today against the gaps and the open questions are in `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`.** Numbering: open PR #526 proposes §BB for its propimage-config rulings, so this entry takes the next free letter, §BC; if #526 lands under another letter, the two are independent and only the headings change.
+
+<!-- src: owner, 2026-11-20, packaging/distribution/docs/trust discussion with the coordinator -->
+
+1. **What is shipped.** A specific patched QEMU build (a release binary), plus a **build kit** that overlays the kayfabe device onto any QEMU source tree (Proxmox's, for example) and builds a full binary or only a loadable module. A module must match the exact QEMU build. Configuration uses the mechanism QEMU provides natively for a module (a user-creatable `-object` umbrella plus `-device kf3-gpu,...`), not a `vl.c` patch, and must be understandable to a user. QEMU-specific code stays in `kf3.c`, so a second front end (Cloud Hypervisor) can sit on the Rust core through the numbered C ABI. Extends §AS items 3 and 4. *Not decided:* whether `hw/misc` devices can be modules (§AS says unstudied; still unstudied), the umbrella's name, and whether it can create devices. **This ruling does not lift the two standing blockers of a public binary:** the GPL exception for the nvproxy-derived files (`LICENSE`, exception 2) and §P's security gate.
+2. **The command line is the interface; no environment variable is needed.** A full-performance Windows or Linux run needs none. Every user setting is a QEMU argument: GPUs to bind, VRAM per GPU, UUID mode, utilisation visibility (default on), DoS limits, PCIe index (QEMU's `bus=`/`addr=`), broker socket per GPU, headless display framerate, resolution and framelock, display off by default, Windows support default on and switchable. Options given globally apply to every GPU. Kayfabe is enabled by a command-line argument; with no GPU named it binds all GPUs; with no kayfabe argument it is plain QEMU. Debug and measurement environment variables may remain and are secondary. **The display broker (non-headless case only) follows the same rule:** the manual tells how to start and run it as simply as the QEMU side, with no environment dependency (explicit flags for what it reads from the environment, one broker socket per GPU, a two-command quickstart; DESIGN-ONLY, `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md` section 2.6). *Plan:* a lint that holds the environment reads of the product sources to a committed allowlist (none exists today; §AT item 2 called it Stage 3), and a limits family with today's constants as defaults. *Measured today (`git grep`, 2026-11-20):* 27 device properties, with the display resolution, framelock, all-GPUs and the umbrella missing; 120 distinct `KF3_`, `KF_` and `KAYFABE_` names in product sources, about 30 of which change what the guest is served (classified by name and read-site comment, not exhaustively).
+3. **The guest driver is automatic by default; a command-line pin stays for security.** Invariant: **the guest never dictates the host ABI.** Host commands are authored by kayfabe from the host driver's tables, and a guest request with another layout is refused with a named reason (the `HOST-ABI REFUSED` mechanism). *Plan:* a GPU-free guest-driver by host-driver conformance matrix over every control kayfabe forwards, each cell a total translation, a defined default or a named refusal, a static proof of layout, size and field handling (not behaviour), with a generated compatibility table in the documentation. *Known gap:* automatic selection works inside a branch only; a pair whose pre-fn-1 surface differs is refused and needs the pin today.
+4. **Guests.** Windows needs only the documented guest settings (`docs/howto/windows-guest.md`), delivered by one tested user script that runs before the NVIDIA driver is installed, tested in CI on a Windows runner. Linux: any unmodified VFIO image boots with only the device swapped, with an equivalence test (same image, `vfio` arm and `kf3` arm). *Open:* the owner counts four Windows settings; the table has three.
+5. **Bench scripts have two purposes only:** CI-test helpers (heavy coupling is intended, for determinism) and optional guest-setup helpers. They are never a requirement of the user manual. Sharpens §AS item 5.
+6. **Rootless.** The rootless run is the test that proves the VM run needs no root. `kfroot` is an explicit per-command approval and every one is audited ("are you sure users do not have to run this to get that app working rootlessly?"). Production has no `kfroot`. The work is to reduce it. State: `docs/design/V3_KFROOT_ROOTLESS.md` is NOT RUN ON A BOX and the payload still starts every stage as root; an audit is in progress.
+7. **Trust.** The default of a standalone run is **trust git only**; the non-trust-git mode is **dropped for third-party standalone** (it needs one's own Worker). Refines §AX item 3 (the explicit lift stays an operator feature). The anchors that count: an official-origin checksum or signature; a GitHub attestation produced in the **same workflow run** that builds, attests and uploads (builder equals uploader is fine: the attestation binds bytes to repository, commit and workflow; the Worker already verifies GitHub OIDC, so CI workers may publish through it; cross-machine bit reproducibility is not required); a **local rebuild** (use your own build, no comparison with the stored object). A sha256 pinned in git for an opaque blob is a cache key, not trust. Public objects are of three kinds: (A) exact mirrors of upstream files, verified by the upstream hash or attestation; (B) our own builds, such as `winapps-open.iso`, verified by their attestation or a local rebuild; (C) coordinator-built bundles, for our own workers only. A download prints one short line (what, where, the anchor, that kayfabe validates it). *Plan:* a machine-readable `INDEX.json` at the bucket root, generated from the repository, and `docs/DOWNLOADS.md` generated from it. *Not built:* the attestation anchor (`kf_trust.py` still refuses it by name) and the publishing workflow.
+8. **The Worker is reproducible by someone else.** A separate "run your own CI" section (not the user manual): a from-scratch deploy guide, the secret and binding names (names only), one script that creates the buckets and bindings, and an example images configuration. The project's own object keys stay with the operator (§BA item 1).
+9. **Licences.** The Windows LTSC download is Microsoft's evaluation: the run prompts the user to accept Microsoft's terms (with the link), records the acceptance in the run log, and has a non-interactive accept flag. For NVIDIA the user is assumed to have accepted its terms: one printed line with the link, no prompt. Kayfabe is not affiliated with NVIDIA and redistributes no NVIDIA binary. Does not conflict with §BA item 4: the log records acceptance of a download's terms, never a product's end date.
+10. **Testing is reproducible from the repository alone**; `kayfabe-private` is never a dependency. Everyone can run the GPU-free Rust tests, GPU tests on open Linux images, open-source applications (Blender, OBS) on them, and the Windows open probes after the Microsoft prompt. What to test is chosen through an **interactive mode of the existing standalone runner** (§AS: no new CLI). Unreal: point at a folder holding the source or a built binary. SPECviewperf: point at a zip of the installed Program Files, with the exact layout documented, a validator and no pins. Proprietary images are bring-your-own, by a manifest or config (path and app list; PRs #526 to #528); no image letters in the model. Every script that can also runs against a VFIO reference target. The full release gate runs standalone on Vast on cheap untrusted nodes.
+11. **Documentation.** User docs (install, run, troubleshoot, report) are separate from internal docs; `docs/howto` and `docs/FAQ.md` stay the only published pages (`docs/README.md`). The property table is generated from `kf3.c`, with a test that fails on an undocumented property. AI-only notes stay out of code comments (a gate for date-stamped or agent-process comments, with a baseline of existing debt) and in separate internal files. `AGENTS.md` does not change for this. *Measured 2026-11-20:* 478 Markdown files under `docs/`; 34 files in `docs/howto/`, 11 operator or CI pages by name; the 26-row property table misses `x-gsp-observer-seconds`; `installing.md` says "There is no installer".
+12. **Not decided here.** The module question, the umbrella object's shape and name, the display resolution and framelock design, which limits become settable, the attested-bundle workflow, the fourth Windows setting, the broker's name and packaging and what "frame clock" means for it, when a public binary may ship (the GPL exception and §P stay in force), and the result of the rootless audit. These are the open questions of the design document.
+
+## §BA. Propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, and other 2026-11-18 rulings
+
+**STATUS: LIVE as rulings, 2026-11-18; owner decisions (stated in conversation, recorded by the coordinator from its notes). Each item says what is a rule and what is only a plan. DESIGN-ONLY for the config schema and the generic stage: nothing in items 1 and 2 is implemented yet; the refactor is queued.** Where an item restates a rule already in `AGENTS.md`, it is repeated here only to give it a date and a reason.
+
+<!-- src: owner, 2026-11-18, conversation with the coordinator (propimage config, from-scratch standalone, one image per propimage, no licence time checker, clock rule, gap matrix, test-first, pc recovery, Vast offers, public screenshots) -->
+
+1. **Propimages are configuration, not names in code.** The images called A, B, C and D are configuration material. The code has no
+   concept of "image A": a propimage is a configuration entry (id, kind Windows or Linux, image source and trust anchor, identity or
+   seed rule, launch arguments, its apps with their rows, its gate rows) and **one generic stage** iterates the entries. One image
+   holding all the apps, or a subset spread over several images, must both be expressible. No new per-image stage name, environment
+   variable, script or test that names A, B, C or D: add a configuration entry instead. *Reason:* MEASURED on the 2026-11-18
+   acceptance tree: per-image stage names and environment names, and more than 20 files naming one image; third parties must be able
+   to bring their own images. The repository holds the schema, the validator and the generic stage. The concrete entries of the
+   project's own release gate (with their object-store keys) are operator deployment configuration, not repository code, because they depend on the
+   storage layout. *Plan, not done:* the refactor, with an equivalence test that the generated stage plan is identical before and
+   after.
+2. **Standalone is reproducible from git and official URLs only.** A third party must be able to run the whole standalone run from
+   the repository plus official URLs (each with an official anchor: upstream checksum, signature, attestation or pin), their own
+   inputs given by configuration, or software built from source by the repository's own recipe. No input may have our object store as
+   its only source, and the standalone plan may name no host of ours. Everything open is built from scratch. Proprietary software is
+   obtained by the user under their own licences and accepted agreements, and each proprietary app must be addable, testable and
+   includable by pointing the configuration at an installer (with the repository's silent-install recipe) or at a pre-installed image;
+   the licence input is a user-supplied file or environment value that the tooling never records or prints. An app that is configured must pass
+   under the strict zero-skip rule; an app that is not configured is listed as "not in this config", never skipped silently and never
+   counted as a pass. The project's own release gate is the project's own configuration with all of them. *Reason:* the from-scratch
+   requirement of the standalone run (see `AGENTS.md`, *Read first*, and the pins ruling §AW). *Known gap, measured in the 2026-11-18
+   audit of the run manifest:* a few inputs (the public Windows apps bundle, the SPECviewperf repack, the proprietary images, the signed
+   display firmware and the MATLAB and Unreal artifacts) have only our store as a source; for a third party these are their own inputs
+   by configuration, and a lint that the generated plan names no host of ours is queued.
+3. **One stored image per propimage.** In long-term storage there is exactly one image for each propimage, containing all its apps.
+   Layer checkpoints (a base plus one app at a time) stay on the maintainers' PC only. For safety the PC is never the only copy
+   (an earlier owner rule: the PC is unreliable), so one rolling copy per propimage may be kept at a fixed path, replaced and
+   read back before the old one is deleted; at the end that one object is the final image. No per-layer copies side by side. The blank
+   Windows base is a separate image. *Reason:* storage and clarity; the earlier images are single images too.
+4. **`state.json` has no licence time checker; the clock policy is one-way.** No `valid_until`, no licence-expiry check and no
+   clock-versus-licence validation in `state.json`, the propimage tooling, the Worker or any gate; a product's end date is never
+   written into code, a state file or a public document. The recorded-clock mechanism stays as it is. *Reason:* licence handling
+   does not belong in public code, and the pinned clock was already an accepted, private decision. The clock rule is **one-way:
+   internet on means the real clock, and that is enforced in every launch path. Internet off does not force a fake clock.** Whether
+   an offline guest runs a recorded clock or the real one is the user's or the Worker's policy, and a third party's policy may differ.
+   *Measured:* `clocknet_assert.py` already enforces the one-way direction and states that a real clock with the network off is
+   fine. *Design intent, not built:* an optional policy block in `state.json` that keeps clock and network independent (defaults equal
+   to today's behaviour; the gate pins them), documented in the howto with a schema reference. This refines §AU items 1 and 2.
+5. **Gap matrix: BROKEN target is 0; the managed-memory patch tier is optional and later.** Every BROKEN row of the GPU-gap matrix
+   needs a closure path: an in-tree fix, an optional patch tier (host and guest kernel or driver patch), an owner decision, or
+   not-applicable-by-design. The target count of BROKEN rows is 0. UVM managed memory (demand paging) is an *optional later patch
+   tier*, not a core requirement. *Reason:* adding passing apps for weeks without fixing kayfabe is inefficient; the metric from now is
+   confirmed kayfabe bugs found and kayfabe-code fixes merged, not rows or passes.
+6. **Reproduce a suspected bug with a cheap GPU-free Rust unit test first.** Before a hardware run or a theory, write the failing
+   unit test (a replay or a model test, with a mutant that proves it can fail) and only then fix or measure on a GPU. *Reason:* a
+   wrong hypothesis costs far more than a test; it keeps hardware time for what only hardware can answer.
+7. **A bare-metal or VFIO control decides whether a failure is kayfabe's.** Run the same case on the host or through VFIO first. If
+   it passes there and fails in the guest, the defect is kayfabe's; if it fails there too, it is not (`AGENTS.md`, *Verification*).
+   A harness defect caught by a host control is recorded as a harness defect.
+8. **The maintainers' PC is the VFIO and performance reference machine, and a wedged PC is never normally rebooted.** When the GPU
+   or driver is wedged (a driver unload or reset hangs, processes stuck in uninterruptible sleep), do not pile on reload attempts and
+   do not use `reboot`, `shutdown -r` or `reboot -f`: use the SysRq sequence `s` (sync), `u` (remount read-only), `b` (restart), one
+   step at a time. *Reason:* MEASURED 2026-11-16 and 2026-11-18: a normal reboot hung in the kernel's device shutdown waiting on the
+   stuck GPU device and needed a power cycle; SysRq `b` skips that path. Reload or reset is only for a GPU that is in error but still
+   responds. Never on a healthy PC. Sealed images are read-only, so only resumable work is at risk.
+9. **Rented offers are chosen by the final total price, with no regional preference.** The offer ranking prices rental, bandwidth
+   and storage into one total and ranks by what the run costs; the split by component does not matter. Data comes from the object
+   store behind a global edge network, so downloads are not region-bound, and a region preference only shrinks the pool. The one
+   region rule is the Worker's denied-countries list (trust policy), which stays. *Checked 2026-11-18:* no region preference exists in the offer
+   picker or the Worker's offer code.
+10. **Screenshots of proprietary apps may appear in public posts, never in the repository.** A screenshot is acceptable for a public
+    post if the account or user name, e-mail address, licence or serial strings and machine names are blurred and the owner reviews
+    each one before use. Screenshots stay out of the repository and out of `traces/`. *Reason:* the earlier "no screenshot leaves the
+    box" was a privacy rule, not a legal one; it is relaxed to "scrubbed, owner-reviewed, post only".
+11. **Cached logins stay in a sealed propimage; safety is vendor-side revocation, verified online.** Offline operation needs the
+    cached login, so removing it locally defeats the image. Protection against a leaked image is to make the login dead on the
+    vendor's server after the seal, and to verify that with an online check on a throwaway overlay. *Reason and measurement:*
+    `docs/howto/recreate-the-proprietary-image.md`, *Token revocation and the online token check* (MEASURED 2026-11-18). An image is
+    not used on a rented box or uploaded until its check has passed.
+
+## §AZ. Proprietary images and SPEC leave the required release gate; they run as an invoked app lane, required only when a release touches core paths, 2026-11-18
+
+**STATUS: LIVE as a ruling, 2026-11-18; owner decision (stated in conversation: "maybe the plan is to remove images and SPEC from release requirement, so we can launch them manually, or invoked through worker"; recorded by the coordinator). DESIGN-ONLY for the Worker: the Start kind `app` is not built and nothing is deployed. 2026-11-18 (implemented GPU-free, `docs/design/V3_APP_LANE_PLANNER.md`): the planner's `core_paths` data, `appLaneRequired`, the app leg, the first-release and rotation modes and the daily-cap refusal exist as offline code; the release criteria do not read them yet.** The cost model and the release plan behind it are in the coordinator's notes and are not yet a repository document (a design note follows this ruling); the discovery-versus-gate split below follows the owner's remark that apps find bugs in the unknown while conformance suites prove that a bug is solved.
+
+1. **The required release gate is the reproducible set.** It consists of the GPU-free layer (unit, replay, model and fuzz tests, the page-table oracle fuzz, the coverage meter), the per-family smoke tier, and the full-suite differential (Vulkan CTS and the other open suites run host against guest, only differences reported, a known-limits file for documented limitations). Every input of the gate is open or fetched from an official URL, so a third party can run it (the owner's standalone requirement of 2026-11-18, recorded by the coordinator).
+2. **The proprietary images and SPEC are not part of the required gate.** That covers every propimage (today A, B, C and D; the owner's rule of 2026-11-18, recorded by the coordinator and not yet folded into this file, is that they are configuration and not names in code) and the SPECviewperf stage. Reasons (measured or stated): their verdicts are often inconclusive or harness-level, a flaky host can fail a leg, they cost about 30 percent of the release, and a third party cannot reproduce them without the owner's proprietary inputs. `scripts/ci/vast_payload.py` already lists the image stages (`MANUAL_ONLY_STAGES`) as manual-only.
+3. **The app lane.** They run as an invoked lane: from the Worker admin page (a start kind `app`, to be built) or by hand, on boxes chosen by a profile that prices bandwidth by the real gigabytes of each role and is free to pick any die with enough VRAM (not pinned to a family). It may also run on a schedule between releases, and it runs on the owner's pc when that is free (the pc is the discovery machine: VFIO controls and perf ratios). A run records the commit, the die, the host driver, the rows and the verdicts.
+4. **The release record shows the app lane.** Each release states, per image, the last app-lane run: commit, date, die, family, result. It is information, not a criterion, except under item 5.
+5. **Conditional requirement.** If the change since the previous release (the batch PR's diff against master) touches any CORE PATH below, the app lane must have a green run, or a run whose only reds are listed known breakages, on a tree that contains the change, covering each image on at least one family, before the batch PR merges. If no core path is touched, the app lane is not required.
+   **Core paths (exact list; globs relative to the repository root):**
+   - `crates/kf-*/src/**` except `crates/kf-harness/**`, `crates/kf-rawclient/**` and `crates/kf-trace/**` (the kayfabe product crates, including their generated tables under `src/generated/`);
+   - `crates/kf-chip/**` (family and die tables and the per-family descriptors);
+   - `cuda/walk/**` (the walk kernel, its header and the committed PTX);
+   - `qemu/hw/misc/kf3/**` (the device, its properties and their defaults);
+   - `broker/**` (the display broker) and `firmware/**` (the boot-display driver);
+   - `scripts/bench/windows/propimage.py` and `scripts/bench/windows/clocknet_assert.py` (the launch arguments, the clock and network rule of a Windows guest).
+   Not core paths: `docs/**`, `site/**`, `ci/**`, `scripts/ci/**`, other `scripts/**`, `traces/**`, tests only (`crates/*/tests/**` alone), and CI-only changes. The list is data (a `core_paths` array in the release configuration read by the planner), so it is edited in one place; the planner never names an image.
+   **First release (owner, 2026-11-18: "my plan is still first release to run all of A to D").** The first release runs the app lane in full: every image (A, B, C and D as configured) on every architecture family of the release matrix, not only the rotation of item 6 and not only the minimum of this item. It is the baseline against which later rotations are read. Cost and die choice come from the planner (any die with enough VRAM per image, offers by final total price); the cost of this pass is estimated before it is started and is a decision for the owner if it exceeds the daily cap. DESIGN-ONLY until the app lane exists; until then it is run by hand with the same coverage.
+6. **Rotation.** Each release runs the images on rotating families so that every image meets every family within four releases; a rotation table records the last run per image and family. A change to an architecture-specific path (a per-family descriptor, a channel route, the walker) escalates to every image on the affected family.
+7. **The discovery lane is separate and non-gating.** Real applications and production workloads run between releases, chosen by the coverage gap (new RM control ids, new refusals, new Xid lines: a novelty signal), with automatic capture of the kf3 census window, the host log and the guest events; every novelty is triaged with a control (VFIO, native Windows or the host) and becomes a GPU-free replay test and a gate row.
+8. **What this does not change.** The standalone run still lets a third party add their own proprietary apps and images by configuration (the owner's rule of 2026-11-18). Nothing in this ruling edits how an image is built, and a PASS of the required gate is still a statement only about the gate.
+
+## §AX. Standalone trust is git only by default; the lift is explicit; what the user passes is trusted, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner rules (stated in conversation, recorded by the coordinator); step 1 of the plan is built GPU-free, no box ran it.**
+Design, the list of what was changed and what was not: `docs/design/V3_STANDALONE_TRUST.md`. Code: `scripts/ci/kf_trust.py`,
+`scripts/ci/trust_manifest.json`, `scripts/ci/trust_lint.py`. Refines §AW.2 (the supersession note stands in that sentence).
+
+1. **Two actors.** The OPERATOR runs their own Worker, boxes and object store: implicit trust in their own storage and pipeline, and a pin is
+   deployment data that guards against staleness, corruption and accidents (§AW), not a security anchor. The THIRD PARTY dislikes opaque
+   blobs: a standalone run trusts git (the reviewed repository) and nothing we build or host.
+2. **The default of a standalone run is "trust git only".** What the repository downloads by itself must be verified by an anchor that does
+   not depend on us. The anchors allowed for a repo-defined default: (1) the official upstream checksum or signature, fetched from the
+   upstream origin; (2) a GitHub attestation, verified (NOT BUILT: the helper refuses it by name, `TRUST_ATTEST_NOT_IMPLEMENTED`); (3) a pin in
+   git of an upstream-authored identifier that anyone can re-check against upstream: a git commit or tag id, a vendor-published checksum, a
+   registry digest, or the sha256 of a SOURCE input. **Not allowed:** a sha256 in git of an artifact WE build or host (class
+   `git-sha256-of-our-own-artifact`; the lint fails on it and the helper refuses it).
+3. **Lifting is explicit and recorded.** Only a named flag (`--trust-lift REASON`, `KF_TRUST_LIFT=REASON`) lifts the default; a failed
+   check then becomes anchor `unverified-lifted` with the computed sha256, marked non-gating. Nothing implies the lift: not reachability,
+   not a URL scheme, not the absence of a Worker.
+4. **What the user passes is ALWAYS trusted.** A path or URL the user passes explicitly (an image, a `.run`, a mirror, a URL file) is a user
+   input: its sha256 and size are recorded, `--expect-sha256` is the user's own opt-in and is enforced in every mode, no verification is
+   needed. The newest statement decides the conflict with §AW.2: **a user-passed mirror, URL or path for a repo-defined artifact is a user
+   input, trusted and recorded.** Strict mode (an operator who sets `KF_TRUST_MODE=strict`; having the Worker's instruction set it is DESIGN INTENT, not wired in this
+   change) additionally holds a user object to the pin the operator keeps (for example the SPECviewperf archive's pin). The Worker's
+   `/bench-data` route, which has no URL file, already keeps that pin.
+5. **PENDING OWNER CONFIRMATION.** The owner agreed to anchor (3) for SOURCE inputs. This change also accepts, and implements, the sha256 of
+   an upstream BINARY that upstream still serves byte-identically (measured from the upstream host, no vendor checksum behind it). Each such
+   entry is marked `pending-owner-confirmation` by the helper and listed by `python3 scripts/ci/trust_lint.py --pending` (11 names on
+   2026-11-17). If the owner rules against it, those entries lose their anchor and their runs need the lift or a user-supplied file.
+6. **Not decided here:** whether `qemu_source.py --from-file` (today still held to the pin, as §AR said) should become a plain user input;
+   the attestation route (step 2) and the CI workflow that would build and attest what only we can build (steps 5 to 7 of the plan).
 
 ## §AW. Pins are deployment data: identity pins are strict-only; a standalone run records and never refuses on them, 2026-11-17
 
@@ -23,7 +170,48 @@ recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran
    config and pins. Storage is plain S3 semantics (R2 is S3-compatible; no R2-only features; presign with any S3-compatible API).
 5. The Worker's own behaviour (`ci/vast-broker/propimages.json`, strict always) does not change.
 
+## §AV. The guest may read the physical GPU's utilisation: `report-utilization=on|off`, default on, read-only and one way, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design, evidence split and the
+hostile-guest analysis: `docs/design/V3_UTILIZATION_FLAG.md`. Implemented GPU-free (generated layouts, the chain link, the sampler,
+the RUSD publisher, tests and mutants); **not run on hardware** (the plan and the falsifiers are in section 9 of that document).
+
+1. **Build it.** A guest can read GPU utilisation (NVML and `nvidia-smi`: `utilization.gpu`, `utilization.memory`, encoder, decoder),
+   which reads `[N/A]` without it.
+2. **A device property, default on.** `report-utilization=on|off`, declared next to `windows-support` (KF3_ABI 34). A user can turn it off
+   to avoid host leakage. The guest cannot change it, and it is neither an environment variable nor inferred from the guest.
+3. **Read-only and one way.** No guest-supplied byte is sent to the NVIDIA host or driver on behalf of this feature: the host read is one
+   fixed request that the host builds itself, and the answer goes to the guest only. Enabling it therefore has little effect on the VM's
+   security; what remains is the exposure in item 4.
+4. **What changes in an earlier open direction.** §W recorded the owner's wish for `utilization.gpu` as "this VM's own, never host-wide".
+   For utilisation only, the values the guest sees are the PHYSICAL GPU's whole-device values. On a GPU shared by several VMs that is a
+   cross-tenant load side channel, which is why the property exists. Power, clocks, P-state, thermals and process identity stay
+   unexposed (§S item 6).
+5. **The RUSD answer needs a publisher, so it has one.** `sweep.rs` refused `0x20800afe`/`0x20800aff` because an `NV_OK` would promise a page
+   that is never written; with the property on, kayfabe writes the utilisation record of that page itself (from its own sample), and
+   nothing else of it.
+
+## §AY. The open LTSC guest of the SPECviewperf lanes has the network and the real clock, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design and what needs hardware:
+`docs/design/V3_SPEC_GATE.md` section 5a. Implemented GPU-free in `scripts/bench/box/specviewperf_stage.sh`; nothing here has run on hardware yet.
+
+1. The open Windows LTSC guest that the SPECviewperf lanes run on has **internet and the real clock** (`KF_SPEC_NET=online`, the default of
+   the stage): the Windows evaluation guest needs the network and the real time to complete its own start-up validation. By §AU the real
+   clock follows from the network. SPEC does not mind having internet.
+2. It does **not** apply to the proprietary images (A, B, C): they stay offline with the clock of their `state.json` (§AR, §AU). The Windows
+   gate, the Windows apps stage and the second Windows run keep their network mode (they are shorter than 60 minutes).
+3. The guest stays untrusted and the box holds no secrets; the network of this stage is for the operating system's own validation and
+   incidental traffic.
+4. The licence probe is on by default for this stage and the stage reports a guest that went down with a licence event 1074 as
+   `GUEST_SHUTDOWN_LICENCE`. The "validate once, then seal" proposal of the acceptance plan is the fallback and is not needed if the online
+   boot validates.
+
+<!-- src: owner, 2026-11-17: "the open Windows LTSC guest that the SPECviewperf lanes run on must have INTERNET and the REAL CLOCK" -->
+
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
+
+**Refined 2026-11-18 by §BA item 4 (read this first):** the clock rule is one-way. Network on means the real clock. Network off does not force a recorded clock; that is the user's or the Worker's policy. Items 1 and 2 below say "network off runs a recorded clock" and "WARN" for an offline real clock; read them as the project's default policy, not as a rule a third party must follow.
 
 **STATUS: LIVE, 2026-11-16; owner rulings (stated in conversation, recorded by the coordinator).** Design and measured/code-read
 split: `docs/design/V3_CLOCK_RULE.md`. Implemented GPU-free in `scripts/bench/windows/clockrule.py` and `win_vm.sh`; nothing here has
@@ -402,6 +590,7 @@ Source: the owner's whitepaper answers, forwarded by the coordinator on 2026-10-
   - files derived from gVisor's nvproxy, which stay Apache-2.0 only;
   - files that carry their own notice;
   - third-party data inside recorded traces.
+- ⊘ *Superseded in part 2026-11-23: the first bullet below (the re-derivation of the allowlists) was done by task I7 on 2026-11-20, see §BD and `LICENSE` exception 2; the other two bullets were not re-checked.*
 - **Still open, under task I7 (`docs/design/V3_SWEEP_AND_INSTALL.md`):**
   - Re-derive the nvproxy-derived allowlists (`kf-abi`/`kayfabe-abi` `capability.rs`) from ogkm
     headers. `kf-qemu` links `kf-abi`, so until then a QEMU binary built from this tree is not
@@ -1194,6 +1383,9 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
+  ⊘ *Superseded 2026-11-17 for utilisation (§AV, owner): the guest sees the PHYSICAL GPU's whole-device values, behind the
+  device property `report-utilization` (default on), read-only and one way; the "this VM's own" direction no longer applies
+  to utilisation.*
 - ⊘ **REVERSED 2026-11-15 (owner, §AT: "set the measured Windows profile as the default"): the
   software-runlist host-owned scheduling (`KF3_SW_RUNLIST_HOST_OWNED`, now no flag) is ON for a guest that
   declares the measured Windows driver, and off for every other guest.** "Undecided" was never a decision to
@@ -1646,3 +1838,24 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
 ## §AT. Proprietary-image runner: a list of images, prebuilt now and built later, state.json optional, clock and network asserted, 2026-11-16
 
 Owner, 2026-11-16: the runner takes any number of images (a list); the kinds are `prebuilt` (phase 1) and `built` (phase 2, after the release run); `state.json` is optional (required for CI); a faked clock requires the network off and a networked guest requires the real clock (asserted in every launch path); the Worker builds instructions from its image and app configuration. Design, schema and the phase split: `docs/design/V3_PROPIMAGE_RUNNER.md`.
+
+## §BD. gVisor out of the QEMU device; the guest-ingress allowlist generated from ogkm; parity as a test, 2026-11-20
+
+Owner, 2026-11-20 (relayed by the coordinator; task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):
+
+1. Remove gVisor's nvproxy as a dependency of the distributed QEMU. A new driver branch needs only NVIDIA's ogkm release
+   plus the generator, never gVisor.
+2. Tables and ids come from ogkm. A safety judgement is not copyrightable: where ogkm lacks information, kayfabe applies
+   its own judgement, in its own words, with its own evidence, listed for after-the-fact review
+   (`tools/api_boundaries/ingress_rules.tsv`). Transcribing gVisor code, comments, data structures, ordering or tables
+   into the QEMU-linked tree stays forbidden. Risk judged low; a counsel check before the first public binary is
+   recommended, not blocking.
+3. Security parity is a hard requirement and is a TEST, not a generator input: nothing the old gate refused may be
+   admitted unless a reviewed exception with evidence lists it; what the old gate admitted and the new refuses is
+   checked against the lane evidence (`crates/kf-rm/tests/ingress_parity.rs`).
+4. Keep and improve the attribution: `THIRD_PARTY_NOTICES.md` and the credits page credit nvproxy as the design
+   reference for the default-deny allowlist at the guest ingress, with gVisor's Apache-2.0 notice;
+   `archive/nvkvm/CREDITS` stays as it is.
+5. Focus on the release: licence work kept to the minimum (regenerate, attribution, shrink `LICENSE` exception 2, the
+   closure check).
+

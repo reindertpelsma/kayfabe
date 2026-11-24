@@ -1,0 +1,38 @@
+# refused-ids census at tag 580.159.04 over 4 logs
+# kind	id	source	status	logs	old_gate	new_gate	flag | new reason
+class	0x0000208f	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+class	0x0000208f	RPC:UnmappedAllocClass		4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+class	0x0000402c	GSP	0x56	4	refuse	refuse	same | NV40_I2C Judgement:NoBoardBus
+class	0x0000402c	RPC:AllocClassNotPermitted		4	refuse	refuse	same | NV40_I2C Judgement:NoBoardBus
+class	0x0000c36f	GSP	0x56	4	refuse	refuse	same | VOLTA_CHANNEL_GPFIFO_A Judgement:EngineNotModelled
+class	0x0000c36f	RPC:AllocClassNotPermitted		4	refuse	refuse	same | VOLTA_CHANNEL_GPFIFO_A Judgement:EngineNotModelled
+control	0x00800294	GSP	0x56	4	allow	allow	same | NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS Empirical
+control	0x2080012b	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_GPU_PROMOTE_CTX Mode2Rpc
+control	0x2080012f	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS OgkmNonPrivileged
+control	0x2080013f	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO OgkmNonPrivileged
+control	0x2080014b	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION OgkmNonPrivileged
+control	0x20800157	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT OgkmNonPrivileged
+control	0x2080017e	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE Judgement:AnsweredInChain
+control	0x20800a1e	GSP	0x56	4	refuse	refuse	same | NotOnAllowlist (no row)
+control	0x20800a2e	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ROP_INFO Internal
+control	0x20800a30	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PPC_MASKS Internal
+control	0x20800a3f	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_TRACE_DEFINES Internal
+control	0x20800a4b	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_IP_VERSION Internal
+control	0x20800a80	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_PERF_GPU_BOOST_SYNC_GET_INFO Internal
+control	0x20800a87	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO Internal
+control	0x20800a9a	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X Internal
+control	0x20800a9c	GSP	0x56	4	refuse	refuse	same | NotOnAllowlist (no row)
+control	0x20800a9e	GSP	0x56	4	refuse	refuse	same | NotOnAllowlist (no row)
+control	0x20800ab8	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_GET_PCIE_P2P_CAPS Internal
+control	0x20800b03	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_V2 Internal
+control	0x20800b05	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_THROTTLE_CTRL Internal
+control	0x20801357	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT OgkmNonPrivileged
+control	0x20802068	GSP	0x56	4	allow	allow	same | NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE OgkmNonPrivileged
+control	0x20802a0f	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE Internal
+control	0x20802a12	GSP	0x56	4	refuse	refuse	same | NV2080_CTRL_CMD_CE_IS_DECOMP_LCE_ENABLED Privileged
+control	0x20808513	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+control	0x2080852f	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+control	0x20809064	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+control	0x2080a612	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+control	0x20810108	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)
+control	0x20810110	GSP	0x56	4	allow	refuse	NEWLY_REFUSED | NotOnAllowlist (no row)

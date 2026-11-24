@@ -1292,7 +1292,7 @@ impl Pump {
                 .saturating_add(c.entries_window)
                 != 0
             {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
                     self.key,
                     self.core.life.mode()
@@ -1305,16 +1305,18 @@ impl Pump {
         let lazy = self.core.lazy.take_delta();
         stats.lazy.add(&lazy);
         if self.core.lazy.counts.turns != 0 {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: USER_RING_LAZY_OBSERVE {:x?} {}",
                 self.key,
                 self.core.lazy.counts.summary()
             );
         }
         if self.aux.sync_carried != 0 {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} sync_wait_entries_behind_an_open_packet_read_ungated={}",
-                self.key.0, self.key.1, self.aux.sync_carried
+                self.key.0,
+                self.key.1,
+                self.aux.sync_carried
             );
         }
         if let Some(t) = &self.trace {
@@ -1340,7 +1342,7 @@ impl Pump {
         }
         let (armed, evicted, keep) = self.cache.stats();
         if evicted > 0 {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: USER_STORE_VIEWS channel {:x?} armed={armed} evicted_at_quota={evicted} keep={keep} (its working set exceeds the per-channel limit: raise user-view-keep)",
                 self.key
             );
@@ -2957,7 +2959,7 @@ impl Pump {
                 && self.core.new_ring_get(u32::from_le_bytes(b))
                 && loud
             {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: USER_RING_SWITCH_CURSOR_MISMATCH {:#x}:{:#x} the new ring's USERD shows GP_GET={} at the switch; the relay resets its cursor to 0 (reset-to-0 is contradicted for this growth)",
                     r.key.0,
                     r.key.1,
@@ -3185,9 +3187,10 @@ impl ChanPlane {
             }
             Err(Failure::Refused(why)) => {
                 self.poisoned.fetch_add(1, Ordering::Relaxed);
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: USER_RING_REFUSED {:#x}:{:#x} host {ht:#x}: {why}; no completion/reuse credit",
-                    r.key.0, r.key.1
+                    r.key.0,
+                    r.key.1
                 );
                 r.dead = Some(why);
                 record.cancel();

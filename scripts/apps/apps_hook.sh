@@ -7,6 +7,10 @@
 # and append its APPRES line (plus KF3/XID counters) to $APPS_OUT/guest.res.
 # Stops at the first app after which the guest no longer answers (verdict GUEST_DEAD);
 # apps_matrix.sh reboots and continues with the rest.
+# GPU use (owner requirement 2026-11-17, docs/design/V3_GPU_USE_ASSERTION.md): around each app the BOX's nvidia-smi is sampled ($app.smi/), the kf3 window and
+# its baseline status line are kept ($app.kf3.log, $app.kf3.base) and gpu_use_rows.py rewrites a PASS of a row that can fall back to the CPU into FAIL
+# (or NOTRUN when it cannot be judged) unless the host census, the host engine counters and the app's own proof agree. KF_NEGCTL=1 runs the CPU form of
+# each such row instead and writes CONTROL_OK / CONTROL_BROKEN lines to $APPS_OUT/negctl.res (the row line in guest.res stays unannotated).
 set -uo pipefail
 TAG=${1:?tag}
 HERE="$(cd "$(dirname "$0")" && pwd)"; G="$HERE/../bench/gssh_nv"
@@ -19,6 +23,16 @@ $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
+# the open rows' drivers (scripts/apps/open_rows): small, pushed every boot like src/*.py; their DCGM files ride in the bundle
+tar -C "$HERE" -cf - open_rows | $G 'sudo mkdir -p /opt/apps/bundle/share && sudo tar -C /opt/apps/bundle/share -xf -'
+# discovery row vkcts: the tool dir and the artifact `vkcts.py build` made (docs/design/V3_VULKAN_CTS_ROW.md); the host samples the GPU around the row
+case " $APPS " in *" vkcts "*)
+  tar -C "$HERE/vkcts" -cf - vkcts.py vkcts_lib.py pins.json caselist.tsv | $G 'sudo mkdir -p /opt/apps/bundle/vkcts_tool && sudo tar -C /opt/apps/bundle/vkcts_tool -xf -'
+  tar -C "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" -cf - . | $G 'sudo mkdir -p /opt/apps/bundle/vkcts && sudo tar -C /opt/apps/bundle/vkcts -xf -';;
+esac
+# discovery rows vllm / tensorrt / jax (docs/design/V3_OPEN_ML_ROWS.md): the tool dir and the venvs (and the model) `mlrows.py setup` staged on the host; the guest has no network
+MLR=$(for a in $APPS; do case $a in vllm|tensorrt|jax) printf '%s,' "$a";; esac; done); MLR=${MLR%,}
+[ -n "$MLR" ] && python3 -B -I "$HERE/mlrows/mlrows.py" push --root "${KF_APPS_ROOT:-/workspace/apps}/mlrows" --rows "$MLR" --transport "$G"
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 # ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the
@@ -26,38 +40,70 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 # Load them so both sides run the same experiment; APPS_GUEST_DRM=0 reproduces the bare state.
 [ "${APPS_GUEST_DRM:-1}" = 1 ] && echo "APPS_GUEST_DRM $($G 'sudo modprobe nvidia_drm; echo rc=$?; lsmod | grep -c ^nvidia' 2>&1 | tr '\n' ' ')"
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"
+# ⊘ the open rows read the HOST census: GPU use from the host's nvidia-smi (a guest cannot prove it until the utilisation flag serves the
+#   counters) and the unserviced-RPC count of the kf3 log before and after the row (open_rows/census.py; the same census the other rows read)
+census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo info;; esac; }
+GU="$HERE/gpu_use_rows.py"
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
+  head -n "$q0" "$QLOG" 2>/dev/null | grep -a 'kf3: family=' | tail -1 > "$OUT/$app.kf3.base"
+  need=$(census_need "$app"); cpid=""
+  if [ -n "$need" ]; then python3 "$HERE/open_rows/census.py" sample --out "$OUT/$app.hostsmi.csv" > "$OUT/$app.hostsmi.json" 2>/dev/null & cpid=$!; fi
   d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
-  res=$(timeout "${APPS_APP_TMO:-2400}" "$G" "sudo bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
+  [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census start --dir "$OUT/vkcts.guest.census" >/dev/null 2>&1
+  res=$(timeout "${APPS_APP_TMO:-2400}" python3 -B -I "$GU" sample --out "$OUT" --app "$app" -- "$G" "sudo env KF_NEGCTL=${KF_NEGCTL:-0} bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
   src=$?
+  [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census stop --dir "$OUT/vkcts.guest.census" --side guest > "$OUT/vkcts.guest.gpu.txt" 2>&1
   alive=1; $G true >/dev/null 2>&1 || { sleep 20; $G true >/dev/null 2>&1 || alive=0; }
   line=$(grep -a '^APPRES ' <<<"$res" | tail -1)
   if [ -z "$line" ]; then
     v=HANG; [ $alive = 0 ] && v=GUEST_DEAD
-    line="APPRES side=guest app=$app verdict=$v rc=ssh$src secs=- quiet=- note=no-result-line(guest_alive=$alive)"
+    note="no-result-line(guest_alive=$alive)"
+    # ⊘ rc 126/127 from the guest shell is a command that could not start (run_apps.sh is not in the guest: an image without /opt/apps/bundle): nothing ran, so it is
+    #   NOTRUN with the path, never a HANG (a HANG is a finding about the guest; measured 2026-11-20: six boots of the base image said HANG for rows that never started)
+    if [ $alive = 1 ] && { [ "$src" = 126 ] || [ "$src" = 127 ]; }; then
+      miss=$(grep -a -m1 -oE '(/[A-Za-z0-9_./+-]+|[A-Za-z0-9_+-]+): (No such file or directory|Permission denied|command not found)' <<<"$res" | cut -d: -f1 | head -1)
+      v=NOTRUN; note="not-run:missing_command:${miss:-unknown}"
+    fi
+    line="APPRES side=guest app=$app verdict=$v rc=ssh$src secs=- quiet=- note=$note"
   fi
   if [ $alive = 1 ]; then
     $G "sudo cat /opt/apps/out/guest/$app.log" > "$OUT/$app.guest.log" 2>&1
     $G "sudo dmesg | tail -n +$((d0+1))" > "$OUT/$app.guest_dmesg.log" 2>&1
   fi
+  cextra=""
+  if [ -n "$cpid" ]; then
+    kill -TERM "$cpid" 2>/dev/null; wait "$cpid" 2>/dev/null
+    cextra=" $(python3 "$HERE/open_rows/census.py" verdict --csv "$OUT/$app.hostsmi.csv" --need "$need" 2>&1 | tail -1) $(python3 "$HERE/open_rows/census.py" kf3 --log "$QLOG" --before "$q0" 2>&1 | tail -1)"
+  fi
+  sleep "${APPS_KF3_SETTLE:-3}"   # the device prints its status line about every 2 s (on change): let the last one of this app land before the slice
   tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -3000 > "$OUT/$app.kf3.log"
+  gu_args=(--side guest --app "$app" --line "$line" --app-log "$OUT/$app.guest.log" --kf3-log "$OUT/$app.kf3.log" --kf3-base "$OUT/$app.kf3.base" --smi-dir "$OUT/$app.smi" --record-dir "$OUT")
+  if [ "${KF_NEGCTL:-0}" = 1 ]; then python3 -B -I "$GU" annotate "${gu_args[@]}" --negctl | tee -a "$OUT/negctl.res"
+  else new=$(python3 -B -I "$GU" annotate "${gu_args[@]}") && [ -n "$new" ] && line=$new; fi
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
   nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
-  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr" | tee -a "$OUT/guest.res"
+  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr$cextra" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
   [ $alive = 0 ] && { echo "APPS_HOOK guest dead after $app — stopping this boot"; break; }
   # ⊘ measured nb1 (670bd310, vh): after UnifiedMemoryStreams' fault the boot was WEDGED — every
   # later app burned its whole timeout silently. After any non-PASS row, prove the boot still runs
   # CUDA (vectorAdd, 60 s); if not, record WEDGED and end the boot — apps_matrix.sh reboots and
   # continues with the remaining apps, so one wedge costs one app, not the rest of the list.
+  # ⊘ no vectorAdd in the guest (an image without /opt/apps/bundle/samples): the probe proves nothing, so it says so and the boot goes on (`test -x` exits 1: absent; an
+  #   unreachable guest exits 255 and still reaches the probe, which then fails as before)
   case "$line" in *verdict=PASS*) ;; *)
     if [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
-      sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
-      if [ "${sane:-0}" != 1 ]; then
-        echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
-        echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+      timeout 30 "$G" 'test -x /opt/apps/bundle/samples/vectorAdd' >/dev/null 2>&1; has=$?
+      if [ "$has" = 1 ]; then
+        echo "APPS_HOOK no_samples_in_guest after $app — wedge probe skipped"
+      else
+        sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
+        if [ "${sane:-0}" != 1 ]; then
+          echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
+          echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+        fi
       fi
     fi ;;
   esac

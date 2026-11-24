@@ -23,7 +23,7 @@ export function checkedResult(result) {
   if (
     !Array.isArray(rows) ||
     rows.length < 1 ||
-    rows.length > 20 ||
+    rows.length > 32 ||
     new Set(rows.map((x) => x?.name)).size !== rows.length
   )
     refuse('BAD_REPORT', 400);

@@ -1,0 +1,66 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 4090",
+  "facts": {
+   "framework_device": "cuda:0",
+   "peak_mib": 953
+  },
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 12,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 3158,
+  "gr_methods": 0,
+  "retired": 10,
+  "serves": 28484,
+  "status_lines": 70,
+  "submissions": 22711,
+  "wakes": {
+   "CE2": 21916,
+   "CE3": 2,
+   "GR0": 42853
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +22711 submission(s), +12 channel birth(s) in the window",
+  "[host-smi] PASS: host engines: gpu busy (peak {'gpu': 31.0, 'mem_mb': 8920.0, 'gpu_dmon_sm': 31.0, 'busy_samples': 100})",
+  "[app] PASS: the application reports NVIDIA GeForce RTX 4090"
+ ],
+ "row": "tensorrt",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8891.0
+  },
+  "peak": {
+   "busy_samples": 100,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 31.0,
+   "gpu_dmon_sm": 31.0,
+   "mem_mb": 8920.0
+  },
+  "reasons": [],
+  "required": [
+   "gpu"
+  ],
+  "samples": 541,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "PASS"
+ },
+ "thresholds": {
+  "interval_ms": 250,
+  "min_samples": 2
+ },
+ "verdict": "PASS"
+}

@@ -1,0 +1,24 @@
+START 21:29:35
+REV 5d9c6dbaf
+21:30:13
+MLROWS_FACTS {"cc": [8, 9], "disk_free_gb": 84.841295872, "driver": "580.178.04", "driver_cuda": [13, 0], "gcc": true, "gpus": 1, "name": "NVIDIA GeForce RTX 4060 Ti", "python": [3, 12, 3], "python_h": true, "total_mib": 16380}
+MLROWS_CHECK_ROW row=vllm status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_CHECK_ROW row=tensorrt status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_CHECK_ROW row=jax status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_SETUP row=vllm status=ok reason=flavour_cu13,_254_s,_9.63_GB
+MLROWS_SETUP row=tensorrt status=ok reason=flavour_cu13,_71_s,_7.34_GB
+MLROWS_SETUP row=jax status=ok reason=flavour_cu13,_70_s,_4.38_GB
+GPU_USE_PROOF jax device=cuda:0 name=NVIDIA GeForce RTX 4060 Ti peak_mib=12114
+JAX_SUMMARY status=PASS flavour=cu13 reason=ok secs=10.0 mem_growth_mib=12114 token_sha256=-
+GPU_USE_PROOF tensorrt device=cuda:0 name=NVIDIA GeForce RTX 4060 Ti peak_mib=576
+TENSORRT_SUMMARY status=PASS flavour=cu13 reason=ok secs=77.3 mem_growth_mib=576 token_sha256=-
+GPU_USE_PROOF vllm device=cuda:0 name=NVIDIA GeForce RTX 4060 Ti peak_mib=14372
+VLLM_SUMMARY status=PASS flavour=cu13 reason=ok secs=65.4 mem_growth_mib=14372 token_sha256=98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a
+STANDALONE_EXIT rc=0 21:39:41
+NEGCTL_START jax 21:39:41
+NEGCTL_EXIT jax rc=1 21:39:45
+NEGCTL_START tensorrt 21:39:45
+NEGCTL_EXIT tensorrt rc=1 21:39:48
+NEGCTL_START vllm 21:39:48
+NEGCTL_EXIT vllm rc=1 21:40:11
+EXIT 21:40:11

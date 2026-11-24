@@ -1,0 +1,3 @@
+dcgm=RAN version=Version_:_4.8.0 gpus=1
+diag_r1 rc=0 secs=1 tests=1
+diag_r3 rc=0 secs=1 tests=8

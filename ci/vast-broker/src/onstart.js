@@ -32,6 +32,7 @@ const SPARSE = [
   '/traces/real_hw_20261013/',
   '/traces/real_tu116/',
   '/traces/user_ring_scan_20261014/',
+  '/traces/util_layout_20261117/',
 ];
 // The provider's onstart: clone, write the sparse list, check out the exact tested commit, exec the
 // repo-side script. Only the two interpolated values are inputs; per-run data travels in the KF_*

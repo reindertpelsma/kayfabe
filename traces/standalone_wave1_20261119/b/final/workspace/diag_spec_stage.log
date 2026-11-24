@@ -1,0 +1,30 @@
+SPEC_NOTE stage=preflight 2026-11-19T23:59:36+00:00 left_s=21590
+SPEC_STAGE_LIST lane=both n=9
+SPEC_NOTE rev=7fb1c98a tag=ci453fda76a6191b5e lane=both release=15.0.0 deadline_left_s=21590
+SPEC_NOTE guest network=online (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=1
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=195 disk_free_gb=391 need_gb=190
+SPEC_NOTE stage=fetch 2026-11-19T23:59:36+00:00 left_s=21590
+SPEC_NOTE stage=hostref_before 2026-11-19T23:59:36+00:00 left_s=21590
+SPEC_NOTE hostref before green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-19T23:59:37+00:00 left_s=21589
+SPEC_NOTE stage=boot_copy 2026-11-19T23:59:37+00:00 left_s=21589
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=183.7
+SPEC_NOTE stage=copy 2026-11-20T00:01:46+00:00 left_s=21460
+SPEC_NOTE copy: src=0 zstd=141 tarfilter=4 ssh_tar=124 tarfilter: stream error (BrokenPipeError) 
+SPEC_NOTE abort class=TIME stage=copy: the copy into the guest did not finish inside its budget
+SPEC_NOTE stage=conclude 2026-11-20T01:14:48+00:00 left_s=17078
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE hostref after green cup8=PASS xid_count=0 xid_delta=0
+SPEC_COPY_DELETED removed=overlay
+SPEC_ROW name=energy-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=creo-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=blender-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=enscape-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=medical-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=maya-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=catia-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=solidworks-08 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_STAGE_COUNTS pass=0 fail=0 not_run=9 of=9
+SPECVIEWPERF_STAGE_RETRY class=TIME

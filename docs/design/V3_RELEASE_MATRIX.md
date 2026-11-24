@@ -5,6 +5,9 @@ every blocker in `release-matrix.json` (driver choices, minima, the sub-run exec
 
 ## Release shape v2 (owner CONFIRMED 2026-11-12)
 
+⊘ **Correction 2026-11-23 (against `OWNER_RULINGS.md` §AZ, 2026-11-18):** the owner took SPECviewperf and every proprietary image (propimage) out of the required release gate; they run as an invoked app lane, required only when a release touches a core path (§AZ items 2 to 5), and the release record lists their last run as information. The rental counts below (12 with SPEC, 8 without) are the 2026-11-12 plan; the "8 without SPEC" case is the one §AZ points at. CODE READ on 2026-11-23 at `next` `92a7f2782`: the propimage stages are in `MANUAL_ONLY_STAGES` (`scripts/ci/vast_payload.py`), and the release profile in `ci/vast-broker/src/tier.js` still lists `specviewperf` in `additionalStages`; this note changes no code. Where the text below puts SPEC or a propimage into the release tier or the release criteria, §AZ governs.
+
+
 A release does ONE large run per die family (Turing, Ampere, Ada, Blackwell): the **flagship die runs the full LARGE profile**, the **second die
 runs the MIDDLE profile** (small as a sub-run): 4 large + 4 middle. The large run's SPECviewperf is split over two boxes (lane A and lane B on
 separate rentals, 2 SPEC legs per large die, `requiresSeparateRentals`), so a release is 4 x 2 large boxes + 4 middle boxes = **12 rentals** with
