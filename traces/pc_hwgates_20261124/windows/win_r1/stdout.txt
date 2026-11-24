@@ -1,0 +1,5 @@
+[    18.3s] guest up=True after 18s
+[    78.4s] GUEST_GPU 
+[   198.6s] EVENTS 0: []
+[   198.7s] STOP not running
+WIN_KF3_RESULT {"up": true, "stop": "not running", "refusal_lines": 254}

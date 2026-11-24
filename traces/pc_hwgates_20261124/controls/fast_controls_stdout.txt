@@ -1,0 +1,35 @@
+CTL_START 2026-11-24T18:22:34Z
+### NEW (63e46069) with unmapped-reads-zero=off
+FAST_SUITE_STARTED=2026-11-24T19:22:34+01:00 arms=2 budget=180s
+rev=63e46069
+ARM                          VERDICT   secs  why
+--defer-liveness             PASS      16s   16s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=16 client_ms=12550
+--missing-page-fault         PASS      7s    7s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=7 client_ms=3460
+
+FAST_SUITE_PASS=2 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=0
+### OLD ed41beea (pre-batch), defaults
+FAST_SUITE_STARTED=2026-11-24T19:22:57+01:00 arms=2 budget=180s
+rev=63e46069
+ARM                          VERDICT   secs  why
+--defer-liveness             PASS      16s   16s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=16 client_ms=12540
+--missing-page-fault         PASS      7s    7s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=7 client_ms=3439
+
+FAST_SUITE_PASS=2 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=0
+### NEW (63e46069) defaults, repeat
+FAST_SUITE_STARTED=2026-11-24T19:23:20+01:00 arms=2 budget=180s
+rev=63e46069
+ARM                          VERDICT   secs  why
+--defer-liveness             FAIL      13s   raw client rc=1
+FAST_CELL_ARM arm=defer-liveness verdict=FAIL secs=13 client_ms=9680
+--missing-page-fault         FAIL      8s    raw client rc=1
+FAST_CELL_ARM arm=missing-page-fault verdict=FAIL secs=8 client_ms=3750
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=2 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=1
+CTL_DONE

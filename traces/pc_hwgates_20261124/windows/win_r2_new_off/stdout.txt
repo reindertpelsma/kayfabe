@@ -1,0 +1,6 @@
+[    18.2s] guest up=True after 18s
+[    18.2s] QEMU alive right after ssh answered: rc=None
+[    78.3s] GUEST_GPU 
+[   138.4s] EVENTS 0: []
+[   138.6s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 254}

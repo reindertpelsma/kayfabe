@@ -28,13 +28,13 @@ C5. After the run the host is idle: no qemu process, lock released, `PC_ACTIVE.l
 still 595.91.07 and loaded, no new Xid in host dmesg. Falsifier: any of these differs.
 
 ## Rules for the run
-- Measured and inferred are kept apart in the README; every measurement names run, date and revision.
+- Measured and inferred are kept apart in the README; every measurement there names its run, date and revision (pc run 2026-11-24, `63e46069`).
 - No code fix in this hour unless trivial; a fix carries the smallest GPU-free Rust test, failing before and passing after.
 - Disk: abort the build if free space on `/workspace` would drop below 8 GB; delete only scratch created by this run.
 
 ## Addendum 1, written 2026-11-24 ~18:30Z after the fast suite (28/30) and the first Windows boot, before the controls
 
-Seen so far (measured, not yet explained): fast-suite arms `--defer-liveness` and `--missing-page-fault` FAIL on `63e46069`; the first
+Seen so far (pc run of 2026-11-24, `63e46069`, not yet explained): fast-suite arms `--defer-liveness` and `--missing-page-fault` FAIL on `63e46069`; the first
 Windows kf3 boot (default flags) had the guest answer ssh, then the host RM logged `mmuWalkMap: Failed to map VA Range
 0x120000000 to 0x20f9fffff. Status = 0x51` (NV_ERR_NO_MEMORY) and QEMU was gone before the first guest GPU query returned.
 

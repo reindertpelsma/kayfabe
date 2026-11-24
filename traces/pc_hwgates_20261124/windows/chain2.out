@@ -1,0 +1,12 @@
+== r5 start 2026-11-24T18:36:20Z
+== r5 end 2026-11-24T18:38:12Z
+[    18.5s] guest up=True after 18s
+[    18.5s] QEMU alive right after ssh answered: rc=None
+[    25.1s] GUEST_GPU ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088 ; NVSMI NVIDIA GeForce RTX 4070, 580.88 ; NVSMI_RC 0 ; 
+[   112.3s] POLL last: 112s rc=255 qemu_rc=0 
+[   112.4s] EVENTS 0: []
+[   112.5s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 269}
+== old full suite start 2026-11-24T18:38:12Z
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+CHAIN2_DONE

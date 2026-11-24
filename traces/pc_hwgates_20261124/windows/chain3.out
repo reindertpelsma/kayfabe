@@ -1,0 +1,19 @@
+== win_r6_old_polled start 2026-11-24T18:41:14Z extra=[]
+== win_r6_old_polled end 2026-11-24T18:42:18Z
+[    19.5s] guest up=True after 19s
+[    19.5s] QEMU alive right after ssh answered: rc=None
+[    22.3s] GUEST_GPU ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088 ; NVSMI NVIDIA GeForce RTX 4070, 580.88 ; NVSMI_RC 0 ; 
+[    63.5s] POLL last: 63s rc=255 qemu_rc=0 
+[    63.6s] EVENTS 0: []
+[    63.7s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 328}
+== win_r7_new_off_polled start 2026-11-24T18:42:18Z extra=[unmapped-reads-zero=off]
+== win_r7_new_off_polled end 2026-11-24T18:43:20Z
+[    20.6s] guest up=True after 20s
+[    20.6s] QEMU alive right after ssh answered: rc=None
+[    23.1s] GUEST_GPU ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088 ; NVSMI NVIDIA GeForce RTX 4070, 580.88 ; NVSMI_RC 0 ; 
+[    62.0s] POLL last: 61s rc=255 qemu_rc=0 
+[    62.1s] EVENTS 0: []
+[    62.2s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 331}
+CHAIN3_DONE

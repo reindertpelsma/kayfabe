@@ -50,8 +50,7 @@ def main():
     res = {"up": up}
     if up:
         S.say("QEMU alive right after ssh answered: rc=%s" % vm.proc.poll())
-        time.sleep(60)
-        since = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t0 - 5))
+        since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t0 - 5))
         ps = ('$g=Get-CimInstance Win32_VideoController | ? { $_.Name -like "*NVIDIA*" }; '
               '"ADAPTER " + $g.Name + " code=" + $g.ConfigManagerErrorCode + " status=" + $g.Status + " driver=" + $g.DriverVersion; '
               '"NVSMI " + ((& nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>&1) -join " | "); '
@@ -60,7 +59,22 @@ def main():
         (out / "guest_gpu.txt").write_text(S.scrub(o))
         S.say("GUEST_GPU " + S.scrub(o).replace("\n", " ; "))
         res["gpu_text"] = S.scrub(o)
-        time.sleep(idle)
+        # the guest is polled every 5 s: when it stops answering is part of the evidence
+        probe = []
+        for _ in range(int(os.environ.get("KF_POLLS", "16"))):
+            rc, o = vm.guest('"KF_UP " + (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString("o")', 15)
+            probe.append("%ds rc=%s qemu_rc=%s %s" % (time.time() - t0, rc, vm.proc.poll(), o.strip()[:60]))
+            if rc == 0:
+                _, ev = vm.guest('Get-WinEvent -LogName System -MaxEvents 12 -EA 0 | % { $m = ($_.Message + "") -replace "\\s+"," "; '
+                                 '"$($_.TimeCreated.ToString("HH:mm:ss")) $($_.Id) $($_.ProviderName) " + $m.Substring(0, [Math]::Min(110, $m.Length)) }', 40)
+                probe.append(S.scrub(ev).rstrip())
+            if vm.proc.poll() is not None:
+                break
+            time.sleep(5)
+        (out / "poll.txt").write_text("\n".join(probe) + "\n")
+        S.say("POLL last: " + probe[-1])
+        if vm.proc.poll() is None:
+            time.sleep(idle)
         res["events"] = S.guest_events(vm, since)
         (out / "guest_events.txt").write_text("\n".join(res["events"]) + "\n")
         S.say("EVENTS %d: %s" % (len(res["events"]), res["events"][:6]))
