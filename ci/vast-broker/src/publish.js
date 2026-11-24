@@ -94,22 +94,33 @@ async function secretsOf(env, entry) {
     entry.scopes === undefined
       ? [undefined, ['public'], ['public', 'private']]
       : [entry.scopes, undefined];
-  for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])
-    for (const scopes of forms)
-      try {
-        values.push(
-          await new RunTokens(env.RUN_TOKEN_SECRET).issue({
-            run: entry.run,
-            attempt: entry.attempt,
-            sha: entry.sha,
-            nonce,
-            key: entry.key,
-            label: 'kf-ci-' + entry.key,
-            reportExpiry: entry.reportExpiry,
-            ...(scopes === undefined ? {} : { scopes }),
-          }),
-        );
-      } catch {}
+  const prior = entry.priorNonces ?? [],
+    expiries = entry.priorReportExpiries ?? [];
+  // The current leg's token expires with this entry's deadline. An earlier leg's token expired with that leg's own deadline,
+  // kept in a parallel list; a chain that began before the list existed has none for its first legs, so an earlier token
+  // is then redacted under every expiry the run is known to have used.
+  const known = [...new Set([entry.reportExpiry, ...expiries])];
+  const legs = [
+    [entry.nonce, [entry.reportExpiry]],
+    ...prior.map((nonce, i) => [nonce, expiries.length === prior.length ? [expiries[i]] : known]),
+  ];
+  for (const [nonce, expiryList] of legs)
+    for (const reportExpiry of expiryList)
+      for (const scopes of forms)
+        try {
+          values.push(
+            await new RunTokens(env.RUN_TOKEN_SECRET).issue({
+              run: entry.run,
+              attempt: entry.attempt,
+              sha: entry.sha,
+              nonce,
+              key: entry.key,
+              label: 'kf-ci-' + entry.key,
+              reportExpiry,
+              ...(scopes === undefined ? {} : { scopes }),
+            }),
+          );
+        } catch {}
   return exactValues(values);
 }
 

@@ -76,7 +76,8 @@ def run_all(specs, env, environ=None, root=None, reference_dir=None, record_dir=
         if v.kind != "ok":
             st = "NOT_RUN" if v.kind == "not_run" else "FAIL"
             reason = v.reason if v.kind == "not_run" else "env-missing: " + v.reason
-            row = rows.make_row(spec.name, st, reason, time.time() - t0, env, **extra)
+            code = {"skip_code": v.code} if st == "NOT_RUN" and v.code else {}
+            row = rows.make_row(spec.name, st, reason, time.time() - t0, env, **extra, **code)
         else:
             row = _run_one(spec, env, cenv, data_dir, log_dir, budget, reference_dir, record_dir, exec_fn,
                            resolve_fn, root, t0, extra, dev_cpu, python)
@@ -118,6 +119,7 @@ def _run_one(spec, env, cenv, data_dir, log_dir, budget, reference_dir, record_d
                         metrics={k: v for k, v in res.get("metrics", {}).items() if k != "log"},
                         run_id=cenv.get("KF_ML_RUN_ID"))
         metrics = dict(metrics, reference_recorded=True)
+    code = {"skip_code": res["skip_code"]} if status == "NOT_RUN" and res.get("skip_code") else {}
     return rows.make_row(spec.name, status, reason, wall, env, metrics,
                          upstream_commits=commits, patch_sha256=psha,
-                         dataset_sha256=res.get("dataset_sha256", {}), **extra)
+                         dataset_sha256=res.get("dataset_sha256", {}), **extra, **code)

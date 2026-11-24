@@ -1,0 +1,4 @@
+1795503932602 begin 27.0.0 mode=learn clip=Preview-Your-Clips.prproj
+1795503932609 creating sequence: openDocument
+1795503933068 openDocument returned true; sequence active and selected; returning so the project can load
+1795503933074 done learn opened=true ERR=Error: learn: returned after openDocument line 24

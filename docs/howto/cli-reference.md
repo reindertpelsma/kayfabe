@@ -51,7 +51,7 @@ This table is generated from the device's source (`qemu/hw/misc/kf3/kf3.c`) and 
 | `user-view-keep` | uint32 | `0` (behaves as 16) | Used in recorded runs | Windows tuning: CPU views of video memory that each channel keeps armed, up to 256. |
 | `windows-support` | bool | `on` | Default in use for Windows; `off` not measured | The Windows profile (the behaviours a Windows driver needs and Linux does not). It is chosen by what the guest announces about itself, so it is not a security boundary. `off` makes the VM Linux-only; set it on hosts that run only Linux guests or several tenants. |
 | `report-utilization` | bool | `on` | Not yet run on a GPU | Shows the guest the physical GPU's utilisation in `nvidia-smi` and NVML. On a GPU shared by several VMs every guest sees the whole GPU's load, including the other VMs'; set `off` for tenants that must not see each other's load. |
-| `unmapped-reads-zero` | bool | `off` | Not yet run on hardware | A GPU read of an unmapped guest address returns zero and a write is dropped, with no fault. Vulkan sparse residency then works; every fault the guest expects becomes a silent zero, including application bugs that read freed memory. Off by default, where such a read faults and the guest sees the error. |
+| `unmapped-reads-zero` | bool | `on` | Linux guest measured (Vulkan sparse residency, RTX 4090); Windows not run | A GPU read of an unmapped guest address returns zero and a write is dropped, with no fault, for every guest. Vulkan sparse residency then works; with `off` it hangs the guest's GPU channel (host `Xid 109`) and the application loses the device. The cost of `on`: every fault the guest expects becomes a silent zero, including application bugs that read freed memory and CUDA managed memory or HMM pages that need demand paging (kayfabe does not serve them: with `off` they fail with an error, with `on` they read zero and the result can be wrong). Set `off` for a VM that uses managed memory and no sparse resources. |
 | `doorbell-ioeventfd` | bool | `off` | Experimental | Doorbell fast path that avoids a VM exit per doorbell write. Off until measured. |
 | `doorbell-ioeventfd-max` | uint32 | `256` | Experimental | Cap on the number of doorbell fast-path event files. |
 | `display-broker` | string | `unset` (no broker) | Used in recorded runs | Absolute path of the display broker's unix socket. Unset means no broker. See Display and the broker. |
@@ -65,7 +65,7 @@ This table is generated from the device's source (`qemu/hw/misc/kf3/kf3.c`) and 
 
 <!-- kf-generated: device-properties end -->
 
-**Pending change:** the `unmapped-reads-zero` default in the table above is `off`, as the device source has it today. The project has decided that it will default to `on` for every guest, Linux included; the code change has not landed. This page and the table follow the source, and both change when it does.
+The `unmapped-reads-zero` default in the table above is `on` for every guest, Linux included, as the device source has it. Set `off` to get the host fault back for a VM that uses managed memory and no sparse resources.
 
 A property that is refused at start is refused by name; see [Troubleshooting](troubleshooting.md#the-device-refuses-to-start).
 

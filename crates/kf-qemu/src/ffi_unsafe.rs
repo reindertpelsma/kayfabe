@@ -88,7 +88,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// (`claude/util-flag-20261117`, `report_utilization`); a merge with it puts this argument after that one.
 /// 36 (2026-11-19, merge of `claude/util-flag-20261117` into next): both 34 and 35, in that order: `kf3_realize` takes
 /// `report_utilization` (34) and then `unmapped_reads_zero` (35) after `windows_support`.
-pub const KF3_ABI: u32 = 36;
+/// 37 (2026-11-24, `claude/sparse-fill-on-20261124`, `docs/design/V3_SPARSE_RESIDENCY_RCA.md`): no signature change.
+/// `unmapped-reads-zero` defaults to on for every guest. The default is C text, so the number moves: a QEMU built from the
+/// old `kf3.c` would otherwise keep the old default against this archive without a word.
+pub const KF3_ABI: u32 = 37;
 
 /// The PCI identity the C device presents.
 #[repr(C)]

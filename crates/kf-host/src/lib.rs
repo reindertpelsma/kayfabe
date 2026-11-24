@@ -535,9 +535,10 @@ pub struct HostRm {
     /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
     /// bring-up; read by no behaviour yet.
     tier: tier::HostTier,
-    /// ★ 2026-11-18: what an unmapped VA of the static guest ranges reads as in every mirror space
-    /// allocated after it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property).
-    /// `false` = [`channel::GuestVaFill::Fault`], the default.
+    /// What an unmapped VA of the static guest ranges reads as in every mirror space allocated after
+    /// it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property). `false` =
+    /// [`channel::GuestVaFill::Fault`], the value of a host nobody configures; the kf3 device sets it
+    /// to the property, which is on by default.
     guest_va_zero: std::sync::atomic::AtomicBool,
 }
 

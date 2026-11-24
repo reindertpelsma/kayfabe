@@ -12,6 +12,7 @@ from .env import DRIVER_TOO_OLD, MIN_DRIVER_FOR_CUDA
 class Verdict:
     kind: str  # ok | not_run | env_missing
     reason: str = ""
+    code: str = ""  # one of errors.SKIP_CODES for a not_run that is outside kayfabe, else empty
 
 
 def evaluate(spec, env, environ=None) -> Verdict:
@@ -34,11 +35,11 @@ def evaluate(spec, env, environ=None) -> Verdict:
     if env.cc is None:
         return Verdict("env_missing", "compute capability unknown")
     if tuple(env.cc) < tuple(spec.min_cc):
-        return Verdict("not_run", "compute capability %s < min %s" % (versions.cc_str(env.cc), versions.cc_str(spec.min_cc)))
+        return Verdict("not_run", "compute capability %s < min %s" % (versions.cc_str(env.cc), versions.cc_str(spec.min_cc)), "DIE_LACKS_FEATURE")
     if spec.max_cc is not None and tuple(env.cc) > tuple(spec.max_cc):
         return Verdict("not_run", "compute capability %s > max %s" % (versions.cc_str(env.cc), versions.cc_str(spec.max_cc)))
     if (env.vram_total_gb or 0) < spec.min_vram_gb:
-        return Verdict("not_run", "vram %.1f GB < required %.1f GB" % (env.vram_total_gb or 0, spec.min_vram_gb))
+        return Verdict("not_run", "vram %.1f GB < required %.1f GB" % (env.vram_total_gb or 0, spec.min_vram_gb), "VRAM_TOO_SMALL")
     if spec.needs_triton and not (env.triton or env.modules.get("triton")):
         return Verdict("env_missing", "triton is not installed")
     if spec.needs_compiler and not (env.cxx and env.python_h):

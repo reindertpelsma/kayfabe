@@ -2045,6 +2045,8 @@ jobs:
           node ci/vast-broker/evidence-mutants.mjs
           # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/provider-tolerance-mutants.mjs
+          # gpu-vast hardening: commit-gap release, replacement deadline, kvm device signature, gate reuse stages.
+          node ci/vast-broker/sha-gap-mutants.mjs
           node ci/vast-broker/denied-countries-mutants.mjs
 
   worker-mutants-b:
