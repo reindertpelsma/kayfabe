@@ -1,6 +1,6 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-24. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as the property `unmapped-reads-zero`, which is ON by default for every guest and profile (owner ruling 2026-11-24, §5; it was an opt-in, #494). Windows runs of it do not exist. Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+**STATUS: LIVE, 2026-11-24. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as the property `unmapped-reads-zero`, which is ON by default for every guest and profile (owner ruling 2026-11-24, §5; it was an opt-in, #494). Windows runs of it do not exist. Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED. The fast suite's two fault arms (`--defer-liveness`, `--missing-page-fault`) boot with the property off (§8).**
 ⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BH), implemented 2026-11-24 by PR #580:** The earlier status wording "Option B ships as an opt-in property" is superseded as a default: `unmapped-reads-zero` defaults to ON for every guest, Linux included (the owner's statement: real host sparse residency proves the ioctl exists on Linux, and Linux Vulkan sparse-residency cases hang with the fill off). The code and the details are in §5.
 
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
@@ -282,3 +282,27 @@ C1 is infeasible (box `kf-openguest-180343`, kf3 `5ee2aa5a`, probe output above)
 redesign of how `kf-mem` places guest rows, whose per-map cost is unknown until a host-side test exists.
 DX12 reserved/tiled resources and UE virtual textures on Windows need the same S1+S2 property, so C (not
 B) is the real fix.
+
+## 8. The fast suite's two fault arms boot with `unmapped-reads-zero=off`
+
+Two of the 30 fast-suite arms test the FAULT of a read through a VA that nothing maps: `--defer-liveness` (does a PTE written with the
+deferred-invalidate flag go live, asked of hardware through a VA whose non-present result is a fault) and `--missing-page-fault` (a deliberate
+missing page must be contained and named, with a real Xid 31). With `unmapped-reads-zero` ON, which is the default for every guest, an unmapped
+read returns zeros and never faults, so neither arm can pass: that is the property working as designed, not a regression of the arms.
+
+- **The default stays ON.** The two arms are the only suite arms that assert the OFF behaviour, so the suite, not the product, changes.
+- **Where it is set.** `scripts/fastguest/run_fast_guest.sh` derives the property from the arm names (`FAULT_ARMS`) and adds
+  `unmapped-reads-zero=off` to the kf3 device line of every device of a boot that runs either arm; no other boot has it. It is not an
+  environment variable. An explicit `unmapped-reads-zero=` in `KF3_DEV_EXTRA` that is not `off` is refused for those arms (exit 2, QEMU not
+  started), because a boot that cannot pass should not start.
+- **What fails if it is lost.** `scripts/ci/test_fastsuite_fill.py` runs the lane with a recording fake QEMU (no GPU, no guest) and fails when
+  either arm boots without the property, when any other suite arm boots with it, or when the multi-device and combined-arm cases lose it.
+  `scripts/ci/fastsuite_fill_mutants.py` kills nine one-site edits of the lane, each by at least two named tests.
+- **Evidence the arms need it.** [inferred, from a hardware run reported in PR #595, not in this tree] on one RTX 4070 box the suite at `next`
+  63e46069 passed 28 of 30, the two failures being exactly these arms, and both passed with `unmapped-reads-zero=off` on the same binary. A
+  fast-suite run with this change on hardware has not been done.
+- **Other lanes that could depend on an unmapped-read fault** (checked by reading the scripts, not run): none of the Windows lanes asserts one;
+  `scripts/bench/rmladder_suite.sh` and `gpu_fault_containment.sh` run on the host, outside the kf3 device; the lanes that call
+  `fast_suite.sh` or `run_fast_guest.sh` (the driver matrix, `dbfast_lane.sh`, `perf_compare.sh`, the box merge bar and the Vast payload) get
+  the property through the lane script; `readmostly_hook.sh` and `llm_hook2.sh` are diagnostic hooks that read host Xid lines and assert
+  no verdict on an unmapped read.
