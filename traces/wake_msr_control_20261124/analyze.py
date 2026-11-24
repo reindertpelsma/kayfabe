@@ -29,6 +29,14 @@ def trace_facts(path):
     text = gzip.open(path, "rt", errors="replace").read()
     wake_ts = None
     host, guest, tsc, oneshot = [], [], [], []
+    apic_writes = 0
+    vcpu_of = {}
+    for line in text.splitlines():
+        m = LINE.match(line)
+        if m and m[4] == "kvm_write_tsc_offset":
+            vm = re.search(r"vcpu=(\d+)", m[5])
+            if vm:
+                vcpu_of[m[2]] = vm[1]
     for line in text.splitlines():
         m = LINE.match(line)
         if not m:
@@ -37,13 +45,14 @@ def trace_facts(path):
         if ev == "tracing_mark_write" and "system_wakeup" in body:
             wake_ts = ts
         after = wake_ts is not None and ts >= wake_ts
-        vcpu = re.search(r"CPU (\d+)/KVM", comm)
-        vc = vcpu[1] if vcpu else "?"
+        vc = vcpu_of.get(m[2], "?")
         if ev in ("kvm_hv_synic_set_msr", "kvm_hv_stimer_set_config", "kvm_hv_stimer_set_count") and body.rstrip().endswith("host 1"):
             host.append((after, body))
         elif ev == "kvm_msr" and body.startswith("msr_write") and after:
             mm = re.match(r"msr_write (\w+) = (0x\w+)(.*)", body)
-            if mm:
+            if mm and 0x40000070 <= int(mm[1], 16) <= 0x40000072:
+                apic_writes += 1
+            elif mm:
                 guest.append("vcpu%s %s=%s%s" % (vc, NAMES.get(int(mm[1], 16), mm[1]), short(mm[2]), mm[3]))
         elif ev == "kvm_write_tsc_offset" and after:
             mm = re.search(r"vcpu=(\d+) prev=(\d+) next=(\d+)", body)
@@ -60,7 +69,7 @@ def trace_facts(path):
         peak = max(peak, i - j + 1)
     wake_host = [b for a, b in host if a]
     return {"wake_marker": wake_ts is not None, "host_writes_at_wake": wake_host, "guest_hv_writes_after": guest,
-            "tsc_offset_steps": tsc, "oneshot_peak_per_s": peak, "oneshot_after": len(oneshot)}
+            "tsc_offset_steps": tsc, "apic_msr_writes": apic_writes, "oneshot_peak_per_s": peak, "oneshot_after": len(oneshot)}
 
 
 def cycle_rows(vdir, n):
@@ -99,11 +108,14 @@ def main(root):
                 out.append("| %s | %s | %s | %s |" % (cpu, name, short(a), short(b)))
             mono_g = post["t_monotonic"] - pre["t_monotonic"]
             boot_g = post["t_boottime"] - pre["t_boottime"]
-            out.append("\nclocksource %s -> %s; guest MONOTONIC +%.2f s, BOOTTIME +%.2f s across the cycle; guest REALTIME "
-                       "post - host wake time = %.2f s; TSC page %s -> %s; suspend_error %s" % (
-                           pre["clocksource"], post["clocksource"], mono_g, boot_g,
-                           post["t_realtime"] - cyc["host_realtime_wake"], pre["tsc_page"], post["tsc_page"],
-                           post.get("suspend_error")))
+            rt_g = post["t_realtime"] - pre["t_realtime"]
+            out.append("\nclocksource %s -> %s; guest MONOTONIC +%.2f s, BOOTTIME +%.2f s, REALTIME +%.2f s across the cycle "
+                       "(REALTIME - BOOTTIME advance %.2f s); guest REALTIME at the post read - host time of system_wakeup = %.2f s; "
+                       "suspend_error %s" % (pre["clocksource"], post["clocksource"], mono_g, boot_g, rt_g, rt_g - boot_g,
+                                             post["t_realtime"] - cyc["host_realtime_wake"], post.get("suspend_error")))
+            for k in ("tsc_page_before", "tsc_page_suspended", "tsc_page_after"):
+                if cyc.get(k):
+                    out.append("host xp of the TSC page, %s: %s" % (k[9:], cyc[k]))
             try:
                 dm = (vdir / ("c%d_dmesg.txt" % n)).read_text()
             except OSError:
@@ -115,8 +127,8 @@ def main(root):
                 f = trace_facts(tf)
                 out.append("host (QEMU) Hyper-V writes after the system_wakeup marker: %d%s" % (
                     len(f["host_writes_at_wake"]), "".join("\n    " + h for h in f["host_writes_at_wake"][:12])))
-                out.append("guest Hyper-V MSR writes after the wake: %d%s" % (
-                    len(f["guest_hv_writes_after"]), "".join("\n    " + g for g in f["guest_hv_writes_after"][:12])))
+                out.append("guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: %d): %d%s" % (
+                    f["apic_msr_writes"], len(f["guest_hv_writes_after"]), "".join("\n    " + g for g in f["guest_hv_writes_after"][:12])))
                 out.append("TSC offset steps after the wake (vcpu, cycles): %s" % f["tsc_offset_steps"])
                 out.append("stimer one-shots after the wake: %d, peak %d per 1 s\n" % (f["oneshot_after"], f["oneshot_peak_per_s"]))
     print("\n".join(out))

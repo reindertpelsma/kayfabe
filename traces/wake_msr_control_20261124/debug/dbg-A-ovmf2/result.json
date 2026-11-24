@@ -1,0 +1,136 @@
+{
+ "variant": "dbg-A-ovmf2",
+ "cpu": "host,-vmx",
+ "seeded": false,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481643.2497725,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481643.2497852,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481643.2497947,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481644.2562265,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1630.783458718,
+   "host_realtime_wake": 1795481649.2622766,
+   "host_mono_wake": 1635.788755669,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.259451627731323,
+   "host_realtime_after": 1795481655.8088279,
+   "host_mono_after": 1642.335306477,
+   "trace_counts": {
+    "kvm_msr": 40,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "qmp_events": [
+    [
+     1795481643.2497725,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481643.2497852,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481643.2497947,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481644.2562265,
+     "SUSPEND"
+    ],
+    [
+     1795481649.3043098,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481660.8438349,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1647.37081894,
+   "host_realtime_wake": 1795481665.8496804,
+   "host_mono_wake": 1652.376159845,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.268258810043335,
+   "host_realtime_after": 1795481672.3914087,
+   "host_mono_after": 1658.91788695,
+   "trace_counts": {
+    "kvm_msr": 40,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "qmp_events": [
+    [
+     1795481660.8438349,
+     "SUSPEND"
+    ],
+    [
+     1795481665.878657,
+     "WAKEUP"
+    ],
+    [
+     1795481676.158599,
+     "RTC_CHANGE"
+    ]
+   ]
+  }
+ ],
+ "boot_ssh_s": 20.018051385879517,
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

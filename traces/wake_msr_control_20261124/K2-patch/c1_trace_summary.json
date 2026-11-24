@@ -1,0 +1,612 @@
+{
+ "host_synic": [
+  [
+   2598.510912,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000081 data 0x1 host 1"
+  ],
+  [
+   2598.510913,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000080 data 0x1 host 1"
+  ],
+  [
+   2598.510914,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000082 data 0x3d002001 host 1"
+  ],
+  [
+   2598.510914,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000083 data 0x3d003001 host 1"
+  ],
+  [
+   2598.510915,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000090 data 0x10000 host 1"
+  ],
+  [
+   2598.510916,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000091 data 0x10000 host 1"
+  ],
+  [
+   2598.510917,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000092 data 0x10000 host 1"
+  ],
+  [
+   2598.510917,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000093 data 0x10000 host 1"
+  ],
+  [
+   2598.510918,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000094 data 0x10000 host 1"
+  ],
+  [
+   2598.510919,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000095 data 0x10000 host 1"
+  ],
+  [
+   2598.510919,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000096 data 0x10000 host 1"
+  ],
+  [
+   2598.51092,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000097 data 0x10000 host 1"
+  ],
+  [
+   2598.510921,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000098 data 0x10000 host 1"
+  ],
+  [
+   2598.510921,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000099 data 0x10000 host 1"
+  ],
+  [
+   2598.510922,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009a data 0x10000 host 1"
+  ],
+  [
+   2598.510923,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009b data 0x10000 host 1"
+  ],
+  [
+   2598.510923,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009c data 0x10000 host 1"
+  ],
+  [
+   2598.510924,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009d data 0x10000 host 1"
+  ],
+  [
+   2598.510925,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009e data 0x10000 host 1"
+  ],
+  [
+   2598.510925,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009f data 0x10000 host 1"
+  ],
+  [
+   2598.511064,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000081 data 0x1 host 1"
+  ],
+  [
+   2598.511064,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000080 data 0x1 host 1"
+  ],
+  [
+   2598.511065,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000082 data 0x3d004001 host 1"
+  ],
+  [
+   2598.511065,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000083 data 0x3d005001 host 1"
+  ],
+  [
+   2598.511066,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000090 data 0x10000 host 1"
+  ],
+  [
+   2598.511066,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000091 data 0x10000 host 1"
+  ],
+  [
+   2598.511067,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000092 data 0x10000 host 1"
+  ],
+  [
+   2598.511067,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000093 data 0x10000 host 1"
+  ],
+  [
+   2598.511067,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000094 data 0x10000 host 1"
+  ],
+  [
+   2598.511068,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000095 data 0x10000 host 1"
+  ],
+  [
+   2598.511068,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000096 data 0x10000 host 1"
+  ],
+  [
+   2598.511069,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000097 data 0x10000 host 1"
+  ],
+  [
+   2598.511069,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000098 data 0x10000 host 1"
+  ],
+  [
+   2598.51107,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000099 data 0x10000 host 1"
+  ],
+  [
+   2598.51107,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009a data 0x10000 host 1"
+  ],
+  [
+   2598.51107,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009b data 0x10000 host 1"
+  ],
+  [
+   2598.511071,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009c data 0x10000 host 1"
+  ],
+  [
+   2598.511071,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009d data 0x10000 host 1"
+  ],
+  [
+   2598.511072,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009e data 0x10000 host 1"
+  ],
+  [
+   2598.511072,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009f data 0x10000 host 1"
+  ]
+ ],
+ "host_stimer": [
+  [
+   2598.510927,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 0 config 0x20000 host 1"
+  ],
+  [
+   2598.510928,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 1 config 0x0 host 1"
+  ],
+  [
+   2598.510928,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 2 config 0x0 host 1"
+  ],
+  [
+   2598.510929,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 3 config 0x0 host 1"
+  ],
+  [
+   2598.51093,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 0 count 305419896 host 1"
+  ],
+  [
+   2598.510931,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 1 count 0 host 1"
+  ],
+  [
+   2598.510931,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 2 count 0 host 1"
+  ],
+  [
+   2598.510932,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 3 count 0 host 1"
+  ],
+  [
+   2598.511073,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 0 config 0x20000 host 1"
+  ],
+  [
+   2598.511074,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 1 config 0x0 host 1"
+  ],
+  [
+   2598.511074,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 2 config 0x0 host 1"
+  ],
+  [
+   2598.511075,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 3 config 0x0 host 1"
+  ],
+  [
+   2598.511075,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 0 count 305419897 host 1"
+  ],
+  [
+   2598.511076,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 1 count 0 host 1"
+  ],
+  [
+   2598.511076,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 2 count 0 host 1"
+  ],
+  [
+   2598.511077,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 3 count 0 host 1"
+  ]
+ ],
+ "guest_msr": [
+  [
+   2592.423532,
+   "kvm_msr",
+   "msr_write 40000021 = 0x3d001001"
+  ],
+  [
+   2592.423569,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000080 data 0x1 host 0"
+  ],
+  [
+   2592.42357,
+   "kvm_msr",
+   "msr_write 40000080 = 0x1"
+  ],
+  [
+   2592.423847,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000082 data 0x3d002001 host 0"
+  ],
+  [
+   2592.423848,
+   "kvm_msr",
+   "msr_write 40000082 = 0x3d002001"
+  ],
+  [
+   2592.424164,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000083 data 0x3d003001 host 0"
+  ],
+  [
+   2592.424165,
+   "kvm_msr",
+   "msr_write 40000083 = 0x3d003001"
+  ],
+  [
+   2592.424533,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 0 count 305419896 host 0"
+  ],
+  [
+   2592.424535,
+   "kvm_msr",
+   "msr_write 400000b1 = 0x12345678"
+  ],
+  [
+   2592.42466,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 0 config 0x20000 host 0"
+  ],
+  [
+   2592.424661,
+   "kvm_msr",
+   "msr_write 400000b0 = 0x20000"
+  ],
+  [
+   2592.424731,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000080 data 0x1 host 0"
+  ],
+  [
+   2592.424733,
+   "kvm_msr",
+   "msr_write 40000080 = 0x1"
+  ],
+  [
+   2592.424968,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000082 data 0x3d004001 host 0"
+  ],
+  [
+   2592.424969,
+   "kvm_msr",
+   "msr_write 40000082 = 0x3d004001"
+  ],
+  [
+   2592.425503,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000083 data 0x3d005001 host 0"
+  ],
+  [
+   2592.425505,
+   "kvm_msr",
+   "msr_write 40000083 = 0x3d005001"
+  ],
+  [
+   2592.426038,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 0 count 305419897 host 0"
+  ],
+  [
+   2592.42604,
+   "kvm_msr",
+   "msr_write 400000b1 = 0x12345679"
+  ],
+  [
+   2592.426108,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 0 config 0x20000 host 0"
+  ],
+  [
+   2592.42611,
+   "kvm_msr",
+   "msr_write 400000b0 = 0x20000"
+  ],
+  [
+   2592.740515,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2592.740559,
+   "kvm_msr",
+   "msr_read 40000001 = 0x0"
+  ],
+  [
+   2592.740584,
+   "kvm_msr",
+   "msr_read 40000021 = 0x3d001001"
+  ],
+  [
+   2592.740609,
+   "kvm_msr",
+   "msr_read 40000080 = 0x1"
+  ],
+  [
+   2592.740651,
+   "kvm_msr",
+   "msr_read 40000082 = 0x3d002001"
+  ],
+  [
+   2592.740674,
+   "kvm_msr",
+   "msr_read 40000083 = 0x3d003001"
+  ],
+  [
+   2592.740697,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2592.74072,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x20000"
+  ],
+  [
+   2592.740797,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x12345678"
+  ],
+  [
+   2592.740824,
+   "kvm_msr",
+   "msr_read 40000020 = 0xd2dcd32"
+  ],
+  [
+   2592.740902,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2592.741071,
+   "kvm_msr",
+   "msr_read 40000001 = 0x0"
+  ],
+  [
+   2592.741236,
+   "kvm_msr",
+   "msr_read 40000021 = 0x3d001001"
+  ],
+  [
+   2592.741392,
+   "kvm_msr",
+   "msr_read 40000080 = 0x1"
+  ],
+  [
+   2592.741474,
+   "kvm_msr",
+   "msr_read 40000082 = 0x3d004001"
+  ],
+  [
+   2592.741545,
+   "kvm_msr",
+   "msr_read 40000083 = 0x3d005001"
+  ],
+  [
+   2592.741632,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2592.741709,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x20000"
+  ],
+  [
+   2592.741858,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x12345679"
+  ],
+  [
+   2592.741921,
+   "kvm_msr",
+   "msr_read 40000020 = 0xd2df806"
+  ],
+  [
+   2602.282617,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2602.282763,
+   "kvm_msr",
+   "msr_read 40000001 = 0x0"
+  ],
+  [
+   2602.282904,
+   "kvm_msr",
+   "msr_read 40000021 = 0x3d001001"
+  ],
+  [
+   2602.283016,
+   "kvm_msr",
+   "msr_read 40000080 = 0x1"
+  ],
+  [
+   2602.283079,
+   "kvm_msr",
+   "msr_read 40000082 = 0x3d002001"
+  ],
+  [
+   2602.283133,
+   "kvm_msr",
+   "msr_read 40000083 = 0x3d003001"
+  ],
+  [
+   2602.2832,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2602.283257,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x20000"
+  ],
+  [
+   2602.28331,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x12345678"
+  ],
+  [
+   2602.283397,
+   "kvm_msr",
+   "msr_read 40000020 = 0x12dde593"
+  ],
+  [
+   2602.283446,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2602.283478,
+   "kvm_msr",
+   "msr_read 40000001 = 0x0"
+  ],
+  [
+   2602.283502,
+   "kvm_msr",
+   "msr_read 40000021 = 0x3d001001"
+  ],
+  [
+   2602.283525,
+   "kvm_msr",
+   "msr_read 40000080 = 0x1"
+  ],
+  [
+   2602.283618,
+   "kvm_msr",
+   "msr_read 40000082 = 0x3d004001"
+  ],
+  [
+   2602.28365,
+   "kvm_msr",
+   "msr_read 40000083 = 0x3d005001"
+  ],
+  [
+   2602.283673,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2602.283696,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x20000"
+  ],
+  [
+   2602.283719,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x12345679"
+  ],
+  [
+   2602.283742,
+   "kvm_msr",
+   "msr_read 40000020 = 0x12ddf310"
+  ]
+ ],
+ "tsc_offset": [
+  [
+   2598.510903,
+   "kvm_write_tsc_offset",
+   "vcpu=0 prev=18446734799410686569 next=18446734698927392871"
+  ],
+  [
+   2598.511058,
+   "kvm_write_tsc_offset",
+   "vcpu=1 prev=18446734799410686569 next=18446734698927392871"
+  ]
+ ],
+ "counts": {
+  "kvm_msr": 51,
+  "kvm_hv_synic_set_msr": 46,
+  "kvm_hv_stimer_set_count": 10,
+  "kvm_hv_stimer_set_config": 10,
+  "kvm_write_tsc_offset": 2
+ }
+}

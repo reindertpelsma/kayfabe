@@ -145,6 +145,7 @@ def main():
     ap.add_argument("--qemu", required=True)
     ap.add_argument("--cpu", required=True)
     ap.add_argument("--seed", action="store_true")
+    ap.add_argument("--no-os-id", action="store_true", help="seed without GUEST_OS_ID/HYPERCALL (guest_msr.py seed no-os-id)")
     ap.add_argument("--base", required=True)
     ap.add_argument("--cidata", required=True)
     ap.add_argument("--key", required=True)
@@ -179,7 +180,7 @@ def main():
                  "-drive", "if=pflash,format=raw,unit=1,file=%s" % vars_copy]
     (out / "qemu_argv.json").write_text(json.dumps(argv[1:], indent=1))
     ver = subprocess.run([a.qemu, "--version"], capture_output=True, text=True).stdout.strip()
-    res = {"variant": a.variant, "cpu": a.cpu, "seeded": a.seed, "qemu_version": ver, "cycles": []}
+    res = {"variant": a.variant, "cpu": a.cpu, "seeded": a.seed, "no_os_id": a.no_os_id, "qemu_version": ver, "cycles": []}
     trace_arm()
     q = subprocess.Popen(argv, stdout=open(out / "qemu_stdout.log", "w"), stderr=subprocess.STDOUT)
     try:
@@ -203,7 +204,7 @@ def main():
             cyc = {"n": n}
             gssh(a.key, "sudo rm -rf /root/wm; sudo mkdir -p /root/wm")
             if a.seed:
-                rc, so, se = gssh(a.key, "sudo python3 /tmp/guest_msr.py seed")
+                rc, so, se = gssh(a.key, "sudo python3 /tmp/guest_msr.py seed" + (" no-os-id" if a.no_os_id else ""))
                 (out / ("c%d_seed.json" % n)).write_text(so + se)
             qmp.events.clear()
             cyc["acpi_io_before"] = acpi_io(qmp)

@@ -1,0 +1,1 @@
+cat: /root/wm/c1_dmesg.txt: No such file or directory

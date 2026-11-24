@@ -1,0 +1,33 @@
+[   31.148650] traps: python3[1726] trap invalid opcode ip:7cd3ff588de2 sp:7ffe243364f8 error:0 in libc.so.6[7cd3ff428000+189000]
+[   31.349160] PM: suspend entry (deep)
+[   31.357527] Filesystems sync: 0.008 seconds
+[   31.359855] Freezing user space processes
+[   31.361049] Freezing user space processes completed (elapsed 0.001 seconds)
+[   31.361054] OOM killer disabled.
+[   31.361056] Freezing remaining freezable tasks
+[   31.362043] Freezing remaining freezable tasks completed (elapsed 0.000 seconds)
+[   31.367936] ata3.00: Check power mode failed (err_mask=0x1)
+[   31.384020] ACPI: PM: Preparing to enter system sleep state S3
+[   31.384189] ACPI: PM: Saving platform NVS memory
+[   31.384330] Disabling non-boot CPUs ...
+[   31.386830] smpboot: CPU 1 is now offline
+[   40.580442] ACPI: PM: Low-level resume complete
+[   40.580950] ACPI: PM: Restoring platform NVS memory
+[   40.586371] Enabling non-boot CPUs ...
+[   40.586954] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   40.594570] CPU1 is up
+[   40.595910] ACPI: PM: Waking up from system sleep state S3
+[   40.614211] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   40.620799] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   40.631751] OOM killer enabled.
+[   40.631755] Restarting tasks ... done.
+[   40.633974] random: crng reseeded on system resumption
+[   40.703527] PM: suspend exit
+[   40.764732] traps: python3[1732] trap invalid opcode ip:757139388de2 sp:7fff50763948 error:0 in libc.so.6[757139228000+189000]
+[   40.935969] ata5: SATA link down (SStatus 0 SControl 300)
+[   40.936931] ata2: SATA link down (SStatus 0 SControl 300)
+[   40.938024] ata3: SATA link up 1.5 Gbps (SStatus 113 SControl 300)
+[   40.939430] ata1: SATA link down (SStatus 0 SControl 300)
+[   40.940448] ata4: SATA link down (SStatus 0 SControl 300)
+[   40.942079] ata3.00: configured for UDMA/100
+[   40.951504] ata6: SATA link down (SStatus 0 SControl 300)

@@ -1,0 +1,37 @@
+{
+ "clocksource": "hyperv_clocksource_tsc_page",
+ "clocksource_available": "hyperv_clocksource_tsc_page hyperv_clocksource_msr hpet acpi_pm",
+ "msrs": {
+  "0": {
+   "GUEST_OS_ID": "0x0000000000000000",
+   "HYPERCALL": "0x00000000051a3000",
+   "REFERENCE_TSC": "0x0000000004a04001",
+   "SCONTROL": "0x0000000000000000",
+   "SIEFP": "0x0000000000000000",
+   "SIMP": "0x0000000000000000",
+   "SINT2": "0x0000000000010000",
+   "STIMER0_CONFIG": "0x0000000000000000",
+   "STIMER0_COUNT": "0x0000000000000000",
+   "TIME_REF_COUNT": "0x000000002660744d"
+  },
+  "1": {
+   "GUEST_OS_ID": "0x0000000000000000",
+   "HYPERCALL": "0x00000000051a3000",
+   "REFERENCE_TSC": "0x0000000004a04001",
+   "SCONTROL": "0x0000000000000000",
+   "SIEFP": "0x0000000000000000",
+   "SIMP": "0x0000000000000000",
+   "SINT2": "0x0000000000010000",
+   "STIMER0_CONFIG": "0x0000000000000000",
+   "STIMER0_COUNT": "0x0000000000000000",
+   "TIME_REF_COUNT": "0x0000000026609497"
+  }
+ },
+ "suspend_error": null,
+ "t_boottime": 55.007859994,
+ "t_monotonic": 28.1940675,
+ "t_realtime": 1795482422.1237903,
+ "tsc_page": {
+  "error": "rc=-4 "
+ }
+}

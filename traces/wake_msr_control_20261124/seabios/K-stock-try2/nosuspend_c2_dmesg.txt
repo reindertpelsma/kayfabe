@@ -1,0 +1,25 @@
+[   34.013443] PM: suspend entry (deep)
+[   34.015204] Filesystems sync: 0.001 seconds
+[   34.034403] Freezing user space processes
+[   34.035953] Freezing user space processes completed (elapsed 0.001 seconds)
+[   34.035962] OOM killer disabled.
+[   34.035965] Freezing remaining freezable tasks
+[   34.037221] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[   34.043323] ata3.00: Check power mode failed (err_mask=0x1)
+[   34.061764] ACPI: PM: Preparing to enter system sleep state S3
+[   34.061918] ACPI: PM: Saving platform NVS memory
+[   34.061932] Disabling non-boot CPUs ...
+[   34.064472] smpboot: CPU 1 is now offline
+[   34.074318] ACPI: PM: Low-level resume complete
+[   34.074713] ACPI: PM: Restoring platform NVS memory
+[   34.079448] Enabling non-boot CPUs ...
+[   34.079580] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   34.082542] CPU1 is up
+[   34.083393] ACPI: PM: Waking up from system sleep state S3
+[   34.092133] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   34.093697] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   34.101601] OOM killer enabled.
+[   34.101604] Restarting tasks ... done.
+[   34.101984] random: crng reseeded on system resumption
+[   34.113072] workqueue: console_callback hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[   34.120419] PM: suspend exit

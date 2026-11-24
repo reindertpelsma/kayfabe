@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Guest side of the S3 wake MSR control (runs as root inside the Linux guest; stdlib only).
 
-  guest_msr.py seed            write the known Hyper-V MSR values (variant K only), print the result as JSON
+  guest_msr.py seed [no-os-id] write the known Hyper-V MSR values (variant K only), print the result as JSON
   guest_msr.py read            print every probed MSR of every CPU, the clocks and the TSC page bytes as JSON
   guest_msr.py cycle OUTDIR N  read -> OUTDIR/cN_pre.json, suspend to RAM, read the moment the suspend returns ->
                                OUTDIR/cN_post.json, then the kernel log lines of the cycle -> OUTDIR/cN_dmesg.txt
@@ -52,8 +52,11 @@ def wrmsr(cpu, msr, value):
         return "ERR:%s" % (e.strerror or e.errno)
 
 
-def seed_plan():
-    plan = [(0, 0x40000000, 0x8100000000000001), (0, 0x40000001, PAGE_BASE | 1), (0, 0x40000021, TSC_PAGE | 1)]
+def seed_plan(partition_id=True):
+    """partition_id=False leaves GUEST_OS_ID (and so HYPERCALL) alone: with it set, KVM routes the guest's own KVM PV
+    hypercalls (vmcall) to its Hyper-V hypercall handler, which a Linux KVM guest does not survive for long."""
+    plan = [(0, 0x40000000, 0x8100000000000001), (0, 0x40000001, PAGE_BASE | 1)] if partition_id else []
+    plan += [(0, 0x40000021, TSC_PAGE | 1)]
     for c in cpus():
         plan += [(c, 0x40000080, 1), (c, 0x40000082, (PAGE_BASE + 0x2000 + c * 0x2000) | 1),
                  (c, 0x40000083, (PAGE_BASE + 0x3000 + c * 0x2000) | 1),
@@ -134,7 +137,8 @@ def cycle(outdir, n):
 def main(argv):
     subprocess.run(["modprobe", "msr"], check=False)
     if argv[0] == "seed":
-        res = [{"cpu": c, "msr": MSRS[m], "value": "0x%x" % v, "result": wrmsr(c, m, v)} for c, m, v in seed_plan()]
+        plan = seed_plan(partition_id=argv[1:] != ["no-os-id"])
+        res = [{"cpu": c, "msr": MSRS[m], "value": "0x%x" % v, "result": wrmsr(c, m, v)} for c, m, v in plan]
         print(json.dumps(res))
     elif argv[0] == "read":
         print(json.dumps(snapshot(), sort_keys=True))

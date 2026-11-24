@@ -87,7 +87,7 @@ value KVM returned) plus the absence of a guest write between the wake and that 
 Stable host TSC required (`current_clocksource` = `tsc`, no "TSC unstable" in `dmesg`); if not, reboot the box with
 `tsc=reliable clocksource=tsc` as `traces/win11_s3_wake_20261123/` did, and say so. A cycle whose guest does not reach
 `suspended` within 60 s is reported as "no suspend" and does not count for or against H1. Measured and inferred are kept
-apart in the README. Cap: 1.5 USD and 2 box-hours.
+apart in the README of the 2026-11-24 run. Cap: 1.5 USD and 2 box-hours.
 
 ## Addendum 1 (2026-11-24 ~00:57Z, written before the OVMF runs' results were read)
 
@@ -105,3 +105,17 @@ Changes to the method, with the reason. The hypotheses and falsifiers above are 
 - **The TSC page is read by the host** (HMP `xp /3gx` at the page's GPA, before the suspend, while suspended, after the
   wake): under OVMF the guest's `/dev/mem` read of that page dies with SIGILL, so the guest-side copy is reported as an
   error there. For H-* the GPA is the guest kernel's last `REFERENCE_TSC` write in the boot trace.
+
+## Addendum 2 (2026-11-24 ~01:05Z, written after K-stock/K-patch/A-stock/H-* had run, before K2-* ran)
+
+K-patch's guest never came back after its first wake (CPU 0 RCU stall; the host trace shows `kvm_hv_hypercall` events
+from vCPU 1 after the wake). [inferred, from KVM's code] With `GUEST_OS_ID` non-zero KVM treats every `vmcall` of the guest
+as a Hyper-V hypercall, and a Linux KVM guest issues KVM PV hypercalls (IPIs, kicks); the probe's own `GUEST_OS_ID` seed,
+which the wake hunk keeps, is what breaks such a guest, not the hunk. Two variants are added to answer H1 for every other
+MSR with a guest that survives: **K2-stock / K2-patch** = K-stock / K-patch with the seed minus `GUEST_OS_ID` and
+`HYPERCALL` (`guest_msr.py seed no-os-id`). Same falsifiers as H1 for the MSRs seeded.
+
+## Addendum 3 (2026-11-24, editorial, after the runs)
+
+The last sentence of "Rules for the run" gained the words "of the 2026-11-24 run" so the claim-ledger gate
+(`scripts/ci/debt.py claims`) finds a date in that block. Nothing else in this file changed after the runs.

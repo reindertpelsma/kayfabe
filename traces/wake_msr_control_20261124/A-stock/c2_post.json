@@ -1,0 +1,37 @@
+{
+ "clocksource": "kvm-clock",
+ "clocksource_available": "kvm-clock hpet acpi_pm",
+ "msrs": {
+  "0": {
+   "GUEST_OS_ID": "ERR:Input/output error",
+   "HYPERCALL": "ERR:Input/output error",
+   "REFERENCE_TSC": "ERR:Input/output error",
+   "SCONTROL": "ERR:Input/output error",
+   "SIEFP": "ERR:Input/output error",
+   "SIMP": "ERR:Input/output error",
+   "SINT2": "ERR:Input/output error",
+   "STIMER0_CONFIG": "ERR:Input/output error",
+   "STIMER0_COUNT": "ERR:Input/output error",
+   "TIME_REF_COUNT": "ERR:Input/output error"
+  },
+  "1": {
+   "GUEST_OS_ID": "ERR:Input/output error",
+   "HYPERCALL": "ERR:Input/output error",
+   "REFERENCE_TSC": "ERR:Input/output error",
+   "SCONTROL": "ERR:Input/output error",
+   "SIEFP": "ERR:Input/output error",
+   "SIMP": "ERR:Input/output error",
+   "SINT2": "ERR:Input/output error",
+   "STIMER0_CONFIG": "ERR:Input/output error",
+   "STIMER0_COUNT": "ERR:Input/output error",
+   "TIME_REF_COUNT": "ERR:Input/output error"
+  }
+ },
+ "suspend_error": null,
+ "t_boottime": 39.411376902,
+ "t_monotonic": 21.57554524,
+ "t_realtime": 1795482334.1571424,
+ "tsc_page": {
+  "error": "rc=-4 "
+ }
+}

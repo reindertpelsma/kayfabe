@@ -1,0 +1,130 @@
+{
+ "variant": "K-patch",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash",
+ "seeded": true,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-patched)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481803.8263378,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481803.82635,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481803.8263597,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481804.833812,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1791.360844067,
+   "tsc_page_suspended": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "host_realtime_wake": 1795481809.8403034,
+   "host_mono_wake": 1796.366781847,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": null,
+   "host_realtime_after": 1795482080.6230116,
+   "host_mono_after": 2067.149491231,
+   "trace_counts": {
+    "kvm_msr": 33,
+    "kvm_hv_synic_set_msr": 46,
+    "kvm_hv_stimer_set_count": 10,
+    "kvm_hv_stimer_set_config": 10,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_hypercall": 3
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_after": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "qmp_events": [
+    [
+     1795481803.8263378,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481803.82635,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481803.8263597,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481804.833812,
+     "SUSPEND"
+    ],
+    [
+     1795481809.8958435,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [],
+   "verdict": "no suspend",
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ]
+  },
+  {
+   "n": 3,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "tsc_page_before": "000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff",
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [],
+   "verdict": "no suspend",
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ]
+  }
+ ],
+ "boot_ssh_s": 20.619555711746216,
+ "tsc_page_gpa": "0x3d001000",
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 80,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}
