@@ -611,8 +611,8 @@ const MUTANTS = [
     [
       [
         P,
-        'for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])',
-        'for (const nonce of [entry.nonce])',
+        '    ...prior.map((nonce, i) => [nonce, expiries.length === prior.length ? [expiries[i]] : known]),\n',
+        '',
       ],
     ],
   ],

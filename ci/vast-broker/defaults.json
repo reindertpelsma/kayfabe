@@ -586,6 +586,14 @@
           "libvirt: QEMU Driver error",
           "Domain not found: no domain with matching name 'C.{id}'"
         ]
+      },
+      {
+        "reason": "KVM_DEVICE_ERROR",
+        "source": "status",
+        "contains": [
+          "error gathering device information while adding custom device",
+          "/dev/kvm"
+        ]
       }
     ],
     "ignorableSignatures": [
@@ -606,6 +614,7 @@
     "observationSpacingSeconds": 1,
     "maxAttempts": 8,
     "sessionMinutes": 90,
+    "replacementExtensionMinutes": 25,
     "penaltyBaseUsdHour": 0.25,
     "penaltyHalfLifeHours": 24,
     "penaltyCapUsdHour": 5,

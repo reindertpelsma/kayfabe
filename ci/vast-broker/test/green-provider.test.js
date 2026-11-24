@@ -55,8 +55,11 @@ for (const kind of ['boot', 'running-boot', 'report'])
       assert.equal(data.provider_retries, 1);
       assert.equal(data.machine_id, 100002);
       const replacement = await row(h);
-      assert.equal(replacement.hardDeadline, original.hardDeadline);
-      assert.equal(replacement.softDeadline, original.softDeadline);
+      // The unusable first leg took at least the 25 minute extension cap, so the replacement gets exactly the cap back.
+      const extension = configuration(env).provider.replacementExtensionMinutes * 60000;
+      assert.equal(replacement.deadlineExtension, extension);
+      assert.equal(replacement.hardDeadline, original.hardDeadline + extension);
+      assert.equal(replacement.softDeadline, original.softDeadline + extension);
       assert.equal(replacement.runBudgetUsd, original.runBudgetUsd);
       assert.notEqual(replacement.nonce, original.nonce);
       const environment = h.cloud.calls.filter((call) => call.url.includes('/api/v0/asks/')).at(-1)

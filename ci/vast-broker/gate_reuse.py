@@ -12,6 +12,15 @@ import urllib.request
 REPO = "reindertpelsma/kayfabe"
 SHA = r"[0-9a-f]{40}"
 BOT = {"login": "github-actions[bot]", "id": 41898282}
+# The stages every tier of the payload plans first, in order (scripts/ci/vast_payload.py plan_stage_names).
+# This file is fetched alone by the workflow, so it cannot import the payload;
+# scripts/ci/test_gate_reuse_stages.py fails when the payload's plan no longer starts with these.
+BASE_STAGES = ("provision", "cuda_host", "merge_bar", "cuda_guest")
+# The gate that produced the evidence may have planned more (Linux apps, Windows, ...): the original frame names them.
+MAX_STAGES = 16
+# Boxes one run may have rented: providerPolicy.maxAttempts in ci/vast-broker/defaults.json.
+MAX_RENTALS = 8
+STAGE_NAME = r"[a-z][a-z0-9_]{0,39}"
 
 
 def api(path, body=None):
@@ -185,9 +194,10 @@ def summary_lines(text, parent):
         r"reason=[A-Z_]+ ignored=[0-9]+",
         r"\[untrusted\] \[box\] CUDA_LADDER_STARTED=[0-9T:+-]+ mode=(host|guest) "
         r"reps=[0-9]+ rungs=[a-z0-9,]+ rev=" + parent[:8],
-        r"\[untrusted\] \[box\] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4",
-        r"\[untrusted\] \[box\] stage name=(provision|cuda_host|merge_bar|cuda_guest) "
-        r"rc=[0-9]+ duration_ms=[0-9]+ result=PASS",
+        r"\[untrusted\] \[box\] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=[0-9]{1,2}",
+        r"\[untrusted\] \[box\] stage name="
+        + STAGE_NAME
+        + r" rc=[0-9]+ duration_ms=[0-9]+ result=PASS",
     ]
     groups = [[] for _ in patterns]
     final_blocks = 0
@@ -198,14 +208,23 @@ def summary_lines(text, parent):
         for index, pattern in enumerate(patterns):
             if re.fullmatch(pattern, line) and line not in groups[index]:
                 groups[index].append(line)
-    expected = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     stages = [line.split("stage name=", 1)[1].split(" ", 1)[0] for line in groups[-1]]
     modes = [line.split(" mode=", 1)[1].split(" ", 1)[0] for line in groups[2]]
-    if any(not group for group in groups) or sorted(stages) != sorted(expected):
+    if any(not group for group in groups):
+        raise ValueError("missing original result lines")
+    # The frame states how many stages the gate planned; every one of them must be a PASS line, none twice, and the
+    # stages every tier plans first must come first, in order. A frame with a failed or unrun stage has fewer lines.
+    planned = int(groups[3][0].rsplit("stages=", 1)[1]) if groups[3] else 0
+    if (
+        not len(BASE_STAGES) <= planned <= MAX_STAGES
+        or len(set(stages)) != planned
+        or tuple(stages[: len(BASE_STAGES)]) != BASE_STAGES
+    ):
         raise ValueError("missing original result lines")
     if sorted(modes) != ["guest", "host"] or final_blocks != 1:
         raise ValueError("incomplete or conflicting original verdict")
-    if any(len(groups[index]) != 1 for index in [0, 1, 3]):
+    # One verdict frame; a run that replaced a box that never became usable prints one rental and one selection per box.
+    if len(groups[3]) != 1 or any(not 1 <= len(groups[index]) <= MAX_RENTALS for index in [0, 1]):
         raise ValueError("ambiguous original rental or verdict")
     return [line for group in groups for line in group]
 

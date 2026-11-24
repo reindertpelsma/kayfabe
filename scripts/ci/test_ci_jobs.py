@@ -50,6 +50,7 @@ HARNESSES = [
     'node ci/vast-broker/evidence-mutants.mjs',
     'node ci/vast-broker/report-mutants.mjs',
     'node ci/vast-broker/provider-tolerance-mutants.mjs',
+    'node ci/vast-broker/sha-gap-mutants.mjs',
     'node ci/vast-broker/denied-countries-mutants.mjs',
     'node ci/vast-broker/propimages-mutants.mjs',
     'python3 -B -I scripts/ci/bandwidth_check.py',
