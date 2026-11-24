@@ -11,7 +11,7 @@ Labels: READ (read from a file of this tree), M (a number from committed evidenc
 1. **One invocation.** `python3 -I scripts/ci/vast_payload.py --full --instruction FILE [--matlab-image PATH|URL] [--skip STAGE]... SHA NONCE`. `--full` needs an instruction file (it is the only place the strict switch lives) and refuses `--only`.
 2. **A stage cannot silently disappear.** The plan is the 16 stages of section 2, in that order. A stage whose input is missing is a named refusal (`KF_PAYLOAD_FULL_REFUSED <stage>:<input>`, then `KF_PAYLOAD_FAIL suite=preflight`) before any stage runs: `tier:large`, `propimage_apps:propimages`, `propimage_apps:strict`, `apps:linux_apps`, `windows_gate:windows`, `windows_apps:winapps`, `windows_gate_2:windows_runs_2`, `windows_open_rows:online_host`, `matlab:matlab_image`, `specviewperf:spec_both`.
 3. **A skip is explicit and printed.** `--skip STAGE` is the only exit. `KF_PAYLOAD_FULL manifest=1 stages=N skipped=a,b complete=0|1 by_design=...` is printed and the same record is the `full` key of the result file (`vast_report.validate_full`). `provision` and `merge_bar` cannot be skipped; `windows_apps` and `windows_open_rows` need `windows_gate`, `apps_discovery` needs `apps`.
-4. **No skipped row inside a stage.** `propimages_strict: true` (every listed image and app runs; a skip fails by name `STRICT_SKIP:<image>:<app>:<reason>`), kfml's strict rule (`kfml_not_run`, in the same instruction field), the MATLAB stage's `--strict-rows` (added here: the zero-skip rule of the Worker's shape without its pins; the standalone shape was permissive and graded a run with skipped rows as PASS), and the new stages below.
+4. **No skipped row inside a stage.** `propimages_strict: true` (every listed image and app runs; a skip fails by name `STRICT_SKIP:<image>:<app>:<reason>`), kfml's strict rule (`kfml_not_run`, in the same instruction field; since the owner ruling of 2026-11-24 a row may skip only with a reason code for a limit outside kayfabe, see `scripts/ci/VAST_PAYLOAD.md`, "2026-11-24 correction"), the MATLAB stage's `--strict-rows` (added here: the zero-skip rule of the Worker's shape without its pins; the standalone shape was permissive and graded a run with skipped rows as PASS), and the new stages below.
 5. **Discovery lane: report, never gate.** A discovery row that RAN and failed, crashed or hung is a listed breakage; a row that did NOT run fails its stage by name (`apps_discovery_not_run`, `windows_open_rows_not_run`).
 6. **By-design NOT_RUN rows are named, not hidden** (table in section 3). Everything else that does not run is a failure.
 7. **Trust.** A standalone run trusts git only: what the repository downloads is checked against an upstream-authored anchor (official checksum, pinned upstream commit, vendor signature); a path or URL the user passes is trusted and its computed sha256 and size are recorded; lifting a check is explicit (`docs/design/V3_STANDALONE_TRUST.md`). A GitHub attestation anchor is NOT BUILT.
@@ -31,7 +31,7 @@ Column key. Lane: gate (must pass) or discovery (reports; a row that did not run
 | GPU-use assertion of the app rows (#475) | inside `apps` | gate | `KF_NEGCTL=1` runs the CPU control of each row | a kf3 guest | repo | none extra | a PASS that cannot be judged becomes NOTRUN and fails the row |
 | llama.cpp built without the prebuilt web UI download (#469) | inside `apps` | gate | build of the apps bundle | network | pinned upstream commit | 4 min (M) | build step fails by name |
 | documented install flow | `install_flow` | gate | `scripts/ci/install_flow.py` | provision | repo | 315 s (M) | `install_flow` fails |
-| kfml: six ML research workloads on the box's own GPU (#455, #472) | `kfml` | gate | `python3 -m kfml run --tier large` (`scripts/kfml/README.md`) | a die with a pinned wheel flavour; 1.25 x VRAM <= 60 percent of free RAM for `managed_oversub` | hashed locks, datasets by sha256 in `pins.json` | 5 min warm (M) | `kfml_not_run` (strict) |
+| kfml: six ML research workloads on the box's own GPU (#455, #472) | `kfml` | gate | `python3 -m kfml run --tier large` (`scripts/kfml/README.md`) | a die with a pinned wheel flavour; 1.25 x VRAM <= 60 percent of free RAM for `managed_oversub` | hashed locks, datasets by sha256 in `pins.json` | 5 min warm (M) | `kfml_not_run` (strict; a row skipped for `HOST_RAM_TOO_SMALL`, `VRAM_TOO_SMALL`, `DIE_LACKS_FEATURE` or `NOT_RUNNABLE_ON_BARE_METAL` is a permitted skip) |
 
 ### 2.2 Open Linux rows and probes
 
@@ -87,7 +87,7 @@ The stage `windows_open_rows` runs `windows_apps.sh` with the profile `open_sour
 | `windows_open_rows` | `dxsamples_multiadapter` | needs two GPUs; a guest has one | hardware |
 | `windows_open_rows` | `vkglcts_gl46`, `vkglcts_vk` | pass only against a control from native Windows on the same GPU model, a second machine | needs a second machine |
 | `propimage_apps` | `wukong` | no verdict driver | known gap |
-| (a die) | kfml rows whose RAM rule fails on a small box | `managed_oversub` needs 1.25 x VRAM of host RAM | box configuration; `kfml_not_run` in strict |
+| (a die) | kfml rows whose RAM rule fails on a small box | `managed_oversub` needs 1.25 x VRAM of host RAM | box configuration; a permitted skip in strict since 2026-11-24 (`skip_code` `HOST_RAM_TOO_SMALL`, recorded in the result) |
 
 ## 4. What this change wires (READ)
 

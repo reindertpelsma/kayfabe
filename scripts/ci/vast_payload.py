@@ -1896,9 +1896,10 @@ def kfml_rows(text, rc, sha, result, strict=False):
     """One KF_KFML_RESULT line, kept in the result file (die, driver, per-row status) even when it is red (vast_report.py validates it).
     PASS needs rc 0, verdict PASS and the right sha. verdict NOT_RUN (no pinned wheel flavour fits this box, or every test NOT_RUN for a
     named hardware reason) with rc 0 is a skipped row, never a pass; a FAIL row, a failed step or anything else is the stage failing.
-    strict (2026-11-17; the instruction's `propimages_strict`, its only strict switch): a row that did not run fails by name `kfml_not_run`,
-    whether the whole stage was NOT_RUN or one row of a PASS record was (MEASURED: managed_oversub NOT_RUN on a box with too little RAM
-    graded PASS); the record is kept first, so the evidence stays. Without strict nothing changes."""
+    strict (the instruction's `propimages_strict`, its only strict switch): a whole-stage NOT_RUN, and any NOT_RUN row of a PASS record whose
+    `skip_code` is not one of the row runner's fixed vocabulary (kfml_skip_codes.SKIP_CODES), fails by name `kfml_not_run`. A row that did not run
+    for a limit outside kayfabe (host RAM or VRAM too small, a feature the die lacks, not runnable on bare metal either) carries such a code and
+    passes; it stays in the kept record, which is stored first. The free-text reason is never graded. Without strict nothing changes."""
     found = re.findall(r"^KF_KFML_RESULT (\{.*\})$", text, re.M)
     if len(found) != 1:
         raise EvidenceError("kfml")
@@ -1916,8 +1917,10 @@ def kfml_rows(text, rc, sha, result, strict=False):
     if rc or doc.get("verdict") != "PASS":
         raise EvidenceError("kfml")
     rows = doc.get("rows")
-    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):
-        raise EvidenceError("kfml_not_run")
+    if strict:
+        import kfml_skip_codes  # loaded only when it grades: a harness that copies this file alone and never runs strict keeps working
+        if type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" and not kfml_skip_codes.permitted(r) for r in rows):
+            raise EvidenceError("kfml_not_run")
     return [row("kfml", 1)]
 
 

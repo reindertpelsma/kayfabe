@@ -37,6 +37,11 @@ runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
 
+**2026-11-24 note on the 2026-11-17 note below (owner ruling 2026-11-24; the text is in `docs/OWNER_RULINGS.md`, added by a separate docs change):** under a strict payload instruction a NOT_RUN row is acceptable only when its reason is outside kayfabe, and the row says so with a `skip_code` (`skip_code` in the row JSON,
+written only on a NOT_RUN row): `HOST_RAM_TOO_SMALL`, `VRAM_TOO_SMALL`, `DIE_LACKS_FEATURE`, `NOT_RUNNABLE_ON_BARE_METAL`. The list is `SKIP_CODES` in `kfml/errors.py` and nowhere else; a workload raises `NotRun(reason, code=...)`, `gating.py` sets the code for the compute-capability and VRAM
+floors, `managed_oversub` sets `HOST_RAM_TOO_SMALL`. Every other NOT_RUN (a driver too old for the wheel, no pinned flavour, the guest's unsupported managed memory) has no code and fails a strict run by name `kfml_not_run`; so does a whole-stage NOT_RUN. The runner's exit code and the default
+(non-strict) grading are unchanged. Grading: `scripts/ci/VAST_PAYLOAD.md`, "The kfml stage".
+
 **2026-11-17 note on the bullet below (payload stage, not the runner):** the runner's exit code is unchanged (NOT_RUN does not fail `kfml run`), and the payload's default grading still counts a record with a NOT_RUN row as a pass and a
 whole-stage NOT_RUN as a skipped row. Under a STRICT payload instruction a row that did not run fails the stage by name `kfml_not_run`: MEASURED in the 2026-11-17 acceptance run, `managed_oversub` was NOT_RUN (`host RAM too small to
 oversubscribe VRAM by 25%`) and the stage still graded PASS. "Strict" means `propimages_strict`, the payload instruction's only strict switch; whether kfml deserves its own field is an OWNER decision (open). Grading: `scripts/ci/VAST_PAYLOAD.md`,

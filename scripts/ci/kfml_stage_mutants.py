@@ -23,6 +23,8 @@ FILES = {
     "ks": "scripts/ci/kfml_stage.py",
     "report": "scripts/ci/vast_report.py",
     "payload": "scripts/ci/vast_payload.py",
+    "codes": "scripts/ci/kfml_skip_codes.py",
+    "errors": "scripts/kfml/kfml/errors.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_kfml_stage."
@@ -41,7 +43,7 @@ r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
 
-S, PL, RU, RP, SM = (SUITE + n for n in ("Summarize.", "Payload.", "Run.", "Report.", "StrictInMain."))
+S, PL, RU, RP, SM, SR = (SUITE + n for n in ("Summarize.", "Payload.", "Run.", "Report.", "StrictInMain.", "SkipRule."))
 
 
 def M(name, key, old, new, *tests):
@@ -67,7 +69,7 @@ MUTANTS = [
     M("strict-ignored-by-the-grader", "payload", '    result["kfml"] = doc\n', '    result["kfml"] = doc\n    strict = False\n',
       PL + "test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept", PL + "test_strict_a_whole_stage_not_run_fails_by_name_and_the_record_is_kept",
       SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record"),
-    M("strict-only-checks-the-whole-stage", "payload", 'if strict and type(rows) is list and any(', 'if False and type(rows) is list and any(',
+    M("strict-only-checks-the-whole-stage", "payload", '        if type(rows) is list and any(', '        if False and type(rows) is list and any(',
       PL + "test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept", SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record"),
     M("strict-only-checks-the-rows", "payload", '        if strict:\n            raise EvidenceError("kfml_not_run")\n        return [row("kfml", skipped=1)]',
       '        return [row("kfml", skipped=1)]',
@@ -78,10 +80,33 @@ MUTANTS = [
     M("strict-on-for-every-instruction", "payload", "kfml_rows(bounded_text(output), rc, sha, result, strict=instruction.propimages_strict)",
       "kfml_rows(bounded_text(output), rc, sha, result, strict=True)",
       SM + "test_a_non_strict_instruction_still_passes_a_not_run_row", SM + "test_a_non_strict_instruction_still_skips_a_whole_stage_not_run"),
-    M("strict-row-check-before-the-exit-code", "payload",
-      '    if rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n    rows = doc.get("rows")\n    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):\n        raise EvidenceError("kfml_not_run")\n',
-      '    rows = doc.get("rows")\n    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):\n        raise EvidenceError("kfml_not_run")\n    if rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n',
+    M("strict-row-check-before-the-exit-code", "payload", '    if rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n    rows = doc.get("rows")\n    if strict:',
+      '    if (rc and not strict) or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n    rows = doc.get("rows")\n    if strict:',
       PL + "test_strict_a_not_run_row_with_a_bad_exit_code_is_the_stage_failing_not_a_not_run", PL + "test_strict_a_not_run_row_from_a_killed_stage_is_the_stage_failing_not_a_not_run"),
+    # skip rule: under a strict instruction a NOT_RUN row passes only with a code from the row runner's fixed vocabulary (kfml_skip_codes.SKIP_CODES)
+    M("skip-rule-accepts-any-code", "payload", "and not kfml_skip_codes.permitted(r) for r in rows", 'and not r.get("skip_code") for r in rows',
+      SR + "test_strict_an_unknown_code_fails_by_name", SR + "test_strict_a_code_outside_the_vocabulary_such_as_a_driver_too_old_fails_by_name",
+      SM + "test_a_strict_instruction_fails_a_not_run_row_with_an_unknown_code_by_name"),
+    M("skip-rule-accepts-a-missing-code", "payload", "and not kfml_skip_codes.permitted(r) for r in rows",
+      'and not ("skip_code" not in r or kfml_skip_codes.permitted(r)) for r in rows',
+      SR + "test_strict_a_row_without_a_code_fails_by_name", PL + "test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept",
+      SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record"),
+    M("skip-rule-accepts-a-whole-stage-not-run-with-coded-rows", "payload", '        if strict:\n            raise EvidenceError("kfml_not_run")\n        return [row("kfml", skipped=1)]',
+      '        import kfml_skip_codes\n        if strict and not all(kfml_skip_codes.permitted(r) for r in doc.get("rows") or [] if type(r) is dict):\n            raise EvidenceError("kfml_not_run")\n        return [row("kfml", skipped=1)]',
+      SR + "test_strict_a_whole_stage_not_run_fails_by_name_even_when_every_row_carries_an_allowed_code",
+      SM + "test_a_strict_instruction_fails_a_whole_stage_not_run_by_name_even_when_every_row_carries_an_allowed_code"),
+    M("skip-rule-enumeration-widened", "errors", '    "DIE_LACKS_FEATURE",', '    "DIE_LACKS_FEATURE", "DRIVER_TOO_OLD",',
+      SR + "test_the_vocabulary_is_the_row_runners_tuple_and_every_consumer_loads_it_from_there",
+      SR + "test_strict_a_code_outside_the_vocabulary_such_as_a_driver_too_old_fails_by_name"),
+    M("skip-rule-reads-the-reason-text-as-the-code", "codes", 'type(row.get("skip_code")) is str and row["skip_code"] in SKIP_CODES',
+      'type(row.get("reason")) is str and row["reason"] in SKIP_CODES',
+      SR + "test_strict_an_allowed_skip_passes_and_the_code_is_recorded_in_the_evidence", SR + "test_strict_an_allowed_code_with_any_free_text_reason_passes",
+      SR + "test_strict_the_reason_text_is_never_read_as_a_code"),
+    M("skip-rule-stage-keeps-any-code", "ks", "    if kfml_skip_codes.permitted(r):", '    if r.get("skip_code"):',
+      SR + "test_summarize_drops_a_code_that_is_free_text_or_unknown", SR + "test_summarize_keeps_a_vocabulary_code_on_a_not_run_row_and_nowhere_else"),
+    M("skip-rule-report-refuses-a-recorded-code", "report", '{"name", "status", "reason", "wall_s", "metrics"} <= set(r) <= {"name", "status", "reason", "wall_s", "metrics", "skip_code"}',
+      'set(r) == {"name", "status", "reason", "wall_s", "metrics"}',
+      SR + "test_the_report_validator_reads_a_code_on_a_not_run_row_and_refuses_the_rest", RP + "test_reads_a_record_with_a_coded_not_run_row"),
     M("result-for-another-sha-accepted", "payload", 'if type(doc) is not dict or doc.get("sha") != sha:\n        raise EvidenceError("kfml")',
       'if type(doc) is not dict:\n        raise EvidenceError("kfml")',
       PL + "test_a_result_for_another_sha_is_refused", PL + "test_rows_refuse_everything_else"),

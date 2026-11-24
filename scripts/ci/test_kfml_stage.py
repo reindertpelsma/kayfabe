@@ -474,6 +474,160 @@ class Payload(unittest.TestCase):
                 self.assertEqual(caught.exception.name, "kfml")
 
 
+class SkipRule(unittest.TestCase):
+    """Owner ruling 2026-11-24: under a strict instruction a NOT_RUN row is acceptable only for a reason outside kayfabe. The reason is a code
+    from the row runner's fixed vocabulary (scripts/kfml/kfml/errors.py SKIP_CODES), graded by membership, never by the free-text reason."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("vast_payload_kfml_skip", HERE / "vast_payload.py")
+        self.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.m)
+
+    def record(self, rows, tier="large"):
+        doc = ks.summarize(rows, SHA, tier, [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
+        return doc, "KF_KFML_RESULT " + json.dumps(doc) + "\n"
+
+    def grade(self, text, strict=True, rc=0, result=None):
+        return self.m.kfml_rows(text, rc, SHA, {} if result is None else result, strict=strict)
+
+    def failing_name(self, text, **kw):
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.grade(text, **kw)
+        return caught.exception.name
+
+    # the vocabulary: one place, loaded by every consumer
+    def test_the_vocabulary_is_the_row_runners_tuple_and_every_consumer_loads_it_from_there(self):
+        import kfml_skip_codes
+        text = (ROOT / "scripts/kfml/kfml/errors.py").read_text()
+        namespace = {}
+        exec(compile(text, "errors.py", "exec"), namespace)
+        self.assertEqual(kfml_skip_codes.SKIP_CODES, namespace["SKIP_CODES"])
+        self.assertEqual(kfml_skip_codes.SKIP_CODES, ("HOST_RAM_TOO_SMALL", "VRAM_TOO_SMALL", "DIE_LACKS_FEATURE", "NOT_RUNNABLE_ON_BARE_METAL"))
+        self.assertIn("kfml_skip_codes.permitted(r)", (HERE / "vast_payload.py").read_text())
+        self.assertIs(ks.kfml_skip_codes.SKIP_CODES, kfml_skip_codes.SKIP_CODES)
+        for path in ("vast_payload.py", "kfml_stage.py", "vast_report.py"):
+            self.assertNotIn("HOST_RAM_TOO_SMALL", (HERE / path).read_text(), path)
+
+    # the stage keeps a code only from the vocabulary and only on a NOT_RUN row
+    def test_summarize_keeps_a_vocabulary_code_on_a_not_run_row_and_nowhere_else(self):
+        rows = [ml_row(skip_code="DIE_LACKS_FEATURE"), ml_row("b", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL"),
+                ml_row("c", "FAIL", "boom", skip_code="VRAM_TOO_SMALL")]
+        out = ks.summarize(rows, SHA, "mid", [])["rows"]
+        self.assertNotIn("skip_code", out[0])
+        self.assertEqual(out[1]["skip_code"], "VRAM_TOO_SMALL")
+        self.assertNotIn("skip_code", out[2])
+
+    def test_summarize_drops_a_code_that_is_free_text_or_unknown(self):
+        for bad in ("host RAM too small", "host_ram_too_small", "HOST_RAM_TOO_SMALL ", "OTHER", "", None, 5, ["HOST_RAM_TOO_SMALL"]):
+            with self.subTest(bad=bad):
+                out = ks.summarize([ml_row(), ml_row("b", "NOT_RUN", "r", skip_code=bad)], SHA, "mid", [])["rows"]
+                self.assertNotIn("skip_code", out[1])
+
+    def test_summarize_never_derives_a_code_from_the_reason(self):
+        out = ks.summarize([ml_row(), ml_row("b", "NOT_RUN", "HOST_RAM_TOO_SMALL")], SHA, "mid", [])["rows"]
+        self.assertNotIn("skip_code", out[1])
+
+    # the grader
+    def test_strict_an_allowed_skip_passes_and_the_code_is_recorded_in_the_evidence(self):
+        m = self.m
+        import kfml_skip_codes
+        for code in kfml_skip_codes.SKIP_CODES:
+            with self.subTest(code=code):
+                doc, text = self.record([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%", skip_code=code)])
+                result = {}
+                self.assertEqual(self.grade(text, result=result), [m.row("kfml", 1)])
+                self.assertEqual(result["kfml"], doc)
+                self.assertEqual([r.get("skip_code") for r in result["kfml"]["rows"]], [None, code])
+                self.assertEqual(result["kfml"]["rows"][1]["status"], "NOT_RUN")
+
+    def test_strict_a_row_without_a_code_fails_by_name(self):
+        doc, text = self.record([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%")])
+        self.assertNotIn("skip_code", doc["rows"][1])
+        result = {}
+        self.assertEqual(self.failing_name(text, result=result), "kfml_not_run")
+        self.assertEqual(result["kfml"], doc)
+
+    def test_strict_an_unknown_code_fails_by_name(self):
+        for bad in ("OTHER", "host_ram_too_small", "HOST_RAM_TOO_SMALL ", "", None, 5, ["HOST_RAM_TOO_SMALL"], {"HOST_RAM_TOO_SMALL": 1}):
+            with self.subTest(bad=bad):
+                doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "r")])
+                doc["rows"][1]["skip_code"] = bad   # a record that bypassed the stage's own filter
+                text = "KF_KFML_RESULT " + json.dumps(doc) + "\n"
+                self.assertEqual(self.failing_name(text), "kfml_not_run")
+
+    def test_strict_the_reason_text_is_never_read_as_a_code(self):
+        for reason in ("HOST_RAM_TOO_SMALL", "VRAM_TOO_SMALL: HOST_RAM_TOO_SMALL", "DIE_LACKS_FEATURE"):
+            with self.subTest(reason=reason):
+                doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "x")])
+                doc["rows"][1]["reason"] = reason
+                text = "KF_KFML_RESULT " + json.dumps(doc) + "\n"
+                self.assertEqual(self.failing_name(text), "kfml_not_run")
+
+    def test_strict_an_allowed_code_with_any_free_text_reason_passes(self):
+        doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "anything at all, even a lie", skip_code="VRAM_TOO_SMALL")])
+        self.assertEqual(self.grade(text), [self.m.row("kfml", 1)])
+
+    def test_strict_one_allowed_and_one_unlisted_not_run_row_fails_by_name(self):
+        doc, text = self.record([ml_row(), ml_row("a", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL"), ml_row("b", "NOT_RUN", "driver too old")])
+        self.assertEqual(self.failing_name(text), "kfml_not_run")
+
+    def test_strict_a_code_on_a_row_that_is_not_not_run_grants_nothing(self):
+        doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "r")])
+        doc["rows"][0]["skip_code"] = "VRAM_TOO_SMALL"
+        doc["rows"][1].pop("skip_code", None)
+        self.assertEqual(self.failing_name("KF_KFML_RESULT " + json.dumps(doc) + "\n"), "kfml_not_run")
+
+    def test_strict_a_whole_stage_not_run_fails_by_name_even_when_every_row_carries_an_allowed_code(self):
+        doc, text = self.record([ml_row("a", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL"), ml_row("b", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL")])
+        self.assertEqual(doc["verdict"], "NOT_RUN")
+        result = {}
+        self.assertEqual(self.failing_name(text, result=result), "kfml_not_run")
+        self.assertEqual(result["kfml"], doc)
+
+    def test_strict_a_code_outside_the_vocabulary_such_as_a_driver_too_old_fails_by_name(self):
+        for code in ("DRIVER_TOO_OLD", "NO_PINNED_FLAVOUR", "GUEST_UNSUPPORTED", "KAYFABE_BUG"):
+            with self.subTest(code=code):
+                doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "driver too old for this CUDA wheel")])
+                doc["rows"][1]["skip_code"] = code
+                self.assertEqual(self.failing_name("KF_KFML_RESULT " + json.dumps(doc) + "\n"), "kfml_not_run")
+                self.assertNotIn("skip_code", ks.summarize([ml_row(), ml_row("b", "NOT_RUN", "r", skip_code=code)], SHA, "mid", [])["rows"][1])
+
+    def test_strict_a_stage_level_not_run_has_no_code_and_fails_by_name(self):
+        doc = ks.not_run(SHA, "large", [], "no pinned flavour can run on this box: x", ["a", "b"])
+        self.assertTrue(all("skip_code" not in r for r in doc["rows"]))
+        self.assertEqual(self.failing_name("KF_KFML_RESULT " + json.dumps(doc) + "\n"), "kfml_not_run")
+
+    def test_non_strict_is_unchanged_with_and_without_codes(self):
+        m = self.m
+        doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "r", skip_code="VRAM_TOO_SMALL"), ml_row("c", "NOT_RUN", "r")])
+        for kw in ({}, {"strict": False}):
+            self.assertEqual(m.kfml_rows(text, 0, SHA, {}, **kw), [m.row("kfml", 1)])
+        whole = ks.not_run(SHA, "large", [], "x", ["a"])
+        self.assertEqual(m.kfml_rows("KF_KFML_RESULT " + json.dumps(whole) + "\n", 0, SHA, {}), [m.row("kfml", skipped=1)])
+
+    def test_strict_an_allowed_skip_does_not_hide_a_fail_row_or_a_bad_exit_code(self):
+        doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "r", skip_code="VRAM_TOO_SMALL")])
+        self.assertEqual(self.failing_name(text, rc=1), "kfml")
+        failing, ftext = self.record([ml_row(), ml_row("b", "NOT_RUN", "r", skip_code="VRAM_TOO_SMALL"), ml_row("c", "FAIL", "boom")])
+        self.assertEqual(self.failing_name(ftext), "kfml")
+
+    # the report validator: a kept record with a code is readable, a malformed code is not
+    def test_the_report_validator_reads_a_code_on_a_not_run_row_and_refuses_the_rest(self):
+        import copy
+        doc, _ = self.record([ml_row(), ml_row("b", "NOT_RUN", "r")])
+        doc["rows"][1]["skip_code"] = "VRAM_TOO_SMALL"
+        vast_report.validate_kfml(doc)
+        for mutate in (lambda d: d["rows"][0].update(skip_code="VRAM_TOO_SMALL"),      # on a PASS row
+                       lambda d: d["rows"][1].update(skip_code="free text"),
+                       lambda d: d["rows"][1].update(skip_code=""),
+                       lambda d: d["rows"][1].update(skip_code=["VRAM_TOO_SMALL"]),
+                       lambda d: d["rows"][1].update(skip_code="X" * 60)):
+            bad = copy.deepcopy(doc)
+            mutate(bad)
+            with self.assertRaises(ValueError):
+                vast_report.validate_kfml(bad)
+
+
 class StrictInMain(unittest.TestCase):
     """The strict flag reaches the kfml grader through main(): the instruction's `propimages_strict` (the plan builder's only strict switch)."""
 
@@ -527,6 +681,27 @@ class StrictInMain(unittest.TestCase):
         self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["kfml_not_run"])
         self.assertEqual(result["kfml"], doc)
 
+    def test_a_strict_instruction_passes_an_allowed_skip_and_keeps_the_code_in_the_record(self):
+        doc, text = self.record([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%", skip_code="HOST_RAM_TOO_SMALL")])
+        rc, result, calls = self.run_main(True, text)
+        self.assertEqual((rc, result["verdict"]), (0, "PASS"))
+        self.assertIn({"name": "kfml", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+        self.assertEqual([r.get("skip_code") for r in result["kfml"]["rows"]], [None, "HOST_RAM_TOO_SMALL"])
+
+    def test_a_strict_instruction_fails_a_whole_stage_not_run_by_name_even_when_every_row_carries_an_allowed_code(self):
+        doc, text = self.record([ml_row("a", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL"), ml_row("b", "NOT_RUN", "vram", skip_code="VRAM_TOO_SMALL")])
+        rc, result, calls = self.run_main(True, text)
+        self.assertEqual((rc, result["verdict"]), (1, "FAIL"))
+        self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["kfml_not_run"])
+        self.assertEqual(result["kfml"], doc)
+
+    def test_a_strict_instruction_fails_a_not_run_row_with_an_unknown_code_by_name(self):
+        doc, text = self.record([ml_row(), ml_row("b", "NOT_RUN", "r")])
+        doc["rows"][1]["skip_code"] = "SOMETHING_ELSE"
+        rc, result, calls = self.run_main(True, "KF_KFML_RESULT " + json.dumps(doc) + "\n")
+        self.assertEqual((rc, result["verdict"]), (1, "FAIL"))
+        self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["kfml_not_run"])
+
     def test_a_strict_instruction_passes_when_every_row_ran(self):
         doc, text = self.record([ml_row(), ml_row("b")])
         rc, result, calls = self.run_main(True, text)
@@ -564,6 +739,12 @@ class Report(unittest.TestCase):
     def test_reads_a_good_record(self):
         with tempfile.TemporaryDirectory() as d:
             vast_report.read_result_file(self.write(d, self.good()))
+
+    def test_reads_a_record_with_a_coded_not_run_row(self):
+        doc = ks.summarize([ml_row(), ml_row("b", "NOT_RUN", "vram below the floor", skip_code="VRAM_TOO_SMALL")], SHA, "large", [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
+        self.assertEqual(doc["rows"][1]["skip_code"], "VRAM_TOO_SMALL")
+        with tempfile.TemporaryDirectory() as d:
+            vast_report.read_result_file(self.write(d, doc))
 
     def test_refuses_a_malformed_record(self):
         bad = []

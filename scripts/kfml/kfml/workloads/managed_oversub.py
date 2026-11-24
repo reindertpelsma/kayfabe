@@ -52,6 +52,13 @@ def _host_avail_gb():
     return 0.0
 
 
+def require_host_ram(vram_total_bytes, host_avail_gb):
+    """NOT_RUN (code HOST_RAM_TOO_SMALL) when the oversubscribed allocation does not fit the host's RAM rule."""
+    from ..errors import NotRun
+    if int(vram_total_bytes * OVERSUB_FACTOR) / 2**30 > host_avail_gb * OVERSUB_HOST_RAM_FRACTION:
+        raise NotRun("host RAM too small to oversubscribe VRAM by 25%", code="HOST_RAM_TOO_SMALL")
+
+
 def run(ctx):
     import os
     import torch
@@ -69,8 +76,7 @@ def run(ctx):
                                         functions=["managed_empty"], build_directory=build)
         total = torch.cuda.get_device_properties(0).total_memory
         want = int(total * OVERSUB_FACTOR)
-        if want / 2**30 > _host_avail_gb() * OVERSUB_HOST_RAM_FRACTION:
-            raise NotRun("host RAM too small to oversubscribe VRAM by 25%")
+        require_host_ram(total, _host_avail_gb())
         chunk = 256 * 2**20 // 4
         tensors, got = [], 0
         while got < want:

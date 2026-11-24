@@ -74,7 +74,7 @@ Not done: the Worker does not write an instruction yet (S2), hard-coded paths re
 
 The `kfml` stage (2026-11-17; IN THE DEFAULT PLAN of the middle and large tiers, `--skip kfml` leaves it out; GPU-free tests plus end-to-end runs of `kfml_stage.py` on five Vast CUDA containers, NOT run under the payload on a box):
 `kfml_stage.py` runs `scripts/kfml` (flavour plan, setup and pinned fetch-data together, run) on the box's own GPU and prints one `KF_KFML_RESULT {...}` line that `vast_payload.py kfml_rows` grades (PASS; NOT_RUN = skipped row;
-anything else fails); the payload prefetches the datasets in the background at its start. Middle runs the five gated rows, large all six. The record is `kfml` in `kf-result.json` (`vast_report.py validate_kfml`). Budget row
+anything else fails; under a strict instruction, since the owner ruling of 2026-11-24, a NOT_RUN row passes only with a `skip_code` from the fixed vocabulary `kfml_skip_codes.py` loads from `scripts/kfml/kfml/errors.py`, and a whole-stage NOT_RUN fails by name `kfml_not_run`); the payload prefetches the datasets in the background at its start. Middle runs the five gated rows, large all six. The record is `kfml` in `kf-result.json` (`vast_report.py validate_kfml`). Budget row
 `payloadStageResources.kfml` (`ci/vast-broker/defaults.json`), downloads `bandwidth.json` `kfml`. Details in `VAST_PAYLOAD.md`, last sections. Tests `test_kfml_stage.py`; mutants `kfml_stage_mutants.py` (two named killers each, in `ci.yml`).
 
 The `install_flow` stage (2026-11-15, OWNER_RULINGS section AS; GPU-free tests only, NOT run on a box): `install_flow.py` runs

@@ -29,6 +29,8 @@ def main(argv=None):
                    dataset_sha256=out.get("dataset_sha256", {}))
     except NotRun as e:
         res.update(status="NOT_RUN", reason=str(e))
+        if e.code:
+            res["skip_code"] = e.code
     except EnvMissing as e:
         res.update(status="FAIL", reason="env-missing: %s" % e)
     except CheckFailed as e:
