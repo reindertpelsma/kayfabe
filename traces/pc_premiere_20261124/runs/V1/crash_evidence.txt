@@ -1,0 +1,42 @@
+== now 2026-11-24T07:00:19Z
+== Premiere SentryIO records written since 2026-11-24T06:50:48Z
+-- 2026-11-24T06:52:13Z        399 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:52:44Z        347 \cache\1795503164107-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:53:49Z        399 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:53:56Z        346 \cache\1795503236181-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:54:29Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:55:08Z        346 \cache\1795503308418-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:56:15Z        399 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:56:26Z        346 \cache\1795503386305-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:57:32Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:57:44Z        346 \cache\1795503464154-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:58:50Z        399 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:59:01Z          0 \<uuid>.run\__sentry-breadcrumb2
+-- 2026-11-24T06:59:01Z         40 \settings.dat
+-- 2026-11-24T06:59:01Z          0 \<uuid>.run.lock
+-- 2026-11-24T06:59:01Z        346 \cache\1795503541839-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:59:08Z        224 \<uuid>.run\session.json
+-- 2026-11-24T07:00:06Z       1470 \<uuid>.run\__sentry-breadcrumb1
+-- 2026-11-24T07:00:11Z       2117 \<uuid>.run\__sentry-event
+-- 2026-11-24T07:00:11Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+== Application 1000/1001/1002 since
+== WER reports since
+== LocalDumps since (size only; the dumps stay in the guest)
+== System display-driver events since
+== LiveKernelReports since
+== guest GPU
+NVIDIA GeForce RTX 4070 driver 32.0.15.8088 status OK
+
