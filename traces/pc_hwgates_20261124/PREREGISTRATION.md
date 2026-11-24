@@ -31,3 +31,20 @@ still 595.91.07 and loaded, no new Xid in host dmesg. Falsifier: any of these di
 - Measured and inferred are kept apart in the README; every measurement names run, date and revision.
 - No code fix in this hour unless trivial; a fix carries the smallest GPU-free Rust test, failing before and passing after.
 - Disk: abort the build if free space on `/workspace` would drop below 8 GB; delete only scratch created by this run.
+
+## Addendum 1, written 2026-11-24 ~18:30Z after the fast suite (28/30) and the first Windows boot, before the controls
+
+Seen so far (measured, not yet explained): fast-suite arms `--defer-liveness` and `--missing-page-fault` FAIL on `63e46069`; the first
+Windows kf3 boot (default flags) had the guest answer ssh, then the host RM logged `mmuWalkMap: Failed to map VA Range
+0x120000000 to 0x20f9fffff. Status = 0x51` (NV_ERR_NO_MEMORY) and QEMU was gone before the first guest GPU query returned.
+
+H1. The two fast-suite failures are caused by `unmapped-reads-zero=on` (#580): with `KF3_DEV_EXTRA=unmapped-reads-zero=off` both arms PASS
+on the same binary, and the pre-batch `ed41beea` binary passes both with defaults. Falsifier: either arm still fails with the property
+off, or `ed41beea` fails it. (Run before this addendum; result in the README.)
+
+H2. The Windows host-RM `NV_ERR_NO_MEMORY` and the QEMU death are caused by the same property (the fill maps zero pages over a
+multi-GB unmapped range, which needs host page-table memory): with `KF_DEV_EXTRA=unmapped-reads-zero=off` on `63e46069` the guest
+boots, `nvidia-smi` lists the 4070 and the host log has no `mmuWalkMap ... 0x51`. Falsifier: the same `0x51` / death with the property
+off, or no `0x51` / death on a repeat with defaults (then the first boot was not reproducible and is reported as 1 of 2).
+Second control: `ed41beea` (before #545, #580), defaults. Neither is a claim about the allowlist; C3 stays open for Windows until
+a boot with a working driver names a refusal or not.
