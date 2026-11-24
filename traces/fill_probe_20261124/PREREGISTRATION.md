@@ -92,3 +92,13 @@ D-on and in D-off.
   `docs/howto/requirements.md`, `docs/howto/attach-to-existing-vm.md`).
 - Product code is not changed by this experiment, unless a fix is tiny and obviously right (then one GPU-free Rust test
   failing before and passing after, and its security-sensitive hunks listed).
+
+## Addendum 2026-11-24, before any run
+
+Added before the first run, after reading `gvaspaceReserveMempool` (`ogkm-580 gpu_vaspace.c:5272-5332`: the pool reservation
+is the page-directory plus page-table size of `[0, size-1)` at 4 KiB pages only, computed from VA 0, not from the map's VA):
+the probe's store is the alias length rounded up to 1 GiB (at least 4 GiB), and the sweep gains three arms with the Linux
+kernel alias length `0x1efc00000` (7.9 GiB, fb-mb 8192): S5 fill ON floor, S6 fill ON default start (the Linux shape), S7
+fill OFF floor. H1-fresh predicts that a fill-ON failure depends on the length (not monotonic is allowed: the reservation is
+rounded to 2 MiB pool chunks); the INFERRED size of the extra need is one 256-byte big-page table per 2 MiB region
+(about 0.47 MiB for the 3.74 GiB alias, against a margin of about 0.5 MiB). Falsifiers unchanged.

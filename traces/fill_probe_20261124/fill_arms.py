@@ -27,6 +27,9 @@ ARMS = {
     "S2": ["zero", "floor", "20000000", "0", "0"],
     "S3": ["zero", "floor", "40000000", "0", "0"],
     "S4": ["zero", "floor", "80000000", "0", "0"],
+    "S5": ["zero", "floor", "1efc00000", "0", "0"],
+    "S6": ["zero", "default", "1efc00000", "0", "0"],
+    "S7": ["fault", "floor", "1efc00000", "0", "0"],
 }
 KEEP = re.compile(r"NVRM|Xid|mmuWalk|NO_MEMORY|nvidia", re.I)
 

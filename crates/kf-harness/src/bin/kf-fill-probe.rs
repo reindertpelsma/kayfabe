@@ -30,7 +30,9 @@ use kf_linux_raw::DevDir;
 
 const P: u64 = 0x1000;
 const LEAF: u64 = 0x20_0000;
-const STORE_BYTES: u64 = 4 << 30;
+/// The store: 4 GiB (fb-mb 4096), or the alias length rounded up to 1 GiB when that is larger.
+const STORE_MIN: u64 = 4 << 30;
+const MAX_ALIAS: u64 = 16 << 30;
 const ALIAS_VA: u64 = 0x1_2000_0000;
 /// Regions per round that lie in the alias range (`[0x120000000, +4 GiB)` holds 2048 regions).
 const CHURN_LOW_REGIONS: u64 = 256;
@@ -105,7 +107,7 @@ fn parse() -> Result<Args, String> {
         |s: &str| u64::from_str_radix(s.trim_start_matches("0x"), 16).map_err(|e| e.to_string());
     let num = |s: &str| s.parse::<u64>().map_err(|e| e.to_string());
     let alias_len = hex(&a[2])?;
-    if alias_len == 0 || alias_len % P != 0 || alias_len > STORE_BYTES {
+    if alias_len == 0 || alias_len % P != 0 || alias_len > MAX_ALIAS {
         return Err(format!("alias_len {alias_len:#x}"));
     }
     Ok(Args {
@@ -148,13 +150,14 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
     l.measure("session", format!("driver {}", rm.driver_version()));
     snap(l, "start");
     rm.set_guest_va_fill(a.fill);
+    let store_bytes = STORE_MIN.max(a.alias_len.div_ceil(1 << 30) << 30);
     let store = rm
-        .reserve_gpga(STORE_BYTES)
+        .reserve_gpga(store_bytes)
         .map_err(|e| format!("store: {e:?}"))?;
     l.measure(
         "store",
         format!(
-            "{STORE_BYTES:#x} contiguous_aligned={}",
+            "{store_bytes:#x} contiguous_aligned={}",
             store.contiguous_aligned
         ),
     );
@@ -182,7 +185,7 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
     for round in 0..a.rounds {
         for i in 0..a.regions {
             let va = churn_va(round, i, a.regions);
-            let off = (pairs * P) % STORE_BYTES;
+            let off = (pairs * P) % store_bytes;
             rm.map(
                 space,
                 store.handle,
