@@ -36,6 +36,20 @@ const MARKER_CELL: u64 = 16;
 /// user_consumption model). Early commitment of GP0 alone cannot reuse its cell.
 pub const CELL_BYTES: u64 = 1024;
 
+/// Pure: the words of one marker cell as [`Storage::write_host_marker`] writes them on a family whose
+/// engine writes `USERD` back (`[SET_REFERENCE value, NON_STALL_INTERRUPT 0]`). Shared with
+/// `crate::user_semaphore`, whose tests pin these bytes for every such family.
+///
+/// # Errors
+/// A method that does not encode (never, for these constants).
+pub fn host_marker_words(value: u32) -> Result<[u32; 4], &'static str> {
+    let set_ref = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
+        .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+    let nsi = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
+        .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+    Ok([set_ref, value, nsi, 0])
+}
+
 /// Resource verbs, separated so cleanup failures are checkable without a GPU.
 /// Production calls must run on the VA-manager side, never a vCPU/trap.
 pub trait StorageHost {
@@ -604,17 +618,12 @@ impl Storage<CpuView> {
             .va
             .checked_add(off)
             .ok_or("USER_STORAGE_MARKER_BOUND")?;
-        let set_ref =
-            kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
-                .ok_or("USER_STORAGE_MARKER_FORMAT")?;
-        let nsi =
-            kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
-                .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let words = host_marker_words(value)?;
         let entry = kf_abi::submit::gp_entry(va, MARKER_CELL)
             .ok_or("USER_STORAGE_MARKER_FORMAT")?
             | (1 << 41);
         let cpu = self.cpu()?;
-        for (i, w) in [set_ref, value, nsi, 0].into_iter().enumerate() {
+        for (i, w) in words.into_iter().enumerate() {
             cpu.store_u32(HostOffset::new(off + 4 * i as u64), w)
                 .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))?;
         }
