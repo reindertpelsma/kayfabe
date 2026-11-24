@@ -9,6 +9,7 @@ Each arm is one process. After each arm the new host dmesg lines are kept (NVRM,
 first Xid. Box output is data, only parsed.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -25,6 +26,9 @@ ARMS = {
     "A6": ["zero", "floor", ALIAS, "0", "0", "32"],
     "A7": ["zero", "floor", ALIAS, "131072", "2", "0", "low"],
     "A8": ["fault", "floor", ALIAS, "131072", "2", "0", "low"],
+    "P1": ["zero", "floor", ALIAS, "131072", "2", "0", "low"],
+    "P2": ["fault", "floor", ALIAS, "131072", "2", "0", "low"],
+    "P3": ["zero", "floor", ALIAS, "0", "0"],
     "S1": ["zero", "floor", "4000000", "0", "0"],
     "S2": ["zero", "floor", "20000000", "0", "0"],
     "S3": ["zero", "floor", "40000000", "0", "0"],
@@ -52,12 +56,13 @@ def main():
         t = time.time()
         print(f"ARM_START {arm} {' '.join(ARMS[arm])}", flush=True)
         r = subprocess.run(argv, capture_output=True, text=True, timeout=3600)
+        env_note = os.environ.get("KF_FILL_PROBE_LEAVE_FREE_MIB")
         secs = round(time.time() - t, 1)
         (out / f"{arm}.out").write_text(r.stdout + ("\n--- stderr ---\n" + r.stderr if r.stderr else ""))
         new = [ln for ln in dmesg_lines()[d0:] if KEEP.search(ln)]
         (out / f"{arm}_dmesg.txt").write_text("\n".join(new) + "\n")
         res = next((ln for ln in r.stdout.splitlines() if ln.startswith(("FILL_PROBE_RESULT", "FILL_PROBE_ERROR"))), "none")
-        row = {"arm": arm, "args": ARMS[arm], "rc": r.returncode, "secs": secs, "result": res,
+        row = {"arm": arm, "args": ARMS[arm], "leave_free_mib": env_note, "rc": r.returncode, "secs": secs, "result": res,
                "fb_used_mib": [ln.split(" ", 2)[2] for ln in r.stdout.splitlines() if ln.startswith("MEASURE fb_used_mib")],
                "dmesg_mmuwalk": sum("mmuWalk" in ln for ln in new), "dmesg_xid": sum("Xid" in ln for ln in new),
                "dmesg_kept": len(new)}

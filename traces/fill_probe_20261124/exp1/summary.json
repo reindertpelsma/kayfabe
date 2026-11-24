@@ -1,0 +1,336 @@
+[
+ {
+  "arm": "A1",
+  "args": [
+   "zero",
+   "floor",
+   "efa00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.9,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "A2",
+  "args": [
+   "fault",
+   "floor",
+   "efa00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.7,
+  "result": "FILL_PROBE_RESULT fill=Fault start=GuestFloor alias_len=0xefa00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 4097",
+   "after_alias_map 4105",
+   "after_alias_unmap 4098",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 1
+ },
+ {
+  "arm": "A3",
+  "args": [
+   "zero",
+   "default",
+   "efa00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 4.4,
+  "result": "FILL_PROBE_RESULT fill=Zero start=HostDefault alias_len=0xefa00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "A6",
+  "args": [
+   "zero",
+   "floor",
+   "efa00000",
+   "0",
+   "0",
+   "32"
+  ],
+  "rc": 0,
+  "secs": 8.9,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=0x0 extra_spaces=32 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6136",
+   "after_alias_map 6136",
+   "after_alias_unmap 6136",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 34
+ },
+ {
+  "arm": "A4",
+  "args": [
+   "fault",
+   "floor",
+   "efa00000",
+   "65536",
+   "4"
+  ],
+  "rc": 0,
+  "secs": 20.0,
+  "result": "FILL_PROBE_RESULT fill=Fault start=GuestFloor alias_len=0xefa00000 churn=65536x4 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 4097",
+   "after_churn_round_0 pairs=65536 4098",
+   "after_churn_round_1 pairs=131072 4098",
+   "after_churn_round_2 pairs=196608 4098",
+   "after_churn_round_3 pairs=262144 4098",
+   "after_alias_map 4105",
+   "after_alias_unmap 4098",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 1
+ },
+ {
+  "arm": "A5",
+  "args": [
+   "zero",
+   "floor",
+   "efa00000",
+   "65536",
+   "4"
+  ],
+  "rc": 0,
+  "secs": 22.0,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=65536x4 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_churn_round_0 pairs=65536 4099",
+   "after_churn_round_1 pairs=131072 4100",
+   "after_churn_round_2 pairs=196608 4101",
+   "after_churn_round_3 pairs=262144 4102",
+   "after_alias_map 4109",
+   "after_alias_unmap 4109",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S1",
+  "args": [
+   "zero",
+   "floor",
+   "4000000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.8,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x4000000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S2",
+  "args": [
+   "zero",
+   "floor",
+   "20000000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.8,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x20000000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S3",
+  "args": [
+   "zero",
+   "floor",
+   "40000000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.8,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x40000000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S4",
+  "args": [
+   "zero",
+   "floor",
+   "80000000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.8,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x80000000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_alias_map 6135",
+   "after_alias_unmap 6135",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S5",
+  "args": [
+   "zero",
+   "floor",
+   "1efc00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 4.0,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x1efc00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 8193",
+   "after_spaces 10231",
+   "after_alias_map 10231",
+   "after_alias_unmap 10231",
+   "after_free_spaces 8193",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S6",
+  "args": [
+   "zero",
+   "default",
+   "1efc00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 4.0,
+  "result": "FILL_PROBE_RESULT fill=Zero start=HostDefault alias_len=0x1efc00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 8193",
+   "after_spaces 10231",
+   "after_alias_map 10231",
+   "after_alias_unmap 10231",
+   "after_free_spaces 8193",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ },
+ {
+  "arm": "S7",
+  "args": [
+   "fault",
+   "floor",
+   "1efc00000",
+   "0",
+   "0"
+  ],
+  "rc": 0,
+  "secs": 3.8,
+  "result": "FILL_PROBE_RESULT fill=Fault start=GuestFloor alias_len=0x1efc00000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 8193",
+   "after_spaces 8193",
+   "after_alias_map 8209",
+   "after_alias_unmap 8194",
+   "after_free_spaces 8193",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 1
+ }
+]

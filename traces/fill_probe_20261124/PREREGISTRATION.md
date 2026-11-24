@@ -113,3 +113,14 @@ ON) and A8 (fill OFF) therefore churn 2 x 131072 distinct 2 MiB regions all insi
 - H1-churn, memory part, prediction: A7's FB used grows by about 4 KiB per region (about 1 GiB) and stays after the
   unmaps; A8's does not. Falsifier: A7 grows by under 64 MiB, or no more than A8.
 - H1-churn, failure part: falsified already if the alias map in A7 succeeds (it is the same test as A5 with more churn).
+
+## Addendum 3, 2026-11-24, AFTER A7/A8, before P1-P3
+
+A7 kept about 1 GiB of host FB after the churn and the alias unmap (A8: none), but the alias map still succeeded on the
+24 GB die. P1-P3 rerun A7, A8 and A1 with VRAM fillers that leave about 3 GiB free after the 4 GiB store
+(`KF_FILL_PROBE_LEAVE_FREE_MIB=3072`; the pc's RTX 4070 has 12 GB), to test the failure part of H1-churn under the
+headroom of a smaller card.
+- Prediction (H1-churn, failure part): P1 (fill ON, churn) fails the alias map with `0x51`; P2 (fill OFF, churn) and
+  P3 (fill ON, no churn) succeed.
+- Falsifiers: P1 succeeds (the failure part is not shown at this headroom), or P3 fails too (then the fill fails the
+  alias without churn, under pressure, and churn is not needed).

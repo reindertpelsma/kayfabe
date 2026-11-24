@@ -18,6 +18,8 @@
 //! - `low` layout: every churn region in the first static range `[0x120000000, 960 GiB)` instead.
 //! - `extra_spaces` more spaces of the same shape are allocated first (Windows has one per process).
 //!
+//! - `KF_FILL_PROBE_LEAVE_FREE_MIB=N` (environment): VRAM fillers leave about N MiB free after the store.
+//!
 //! Output: `MEASURE` lines (host FB used from `nvidia-smi` at each step, the map's answer) and one
 //! `FILL_PROBE_RESULT` line. A failed alias map is a result, not a probe failure: the exit code is 0
 //! when every step ran, 1 when a step other than the alias map was refused.
@@ -49,6 +51,38 @@ fn fb_used_mib() -> String {
             |e| format!("nvidia-smi:{e}"),
             |o| String::from_utf8_lossy(&o.stdout).trim().to_string(),
         )
+}
+
+fn fb_free_mib() -> Option<u64> {
+    let o = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+}
+
+/// `KF_FILL_PROBE_LEAVE_FREE_MIB=N`: allocate 256 MiB VRAM fillers until at most N MiB stay free,
+/// so a 24 GB die has the headroom of a smaller one.
+fn fill_vram(rm: &HostRm, l: &mut Ledger) -> Result<Vec<u32>, String> {
+    let Some(target) = std::env::var("KF_FILL_PROBE_LEAVE_FREE_MIB")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    else {
+        return Ok(Vec::new());
+    };
+    const CHUNK: u64 = 256 << 20;
+    let mut held = Vec::new();
+    while fb_free_mib().is_some_and(|f| f > target + 256) {
+        held.push(
+            rm.alloc_device_local(CHUNK)
+                .map_err(|e| format!("filler: {e:?}"))?,
+        );
+    }
+    l.measure(
+        "filler",
+        format!("{} x 256 MiB, free now {:?} MiB", held.len(), fb_free_mib()),
+    );
+    Ok(held)
 }
 
 fn snap(l: &mut Ledger, step: &str) {
@@ -175,6 +209,7 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
         ),
     );
     snap(l, "after_store");
+    let fillers = fill_vram(&rm, l)?;
 
     let mut extra: Vec<VaSpace> = Vec::new();
     for i in 0..a.extra_spaces {
@@ -252,6 +287,9 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
         rm.free_vaspace(s);
     }
     snap(l, "after_free_spaces");
+    for h in fillers {
+        let _ = rm.free(h);
+    }
     let _ = rm.free(store.handle);
     snap(l, "after_free_store");
     Ok(verdict)
