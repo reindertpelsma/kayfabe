@@ -19,6 +19,8 @@ Labels. **OWNER DECISION (2026-11-20)**: stated by the owner in the discussion, 
 
 ### 1.2 What exists today (CODE READ)
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BF and §BI):** the GPL-exception item is **closed** by the 2026-11-20 ogkm re-derivation (option (a)): a binary may ship once the other gates pass, and a counsel check stays recommended, not blocking; the 2026-11-23 correction below said "no longer a standing blocker" and the owner has now ruled it closed. §BI also limits item 1 of section 1.1 ("a specific patched QEMU build"): the owner is "hesitant to force a patched binary", and a QEMU `.patch` is carried only if really needed and only if it stays optional.
+
 ⊘ **Correction 2026-11-23 (CODE READ; the table row "GPL and the release binary" below is the 2026-11-20 state, kept as written).** Task I7 landed on 2026-11-20 after this document: the guest-ingress allowlist of `kf-abi` was re-derived from NVIDIA's open-gpu-kernel-modules and kayfabe's own measurements, `LICENSE` exception 2 was narrowed to files that are not in the device's link closure, and `scripts/ci/qemu_license_closure.py` runs in the `rust-mutants-b` job of CI (`OWNER_RULINGS.md` §BD; `qemu_license_closure.py` run on 2026-11-23 at `next` `92a7f2782`: CLEAN, 19 workspace crates, findings=0). So the GPL exception is **no longer a standing blocker**; a counsel check before the first public binary is recommended, not blocking. The security gate (§P) row is unchanged, and whether a binary may be published is still the owner's decision (Q10).
 
 | Piece | Today | Gap |
@@ -215,6 +217,8 @@ It is a **static proof of layout, size and field handling**, not of behaviour. I
 
 ### 4.1 Windows
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BL):** the open question in this paragraph is **closed**. The owner's earlier "four" was a typo ("no then it is 3, 4 is a typo"): the three rows of `windows-guest.md` are final and there is no fourth setting. Read "That is three rows; the owner said four. OPEN Q4" below accordingly.
+
 **OWNER DECISION.** A Windows guest needs only the documented guest settings, delivered by **one tested user script that can run before the NVIDIA driver is installed**, and that script is tested in CI on a Windows runner. Today's documented settings are the rows of the table in `docs/howto/windows-guest.md`: `EnableGpuFirmware = 1` in the display adapter's class key, `EnableGpuFirmware = 1` in the `nvlddmkm` service key, and `Dwm` `OverlayTestMode = 5`. **That is three rows; the owner said four. OPEN Q4: which is the fourth?**
 
 The script itself is being written by another agent as a two-phase script (before and after the driver install); it is not duplicated here. See `docs/howto/windows-guest.md` for the settings and the pull request that agent opens for the script (number not known when this was written). Not decided: whether the CI Windows runner is a GitHub-hosted runner (no GPU) or a Vast box.
@@ -328,7 +332,7 @@ Facts recorded 2026-11-20 (counted in the tree):
 ## 13. What this document does not change
 
 - No code, no CI gate and no published page. The only other files touched are `docs/OWNER_RULINGS.md` (§BC) and `docs/STATUS_AND_HANDOFF.md`.
-- ⊘ *2026-11-23: the GPL-exception half of this bullet is outdated, see the correction at the top of section 1.2; the security-audit half stands.* It does not lift the GPL exception or the security-audit gate (section 1.2). A release binary stays blocked on both until the owner rules otherwise.
+- ⊘ *2026-11-23: the GPL-exception half of this bullet is outdated, see the correction at the top of section 1.2; the security-audit half stands.* It does not lift the GPL exception or the security-audit gate (section 1.2). A release binary stays blocked on both until the owner rules otherwise. ⊘ *2026-11-24: the owner ruled the GPL item closed (§BF); only the security gate and the decision to publish remain.*
 - It does not duplicate the Windows script (section 4.1), the kfroot audit (section 6) or the propimage configuration work (section 10): each is in flight elsewhere and is referenced.
 
 ## 14. Falsifiers
@@ -357,6 +361,8 @@ A design claim here is wrong if:
 
 **Q3. Automatic guest driver across branches.** Today a pair whose pre-fn-1 surface differs is refused and needs the pin. Is the target to remove that (re-select the whole chain per pair, which is real work: nine-field init args, MCTP elements) or to keep the pin as the answer and document it? Q3b: how many tags can the matrix cover in CI, given which oracle trees the runner fetches?
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BL): Q4 is CLOSED.** "No then it is 3, 4 is a typo": three is final, the owner's earlier "four" was a typo, and no fourth setting exists to be found.
+
 **Q4. The fourth Windows setting.** `windows-guest.md` has three rows. Which is the fourth: Secure Boot or TPM handling, BitLocker prevention, the boot display driver (`gop-efi`), a service or Defender setting, or another registry value?
 
 **Q5. Rootless audit result.** Which of the 27 `kfroot` lines are removable, which are box setup, which are production-irrelevant. Agent a811eb9c is on it; this document takes its result when it exists.
@@ -376,5 +382,7 @@ A design claim here is wrong if:
 **Q13. The resolution knob.** The broker's `--resolution` is only a suggestion to the guest and the device has no mode property (Q6): whether the user's knob lives on the broker, on the device or on both.
 
 ⊘ **Correction 2026-11-23:** the GPL half of Q10 is answered in fact by task I7 (2026-11-20, `OWNER_RULINGS.md` §BD, see the correction in section 1.2); the stage-2 security gate (§P) is still open, and the decision to publish is the owner's.
+
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BF):** the GPL item of Q10 is closed (option (a), the I7 re-derivation); a binary may ship once the other gates pass. What stays open is the stage-2 security gate (§P) and the decision to publish; a counsel check is recommended, not blocking.
 
 **Q10. When may a binary be published?** The owner's goal is a release binary; the GPL exception (`kf-abi` capability tables, re-derivation task I7 of `V3_SWEEP_AND_INSTALL.md`) and the stage-2 security gate (§P) are both still open. Neither is decided here.

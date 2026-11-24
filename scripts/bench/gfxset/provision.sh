@@ -43,7 +43,7 @@ say "static ffmpeg sha256 $(sha256sum "$FF" | cut -c1-16)"
 if [ ! -f "$IMG.gset_resized" ]; then qemu-img resize "$IMG" +16G && touch "$IMG.gset_resized"; fi
 qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp "${GSET_PROV_SMP:-8}" -display none \
   -drive if=virtio,file="$IMG",format=qcow2 \
-  -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
+  -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/gsetprov_serial.log" -daemonize -pidfile "$BENCH/gsetprov.pid"
 GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 -o ServerAliveInterval=20 ubuntu@127.0.0.1"
 for i in $(seq 1 60); do $GS true >/dev/null 2>&1 && break; sleep 5; done

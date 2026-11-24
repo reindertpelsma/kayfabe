@@ -1,16 +1,113 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-20 (§BC (2026-11-20): packaging and distribution, the command-line surface, the no-environment rule, guest-driver and host-ABI invariant, trust anchors and public objects, licence prompts, docs split; §AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AY (2026-11-17): the SPEC lanes' open LTSC guest has the network and the real clock; §AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-24 (§BE to §BL (2026-11-24): the Windows settings are three, the per-PR CI composition and the waiver of §AZ item 5, the GPL-exception item closed, the skip rule that replaces zero-skip, the sparse zero fill default ON, the QEMU patch policy, the cleanliness tiers, site URLs and the review and merge process; these sections sit above §BC, newest first, and §BD is at the end of the file; 2026-11-20: §BC (2026-11-20): packaging and distribution, the command-line surface, the no-environment rule, guest-driver and host-ABI invariant, trust anchors and public objects, licence prompts, docs split; §AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AY (2026-11-17): the SPEC lanes' open LTSC guest has the network and the real clock; §AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §BL. The fourth Windows setting does not exist: the three rows of `windows-guest.md` are final, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision (answer to open question Q4 of `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`).**
+
+<!-- src: owner, 2026-11-24 -->
+
+*Owner, 2026-11-24:* "no then it is 3, 4 is a typo".
+
+1. The Windows guest settings are the three rows of `docs/howto/windows-guest.md`: `EnableGpuFirmware = 1` in the display adapter's class key, `EnableGpuFirmware = 1` in the `nvlddmkm` service key, and `Dwm` `OverlayTestMode = 5`. Three is final.
+2. The owner's earlier count of four (§BC item 4) was a typo. Nothing is missing from the table, and no fourth setting is to be searched for. Closes the "fourth Windows setting" of §BC item 12.
+
+## §BK. Site URLs, and the review and merge process, 2026-11-24
+
+**STATUS: LIVE as rulings, 2026-11-24; owner decisions (recorded by the coordinator from the owner's statements of 2026-11-23 and 2026-11-24). Process and wording only; nothing here changes code.**
+
+<!-- src: owner, 2026-11-24 (site URLs); owner, 2026-11-23 (process), recorded 2026-11-24 -->
+
+1. **Moved operator-page URLs are accepted.** The eleven operator pages that moved from `docs/howto/` to `docs/howto/ops/` (commit `ec0bd4dbe`) keep their new URLs; no redirect from the old flat URLs is needed. *Owner, 2026-11-24:* "accept the moved ops-page URLs"; there are no external links to them yet.
+2. **Each security-policy PR gets its own independent security review, with a verdict, before it lands on `master`** (owner, 2026-11-24). This is per PR; it sits beside the audit gate of §P and does not replace it.
+3. **The coordinator may merge the next -> master batch** after its own judgment, when `CI` and `gpu-vast` are both green (owner, 2026-11-23). This is the existing batch flow of `AGENTS.md` (*Branches and merging*) with the merge decision delegated; the owner's break-glass bypass of `gpu-vast` on one PR is unchanged.
+
+## §BJ. Cleanliness tiers: what must be clean and what may stay messy, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. A rule for how much tidying a path deserves, not a list of tasks.**
+
+<!-- src: owner, 2026-11-24 -->
+
+*Owner, 2026-11-24:* "everything user visible and install and the Rust crates get a full tidy; CI scripts, bench scripts, debug stuff and agent docs may stay a little messy; but the core code, architecture MDs and the user guides must be clean."
+
+1. **Full tidy (clean, no process notes, no debt left in place):** everything user visible, the install path, and the Rust crates.
+2. **May stay a little messy:** CI scripts, bench scripts, debug tooling, and agent-facing documents (status and handoff records, design notes written for contributors).
+3. **Must be clean regardless of tier:** the core code, the architecture documents (`ARCHITECTURE.md`, `docs/design/THE_ARCHITECTURE_v3.md` and the other architecture MDs) and the user guides (`docs/howto/`, `docs/FAQ.md`).
+4. The rule is recorded as a dated bullet under the doc-hygiene rules of `AGENTS.md`. It changes no gate, baseline or other rule: messy is permitted in the second tier, not required, and the gates of `docs/CI_V3.md` stay as they are.
+
+## §BI. QEMU patch policy: a patched binary is not forced; a `.patch` only if really needed, and optional, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. Another change makes the Windows S3 wake hunk optional; this entry records the policy only.**
+
+<!-- src: owner, 2026-11-24 -->
+
+*Owner, 2026-11-24:* "hesitant to force a patched binary; for some QEMU bug fixes, only if really needed, may apply a .patch, if it remains optional."
+
+1. A user is never forced onto a patched QEMU binary. The device and its build kit are the product (§BC item 1); a QEMU source patch is not a requirement of using kayfabe.
+2. A QEMU bug fix may be carried as a `.patch` only if it is really needed, and only if it stays **optional**: kayfabe works without it, and what the patch adds is a named, opt-in improvement.
+3. Refines §BC item 1 ("a specific patched QEMU build"): the release binary and the build kit stay. Whether the overlay's own build hunks (§BC item 1, the module question) count as patches under this policy is not decided here and stays open with §BC item 12.
+
+## §BH. Sparse zero fill: `unmapped-reads-zero` defaults to ON for every guest, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. IMPLEMENTED 2026-11-24 by PR #580 (`kf3.c` default `true`, `KF3_ABI` 37); the pending notes of item 3 are resolved there. Windows has not been run.**
+
+<!-- src: owner, 2026-11-24; the measurement is docs/design/V3_SPARSE_RESIDENCY_RCA.md section 6 -->
+
+1. **The default of `unmapped-reads-zero` is ON for everything, Linux guests included.** *Reason (owner):* real host sparse residency proves the ioctl exists on Linux, so the fill is not a Windows-only need. *Owner's statement of 2026-11-24 (not re-run for this entry):* Linux Vulkan sparse-residency cases hang with the fill off. The hardware record in the repository is narrower: `docs/design/V3_SPARSE_RESIDENCY_RCA.md` section 6 (one RTX 4090 box, the Vulkan CTS residency cases hang with Xid 109 with the fill off and pass with it on).
+2. Supersedes the `auto` mode proposed by open PR #507 (on for Windows-profile guests, off for Linux): there is no Linux exception. The property remains a boolean, so `off` is still expressible.
+3. The documents that state the old default are `docs/howto/cli-reference.md` (generated property table), `docs/howto/troubleshooting.md` and `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`; each carried a pending marker until the implementing change (#580) landed; the generated table is regenerated from `kf3.c` there and the markers are replaced by the implemented state.
+
+## §BG. Skips: a row may end NOT_RUN only for a cause outside kayfabe; every other skip fails, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. It replaces the zero-skip acceptance rule where the two conflict. NOT YET IN CODE: the payload, the runner and the stages still implement the old strict rule (`kfml_not_run`, `STRICT_SKIP:...`, `apps_discovery_not_run`, `windows_open_rows_not_run`, `--strict-rows`) until a separate code change lands; the documents that describe them carry a dated note.**
+
+<!-- src: owner, 2026-11-24 -->
+
+*Owner, 2026-11-24:* "Things may skip if it is not kayfabe's fault or a GPU-VRAM-bound limit that kf cannot assign. If something cannot surely run on bare metal a skip can be considered. Merge otherwise."
+
+1. **A row may end NOT_RUN or skipped when the cause is outside kayfabe:** the host RAM or the VRAM is too small for the test, a hardware feature is absent, or the row cannot surely run on bare metal (a skip "can be considered" in that last case, it is not automatic).
+2. **Every other NOT_RUN or skip fails its stage,** including any cause inside kayfabe.
+3. **A skip records its named reason** in the row. A skip without a named reason fails.
+4. **"Merge otherwise":** a skip that item 1 allows is not a reason to hold a merge.
+5. Refines §BA item 2 ("under the strict zero-skip rule") and the owner's standalone goal of 2026-11-17 ("passes with everything, no skips"): the configured app must still run, except where item 1 applies.
+
+## §BF. The GPL-exception item is closed by the ogkm re-derivation; a binary may ship once the other gates pass, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision (option (a) of the coordinator's question). It records a licensing posture the owner chose, not a legal opinion.**
+
+<!-- src: owner, 2026-11-24, option (a); evidence is §BD and scripts/ci/qemu_license_closure.py -->
+
+1. **Option (a).** The 2026-11-20 re-derivation of the device's guest-ingress allowlist from NVIDIA's open-gpu-kernel-modules (§BD, task I7) closes the GPL-exception item. A binary may ship once the other gates pass; the item is no longer a blocker.
+2. **A counsel check before the first public binary stays recommended, not blocking.**
+3. **The other gates are unchanged:** §P's security gate (and the per-PR review of §BK item 2) and the owner's decision to publish. Updates the statements in §BC items 1 and 12 that the GPL exception is a standing blocker of a public binary.
+
+## §BE. CI composition: what a PR runs, one middle run, propimages only at release, §AZ item 5 waived, 2026-11-24
+
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. The documents describing the tiers carry dated notes. NOT YET IN CODE: `ci/vast-broker/src/tier.js` (`additionalStages`) and `ci/vast-broker/release-matrix.json` still encode the earlier tiers; a separate code change (which alters the Worker bundle pin) follows.**
+
+<!-- src: owner, 2026-11-24 -->
+
+*Owner, 2026-11-24:* "the rust/cuda/repo tests, windows boot, the linux/windows apps probes (those small 70-ish) is non negotiable in CI. Dont overbloat the middle run. The propimages dont need to be run, only at release. So largely waive [section AZ.5]. A PR does only 1 middle run."
+
+1. **Per-PR CI is:** the Rust, CUDA and repo tests; the Windows boot; the small Linux and Windows app probes; and **exactly one middle run** per PR. These are not negotiable. The middle run is not to be loaded with further stages.
+2. **Propimages are not run per PR.** They run only in the release run.
+3. **§AZ item 5 is waived for the batch and PR flow.** The rule "an app-lane run per image before a core-path merge" no longer gates a batch PR or any PR. The `core_paths` list and `appLaneRequired` stay as data and planner code; nothing reads them as a merge condition.
+4. **Unchanged:** the first-release rule of §AZ (the first release runs every propimage on every family, as configured), §AZ items 1 to 4 and 6 to 8, and the discovery lane. SPECviewperf stays out of the per-PR runs (it was never in the middle tier).
 
 ## §BC. Packaging and distribution: a QEMU build plus a build kit, the command line is the interface, the guest never dictates the host ABI, trust is git, and the manual is separate, 2026-11-20
 
 **STATUS: LIVE as rulings, 2026-11-20; owner decisions (stated in conversation with the coordinator, recorded from the coordinator's notes). DESIGN-ONLY: nothing below is built unless an item says so. This records the decisions, not the discussion; the design, the table of today against the gaps and the open questions are in `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`.** Numbering: open PR #526 proposes §BB for its propimage-config rulings, so this entry takes the next free letter, §BC; if #526 lands under another letter, the two are independent and only the headings change.
 
 <!-- src: owner, 2026-11-20, packaging/distribution/docs/trust discussion with the coordinator -->
+
+⊘ **Refined 2026-11-24 (§BL):** item 4's "*Open:* the owner counts four Windows settings; the table has three" is closed: the owner said "4 is a typo", so the three rows of `windows-guest.md` are final, and the "fourth Windows setting" in item 12 is moot.
+
+⊘ **Refined 2026-11-24:** item 1's "specific patched QEMU build" is limited by §BI (the owner is "hesitant to force a patched binary"; a QEMU `.patch` only if really needed and only if optional), and the GPL exception named in items 1 and 12 as a standing blocker of a public binary is closed by §BF (the §P security gate and the owner's decision to publish remain).
 
 1. **What is shipped.** A specific patched QEMU build (a release binary), plus a **build kit** that overlays the kayfabe device onto any QEMU source tree (Proxmox's, for example) and builds a full binary or only a loadable module. A module must match the exact QEMU build. Configuration uses the mechanism QEMU provides natively for a module (a user-creatable `-object` umbrella plus `-device kf3-gpu,...`), not a `vl.c` patch, and must be understandable to a user. QEMU-specific code stays in `kf3.c`, so a second front end (Cloud Hypervisor) can sit on the Rust core through the numbered C ABI. Extends §AS items 3 and 4. *Not decided:* whether `hw/misc` devices can be modules (§AS says unstudied; still unstudied), the umbrella's name, and whether it can create devices. **This ruling does not lift the two standing blockers of a public binary:** the GPL exception for the nvproxy-derived files (`LICENSE`, exception 2) and §P's security gate.
 2. **The command line is the interface; no environment variable is needed.** A full-performance Windows or Linux run needs none. Every user setting is a QEMU argument: GPUs to bind, VRAM per GPU, UUID mode, utilisation visibility (default on), DoS limits, PCIe index (QEMU's `bus=`/`addr=`), broker socket per GPU, headless display framerate, resolution and framelock, display off by default, Windows support default on and switchable. Options given globally apply to every GPU. Kayfabe is enabled by a command-line argument; with no GPU named it binds all GPUs; with no kayfabe argument it is plain QEMU. Debug and measurement environment variables may remain and are secondary. **The display broker (non-headless case only) follows the same rule:** the manual tells how to start and run it as simply as the QEMU side, with no environment dependency (explicit flags for what it reads from the environment, one broker socket per GPU, a two-command quickstart; DESIGN-ONLY, `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md` section 2.6). *Plan:* a lint that holds the environment reads of the product sources to a committed allowlist (none exists today; §AT item 2 called it Stage 3), and a limits family with today's constants as defaults. *Measured today (`git grep`, 2026-11-20):* 27 device properties, with the display resolution, framelock, all-GPUs and the umbrella missing; 120 distinct `KF3_`, `KF_` and `KAYFABE_` names in product sources, about 30 of which change what the guest is served (classified by name and read-site comment, not exhaustively).
@@ -30,6 +127,8 @@ citation: ask whether its reason still holds before relying on it.
 **STATUS: LIVE as rulings, 2026-11-18; owner decisions (stated in conversation, recorded by the coordinator from its notes). Each item says what is a rule and what is only a plan. DESIGN-ONLY for the config schema and the generic stage: nothing in items 1 and 2 is implemented yet; the refactor is queued.** Where an item restates a rule already in `AGENTS.md`, it is repeated here only to give it a date and a reason.
 
 <!-- src: owner, 2026-11-18, conversation with the coordinator (propimage config, from-scratch standalone, one image per propimage, no licence time checker, clock rule, gap matrix, test-first, pc recovery, Vast offers, public screenshots) -->
+
+⊘ **Refined 2026-11-24 (§BG):** item 2's "strict zero-skip rule" is replaced, where the two conflict, by the skip rule of §BG: a row may end NOT_RUN or skipped only for a cause outside kayfabe (host RAM or VRAM too small, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other skip fails. Not yet in code.
 
 1. **Propimages are configuration, not names in code.** The images called A, B, C and D are configuration material. The code has no
    concept of "image A": a propimage is a configuration entry (id, kind Windows or Linux, image source and trust anchor, identity or
@@ -103,6 +202,8 @@ citation: ask whether its reason still holds before relying on it.
 ## §AZ. Proprietary images and SPEC leave the required release gate; they run as an invoked app lane, required only when a release touches core paths, 2026-11-18
 
 **STATUS: LIVE as a ruling, 2026-11-18; owner decision (stated in conversation: "maybe the plan is to remove images and SPEC from release requirement, so we can launch them manually, or invoked through worker"; recorded by the coordinator). DESIGN-ONLY for the Worker: the Start kind `app` is not built and nothing is deployed. 2026-11-18 (implemented GPU-free, `docs/design/V3_APP_LANE_PLANNER.md`): the planner's `core_paths` data, `appLaneRequired`, the app leg, the first-release and rotation modes and the daily-cap refusal exist as offline code; the release criteria do not read them yet.** The cost model and the release plan behind it are in the coordinator's notes and are not yet a repository document (a design note follows this ruling); the discovery-versus-gate split below follows the owner's remark that apps find bugs in the unknown while conformance suites prove that a bug is solved.
+
+⊘ **Refined 2026-11-24 (§BE):** per-PR CI is the Rust, CUDA and repo tests, the Windows boot, the small Linux and Windows app probes and exactly one middle run; propimages run only in the release run, not per PR. **Item 5 (an app-lane run per image before a core-path merge) is waived for the batch and PR flow**; the first-release rule under item 5 (every propimage on every family) is unchanged. Nothing below treats the app lane as a merge condition any more.
 
 1. **The required release gate is the reproducible set.** It consists of the GPU-free layer (unit, replay, model and fuzz tests, the page-table oracle fuzz, the coverage meter), the per-family smoke tier, and the full-suite differential (Vulkan CTS and the other open suites run host against guest, only differences reported, a known-limits file for documented limitations). Every input of the gate is open or fetched from an official URL, so a third party can run it (the owner's standalone requirement of 2026-11-18, recorded by the coordinator).
 2. **The proprietary images and SPEC are not part of the required gate.** That covers every propimage (today A, B, C and D; the owner's rule of 2026-11-18, recorded by the coordinator and not yet folded into this file, is that they are configuration and not names in code) and the SPECviewperf stage. Reasons (measured or stated): their verdicts are often inconclusive or harness-level, a flaky host can fail a leg, they cost about 30 percent of the release, and a third party cannot reproduce them without the owner's proprietary inputs. `scripts/ci/vast_payload.py` already lists the image stages (`MANUAL_ONLY_STAGES`) as manual-only.
