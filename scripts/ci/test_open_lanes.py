@@ -133,10 +133,10 @@ class RealOutput(unittest.TestCase):
 
     def test_a_log_is_scrubbed_of_the_pci_address_and_the_host_name_before_it_is_kept(self):
         import socket
-        text = "nvbandwidth Version: v0.9\n\n%s\nDevice 0: NVIDIA GeForce RTX 4090 (00000000:01:00)\nGPU-12345678-1234-1234-1234-123456789abc\n" % socket.gethostname()
+        text = "nvbandwidth Version: v0.9\n\n%s\nDevice 0: NVIDIA GeForce RTX 4090 (00000000:01:00)\nGPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001\n" % socket.gethostname()
         out = NV.clean_log(text)
         self.assertNotIn("00000000:01:00", out)
-        self.assertNotIn("GPU-12345678", out)
+        self.assertNotIn("GPU-fa4efa4e", out)
         self.assertIn("Device 0: NVIDIA GeForce RTX 4090 (<pci>)", out)
         self.assertNotIn(socket.gethostname() + "\n", out)
         self.assertEqual(NV.parse_text_devices(text), ["NVIDIA GeForce RTX 4090"])      # the judge reads the raw text, the file is the cleaned one
