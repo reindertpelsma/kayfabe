@@ -37,5 +37,5 @@ lines naming a `0x51`.
   default fill ON and 0 of 4 with `unmapped-reads-zero=off`, all display-off. Here: does it also appear with display ON?
 
 ## Rules
-Measured values name run, date and revision. Anything not seen in a log is INFERRED and labelled so. No GPU bind, no nvidia tools beyond
+A value this experiment reports names its run (pc, 2026-11-24, kf3 `63e46069`, tag `dispexp`). Anything not seen in a log is INFERRED and labelled so. No GPU bind, no nvidia tools beyond
 reading `dmesg` and `nvidia-smi --query` for the idle check, nothing on the pc deleted except this experiment's own scratch.
