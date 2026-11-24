@@ -49,7 +49,7 @@ boot_stage() {
     qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp "${KF_STAGE_SMP:-4}" -display none \
         -drive if=virtio,file="$IMG",format=qcow2 \
         -drive if=virtio,file="$BENCH/seed.iso",format=raw \
-        -netdev user,id=n0,hostfwd=tcp::$PORT-:22 -device virtio-net-pci,netdev=n0 \
+        -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:22 -device virtio-net-pci,netdev=n0 \
         -serial file:"$BENCH/stage-$V-serial$1.log" -daemonize -pidfile "$PIDF" || die "qemu did not start"
 }
 boot_stage ""
