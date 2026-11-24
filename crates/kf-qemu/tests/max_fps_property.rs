@@ -25,7 +25,7 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         pci_devfn: 0,
         windows_support: true,
         report_utilization: true,
-        unmapped_reads_zero: false,
+        unmapped_reads_zero: kf_qemu::device::UNMAPPED_READS_ZERO_DEFAULT,
         channel_budget: 0,
     }
 }

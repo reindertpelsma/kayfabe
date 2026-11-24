@@ -2,7 +2,7 @@
 //! (`Device::realize` and `HostRm::alloc_vaspace_at` need a host RM; `kf3_realize` is the C ABI; `kf3.c` is C).
 //!
 //! The decisions are tested behaviourally: [`kf_host::channel::guest_range_plan`] (the zero plan differs from the
-//! fault plan by exactly `_SPARSE`; the default plan has none) and `Config::guest_va_fill` (off by default). The
+//! fault plan by exactly `_SPARSE`; the unconfigured plan has none) and `Config::guest_va_fill` (on by default). The
 //! wiring that carries the property from the C device to the host RM's `NVOS32` reservation call is not: if one
 //! of its links is lost the property still parses, still logs, and does nothing, so a user who opts in to Vulkan
 //! sparse residency gets the pre-property hang with no refusal. Each link is pinned here as source text, the way
@@ -42,9 +42,9 @@ fn every_link_from_the_c_property_to_the_reservation_call_is_there() {
     let chan = flat(production(&read("../kf-host/src/channel.rs")));
     for (what, text, needle) in [
         (
-            "the C property is declared and defaults to OFF",
+            "the C property is declared and defaults to ON",
             &c,
-            "DEFINE_PROP_BOOL(\"unmapped-reads-zero\", Kf3State, unmapped_reads_zero, false),",
+            "DEFINE_PROP_BOOL(\"unmapped-reads-zero\", Kf3State, unmapped_reads_zero, true),",
         ),
         (
             "the C device passes the property to kf3_realize",
@@ -89,6 +89,31 @@ fn every_link_from_the_c_property_to_the_reservation_call_is_there() {
     ] {
         assert!(text.contains(needle), "{what}: `{needle}` is missing");
     }
+}
+
+/// The default is C text (`DEFINE_PROP_BOOL`), and the Rust tests build their `Config` from
+/// [`kf_qemu::device::UNMAPPED_READS_ZERO_DEFAULT`]. The two must be the same value, and the value is
+/// ON: a Linux guest and a Windows guest both get the fill unless the user writes `unmapped-reads-zero=off`
+/// (with it off, Vulkan sparse residency hangs a Linux guest with host Xid 109; `V3_SPARSE_RESIDENCY_RCA.md` §6).
+#[test]
+fn the_c_default_is_the_rust_default_and_it_is_on() {
+    let c = flat(&read("../../qemu/hw/misc/kf3/kf3.c"));
+    let decl = c
+        .split("DEFINE_PROP_BOOL(\"unmapped-reads-zero\", Kf3State, unmapped_reads_zero, ")
+        .nth(1)
+        .expect("the property is declared");
+    let c_default = decl.starts_with("true),");
+    assert!(
+        c_default || decl.starts_with("false),"),
+        "the C default is neither true nor false: `{}`",
+        &decl[..decl.len().min(20)]
+    );
+    assert_eq!(
+        c_default,
+        kf_qemu::device::UNMAPPED_READS_ZERO_DEFAULT,
+        "kf3.c and UNMAPPED_READS_ZERO_DEFAULT disagree"
+    );
+    assert!(c_default, "the default of unmapped-reads-zero is ON");
 }
 
 /// The fill reaches the host RM before the first mirror space can exist: a space allocated earlier keeps the

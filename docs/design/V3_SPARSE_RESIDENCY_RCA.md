@@ -1,7 +1,7 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
-⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BH):** "Option B ships as an opt-in property" is superseded as a default: `unmapped-reads-zero` will default to ON for every guest, Linux included (the owner's statement: real host sparse residency proves the ioctl exists on Linux, and Linux Vulkan sparse-residency cases hang with the fill off). The implementing change is separate and not in this tree yet.
+**STATUS: LIVE, 2026-11-24. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as the property `unmapped-reads-zero`, which is ON by default for every guest and profile (owner ruling 2026-11-24, §5; it was an opt-in, #494). Windows runs of it do not exist. Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BH), implemented 2026-11-24 by PR #580:** The earlier status wording "Option B ships as an opt-in property" is superseded as a default: `unmapped-reads-zero` defaults to ON for every guest, Linux included (the owner's statement: real host sparse residency proves the ioctl exists on Linux, and Linux Vulkan sparse-residency cases hang with the fill off). The code and the details are in §5.
 
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
@@ -73,6 +73,35 @@ Mutant (blanket fix: add `_SPARSE` to `NVOS32_RESERVE_FLAGS`): S1 turns green bu
 
 ## 5. Fix design (DESIGN-ONLY; the fix forks on an owner decision)
 
+**Correction 2026-11-24 (owner ruling): `unmapped-reads-zero` defaults to ON for every guest and profile; the
+text below that says "opt-in" or "default OFF" describes #494 and is superseded by this paragraph.** Why:
+Linux needs the fill too. A real host GPU maps sparse pages through the same RM verb, so the verb exists on
+Linux, and the Linux Vulkan sparse-residency cases hang with host Xid 109 with the fill off and pass with it on
+(MEASURED: the hang with the fill off on an RTX 3090, §1, and on an RTX 4090, §6; the pass with the fill on on the RTX 4090, §6). A proposed `auto` default that kept Linux off and gave Windows
+the fill (PR #507) was never merged and is dropped: with Linux on there is nothing left for `auto` to decide, so the
+property stays a plain on/off (`DEFINE_PROP_BOOL`, default `true`; `KF3_ABI` 37 because the default is C text and a
+QEMU built from the old `kf3.c` would otherwise keep the old default silently).
+- **Reachability (the security reading).** The fill changes only what a guest's OWN unmapped reads return, zero instead
+  of a fault, and drops its writes there. It adds no mapping to host memory and no host verb: the reservation is the
+  guest's own static VA range (`GUEST_VA_RANGES` and the low range), allocated `_SPARSE`, and a bound page still maps
+  exactly what the guest bound. No guest byte selects the fill; it is set once at realize from the property.
+- **The owner-visible hazard (MEASURED for one case, otherwise INFERRED).** With the fill on, an access the guest
+  expects to fault reads zero instead: CUDA managed memory or HMM pages that need demand paging (not served by kayfabe
+  today), and an application that reads freed memory. A run that failed loudly with CUDA error 719 or a forwarded
+  RC (Xid 31) can now finish with wrong numbers. The one measured instance of silent wrong output is
+  `conjugateGradientUM` after a host Xid 31 (`docs/howto/troubleshooting.md`); the effect of the fill on the four Linux
+  UVM applications has not been run. S2 below is therefore broken on purpose by the default.
+- **Turn it off per VM:** `-device kf3,...,unmapped-reads-zero=off` restores the fault: S2 holds, and Vulkan sparse
+  residency hangs again. The unconfigured host (the harness, the raw client, the kf-mem model) keeps the fault, so a
+  bare-metal reference run is unchanged.
+- **Not run:** a Windows guest (DX12 reserved/tiled resources, a Windows build of the Vulkan CTS sparse list, a
+  desktop smoke test of the default). That DX12 and UE virtual textures hit the same INVALID-versus-SPARSE gap is
+  INFERRED, and so is a smaller silent-zero hazard on WDDM (no demand-paged UVM/HMM).
+- Tests: the GPU-free tests are `kf-host` `guest_va_fill_tests`, `kf-qemu` `config_tests` and
+  `tests/unmapped_reads_zero_use_sites.rs` (the C default is pinned to `UNMAPPED_READS_ZERO_DEFAULT`, which is `true`),
+  and `scripts/ci/sparse_fill_mutants.py` (12 mutants, each killed by at least two named tests, among them
+  `linux-space-faults`, `default-const-off` and `c-default-off`, which restore the old behaviour).
+
 **Update 2026-11-18 (coordinator decision): option B is implemented as an OPT-IN, default OFF.** The
 `unmapped-reads-zero` device property (`kf_host::channel::GuestVaFill`, `guest_range_plan`; ABI 35;
 `docs/howto/installing.md`) applies to the static guest ranges only. Its tests are in
@@ -81,7 +110,7 @@ Mutant (blanket fix: add `_SPARSE` to `NVOS32_RESERVE_FLAGS`): S1 turns green bu
 - `on_s2_consequence_*` pins the documented price (with it on, a guest-INVALID VA reads zero);
 - with the property off, S2 and the ratchet are unchanged.
 
-Mutants are in `scripts/ci/sparse_fill_mutants.py` (7, each killed by at least 2 named tests). Two wiring
+Mutants are in `scripts/ci/sparse_fill_mutants.py` (7 then, 12 now, each killed by at least 2 named tests). Two wiring
 lines have no GPU-free killer: the plan's flags reaching `reserve_va_flags`, and realize calling
 `set_guest_va_fill`. The box run covers them (the `unmapped-reads-zero=on` log line and the verdict).
 Option C is still open. Not run on hardware.

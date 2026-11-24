@@ -116,14 +116,21 @@ pub struct Config {
     /// seated, no thread starts, no host call is made: exactly the behaviour before the feature. Never an
     /// environment variable, never inferred from the guest.
     pub report_utilization: bool,
-    /// ★ 2026-11-18 (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B): the
-    /// `unmapped-reads-zero` property, default OFF. On, an unmapped VA of the static guest ranges
-    /// reads ZERO on the host twin instead of faulting ([`kf_host::channel::GuestVaFill::Zero`]):
-    /// the guest's sparse pages (Vulkan sparse residency) work, and every other unmapped VA the
-    /// guest's GPU touches silently reads zero. Never an environment variable; never inferred from
-    /// the guest.
+    /// The `unmapped-reads-zero` property (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B), default
+    /// ON ([`UNMAPPED_READS_ZERO_DEFAULT`]) for every guest and profile. On, an unmapped VA of the static
+    /// guest ranges reads ZERO on the host twin instead of faulting
+    /// ([`kf_host::channel::GuestVaFill::Zero`]): the guest's sparse pages (Vulkan sparse residency, DX12
+    /// reserved resources) work, and every other unmapped VA the guest's GPU touches silently reads zero, so
+    /// an expected fault (CUDA managed memory or HMM demand paging, an application bug) is a wrong answer
+    /// instead of an error. It changes only what the guest's OWN unmapped reads return: no host memory
+    /// becomes reachable either way. Off restores the fault. Never an environment variable; never inferred
+    /// from the guest.
     pub unmapped_reads_zero: bool,
 }
+
+/// What `kf3.c` declares as the default of the `unmapped-reads-zero` property. The C text is the one
+/// source of the default; `tests/unmapped_reads_zero_use_sites.rs` fails if the two disagree.
+pub const UNMAPPED_READS_ZERO_DEFAULT: bool = true;
 
 impl Config {
     /// The host fill of the static guest ranges this configuration asks for.
@@ -432,7 +439,7 @@ impl Device {
             )
             .map_err(|e| e.to_string())?,
         ));
-        // ★ 2026-11-18: before any mirror space exists, so every space's static guest ranges take it.
+        // Before any mirror space exists, so every space's static guest ranges take it.
         rm.set_guest_va_fill(cfg.guest_va_fill());
         if cfg.unmapped_reads_zero {
             eprintln!(
@@ -4579,27 +4586,69 @@ mod config_tests {
             pci_devfn: 0,
             windows_support: true,
             report_utilization: true,
-            unmapped_reads_zero: false,
+            unmapped_reads_zero: super::UNMAPPED_READS_ZERO_DEFAULT,
         }
     }
 
-    /// ★ 2026-11-18 `unmapped-reads-zero`: off by default (the host faults on an unmapped guest VA,
-    /// S2 of `V3_SPARSE_RESIDENCY_RCA.md`); on asks for the ZERO fill, and nothing else changes.
+    /// `unmapped-reads-zero`: on by default, for every guest and profile (a Linux guest's
+    /// host-default-start space and a Windows-profile guest's floor-start space alike), so the planned
+    /// static guest ranges of the default configuration are all `_SPARSE`; `off` is the only way to the
+    /// fault, and nothing else changes.
     #[test]
-    fn unmapped_reads_zero_is_off_by_default_and_maps_to_the_fill() {
-        use kf_host::channel::GuestVaFill;
-        let off = cfg(false, false);
-        assert!(!off.unmapped_reads_zero, "default off");
-        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
-        let on = Config {
-            unmapped_reads_zero: true,
+    fn unmapped_reads_zero_is_on_by_default_for_every_profile() {
+        use kf_host::channel::{
+            GuestVaFill, MirrorVaStart, NVOS32_ALLOC_FLAGS_SPARSE, guest_range_plan,
+        };
+        let d = cfg(false, false);
+        assert!(d.unmapped_reads_zero, "default on");
+        assert_eq!(d.guest_va_fill(), GuestVaFill::Zero);
+        for windows in [false, true] {
+            let plan: Vec<_> =
+                guest_range_plan(MirrorVaStart::select(windows), d.guest_va_fill()).collect();
+            assert!(!plan.is_empty());
+            assert!(
+                plan.iter()
+                    .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0),
+                "windows={windows}: every static guest range of the default is SPARSE"
+            );
+        }
+        let off = Config {
+            unmapped_reads_zero: false,
             ..cfg(false, false)
         };
-        assert_eq!(on.guest_va_fill(), GuestVaFill::Zero);
-        assert!(on.check().is_ok(), "the property needs no other property");
+        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
+        for windows in [false, true] {
+            assert!(
+                guest_range_plan(MirrorVaStart::select(windows), off.guest_va_fill())
+                    .all(|(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0),
+                "windows={windows}: off plans no SPARSE range"
+            );
+        }
+        assert!(off.check().is_ok(), "the property needs no other property");
     }
 
-    /// ★ 2026-11-18: the property and the fill agree for both values (the ZERO fill exactly when on).
+    /// The default holds with every other property at its default and under both values of the
+    /// switches that select a profile (`windows-support`).
+    #[test]
+    fn the_default_does_not_depend_on_the_other_properties() {
+        for (display, x11, windows) in [
+            (false, false, true),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let c = Config {
+                windows_support: windows,
+                ..cfg(display, x11)
+            };
+            assert_eq!(
+                c.guest_va_fill(),
+                kf_host::channel::GuestVaFill::Zero,
+                "display={display} x11={x11} windows_support={windows}"
+            );
+        }
+    }
+
+    /// The property and the fill agree for both values (the ZERO fill exactly when on).
     #[test]
     fn the_property_and_the_fill_round_trip() {
         use kf_host::channel::GuestVaFill;
