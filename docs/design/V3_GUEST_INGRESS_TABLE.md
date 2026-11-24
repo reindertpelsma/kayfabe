@@ -30,6 +30,16 @@ nearest-tag fallback. Each control row also says whether kayfabe ever forwards t
 | class | kayfabe serves it and T's `resource_list.h` gives it `RS_FLAGS_ALLOC_NON_PRIVILEGED` and neither `_PRIVILEGED` nor `_KERNEL_PRIVILEGED`; or it is a client root (internal class `RmClientResource`: `serverAllocClient` has no resource privilege check, `ogkm-580: libraries/resserv/src/rs_server.c:728-766`) |
 | either | a row of `tools/api_boundaries/ingress_rules.tsv` overrides the derived verdict for its tags |
 
+⊘ **Addition, 2026-11-24 (security review of PR #545, F2).** The control row above ignored ogkm's per-export
+`accessRight`. It is a mask of the rights the caller must hold (`NVBIT(RS_ACCESS_<right>)`: `resource.c`
+`serverControl_InitCookie` copies it into `rightsRequired`, tested with `rs_access.h` `RS_ACCESS_MASK_TEST`). A
+control whose export names a right is now refused by derivation (`Refusal::AccessRight`), decoded by name with the
+tag's own `rs_access.h`. Re-extracted from all 30 tags on 2026-11-24 (`ingress_policy.py extract --clone`, branch `claude/sec-followups-20261124` from `next` 3f1bb18dc), exactly five
+controls carry one, all `RS_ACCESS_NICE` (mask `0x2`; the review called it `RS_ACCESS_DEBUG`, which is index 2,
+mask `0x4`) at every tag: `0x20801115`, `0xa06c0107`, `0xa06c0110`, `0xa06f0109`, `0xa06f0111`. The three of them
+that kayfabe serves were refused only by judgement rows before; their rows stay, and the derivation now refuses them
+without the rows. The generated table did not change.
+
 "Served" is what kayfabe's own code names (`tools/api_boundaries/derive_served.py` → `served.json`: control ids
 and names, class ids and names, plus the Windows census and the matrix lists). **The gate is excluded
 from that scan** (`EXCLUDE` in `derive_served.py`): before I7, 71 control ids and 122 control names were "served"

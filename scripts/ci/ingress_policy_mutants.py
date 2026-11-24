@@ -43,6 +43,10 @@ CASES = [
     ("absent-control-admitted", changed(GEN, '        return False, "NotExported"', '        return True, "OgkmNonPrivileged"')),
     ("unknown-control-given-a-row", changed(GEN, "                if not ruled:\n                    continue",
                                             "                if False:\n                    continue")),
+    # Security review of PR #545, F2: ogkm's accessRight is a derived refusal.
+    ("access-right-ignored", changed(GEN, '    if any(x.get("access") for x in e["exports"]):', "    if False:")),
+    ("access-right-not-extracted", changed(GEN, '                                 "access": _access_names(int(m.group(2), 0), rights)})',
+                                           '                                 "access": []})')),
     ("duplicate-id-first-wins", changed(GEN, "    if key not in sink or value < sink[key]:", "    if key not in sink:")),
     # the gate
     ("gate-unlisted-admitted", changed(GATE, "        matches!(self, ControlPermit::Admitted { .. })",

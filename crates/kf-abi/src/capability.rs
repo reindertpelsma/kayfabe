@@ -93,6 +93,10 @@ pub enum Refusal {
     Privileged,
     /// Kernel clients only: no visibility flag on the control, or `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED`.
     KernelOnly,
+    /// The tag's export names an access right the caller must hold (`accessRight`, a mask of
+    /// `NVBIT(RS_ACCESS_<right>)`; `RS_ACCESS_NICE` needs a privileged caller,
+    /// `ogkm-580: libraries/resserv/src/rs_access_rights.c`), whatever its visibility flags say.
+    AccessRight,
     /// `RMCTRL_FLAGS_INTERNAL`: RM's own kernel-to-physical traffic.
     Internal,
     /// `RMCTRL_FLAGS_RM_TEST_ONLY_CODE`.
