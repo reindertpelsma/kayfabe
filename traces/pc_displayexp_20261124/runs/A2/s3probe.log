@@ -1,0 +1,15 @@
+[     0.1s] 0s rc=255 qemu_rc=None (no answer)
+[    19.7s] 10s rc=0 qemu_rc=None boot=2026-11-24T20:04:32.5000000+00:00 ev(id=count) 153=1 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    23.2s] 20s rc=0 qemu_rc=None boot=2026-11-24T20:04:32.5000000+00:00 ev(id=count) 153=4 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    60.0s] 30s rc=124 qemu_rc=None (no answer)
+[    70.2s] 60s rc=255 qemu_rc=None (no answer)
+[    80.3s] 70s rc=255 qemu_rc=None (no answer)
+[    90.4s] 80s rc=255 qemu_rc=None (no answer)
+[   100.5s] 90s rc=255 qemu_rc=None (no answer)
+[   110.6s] 100s rc=255 qemu_rc=None (no answer)
+[   120.6s] 110s rc=255 qemu_rc=None (no answer)
+[   130.7s] 120s rc=255 qemu_rc=None (no answer)
+[   140.8s] 130s rc=255 qemu_rc=None (no answer)
+[   150.9s] 140s rc=255 qemu_rc=None (no answer)
+[   154.8s] 150s rc=0 qemu_rc=None boot=2026-11-24T20:04:32.5000000+00:00 ev(id=count) 153=7 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[   160.1s] 160s rc=255 qemu_rc=None (no answer)

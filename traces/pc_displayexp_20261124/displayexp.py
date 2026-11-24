@@ -21,7 +21,9 @@ POLL_PS = r'''
 $o = Get-CimInstance Win32_OperatingSystem
 "UP " + $o.LastBootUpTime.ToString("o") + " NOW " + (Get-Date).ToString("o")
 $ev = Get-WinEvent -FilterHashtable @{LogName="System"; StartTime=$o.LastBootUpTime.AddSeconds(-5)} -EA 0
-foreach ($i in 153,141,41,1074,6008,1001,4101) { "EV $i " + @($ev | ? { $_.Id -eq $i }).Count }
+foreach ($i in 153,141,41,1074,6008,1001,4101) { "EV $i " + @($ev | ? { $_.Id -eq $i -and $_.ProviderName -eq "nvlddmkm" -or ($_.Id -eq $i -and $i -ne 153) }).Count }
+"EV 153KernelBoot " + @($ev | ? { $_.Id -eq 153 -and $_.ProviderName -ne "nvlddmkm" }).Count
+"EV nvlddmkm_any " + @($ev | ? { $_.ProviderName -eq "nvlddmkm" }).Count
 $ev | ? { $_.Id -in 153,141,41,1074,6008,1001,4101,14 } | sort TimeCreated | select -Last 12 | % { $m = ($_.Message + "") -replace "\s+"," "; "EVL $($_.TimeCreated.ToString("HH:mm:ss")) $($_.Id) $($_.ProviderName) " + $m.Substring(0, [Math]::Min(110, $m.Length)) }
 '''
 PNP_PS = r'''
@@ -84,7 +86,7 @@ def main():
     vm = DVm(state, vmroot, name, Path(prep), qemu, S.ARM_CPU["B"], gpu=False, arm=arm, broker=broker, gop=gop)
     vm.setup()
     bp = fd = rec = None
-    dm0 = int(S.sh("dmesg | wc -l")[1].strip() or 0)
+    up0 = float(open("/proc/uptime").read().split()[0])   # dmesg is cut by its monotonic stamp: the ring buffer can wrap, so a line offset is not safe
     try:
         if arm in ("B", "Boff"):
             bp, fd = start_broker(vm)
@@ -105,7 +107,7 @@ def main():
             if rc == 0 and "UP " in o:
                 if up_at is None:
                     up_at = ts
-                cnt = " ".join(l[3:] .replace(" ", "=") for l in o.splitlines() if l.startswith("EV "))
+                cnt = " ".join(l[3:].replace(" ", "=") for l in o.splitlines() if l.startswith("EV "))
                 up = re.search(r"UP (\S+)", o).group(1)
                 line = "%ds rc=0 qemu_rc=None boot=%s ev(id=count) %s" % (ts, up, cnt)
                 last_ev = o
@@ -143,16 +145,18 @@ def main():
         if fd is not None:
             os.close(fd)
     time.sleep(1)
-    d = S.sh("dmesg | tail -n +%d" % (dm0 + 1))[1].splitlines()
+    up1 = float(open("/proc/uptime").read().split()[0])
+    res["host_uptime_window_s"] = [round(up0, 1), round(up1, 1)]
+    d = [ln for ln in S.sh("dmesg")[1].splitlines() if re.match(r"\[\s*(\d+\.\d+)\]", ln) and up0 - 2 <= float(re.match(r"\[\s*(\d+\.\d+)\]", ln).group(1)) <= up1 + 2]
     keep = [ln for ln in d if re.search(r"NVRM|Xid|BUG:|Oops|hung|nvidia", ln, re.I)]
     (out / "dmesg_filtered.txt").write_text(S.scrub("\n".join(keep[-400:])) + "\n")
     res["host_mmuWalkMap_lines"] = sum(1 for ln in d if "mmuWalkMap" in ln)
     res["host_no_memory_lines"] = sum(1 for ln in d if "NV_ERR_NO_MEMORY" in ln)
     qlog = (vm.work / "qemu.log").read_text(errors="replace")
     (out / "qemu_log_tail.txt").write_text(S.scrub(qlog[-30000:]))
-    qf = [ln for ln in qlog.splitlines() if re.search(r"0x51|NO_MEMORY|mmuWalk|VA_ALREADY|HELD|refus|REFUSED|RPC-REFUSED", ln)]
+    qf = [ln for ln in qlog.splitlines() if re.search(r"NV_ERR_NO_MEMORY|status=0x51|mmuWalk|VA_ALREADY|HELD|refus|REFUSED|RPC-REFUSED", ln)]
     (out / "qemu_f1_refusal_lines.txt").write_text(S.scrub("\n".join(qf)) + "\n")
-    res["qemu_log_0x51_lines"] = sum(1 for ln in qf if "0x51" in ln or "NO_MEMORY" in ln)
+    res["qemu_log_0x51_lines"] = sum(1 for ln in qf if "status=0x51" in ln or "NO_MEMORY" in ln)
     res["qemu_log_refusal_lines"] = len(qf)
     evs = []
     try:
