@@ -1,0 +1,9 @@
+=== llama_vulkan side=host start=2026-11-24T00:31:06+00:00 host=ubuntu cmd: ${KF_VK_ENV:+env $KF_VK_ENV }python3 -B -I /opt/apps/bundle/share/open_rows/llama_vulkan_row.py run --out /opt/apps/out/host/llama_vulkan --bundle /opt/apps/bundle --data /opt/apps/data --ngl ${KF_NGL:-99}
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CPU        |      15 |           pp512 |       173.23 ± 26.55 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CPU        |      15 |            tg64 |        17.00 ± 11.53 |
+
+build: 4b1a27f (1)
+LLAMA_VULKAN_SUMMARY status=FAIL reason=no_vulkan_device device=none coopmat=unknown pp512_tps=0.00 tg64_tps=0.00 ngl=0 secs=20 gpu_use=NA
+=== end rc=1 secs=20 2026-11-24T00:31:26+00:00

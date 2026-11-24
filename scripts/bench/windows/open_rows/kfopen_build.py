@@ -16,7 +16,7 @@ import kfopen_pins as P
 from kfopen_common import HERE, OpenRowError, Runner, Trust, canonical, load_json, say, sha256_file, sha256_text, utc, write_json
 
 ROW_NEEDS = {"cts-gl": ("git", "python", "msvc"), "cts-vk": ("git", "python", "lxml", "msvc"), "gl-soak": ("msvc",),
-             "dx-window": ("git", "msvc", "nuget"), "dx-console": ("git", "msvc", "nuget"), "not-run": ()}
+             "dx-window": ("git", "msvc", "nuget"), "dx-console": ("git", "msvc", "nuget"), "hwmon": ("lhm",), "not-run": ()}
 DEFAULT_ROOT = r"C:\kfopen"
 VSWHERE = r"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 MAX_DOWNLOAD = 8 << 30
@@ -184,6 +184,29 @@ def ensure_nuget(ctx):
     return exe
 
 
+def ensure_lhm(ctx):
+    """The LibreHardwareMonitor release zip: its sha256 is read at run time from the pinned release itself (the release's own `digest` field, the same
+    anchor as MinGit), the asset URL must lie under the pinned release, and the zip is unpacked into <root>/tools/lhm. Returns the directory."""
+    u = user_tool(ctx, "lhm")
+    if u:
+        return u
+    spec = ctx.pins["tools"]["lhm"]
+    dest = ctx.p("tools", "lhm")
+    if os.path.exists(os.path.join(dest, "LibreHardwareMonitorLib.dll")):
+        tool_note(ctx, "lhm", anchor=spec["anchor"], verified="already-installed", release=spec["release_tag"])
+        return dest
+    rel = ctx.fetcher.get_text(spec["release_api"], accept="application/vnd.github+json")
+    url, expected = P.expected_from_github_release(rel, spec["asset"], spec["download_prefix"])
+    zp = ctx.p("downloads", spec["asset"])
+    got = ctx.fetcher.download(url, zp)
+    status = anchored(ctx, "lhm", lambda: P.verify_sha256(got, expected))
+    safe_extract_zip(zp, dest)
+    if not os.path.exists(os.path.join(dest, "LibreHardwareMonitorLib.dll")):
+        raise OpenRowError("INSTALL_FAILED the LibreHardwareMonitor zip holds no LibreHardwareMonitorLib.dll")
+    tool_note(ctx, "lhm", anchor=spec["anchor"], verified=status, sha256=got, release=spec["release_tag"])
+    return dest
+
+
 def find_vs(ctx):
     """(installation path) of a Visual Studio / Build Tools instance with the MSVC x64 tools, or None."""
     vw = os.path.expandvars(VSWHERE)
@@ -245,6 +268,8 @@ def ensure_toolchain(ctx, need):
         out["msvc"] = ensure_msvc(ctx)
     if "nuget" in need:
         out["nuget"] = ensure_nuget(ctx)
+    if "lhm" in need:
+        out["lhm"] = ensure_lhm(ctx)
     return out
 
 

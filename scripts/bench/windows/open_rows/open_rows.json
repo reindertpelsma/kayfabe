@@ -99,6 +99,17 @@
    "anchor": "authenticode",
    "url": "https://dist.nuget.org/win-x86-commandline/v7.9.0/nuget.exe",
    "signer": "Microsoft Corporation"
+  },
+  "lhm": {
+   "purpose": "LibreHardwareMonitor (MPL-2.0): its library reads the NVIDIA GPU through NVAPI (nvapi64.dll of the driver); the release zip carries the library and every assembly it loads",
+   "kind": "release-zip",
+   "anchor": "upstream-sha256",
+   "release_tag": "v0.9.6",
+   "release_commit": "3d331e3370efb858411f19511373eff65a218701",
+   "asset": "LibreHardwareMonitor.zip",
+   "release_api": "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/tags/v0.9.6",
+   "download_prefix": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/",
+   "licence": "MPL-2.0"
   }
  },
  "nuget_trust": {
@@ -326,6 +337,49 @@
    "kind": "not-run",
    "reason": "needs-two-gpus",
    "detail": "D3D12HeterogeneousMultiadapter and D3D12LinkedGpus (both in the pinned tree) need two GPUs or two adapters; a kayfabe guest has one"
+  },
+  "hwmon_lhm_nvapi": {
+   "group": "hwmon",
+   "kind": "hwmon",
+   "tool": "lhm",
+   "timeout_s": 300,
+   "gpu_hardware_type": "GpuNvidia",
+   "required_sensor_types": [
+    "Temperature",
+    "Clock",
+    "Load",
+    "SmallData"
+   ],
+   "temperature_c": [
+    1,
+    125
+   ],
+   "load_percent": [
+    0,
+    100
+   ],
+   "smi_tolerance": {
+    "temperature_c": 15,
+    "memory_fraction": 0.05
+   },
+   "negctl": "gpu-disabled",
+   "matrix": {
+    "state": "deferred",
+    "reason": "apps.json is a hash-covered input of the published Windows apps bundle (appmatrix/bundle.pin, RECIPE_INPUT_DRIFT): a matrix row needs the coordinator's republish, so the row runs through kfopen.py until then",
+    "row": {
+     "id": "hwmon_lhm_nvapi",
+     "category": "probe",
+     "session": "service",
+     "tier": 3,
+     "timeout_s": 1800,
+     "expect_s": 120,
+     "rx": "^KFOPEN VERDICT PASS row=hwmon_lhm_nvapi sensors=\\d+ classes=\\d+$",
+     "proof": [
+      "out:KFOPEN HWMON gpu=NVIDIA"
+     ],
+     "smi": false
+    }
+   }
   }
  }
 }

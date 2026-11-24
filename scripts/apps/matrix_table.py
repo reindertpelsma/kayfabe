@@ -41,6 +41,8 @@ DISCOVERY = {
     "vllm": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
     "tensorrt": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
     "jax": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
+    "nvbandwidth": "discovery lane (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): the row reports and never gates; the host-versus-guest comparison is open_rows/compare_logs.py nvbandwidth",
+    "llama_vulkan": "discovery lane (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): the row reports and never gates; the comparison is the LLAMA_VULKAN_SUMMARY line of each side",
 }
 KNOWN_UNSUPPORTED = json.loads((Path(__file__).resolve().parent / "known_unsupported.json").read_text())["known_unsupported"]
 PASS = "PASS"

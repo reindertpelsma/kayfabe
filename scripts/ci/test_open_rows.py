@@ -1667,7 +1667,9 @@ class StaticContracts(unittest.TestCase):
     def test_pins_env_names_a_commit_and_a_version_never_a_hash(self):
         keys = {l.split("=", 1)[0] for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#")}
         self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
-                                "OPENROWS_NVIDIA_KEY_FPR", "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS"})
+                                "OPENROWS_NVIDIA_KEY_FPR", "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS",
+                                # the pins of the nvbandwidth and llama.cpp Vulkan lanes (provision_lanes.sh, scripts/ci/test_open_lanes.py)
+                                "OPENROWS_NVB_URL", "OPENROWS_NVB_TAG", "OPENROWS_NVB_COMMIT", "OPENROWS_NVB_ARCHS", "OPENROWS_LUNARG_SDK_VERSION", "OPENROWS_LUNARG_SDK_BASE", "OPENROWS_LUNARG_CHECKSUM_BASE"})
 
     def test_provision_waits_for_a_busy_package_manager_before_every_apt_call(self):
         text = (OR / "provision.sh").read_text()
@@ -1799,6 +1801,8 @@ class StaticContracts(unittest.TestCase):
         b = (ROOT / "scripts/apps/build_bundle.sh").read_text()
         self.assertIn('open_rows/provision.sh" "$B" ||', b)
         self.assertNotIn("BUILD_open_rows", b)
+        self.assertIn('open_rows/provision_lanes.sh" "$B" ||', b)
+        self.assertNotIn("BUILD_open_lanes", b)
 
     def test_the_recipe_pins_the_current_runner(self):
         import hashlib

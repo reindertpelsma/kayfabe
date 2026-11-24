@@ -22,6 +22,8 @@ S=$B/samples
 if [ "${KF_NEGCTL:-0}" = 1 ]; then
   export KF_BLENDER_DEVS=CPU KF_NGL=0 KF_HASHCAT_ARGS="-D 1" KF_CLPEAK_ARGS="-p 1" KF_VKPEAK_DEV=1 KF_DEC_ARGS="-hwaccel none" KF_ENC=libx264
   export KF_EGL_ENV="__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json" KF_GPU_ENV="CUDA_VISIBLE_DEVICES="
+  # llama_vulkan (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): no driver for the Vulkan loader to open, so ggml finds no device and the CPU backend answers
+  export KF_VK_ENV="VK_DRIVER_FILES=/nonexistent/kayfabe-negctl.json VK_ICD_FILENAMES=/nonexistent/kayfabe-negctl.json"
 fi
 
 # ⊘ llama_cpp_gen's digest covers ONLY the generated text: this llama.cpp rev logs VRAM size and
@@ -110,11 +112,15 @@ EOF
 # DISCOVERY rows report and never gate: they are in `list` (so the names are known) but not in `listall` / `all`, and in no gate list.
 # vkcts: the open Vulkan CTS subset (docs/design/V3_VULKAN_CTS_ROW.md). Needs `vkcts.py build` once ($B/vkcts) and the tool dir $B/vkcts_tool.
 # vllm, tensorrt, jax: the open ML rows (docs/design/V3_OPEN_ML_ROWS.md). Each needs `mlrows.py setup` once ($B/mlrows: one venv per row from a hashed lock) and the tool dir $B/mlrows_tool.
+# nvbandwidth, llama_vulkan: the open lanes of docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md. open_rows/provision.sh builds $B/bin/nvbandwidth and $B/llama_vk/llama-bench (a missing one is NOTRUN
+#   with the reason in the log, never a result about the GPU); the row's drivers are in $B/share/open_rows.
 DISCOVERY=$(cat <<'EOF'
 vkcts|2700|VKCTS_SUMMARY|python3 $B/vkcts_tool/vkcts.py run --side $SIDE --artifact $B/vkcts --out $O/vkcts
 vllm|1800|VLLM_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run vllm --root $B/mlrows --out $O/vllm
 tensorrt|1500|TENSORRT_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run tensorrt --root $B/mlrows --out $O/tensorrt
 jax|1200|JAX_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run jax --root $B/mlrows --out $O/jax
+nvbandwidth|1800|NVBANDWIDTH_SUMMARY status=PASS|${KF_GPU_ENV:+env $KF_GPU_ENV }python3 -B -I $B/share/open_rows/nvbandwidth_row.py run --out $O/nvbandwidth --bundle $B --emit
+llama_vulkan|1200|LLAMA_VULKAN_SUMMARY status=PASS|${KF_VK_ENV:+env $KF_VK_ENV }python3 -B -I $B/share/open_rows/llama_vulkan_row.py run --out $O/llama_vulkan --bundle $B --data $D --ngl ${KF_NGL:-99}
 EOF
 )
 [ "${1:-}" = list ] && { { echo "$APPS"; echo "$DISCOVERY"; } | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }

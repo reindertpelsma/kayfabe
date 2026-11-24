@@ -1,0 +1,21 @@
+NOTE: You have chosen a buffer size that is smaller than the default buffer size. It is suggested to use the default buffer size (512MB) to achieve maximal peak bandwidth.
+nvbandwidth Version: v0.9
+Built from Git version: 4a49bda
+
+CUDA Runtime Version: 12090
+CUDA Driver Version: 12090
+Driver Version: 575.51.03
+
+<host>
+Device 0: NVIDIA GeForce RTX 4090 (<pci>)
+
+Running device_local_copy.
+memcpy local GPU(column) bandwidth (GB/s)
+           0
+ 0    559.24
+
+SUM device_local_copy 559.24
+
+NOTE: The reported results may not reflect the full capabilities of the platform.
+Performance can vary with software drivers, hardware clocks, and system topology.
+

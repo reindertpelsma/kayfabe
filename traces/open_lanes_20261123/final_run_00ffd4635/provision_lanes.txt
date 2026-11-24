@@ -1,0 +1,1 @@
+OPENROWS_llama_vulkan=ok

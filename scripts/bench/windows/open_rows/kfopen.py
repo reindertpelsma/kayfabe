@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-"""kfopen.py -- run the open Windows rows (VK-GL-CTS, DirectX-Graphics-Samples extras) from the repo alone.
+"""kfopen.py -- run the open Windows rows (VK-GL-CTS, DirectX-Graphics-Samples extras, the LibreHardwareMonitor NVAPI reader) from the repo alone.
 
 STATUS: DESIGN-ONLY, 2026-11-17 (docs/design/V3_WINDOWS_OPEN_ROWS.md). GPU-free logic, tested with fakes; nothing here ran on a Windows guest or on
 native Windows. A standalone user trusts git only: no private object, no account, no secret, no licence, no cache. Run it on the Windows machine
@@ -30,6 +30,7 @@ import cts_results as R  # noqa: E402
 import cts_run  # noqa: E402
 import dxs_harness as D  # noqa: E402
 import gl_soak  # noqa: E402
+import hwmon_row  # noqa: E402
 import kfopen_build as B  # noqa: E402
 import kfopen_pins as P  # noqa: E402
 from kfopen_common import OpenRowError, Runner, Trust, add_trust_args, check_line, load_json, say, write_json  # noqa: E402
@@ -100,6 +101,9 @@ def prepare(ctx, row_id):
         exe = B.build_soak(ctx, tools)
         B.write_receipt(ctx)
         return {"exe": exe}
+    if kind == "hwmon":                                      # nothing to build: the release zip is the tool
+        B.write_receipt(ctx)
+        return {"lib_dir": tools["lhm"]}
     src = B.fetch_source(ctx, "dxs", tools["git"])
     exe = B.build_dxs(ctx, row["sample"], tools, src)
     B.write_receipt(ctx)
@@ -114,6 +118,13 @@ def prebuilt_paths(ctx, row):
         cwd = os.path.join(root, *spec["cwd"].split("/"))
     elif row["kind"] == "gl-soak":
         exe, cwd = B.locate(root, "kf_gldual.exe"), root
+    elif row["kind"] == "hwmon":
+        lib = B.locate(root, "LibreHardwareMonitorLib.dll")
+        if not lib:
+            raise OpenRowError("PREBUILT_MISSING no LibreHardwareMonitorLib.dll below %s" % root)
+        from kfopen_common import sha256_file
+        ctx.receipt["builds"]["prebuilt:LibreHardwareMonitorLib.dll"] = {"exe": lib, "sha256": sha256_file(lib), "verified": "trusted-by-user"}
+        return {"lib_dir": os.path.dirname(lib)}
     else:
         exe = B.locate(root, os.path.basename(ctx.pins["dxs_samples"][row["sample"]]["exe"]))
         cwd = os.path.dirname(exe) if exe else root
@@ -131,6 +142,10 @@ def preflight(ctx, row_id, dry_run=False):
         return "%s (%s)" % (row["reason"], row["detail"])
     if not sys.platform.startswith("win") and not dry_run:
         return "not-windows (the rows run in a Windows guest or on native Windows)"
+    if row["kind"] == "hwmon":
+        if not ctx.trust.prebuilt and not os.path.isdir(ctx.p("tools", "lhm")) and not can_reach():
+            return "offline-guest-without-lhm (a gate guest is offline: run `kfopen.py prepare` on an online guest, or pass --tool lhm=DIR)"
+        return None
     if not ctx.trust.prebuilt and not os.path.isdir(ctx.p("build")) and not os.path.isdir(ctx.p("src")) and not can_reach():
         return "offline-guest-without-build-tree (a gate guest is offline: build with `kfopen.py prepare` on an online LTSC guest, or pass --prebuilt DIR)"
     return None
@@ -159,6 +174,8 @@ def run_row(ctx, row_id, args):
                                    allow_different_gpu=args.allow_different_gpu)
     if kind == "gl-soak":
         return gl_soak.run_soak(row_id, row, runner, paths["exe"], smoke=args.smoke, share=args.share)
+    if kind == "hwmon":
+        return hwmon_row.run_hwmon(row_id, row, runner, paths["lib_dir"], negctl=getattr(args, "negctl", False))
     if kind == "dx-window":
         try:
             popen = subprocess.Popen([paths["exe"]], cwd=paths["cwd"])
@@ -208,6 +225,7 @@ def build_parser():
             s.add_argument("--control", help="the native control (results file of a CTS row, JSON of a sample); default <root>/control/<row>.tsv")
             s.add_argument("--out", help="result directory (default <root>/results/<row>)")
             s.add_argument("--smoke", action="store_true", help="the short soak (60 s)")
+            s.add_argument("--negctl", action="store_true", help="the negative control of a hwmon row: the same reader with its GPU group disabled; exit 0 only when the judge says FAIL")
             s.add_argument("--share", action="store_true", help="soak: let the two GL contexts share objects")
             s.add_argument("--allow-different-gpu", action="store_true", help="compare with a control from another GPU model (recorded)")
     d = sub.add_parser("diff")

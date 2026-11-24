@@ -1,0 +1,3 @@
+# gpu_use_why=no case passed, so there was no work to prove
+NVBANDWIDTH_PROOF device=none gpus=0 passed=0 ce=0 sm=0 latency=0 local=0 min_gbps=0
+NVBANDWIDTH_SUMMARY status=FAIL reason=unexpected_results pass=0 waived=17 fail=0 mismatch=18 not_run=0 cases=35 gpus=0 gpu_use=NA device=none buffer_mib=512 secs=44

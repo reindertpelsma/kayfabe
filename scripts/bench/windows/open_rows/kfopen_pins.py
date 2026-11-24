@@ -14,7 +14,7 @@ import xml.sax.saxutils
 from kfopen_common import HERE, OpenRowError, load_json
 
 ANCHORS = ("git-commit", "upstream-sha256", "authenticode", "pypi-sha256", "nuget-signature", "ci-attestation")
-KINDS = ("cts-gl", "cts-vk", "gl-soak", "dx-window", "dx-console", "not-run")
+KINDS = ("cts-gl", "cts-vk", "gl-soak", "dx-window", "dx-console", "hwmon", "not-run")
 SHA256_RX = re.compile(r"(?i)\b[0-9a-f]{64}\b")
 COMMIT_RX = re.compile(r"[0-9a-f]{40}")
 BINARY_PIN_KEYS = re.compile(r"(?i)sha-?256|digest|checksum|hash")
@@ -50,6 +50,10 @@ def validate_pins(doc):
                 raise OpenRowError("tool %s: %s must be https" % (name, key))
         if tool["anchor"] == "authenticode" and not tool.get("signer"):
             raise OpenRowError("tool %s: authenticode needs the expected signer" % name)
+        if tool.get("kind") == "release-zip" and not all(tool.get(k) for k in ("release_api", "download_prefix", "asset", "release_tag")):
+            raise OpenRowError("tool %s: a release zip needs release_tag, asset, release_api and download_prefix (its sha256 is read from that release at run time)" % name)
+        if tool.get("kind") == "release-zip" and tool["anchor"] != "upstream-sha256":
+            raise OpenRowError("tool %s: a release zip is anchored by the upstream sha256 of its release" % name)
     fps = doc["nuget_trust"]["fingerprints_sha256"]
     if not fps or not all(re.fullmatch(r"[0-9A-F]{64}", f) for f in fps) or doc["nuget_trust"]["signature_validation_mode"] != "require":
         raise OpenRowError("nuget_trust: need certificate fingerprints and signatureValidationMode=require")
@@ -63,6 +67,10 @@ def validate_pins(doc):
             raise OpenRowError("row %s: sample %r is not in dxs_samples" % (rid, row["sample"]))
         if row["kind"] in ("cts-gl", "cts-vk") and row["binary"] not in doc["cts_build"]["targets"]:
             raise OpenRowError("row %s: binary %r is not a cts_build target" % (rid, row["binary"]))
+        if "matrix" in row and (row["matrix"].get("state") != "deferred" or len(row["matrix"].get("reason", "")) < 20 or not row["matrix"].get("row", {}).get("rx")):
+            raise OpenRowError("row %s: a matrix block is `deferred` with a reason and the row definition that will be wired (rx, proof, timeouts)" % rid)
+        if row["kind"] == "hwmon" and row.get("tool") not in doc["tools"]:
+            raise OpenRowError("row %s: tool %r is not in tools" % (rid, row.get("tool")))
         if row["kind"] == "not-run" and (not re.fullmatch(r"[a-z0-9-]{5,}", row.get("reason", "")) or len(row.get("detail", "")) < 20):
             raise OpenRowError("row %s: a not-run row needs a named reason token and a detail" % rid)
     return doc

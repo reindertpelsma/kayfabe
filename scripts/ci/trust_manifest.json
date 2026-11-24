@@ -1717,6 +1717,12 @@
    "row": null,
    "reason": "NVIDIA's apt repository key from NVIDIA's URL, refused unless its fingerprint equals pins.env OPENROWS_NVIDIA_KEY_FPR (low 64 bits = the key id NVIDIA publishes); DCGM then through apt with that signed index. The Worker's cache-only apt shim refuses it by design. Not yet read through kf_trust"
   },
+  "scripts/apps/open_rows/provision_lanes.sh": {
+   "count": 2,
+   "class": "native-route3",
+   "row": null,
+   "reason": "the LunarG Vulkan SDK (glslc and current Vulkan headers) on a machine whose distribution has no glslc (Ubuntu 22.04): the tarball and, from LunarG's own checksum endpoint for the same pinned version, its sha256, compared before anything is unpacked (an official-origin checksum, no digest in git, refused on a mismatch). Used only when the distribution's glslc is absent. Not yet read through kf_trust"
+  },
   "scripts/apps/pin_lib.sh": {
    "count": 4,
    "class": "native-route3",

@@ -21,6 +21,8 @@ $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 # the tree's python drivers, so a harness fix does not need a re-provisioned image
 # host-built probes added after the image was provisioned (same binaries the host lane ran)
 tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
+# discovery row llama_vulkan: the Vulkan build of llama-bench (open_rows/provision.sh), pushed like bin/ when the host built one
+[ -d /workspace/apps/bundle/llama_vk ] && tar -C /workspace/apps/bundle -cf - llama_vk | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
 # the open rows' drivers (scripts/apps/open_rows): small, pushed every boot like src/*.py; their DCGM files ride in the bundle

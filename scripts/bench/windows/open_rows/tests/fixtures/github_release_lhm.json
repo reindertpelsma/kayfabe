@@ -1,0 +1,18 @@
+{
+ "tag_name": "v0.9.6",
+ "body": "## What's Changed\n* Update DiskInfoToolkit.\n",
+ "assets": [
+  {
+   "name": "LibreHardwareMonitor.NET.10.zip",
+   "size": 8889121,
+   "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+   "browser_download_url": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.NET.10.zip"
+  },
+  {
+   "name": "LibreHardwareMonitor.zip",
+   "size": 6632626,
+   "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+   "browser_download_url": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.zip"
+  }
+ ]
+}

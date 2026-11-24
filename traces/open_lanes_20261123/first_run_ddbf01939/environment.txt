@@ -1,0 +1,6 @@
+os: Ubuntu 22.04.5 LTS
+kernel: 6.8.0-59-generic
+cpus: 15  mem_gb: 48
+/dev/root       117G  8.7G  108G   8% /
+NVIDIA GeForce RTX 4090, 575.51.03, 24564 MiB, 4, 16
+vulkan packages: 

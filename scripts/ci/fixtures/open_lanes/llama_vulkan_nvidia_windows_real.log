@@ -1,0 +1,11 @@
+load_backend: loaded RPC backend from C:\kfapps\llama_vulkan\ggml-rpc.dll
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = NVIDIA GeForce RTX 4060 Ti (NVIDIA) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: NV_coopmat2
+load_backend: loaded Vulkan backend from C:\kfapps\llama_vulkan\ggml-vulkan.dll
+load_backend: loaded CPU backend from C:\kfapps\llama_vulkan\ggml-cpu-haswell.dll
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |  99 |           pp512 |    10332.92 +- 152.07 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |  99 |            tg64 |        181.28 +- 2.34 |
+
+build: f2918cabb (11541)
