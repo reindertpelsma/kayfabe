@@ -72,7 +72,7 @@ def decide(die, count, table=None, mode='report', entries=None, unresolved=None,
 
 def identify(probe, root):
     # Same unprivileged native tuple as kf-chip::DieId, not a marketing-name/PCI table.
-    lines = re.findall(r'^host_driver=\d+\.\d+\.\d+ arch=\((\d+), (\d+), (\d+)\)$', probe, re.M)
+    lines = re.findall(r'^host_driver=\d+\.\d+(?:\.\d+)? arch=\((\d+), (\d+), (\d+)\)$', probe, re.M)
     if sum(line.startswith('host_driver=') for line in probe.splitlines()) != len(lines):
         raise ValueError('malformed native identity')
     if len(lines) != 1 or probe.splitlines().count('PASS native read-only timer map/read/drop x3') != 1:
