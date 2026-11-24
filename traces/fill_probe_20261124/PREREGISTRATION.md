@@ -102,3 +102,14 @@ kernel alias length `0x1efc00000` (7.9 GiB, fb-mb 8192): S5 fill ON floor, S6 fi
 fill OFF floor. H1-fresh predicts that a fill-ON failure depends on the length (not monotonic is allowed: the reservation is
 rounded to 2 MiB pool chunks); the INFERRED size of the extra need is one 256-byte big-page table per 2 MiB region
 (about 0.47 MiB for the 3.74 GiB alias, against a margin of about 0.5 MiB). Falsifiers unchanged.
+
+## Addendum 2, 2026-11-24, AFTER arms A1-A6 and S1-S7 ran, before A7/A8
+
+Written after the first results (so A7/A8 are a follow-up, not part of the original design): with the fill ON, the static
+range `[1 TiB, 128 TiB)` was NOT reserved in any space (`NoMemory`), so the churn above 1 TiB in A4/A5 went through the
+space's non-sparse `NV01` range and only 256 regions per round (1024 in all) churned inside a SPARSE reservation. A7 (fill
+ON) and A8 (fill OFF) therefore churn 2 x 131072 distinct 2 MiB regions all inside the first range
+`[0x120000000, 960 GiB)` (`low` layout), then map the alias.
+- H1-churn, memory part, prediction: A7's FB used grows by about 4 KiB per region (about 1 GiB) and stays after the
+  unmaps; A8's does not. Falsifier: A7 grows by under 64 MiB, or no more than A8.
+- H1-churn, failure part: falsified already if the alias map in A7 succeeds (it is the same test as A5 with more churn).

@@ -9,12 +9,13 @@
 //! (`MapBacking::SharedSlice`, FIXED), with optional map/unmap churn before the alias map.
 //!
 //! ```text
-//! kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces]
+//! kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low]
 //! ```
 //!
 //! - `churn_regions` 4 KiB maps per round, each in its own 2 MiB region, mapped and unmapped at once:
 //!   the first `CHURN_LOW_REGIONS` of a round lie in `[0x120000000, +4 GiB)` (the alias range), the
 //!   rest above `1 TiB`. Each round uses fresh regions, so every region is touched once.
+//! - `low` layout: every churn region in the first static range `[0x120000000, 960 GiB)` instead.
 //! - `extra_spaces` more spaces of the same shape are allocated first (Windows has one per process).
 //!
 //! Output: `MEASURE` lines (host FB used from `nvidia-smi` at each step, the map's answer) and one
@@ -79,7 +80,18 @@ fn churn_va(round: u64, i: u64, per_round: u64) -> u64 {
     }
 }
 
+/// The 2 MiB regions of the first static guest range, `[0x120000000, HOST_HOLE_LO)`.
+const LOW_RANGE_REGIONS: u64 = (kf_host::channel::HOST_HOLE_LO - ALIAS_VA) / LEAF;
+
+/// The VA of churn region `i` of round `round` in the `low` layout: every region in the first
+/// static guest range, each one once.
+fn churn_va_low(round: u64, i: u64, per_round: u64) -> Option<u64> {
+    let region = round * per_round + i;
+    (region < LOW_RANGE_REGIONS).then(|| ALIAS_VA + region * LEAF + ((i % 512) * P))
+}
+
 struct Args {
+    low_layout: bool,
     fill: GuestVaFill,
     start: MirrorVaStart,
     alias_len: u64,
@@ -91,7 +103,7 @@ struct Args {
 fn parse() -> Result<Args, String> {
     let a: Vec<String> = std::env::args().skip(1).collect();
     if a.len() < 5 {
-        return Err("usage: kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces]".into());
+        return Err("usage: kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low]".into());
     }
     let fill = match a[0].as_str() {
         "zero" => GuestVaFill::Zero,
@@ -117,6 +129,7 @@ fn parse() -> Result<Args, String> {
         regions: num(&a[3])?,
         rounds: num(&a[4])?,
         extra_spaces: a.get(5).map_or(Ok(0), |s| num(s))?,
+        low_layout: a.get(6).is_some_and(|s| s == "low"),
     })
 }
 
@@ -184,7 +197,12 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
     let mut pairs = 0u64;
     for round in 0..a.rounds {
         for i in 0..a.regions {
-            let va = churn_va(round, i, a.regions);
+            let va = if a.low_layout {
+                churn_va_low(round, i, a.regions)
+                    .ok_or_else(|| format!("churn region {round}/{i} beyond the first range"))?
+            } else {
+                churn_va(round, i, a.regions)
+            };
             let off = (pairs * P) % store_bytes;
             rm.map(
                 space,
@@ -256,5 +274,21 @@ mod tests {
                 assert!(seen.insert(va / LEAF), "region reused: {va:#x}");
             }
         }
+    }
+
+    #[test]
+    fn the_low_layout_stays_in_the_first_range_and_refuses_beyond_it() {
+        let mut seen = std::collections::BTreeSet::new();
+        for r in 0..2 {
+            for i in 0..4096 {
+                let va = churn_va_low(r, i, 4096).expect("inside");
+                assert!(
+                    (ALIAS_VA..kf_host::channel::HOST_HOLE_LO).contains(&va),
+                    "{va:#x}"
+                );
+                assert!(seen.insert(va / LEAF));
+            }
+        }
+        assert!(churn_va_low(0, LOW_RANGE_REGIONS, LOW_RANGE_REGIONS + 1).is_none());
     }
 }
