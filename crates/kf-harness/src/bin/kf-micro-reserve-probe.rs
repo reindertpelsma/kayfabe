@@ -16,7 +16,7 @@
 //! kf-micro-reserve-probe nv01-control   # the root cause, on hardware
 //! ```
 //!
-//! ★ 2026-11-15 (flag cleanup, Stage 1): the probe's space is ALWAYS the one a declared Windows guest
+//! The probe's space is ALWAYS the one a declared Windows guest
 //! gets ([`kf_host::channel::MirrorVaStart::GuestFloor`], `HostRm::alloc_vaspace_at`): it used to need
 //! `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` in the environment to be so (gate 10 set it). The floor is no
 //! longer an environment switch (a Linux guest never gets it), so the probe states it itself.

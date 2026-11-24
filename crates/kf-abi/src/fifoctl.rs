@@ -1,4 +1,4 @@
-//! ★ 2026-10-07 (Windows Code43, run34): the two `NV0080` FIFO controls a Windows kernel client
+//! The two `NV0080` FIFO controls a Windows kernel client
 //! sends for each new kernel channel, read at the GUEST's measured layout.
 //!
 //! | control | flags (`g_device_nvoc.c`, 580.159.04) | what kayfabe does |

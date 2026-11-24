@@ -14,7 +14,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// 2026-10-31: the in-flight token set, split out of [`Completions`] so its contract is testable
+/// The in-flight token set, split out of [`Completions`] so its contract is testable
 /// without a host (the event fd is a `/dev/nvidia*` descriptor). Behaviour is unchanged: one bit per
 /// token in a boxed array of atomic words, `Release` on write, `Acquire` on read, and a token past the
 /// table is ignored rather than growing anything (the table is sized once, from the token table).
@@ -120,7 +120,7 @@ impl Completions {
 
 #[cfg(test)]
 mod tests {
-    //! 2026-10-31 -- the contracts of the retired `kayfabe-completion` per-process completion
+    //! The contracts of the retired `kayfabe-completion` per-process completion
     //! plane (11 tests, `archive/crates/kayfabe-completion`) that survive in v3, restated on the one
     //! live structure that carries them. What did NOT survive is listed in the porting PR: v3 posts
     //! no completion batch through a faked GSP queue and arms no mapped-fence jump guard.

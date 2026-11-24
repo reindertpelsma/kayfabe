@@ -147,7 +147,7 @@ pub const NOTIFY_ALLOWED: [Row; 2] = [
 /// `HOPPER_A` headers (`clc597.h`, `clc697.h`, `clc797.h`, `clc997.h`, `clcb97.h`, compared field by
 /// field 2026-10-07); `BLACKWELL_A/B`'s OGKM headers (`clcd97.h`, `clce97.h`) name only the class id.
 ///
-/// ★ 2026-10-20 (bw-resume, OWNER REVIEW: a new public reference): NVIDIA's own public class headers,
+/// NVIDIA's own public class headers,
 /// `NVIDIA/open-gpu-doc` @ `9fdf5c4062007929d9f4e6cbad9c9771fe61b880`
 /// (`classes/3d/clcd97.h:4025-4034`, `classes/3d/clce97.h:4042-4051`), define
 /// `SET_REPORT_SEMAPHORE_A..D` for `BLACKWELL_A/B` at the same offsets with every `D` field equal to

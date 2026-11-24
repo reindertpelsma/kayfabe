@@ -37,7 +37,7 @@ pub struct VmCaps {
     caps: [u32; 4],
     live: [u32; 4],
     refused: [u64; 4],
-    /// ★ 2026-10-11: live channel twins per guest runlist. The channel cap is PER RUNLIST (the count
+    /// Live channel twins per guest runlist. The channel cap is PER RUNLIST (the count
     /// the guest was told per runlist, `kf_abi::chanbudget`), so a guest that fills one runlist cannot
     /// take another's share of the host's channels.
     chan_live_rl: Vec<u32>,

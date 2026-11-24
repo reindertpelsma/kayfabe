@@ -377,7 +377,7 @@ fn mem_op_l2_is_forwarded_access_counter_clr_is_served_and_the_rest_is_refused()
     }
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
+/// RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
 /// dst PHYSICAL LOCAL_FB) cannot run virtual — the host CE raised Xid 71 on GB203. It becomes the
 /// equivalent virtual byte zero-fill; the guest's remap registers and offset are restored after.
 #[test]
@@ -457,7 +457,7 @@ fn a_hopper_plus_fast_scrub_becomes_a_virtual_zero_fill() {
     assert_ne!(l & (1 << 23), 0, "GA10x: bit 23 is not ours to touch");
 }
 
-/// ★ 2026-09-26: a Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
+/// A Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
 /// Blackwell host placed the identity window at `0x1ff_fffe_0000_0000`; masking to 17 bits sent the
 /// copy to `0x1fffe_…` (Xid 31 FAULT_PDE). Ampere keeps 17.
 #[test]

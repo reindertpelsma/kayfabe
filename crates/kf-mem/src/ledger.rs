@@ -1,6 +1,6 @@
 //! ★★★ **Where our host mappings land, and how a walked leaf becomes one.**
 //!
-//! ⊘ 2026-09-25: this file used to hold the CPU ledger of our placements and `plan_reconcile`,
+//! This file used to hold the CPU ledger of our placements and `plan_reconcile`,
 //! which diffed every FULL walk against it on the CPU — O(rows) per invalidate, quadratic over
 //! `--ce-client-guest-ram` (`V3_P5_PORT_MAP.md` Q8). Both are gone: the walk kernel now diffs the
 //! guest's tables against the placements the host CONFIRMED (held by the GPU, committed on ack —
@@ -26,7 +26,7 @@ pub struct Desired {
     /// (`crate::apply::PermPolicy::host_perm`). ⊘ Dropping them mapped every guest read-only leaf
     /// read-write.
     pub perm: kf_host::MapPerm,
-    /// ★ 2026-10-09: the guest leaf size in bytes (`crate::apply::DiffRun::leaf`; 0 = unknown).
+    /// The guest leaf size in bytes (`crate::apply::DiffRun::leaf`; 0 = unknown).
     pub leaf: u64,
 }
 
@@ -408,7 +408,7 @@ impl HostVas<'_> {
         self.map_scattered_through(None, ram_fd, rows, defer)
     }
 
-    /// ★ 2026-10-09: [`HostVas::map_scattered`] mapped THROUGH the reservation `through` when
+    /// [`HostVas::map_scattered`] mapped THROUGH the reservation `through` when
     /// given (`crate::batch` micro reservations; `kf_host::HostRm::map_scattered_through`).
     ///
     /// # Errors
@@ -443,7 +443,7 @@ impl HostVas<'_> {
                 _ => pieces.push((d.off, d.len)),
             }
         }
-        // ★ 2026-11-13 (log-only): rows -> coalesced pieces (= MAP_FIXED mmaps) and the call's wall ns.
+        // Rows -> coalesced pieces (= MAP_FIXED mmaps) and the call's wall ns.
         let t_call = std::time::Instant::now();
         let placed = self.rm.map_scattered_through(
             self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
@@ -464,7 +464,7 @@ impl HostVas<'_> {
         })
     }
 
-    /// ★ 2026-10-09: unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
+    /// Unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
     /// straddles a reservation edge of the twin space was MAPPED as one map per `hDma`
     /// (`kf_host::VaSpace::dma_pieces`; `[measured, run 225]` Windows' `0xb0000+0x80000` and
     /// `0xff000+0x2000`), so the whole-mapping unmap keyed by `va` alone ([`MapTarget::unmap`])

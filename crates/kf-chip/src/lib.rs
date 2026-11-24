@@ -188,7 +188,7 @@ impl Family {
         }
     }
 
-    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **does the host engine write `GP_GET` back
+    /// **Does the host engine write `GP_GET` back
     /// into a channel's USERD?** Turing … Hopper: yes — every channel class's control struct names
     /// `GPGet` at `0x88` (`ogkm-580: clc46f.h`…`clc86f.h:29-45`). Blackwell: **no** — `Nvc96fControl`
     /// and `Nvca6fControl` are `Ignored00[0x23]` then `GPPut` (`clc96f.h:29-33`, `clca6f.h:27-31`),
@@ -200,7 +200,7 @@ impl Family {
         !matches!(self, Family::Blackwell)
     }
 
-    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — **are channel ids allocated per runlist?**
+    /// **Are channel ids allocated per runlist?**
     /// `KernelFifo.bUsePerRunlistChram` is a HAL field defaulting `NV_TRUE` for GB100/GB102/GB10B/
     /// GB110/GB112 and every GB20x (`ogkm-580: generated/g_kernel_fifo_nvoc.c:226-236`); Turing …
     /// Hopper default `FALSE` (only an SR-IOV host turns it on, `kernel_fifo_init.c:197-222`). With it
@@ -232,7 +232,7 @@ impl Family {
         }
     }
 
-    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 1) — **does this family's RM read GR info's
+    /// **Does this family's RM read GR info's
     /// `LITTER_MIN_SUBCTX_PER_SMC_ENG` (`0x37`, the VEID step size)?** Its one reader is
     /// `kgrmgrGetVeidStepSize_IMPL` (`ogkm-580: kernel_graphics_manager.c:782-796`), whose one caller
     /// is `kgrmgrGetVeidsFromGpcCount_GA100` (`*pVeidCount = gpcCount * veidStepSize`,
@@ -246,7 +246,7 @@ impl Family {
         matches!(self, Family::Ampere | Family::Ada | Family::Hopper)
     }
 
-    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 2) — **does this family's RM read the
+    /// **Does this family's RM read the
     /// memory-system config's `ltcCount × ltsPerLtcCount`?** The only readers are
     /// `kmemsysIsPagePLCable_GA100` (`ogkm-580: kern_mem_sys_ga100.c:332-345`) and `_GA102`
     /// (`kern_mem_sys_ga102.c:66-120`), bound for GA100 and GA102 … GA107 only
@@ -258,7 +258,7 @@ impl Family {
         matches!(self, Family::Ampere)
     }
 
-    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 4) — **the FWSEC descriptor version our
+    /// **The FWSEC descriptor version our
     /// synthetic ROM carries: the one this family's `kgspExecuteHsFalcon` can run.** `_TU102`
     /// (TU102 … TU117, and GA100) runs `BOOT_WITH_LOADER` / `BOOT_DIRECT` only ⇒ V2; `_GA102`
     /// (GA102 … AD107) asserts `BOOT_FROM_HS` ⇒ V3 (`ogkm-580: generated/g_kernel_gsp_nvoc.c:1427-1445`,
@@ -348,7 +348,7 @@ impl Family {
                 RiscvLayout::Ga102,
                 fb_size_mb,
             ))),
-            // ★ 2026-09-26: Turing runs the SAME boot as GA10x (kgspBootstrap_TU102, FWSEC-FRTS —
+            // Turing runs the SAME boot as GA10x (kgspBootstrap_TU102, FWSEC-FRTS —
             // kgspGetFrtsSize_TU102 = 1 MiB —, the SEC2 Booter); only the RISC-V block differs.
             Family::Turing => Ok(Box::new(FalconGspModel::with_layout(
                 RiscvLayout::Tu102,

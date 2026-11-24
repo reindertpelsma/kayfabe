@@ -385,7 +385,7 @@ mod model {
     }
 }
 
-/// 2026-10-31 — the stage machine fires once, at or after its fence, across the 32-bit wrap
+/// The stage machine fires once, at or after its fence, across the 32-bit wrap
 /// (ported from the retired `fence_arm_fires_at_or_after_target_exactly_once`; the arm table is
 /// gone, the in-order fence the pump retires against is what carries the contract).
 #[cfg(test)]

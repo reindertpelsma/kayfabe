@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-10-19 — the CE-IMPLICIT binding of a guest-KERNEL copy-engine ring. The defect, as
+//! The CE-IMPLICIT binding of a guest-KERNEL copy-engine ring. The defect, as
 //! measured: Windows run 3017 (`/var/lib/kf-windows-20261005/boundary-kayfabe-3017/qemu.log:40883`,
 //! the only `ring REFUSED` of the run), chan `0xc1d00019:0xff040004`, engine `0xb` (COPY2),
 //! token `0x806`, born at boot and idle for 12 minutes; during the guest's TDR recovery GP entry

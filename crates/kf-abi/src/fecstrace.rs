@@ -1,4 +1,4 @@
-//! ★ 2026-10-07 (Windows Code43, run42): `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
+//! `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
 //! at the GUEST's measured layout. Id and layout come from the driver matrix
 //! (`crate::generated::matrix`, measured per ogkm tag); a version where either is absent gets
 //! `None`, and the control stays unserviced.

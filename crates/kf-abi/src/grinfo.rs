@@ -209,7 +209,7 @@ pub struct GrInfoProfile {
     pub data: [u32; GR_INFO_MAX_SIZE],
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 1) — which of RM's **zero-sensitive** readers
+/// Which of RM's **zero-sensitive** readers
 /// of this table the guest's HAL binds. Family-free here; the composition root fills it from the
 /// family row (`kf_chip::Family::reads_gr_veid_step_size`), which cites the HAL binding.
 ///
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn a_zero_veid_step_size_is_served_where_no_reader_multiplies_by_it() {
-        // ★ 2026-09-28: `[measured TU116]` the host states 0 at 0x37, and Turing's
+        // `[measured TU116]` the host states 0 at 0x37, and Turing's
         // `kgrmgrGetVeidsFromGpcCount_46f6a7` reads nothing. The other two zeros stay refused.
         let turing = GrInfoReaders {
             veid_step_size: false,

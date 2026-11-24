@@ -622,7 +622,7 @@ fn a_refused_unmap_does_not_leave_the_other_maps_live() {
     assert_eq!(unmap_every::<u64>(&[1, 2], |_| Ok(())), Ok(()));
 }
 
-/// ★ 2026-10-19 (Windows run 3017, token 0x806): a kernel copy-engine ring that has been idle since
+/// A kernel copy-engine ring that has been idle since
 /// birth sees GP entry 34 carry `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA` on subchannel 4 with no
 /// `SET_OBJECT` anywhere before it. Without the ring's own CE class the ring is refused at gp 34
 /// (`NoCeObject`; the device then declares the kernel channel DEAD and poisoned). With it — the
@@ -742,7 +742,7 @@ fn a_kernel_ce_ring_with_its_class_still_refuses_what_the_table_does_not_name() 
     );
 }
 
-/// ★ 2026-11-12 (energy-04, PC): the same ring shape as run 3017 with the energy-04 words
+/// The same ring shape as run 3017 with the energy-04 words
 /// (semaphore VA `0x1_2023_b060`, payload `0x244a9`). A kernel CE ring that holds its host CE
 /// class retires GP 34 as one launch; without the class it is refused (killers: the class
 /// plumbing, and the ring-level refusal).

@@ -1,5 +1,5 @@
 //! ★ Per-die facts READ FROM THE HOST — the PCI identity the guest binds on and the PCIe link the
-//! device presents. Never a table row: `derive_per_die_maintain_per_family` (owner, 2026-09-13).
+//! device presents. Never a table row: `derive_per_die_maintain_per_family`.
 //!
 //! Source: the NVIDIA driver's own procfs (`/proc/driver/nvidia/gpus/<bdf>/information`, which names
 //! the device minor) to find the BDF of the GPU our session opened, then that function's sysfs.

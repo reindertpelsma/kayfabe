@@ -322,7 +322,7 @@ pub struct MemorySystemRow {
     pub lts_per_ltc_count: u32,
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 2) — which zero-sensitive readers of this
+/// Which zero-sensitive readers of this
 /// reply the guest's HAL binds. Family-free here; the composition root fills it from the family
 /// row (`kf_chip::Family::reads_memsys_ltc_slices`).
 ///

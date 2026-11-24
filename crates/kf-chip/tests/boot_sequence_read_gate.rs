@@ -63,7 +63,7 @@ fn the_fsp_rows_serve_what_they_declare() {
     );
 }
 
-/// ★ 2026-09-26: every family has a model for a discrete die (Turing's is the `_TU102` RISC-V
+/// Every family has a model for a discrete die (Turing's is the `_TU102` RISC-V
 /// layout); GA100 — Ampere on the `_TU102` HALs with no FWSEC-FRTS — is refused BY NAME.
 #[test]
 fn every_family_has_a_gsp_model_and_ga100_is_refused_by_name() {

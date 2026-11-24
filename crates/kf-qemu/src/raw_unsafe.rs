@@ -318,7 +318,7 @@ impl ReadTrapHook {
     }
 }
 
-/// ★ 2026-09-30 — the C device's `KVM_IOEVENTFD` verb (`docs/design/V3_DOORBELL_IOEVENTFD.md`):
+/// The C device's `KVM_IOEVENTFD` verb (`docs/design/V3_DOORBELL_IOEVENTFD.md`):
 /// assign (`assign` = 1) or deassign one `len`-byte `DATAMATCH` MMIO ioeventfd for `datamatch` at
 /// guest-physical `gpa`, signalling `fd`. Returns 0, or the kernel's negative errno. Thread-safe
 /// (`kvm_vm_ioctl` takes no QEMU lock); called from the channel act thread and the main loop, never
@@ -388,7 +388,7 @@ impl kf_chan::dbfast::Ioeventfd for IoeventfdHook {
     }
 }
 
-/// ★ 2026-10-03 (display step 3, `docs/design/V3_DISPLAY.md` §8) — the C device's fd-handler
+/// The C device's fd-handler
 /// verb for the broker relay: watch `fd` for readability (`read` = 1) and/or writability, or
 /// (`read` = `write` = 0) remove the handler. Called only from inside a `kf3_broker_*` entry, so
 /// on QEMU's main loop with the BQL held; always called with `(0, 0)` BEFORE Rust closes `fd`.
@@ -449,7 +449,7 @@ impl kf_broker::Host for BrokerHooks {
     }
 }
 
-// ── ★ ABI 23 (2026-10-08, `OWNER_RULINGS.md` §V; `docs/design/V3_DISPLAY.md` §8.20): the C
+// ── ★ ABI 23: the C
 // device's input and console-cursor verbs — `kf_broker::InputSink` and `kf_broker::CursorSink`
 // for QEMU. Each is ONE QEMU call (or two: QEMU's wheel is a button press and release); every
 // decision is kf-broker's. All are called only from inside a `kf3_broker_*` or

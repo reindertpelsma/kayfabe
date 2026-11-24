@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`, finding BF-1): what one
+//! (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`, finding BF-1): what one
 //! refused guest-kernel CE launch may cost the host before it is refused.
 //!
 //! `tmode::bind` refuses a launch whose operand needs more than [`MAX_PIECES`] pieces, and a

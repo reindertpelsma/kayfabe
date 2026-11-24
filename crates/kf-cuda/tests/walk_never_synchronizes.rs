@@ -198,7 +198,7 @@ fn a_store_sync_cannot_be_moved_to_ack() {
     assert!(!synchronizations_are_scoped(&src));
 }
 
-/// ★ 2026-09-25 (owner design, COMMIT-ON-ACK): the old whole-generation `ack` — which turned
+/// The old whole-generation `ack` — which turned
 /// reports into deltas against the previous WALK, a snapshot of guest tables — stays gone. The new
 /// `ack` carries one verdict PER RUN and only STAGES it: the next walk's first graph node commits
 /// it. ⇒ `ack` itself makes no driver call (no launch, no copy) on the VA thread.

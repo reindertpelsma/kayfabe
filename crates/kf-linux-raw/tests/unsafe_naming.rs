@@ -15,7 +15,7 @@
 //! The keyword half — *every `.rs` file using the keyword is named `*_unsafe.rs`* — is already
 //! gated, in `scripts/ci_gates.sh`'s **Unsafe-surface gate**, whose rationale is that an
 //! auditor must be able to enumerate that whole surface with `ls`. `[measured]`
-//! 2026-08-06: it holds exactly, 13 files each side.
+//! It holds exactly, 13 files each side.
 //!
 //! ⚠ A first cut of this file re-implemented that scan in Rust and **tripped that very gate on
 //! its own detection strings** — a duplicate that also broke the thing it duplicated. It is

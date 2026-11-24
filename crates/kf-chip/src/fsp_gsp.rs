@@ -261,7 +261,7 @@ const HWCFG2_BR_PRIV_LOCKDOWN: u64 = 1 << 13;
 /// `NV_PFALCON_FALCON_DMATRFCMD_IDLE` is `1:1`
 /// (`ogkm-580: turing/tu102/dev_falcon_v4.h:79`); reported `IDLE=TRUE|FULL=FALSE`.
 const DMATRFCMD_IDLE: u64 = 0x2;
-/// ★ 2026-10-14: `NV_PRISCV_RISCV_CPUCTL_STARTCPU` is `0:0`, `_TRUE` = 1 (`ogkm-595.84: hopper/gh100/dev_riscv_pri.h:59-61`;
+/// `NV_PRISCV_RISCV_CPUCTL_STARTCPU` is `0:0`, `_TRUE` = 1 (`ogkm-595.84: hopper/gh100/dev_riscv_pri.h:59-61`;
 /// the register itself, `0x388` from the RISC-V base, is in the 580 `hwref` table). The RM's own start of the GSP's RISC-V core.
 const RISCV_CPUCTL_STARTCPU: u64 = 0x1;
 /// `NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT` is `7:7`
@@ -452,7 +452,7 @@ impl BootSequence for FspBoot {
                 return BootSteps::none();
             }
             PFSP_QUEUE_HEAD => {
-                // ⊘ 2026-09-26: only a COT packet boots the GSP. RM sends other NVDM packets over
+                // Only a COT packet boots the GSP. RM sends other NVDM packets over
                 // the same channel before it (the Blackwell clock-boost CAPS_QUERY and CLOCK_BOOST,
                 // `kfspCheckForClockBoostCapability_GB100` / `kfspSendClockBoostRpc_GB100`), and
                 // the window keeps an earlier packet's bytes past a shorter one's end — so a
@@ -787,7 +787,7 @@ impl GspModel for FspGspModel {
             }
             // Write-only from our side.
             GspReg::GspQueueHead(_) => 0,
-            // ★ 2026-10-14: the GSP core is out of reset until the guest writes `RESET_ASSERT`
+            // The GSP core is out of reset until the guest writes `RESET_ASSERT`
             // (`answer_on_store` answers each write with the status that follows it).
             GspReg::GspFalconEngine => obs
                 .falcon_engine
@@ -809,7 +809,7 @@ impl GspModel for FspGspModel {
             GspReg::GspFalconDmatrfcmd => Some(DMATRFCMD_IDLE),
             #[allow(clippy::cast_possible_truncation)]
             GspReg::GspRiscvBcrCtrl => Some(u64::from(written as u32) | BCR_CTRL_VALID),
-            // ★ 2026-10-14: the reset FSM completes at once — what the guest wrote in `RESET`, and the
+            // The reset FSM completes at once — what the guest wrote in `RESET`, and the
             // `RESET_STATUS` it ends in (`ASSERT` -> `ASSERTED`, `DEASSERT` -> `DEASSERTED`). The emulated GSP
             // has nothing behind it to reset before its boot command, so no FSM state is kept here.
             GspReg::GspFalconEngine => Some(engine_answer(written)),
@@ -905,7 +905,7 @@ mod hwref_check {
                 "{g:?}"
             );
         }
-        // ★ 2026-10-14: the reset handshake's register and field encodings, per die group.
+        // The reset handshake's register and field encodings, per die group.
         for g in SERVED {
             assert_eq!(
                 PGSP + FALCON_ENGINE,

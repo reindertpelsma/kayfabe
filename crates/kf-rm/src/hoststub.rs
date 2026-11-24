@@ -1,7 +1,7 @@
-//! ★ 2026-10-07 (Windows Code43): the host-owned stub — `NV_OK` with zeroed params for the
+//! The host-owned stub — `NV_OK` with zeroed params for the
 //! generated set of [`kf_abi::hoststub`], for a guest whose declared identity is the cell's
 //! Windows build. Owner ruling §S as **ASSUMED from the owner's 2026-10-07 statement that
-//! privileged non-compute actions can be stubbed; owner to confirm** (`docs/OWNER_RULINGS.md` §S).
+//! privileged non-compute actions can be stubbed; owner to confirm**.
 //!
 //! Why this one control and nothing else: the bisect of runs 38-41
 //! (`traces/windows_code43_walls_20261007/README.md`, "Run41 result") measured that answering
@@ -10,7 +10,7 @@
 //! body; the guest declares zero params bytes for it (measured, `kf_abi::hoststub`), so a
 //! zero-filled answer carries no invented value — only the status. That status is the stub.
 //!
-//! ★ 2026-10-31 (provenance fix): the answer line no longer prints the control's export flags
+//! The answer line no longer prints the control's export flags
 //! (a value that came from a closed binary and that nothing branched on); the cell no longer
 //! carries it. The answer rule is unchanged: `NV_OK` only for the cell's id at exactly its
 //! declared params size, never for a serialized envelope.
@@ -184,7 +184,7 @@ mod tests {
         assert!(p.respond(&control(&w, 0x2081_010d, &[], 0)).is_none());
     }
 
-    /// ★ 2026-10-31 (provenance fix): the Windows-cell source tags are the published constant
+    /// The Windows-cell source tags are the published constant
     /// table's own grammar (`consttab`): the same parser accepts every one of them.
     #[test]
     fn the_windows_cell_tags_parse_under_the_constant_table_grammar() {
@@ -206,7 +206,7 @@ mod tests {
         assert!(n >= 8, "only {n} rows");
     }
 
-    /// ★ 2026-10-31: the answer rule is exactly the one the generated table gave - the declared
+    /// The answer rule is exactly the one the generated table gave - the declared
     /// size must equal the cell's `param_size`, the id must be the cell's, and the reply is
     /// `NV_OK` with the params zeroed; nothing reads the dropped export fields.
     #[test]

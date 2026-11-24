@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the display [`Engine`] against
+//! (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the display [`Engine`] against
 //! hostile pushbuffers, GPU-free.
 //!
 //! Every word a display channel's pushbuffer holds is the guest kernel's to choose, and so are `PUT`,

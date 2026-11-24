@@ -45,11 +45,11 @@ pub(super) struct Cell<T = Record> {
     pub idx: u32,
     pub retry: AtomicBool,
     canceled: AtomicBool,
-    /// ★ 2026-10-14 (`kf_chan::user_loop`): the relay waits for private-ring progress only a look
+    /// The relay waits for private-ring progress only a look
     /// can find (mirrors `Pump::wait`, written under the record lock, read by the spin / backstop
     /// peeks without it).
     waiting: AtomicBool,
-    /// ★ 2026-10-20 (owner): the relay holds an obligation NO registered wake source announces (`kf_chan::user_loop::Obligation::Popped` /
+    /// The relay holds an obligation NO registered wake source announces (`kf_chan::user_loop::Obligation::Popped` /
     /// `Lagging`): the worker must not block while any relay has this set (written under the record lock, read without it).
     unannounced: AtomicBool,
     /// MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`): when a turn or a look last touched this relay (`userstrand::now_ns`; 0 = never). Written only with the
@@ -428,7 +428,7 @@ fn user_ring_class_admitted(class: u32) -> bool {
 /// of the birth admission ([`source_declaration`]), and the route's condition ([`ring_relay_route`])
 /// — one decision, so a routed channel is never refused at its birth.
 ///
-/// ★ 2026-10-24 (GB205 round B1n, lease 57472433): the relay's turn learns its fetch credit from the
+/// The relay's turn learns its fetch credit from the
 /// private USERD `GP_GET` (`user_storage::Storage::gpu_get`) and its gate / batch proof from the
 /// private USERD `REFERENCE` its marker's `SET_REFERENCE` writes (`Storage::gpu_reference`). Both are
 /// words the ENGINE writes back. A family whose engine writes no USERD word
@@ -450,7 +450,7 @@ pub(super) fn ring_relay_serves(family: kf_chip::Family, class: u32) -> Result<(
     if !family.engine_writes_userd_gp_get() {
         return Err("USER_RING_FAMILY_WRITES_NO_USERD");
     }
-    // 2026-11-01 (Blackwell-into-next merge): next's class gate (2026-10-27, TU106 Windows 580.88)
+    // next's class gate (2026-10-27, TU106 Windows 580.88)
     // is the LAST gate, after the family's own reasons, so a Blackwell channel is still refused
     // BY ITS NAME (`USER_RING_FAMILY_WRITES_NO_USERD`) rather than as an unknown class.
     if !user_ring_class_admitted(class) {
@@ -985,7 +985,7 @@ impl ChanPlane {
                 rings.remove(&token);
                 last = rings.is_empty();
             }
-            // ★ 2026-10-14: the event loop's counters whenever the last relay goes (bounded: the first
+            // The event loop's counters whenever the last relay goes (bounded: the first
             // 16 times, then each power of two) -- the device may never see `stop` (a guest power-off).
             if last {
                 let n = self
@@ -1148,7 +1148,7 @@ mod tests {
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
 
-    /// ★ 2026-10-27 (TU106 rental 57882297, Windows 580.88): the Windows USER ring relay refused
+    /// The Windows USER ring relay refused
     /// every Turing channel (`USER_RING_SOURCE_DECLARATION`, class `0xc46f`), so `cuCtxCreate` and
     /// `D3D11CreateDevice` failed on a Code-0 device. The GPFIFO entry (8 bytes), `GP_GET` and
     /// `GP_PUT` in `USERD` and the doorbell token are the Volta-and-later layout shared by
@@ -1193,7 +1193,7 @@ mod tests {
 
     #[test]
     fn user_ring_source_accepts_generated_non_ada_channels() {
-        // ★ 2026-10-24: narrowed from the 2026-10-19 family admission (871c38fad). A family whose
+        // Narrowed from the 2026-10-19 family admission (871c38fad). A family whose
         // engine writes no USERD word (Blackwell) is refused by name: the private ring's marker and
         // fetch credit read engine-written USERD words (`ring_relay_serves`).
         for family in kf_chip::Family::ALL {
@@ -1201,7 +1201,7 @@ mod tests {
                 continue;
             }
             for &class in family.classes().channel_gpfifo {
-                // ★ 2026-11-01 (merge with next's 2026-10-27 class gate): the private ring also needs
+                // The private ring also needs
                 // the class to be one the relay admits (`user_ring_class_admitted`: c46f, c56f), so
                 // Hopper's c86f stays declined as on next; Blackwell keeps its own, more precise name.
                 let want = if !family.engine_writes_userd_gp_get() {
@@ -1304,7 +1304,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-24, GB205 round B1n (lease 57472433, arm `on_urt`, B1 binary cb80cbd29): the first DWM
+    /// GB205 round B1n (lease 57472433, arm `on_urt`, B1 binary cb80cbd29): the first DWM
     /// process's two Windows user-work channels as the kf3 log declared them -- GR
     /// `0xc1d00126:0xff04000b` (class `0xca6f`, engine 1, GPFIFO `0x4000000` x 8192) and CE
     /// `0xc1d00129:0xff04000c` (class `0xca6f`, engine `0x10`, GPFIFO `0x4036000` x 8192), each with a

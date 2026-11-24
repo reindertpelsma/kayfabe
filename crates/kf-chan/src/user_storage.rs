@@ -581,7 +581,7 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
     }
 
-    /// ★ 2026-10-14 — **the marker** (`crate::user_loop`, `crate::user_gate::Marks`): a private 16-byte
+    /// **The marker** (`crate::user_loop`, `crate::user_gate::Marks`): a private 16-byte
     /// segment `[SET_REFERENCE value, NON_STALL_INTERRUPT 0]` in the read-only mapping, one cell per
     /// ring `slot` (so the value each marker writes is its own and a later marker never rewrites the
     /// bytes of an earlier one still in flight), entered as a `LEVEL_SUBROUTINE` main entry.
@@ -622,7 +622,7 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))
     }
 
-    /// ★ 2026-10-14 — the SYNC_WAIT gate's witness when the guest stream CARRIES a packet into the
+    /// The SYNC_WAIT gate's witness when the guest stream CARRIES a packet into the
     /// gated entry (RETIRED 2026-10-14: a control entry proves nothing -- `crate::user_gate::Witness::None`): a CONTROL `NOP` GP entry (`LENGTH` 0,
     /// `OPCODE_NOP`, `SYNC_PROCEED`; all 64 bits zero). It fetches no pushbuffer byte, so the
     /// packet the PBDMA is parsing continues untouched into the guest's next segment. It cannot

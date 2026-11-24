@@ -174,7 +174,7 @@ pub struct QueueBinding {
     /// `ogkm-610: :1436`, `ogkm-580: :1479`). The allowlist it guards has eight entries at
     /// 610 and six at 580 — see the crate-level note above.
     peer_read_at_bind: u32,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
+    /// (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
     /// ([`Transition::E15`]) — the peer's status-queue read pointer when the saved binding was
     /// restored. A resume does not re-link (the guest's `rxReadPtr` continues where it stopped,
     /// `ogkm-580: kernel_gsp_tu102.c:563-570`), so "the guest consumed `GSP_INIT_DONE`" is "the
@@ -262,12 +262,12 @@ pub enum Transition {
     E10,
     /// `device_reset` → `Cold`, unbound, every counter zero.
     E11,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
+    /// (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
     /// life a PM-transition suspend ended ([`GspFsm::wake_reset`]): every register back to
     /// power-on (`Cold`), and the saved GSP-RM state — the queue binding, both cursors and both
     /// sequence numbers — kept, as Booter Unload's suspend/resume data keeps it on silicon.
     E14,
-    /// ★ 2026-10-14 — the resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
+    /// The resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
     /// saved binding restored **without a publish** (no header write, no re-link, sequence numbers
     /// continue), `GSP_INIT_DONE` posted into it.
     E15,
@@ -548,7 +548,7 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
             );
             true
         }
-        // ⊘ 2026-11-13: a succeeded act posts the reply exactly as the link built it. The removed
+        // A succeeded act posts the reply exactly as the link built it. The removed
         // `KF3_GSS_NATIVE` experiment's reply patch (host bytes into the guest's reply) is gone.
         Some(0) => true,
         Some(status) => {
@@ -909,7 +909,7 @@ pub struct GspFsm {
     refusals: crate::refusal::RefusalLedger,
     /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
     bcr_ctrl: Option<u32>,
-    /// ★ 2026-10-14: the guest's last `NV_PGSP_FALCON_ENGINE` write ([`GspReg::GspFalconEngine`]).
+    /// The guest's last `NV_PGSP_FALCON_ENGINE` write ([`GspReg::GspFalconEngine`]).
     falcon_engine: Option<u32>,
     /// ★ w828: how the life that is running now STOPS after fn-47 — latched from the regime that
     /// STARTED the processor ([`BootStep::StartProcessor`]), because the FSM holds no model
@@ -1016,14 +1016,14 @@ pub struct GspFsm {
     /// Found by B4's drain-on-publish: before it, the first *doorbell* after a re-acquire
     /// hit exactly the same wall, but no test rang one.
     cmd_read_ptr: u32,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
+    /// (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
     /// **inert** when the life entered `Halted` from `Suspending` (E2/E4/E13): nothing reads guest
     /// RAM through it (a doorbell while `Halted` is still [`Transition::E8`], zero reads). Only a
     /// resume ([`Transition::E15`]) of a life whose fn 47 was a PM transition
     /// ([`GspFsm::note_pm_suspend`]) brings it back; a cold boot (E1), a publish (E6) or a reset
     /// (E11) discards it.
     suspended: Option<QueueBinding>,
-    /// ★ 2026-10-14 — the fn 47 that ended this life said `bInPMTransition` (and not GC6): the
+    /// The fn 47 that ended this life said `bInPMTransition` (and not GC6): the
     /// device decodes the body and tells the FSM ([`GspFsm::note_pm_suspend`]).
     pm_suspend: bool,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
@@ -1246,7 +1246,7 @@ impl GspFsm {
         Transition::E11
     }
 
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
+    /// (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
     /// transition** (`bInPMTransition`, not GC6), decoded by the device from the body. Recorded
     /// only while that fn 47's suspend is current: `Suspending` (the falcon regime, before its
     /// teardown STARTCPU) or `Halted` with the binding already saved (a regime whose firmware
@@ -1260,7 +1260,7 @@ impl GspFsm {
         current
     }
 
-    /// ★ 2026-10-14 — a saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
+    /// A saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
     /// its binding is kept ([`GspFsm::note_pm_suspend`]).
     #[must_use]
     pub fn resumable(&self) -> bool {
@@ -1423,7 +1423,7 @@ impl GspFsm {
         if w.reg == Some(kf_arch::gsp::GspReg::GspRiscvBcrCtrl) {
             self.bcr_ctrl = Some(val as u32);
         }
-        // ★ 2026-10-14: likewise the GSP reset FSM's register (`GspReg::GspFalconEngine`).
+        // Likewise the GSP reset FSM's register (`GspReg::GspFalconEngine`).
         if w.reg == Some(kf_arch::gsp::GspReg::GspFalconEngine) {
             self.falcon_engine = Some(val as u32);
         }
@@ -1499,7 +1499,7 @@ impl GspFsm {
             BootStep::BootArgsLo(v) => {
                 self.mailbox_lo = v;
                 self.boot_args_seen.0 = true;
-                // ★ 2026-10-24 (B1n, GB205 + Windows 580.88): the suspend sentinel lives in MAILBOX0,
+                // The suspend sentinel lives in MAILBOX0,
                 // and this write replaced it — a register holds what was last written. Left set until
                 // the start, the FMC-direct route's lockdown poll (`_kgspLockdownReleasedOrFmcError`,
                 // `ogkm-580.65.06: kernel_gsp_gh100.c:491-535, 944-948`), which runs before the drainer has
@@ -1584,7 +1584,7 @@ impl GspFsm {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
-                // ★ 2026-10-14: FWSEC runs only on a NORMAL boot (`ogkm-580:
+                // FWSEC runs only on a NORMAL boot (`ogkm-580:
                 // kernel_gsp_tu102.c:514-532`) — the guest is not resuming the saved life.
                 self.suspended = None;
                 self.pm_suspend = false;
@@ -1606,7 +1606,7 @@ impl GspFsm {
     /// Enter `Halted`: WPR2 down and — the load-bearing half — **the binding dropped by
     /// value**.
     fn enter_halted(&mut self) {
-        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
+        // (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
         // INERT, for a resume; nothing reads through it until [`Transition::E15`]. Entering from
         // any other phase saves nothing new and leaves a saved life as it is (a Booter Unload
         // after the teardown STARTCPU already halted it changes nothing about it).
@@ -1946,7 +1946,7 @@ impl GspFsm {
             peer_read_at_bind,
             resume_mark: None,
         });
-        // ★ 2026-10-14: a publish is a new queue instance — a suspended life is not resumed.
+        // A publish is a new queue instance — a suspended life is not resumed.
         self.suspended = None;
         self.pm_suspend = false;
         self.init_done_posted = false;
@@ -2387,7 +2387,7 @@ impl GspFsm {
             let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
             w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize
         } else {
-            // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
+            // (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
             // outgrew one message — the suspend buffer GSP-RM's heap is saved into
             // (`_fbsrInitGsp`, `ogkm-580: fbsr_gm107.c:104-138`). The layout is the version's
             // generated MemoryList contract; no contract, no join.
@@ -2437,7 +2437,7 @@ impl GspFsm {
                         self.abi.rpc.codes.continuation_record,
                     )
                 } else {
-                    // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
+                    // One reply, at the head, carrying only the status the guest reads.
                     vec![OutgoingRpc {
                         payload: Vec::new(),
                         ..full.clone()
@@ -3162,7 +3162,7 @@ impl GspFsm {
         // waiting for it would keep the FSM out of `Running` for exactly as long as it
         // keeps answering.
         let drained = match b.resume_mark {
-            // ★ 2026-10-14: a resumed binding was never re-linked — the pointer continues from
+            // A resumed binding was never re-linked — the pointer continues from
             // where the suspend left it, so moving off that value is consuming `GSP_INIT_DONE`.
             Some(mark) => peer_read != mark,
             None => linked && peer_read != 0,
@@ -3961,7 +3961,7 @@ mod device_reset_from_every_phase {
     const OFF_START: u64 = 0x10;
     const OFF_FWSEC: u64 = 0x18;
     const OFF_FW_LOADED: u64 = 0x20;
-    /// ★ 2026-10-14: the resume's Booter Load ([`BootStep::FirmwareResume`]).
+    /// The resume's Booter Load ([`BootStep::FirmwareResume`]).
     const OFF_FW_RESUME: u64 = 0x28;
     const OFF_TEARDOWN: u64 = 0x30;
     const OFF_ARGS_LO: u64 = 0x40;
@@ -5056,7 +5056,7 @@ mod device_reset_from_every_phase {
         second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, false);
     }
 
-    /// ★ 2026-10-24 (B1n, GB205 + Windows 580.88; the composed replay is
+    /// (B1n, GB205 + Windows 580.88; the composed replay is
     /// `kf-chip/tests/fsp_second_life.rs`) — the suspend sentinel lives in `MAILBOX0`, and the NEXT life's
     /// own `MAILBOX0` write (the FMC-args low half, `_kgspBootstrapGspFmc_GH100`) replaces it, as a register
     /// holds what was last written. Before this, only the start cleared it, and the guest's lockdown poll —
@@ -5213,7 +5213,7 @@ mod device_reset_from_every_phase {
 
     // ---- 3. S3: a PM-transition suspend, the platform's wake reset, the resume ---------------
     //
-    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
+    // (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
     // `KGSP_BOOT_MODE_SR_RESUME` found the GSP Cold after the wake (`device reset #2 … Halted ->
     // Cold`), its Booter Load changed nothing, and `kgspBootstrap_TU102` returned NOT_READY (0x55).
     mod s3_resume {
@@ -5794,7 +5794,7 @@ mod device_reset_from_every_phase {
         }
     }
 
-    /// ★ 2026-10-31 — **the SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
+    /// **The SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
     ///
     /// Ported from the retired `kayfabe-completion` `DeliveryPlane` tests
     /// (`drain_gate_batches_across_procs_without_serializing`,
@@ -5970,7 +5970,7 @@ mod device_reset_from_every_phase {
         }
     }
 
-    /// ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the command queue is
+    /// (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the command queue is
     /// guest memory, so every byte the drain reads is the guest kernel's to choose. A running device,
     /// then a hostile guest: well-formed messages with any function and payload (multi-element and
     /// large ones included), the same with bytes flipped and the checksum made good again (so the

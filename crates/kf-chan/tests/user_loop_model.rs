@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — **Exhaustive interleaving model of the USER-ring relay's worker loop**
+//! **Exhaustive interleaving model of the USER-ring relay's worker loop**
 //! (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`). GPU-free, deterministic, NO wall-clock time
 //! anywhere: a "timer" is just a scheduler step that the configuration may forbid.
 //!
@@ -2419,7 +2419,7 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
     assert!(lost.labels.contains("w:wake(backstop)"));
 }
 
-/// ★ DOORBELL CONTRACT (owner, 2026-10-17). `GP_PUT` ahead of the LAST doorbell is normal and
+/// ★ DOORBELL CONTRACT. `GP_PUT` ahead of the LAST doorbell is normal and
 /// nothing is owed for it: only a doorbell announces `GP_PUT`. With timers that fire and the
 /// backstop armed, the safety net never reads `GP_PUT` and never rings an idle relay (no
 /// `PUT_POLL`), and the design stays live.

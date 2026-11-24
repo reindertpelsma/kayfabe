@@ -444,7 +444,7 @@ pub enum BootStep {
     /// generic bootloader descriptor's `dataDmaBase` written through the PIO port (TU10x
     /// `BOOT_WITH_LOADER`).
     FwsecCommand(u64),
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the RM firmware was loaded while no boot
+    /// (`docs/design/V3_S3_RESUME.md`) — the RM firmware was loaded while no boot
     /// was in progress (the processor not started, the protected region down). On a device whose
     /// GSP-RM state a PM-transition suspend saved, this is the **resume**: the FSM restores the
     /// saved queue binding (no publish, sequence numbers kept) and posts `GSP_INIT_DONE` into it.
@@ -797,7 +797,7 @@ pub trait BootSequence: Send + Sync {
     ///   `PDB_PROP_GPU_PREINITIALIZED_WPR_REGION`.
     fn after_suspend(&self) -> AfterSuspend;
 
-    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`) — **is the [`BootStep::PublishBootArgs`] address
+    /// (`V3_FAMILY_PORT_BLACKWELL.md`) — **is the [`BootStep::PublishBootArgs`] address
     /// the LibOS region array, or a structure that POINTS at it?** `None` (the default) = the
     /// array itself: the falcon regime's `MAILBOX0/1` carry `pLibosInitArgumentsMemdesc`'s address.
     /// `Some(off)` = a little-endian `u64` at `address + off` is the array's address.

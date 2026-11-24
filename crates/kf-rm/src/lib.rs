@@ -164,13 +164,13 @@ pub struct ObjectLinks {
     /// `docs/design/V3_DISPLAY.md` §4.11.4): fn 72's kept body, the BAR1 aperture and — with
     /// `gop=on` — the boot framebuffer's size. `None` serves the board's region table, as before.
     pub console: Option<staticinfo::ConsoleSeat>,
-    /// ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile — the `windows-support`
+    /// The Windows support profile — the `windows-support`
     /// property and the guest's declared identity ([`winprofile`]). `Default` is the property ON with
     /// nothing declared: the Windows behaviours below are then reachable by a guest that declares the
     /// measured Windows build at fn 1, and by no other. Shared by `Clone`, so the device's display and
     /// memory planes read the same declaration the chain records.
     pub windows: winprofile::WindowsProfile,
-    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization` device
+    /// The `report-utilization` device
     /// property. `Some` seats [`utilization::UtilizationPolicy`], which answers the GPU-utilisation controls from
     /// a cache of one fixed host read; `None` (the property off, and the `Default`) seats nothing, so those
     /// controls reach the ledger and are refused, exactly as before the feature existed.
@@ -348,7 +348,7 @@ impl ReselectAtFn1 {
 
     /// Decide at fn 1. Returns what happened, for the log and for tests.
     pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
-        // ★ 2026-10-04 (v3-windows, C2): a Windows build is keyed as the driver-matrix tag whose
+        // A Windows build is keyed as the driver-matrix tag whose
         // Windows twin it is (kf_abi::windows_twin); a tag is keyed as itself.
         let Ok(r) = kf_abi::guestsysinfo::ReportedDriver::decode(payload) else {
             return Reselection::Kept;
@@ -540,7 +540,7 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
-    // ★ 2026-11-15 (review of PR #438, F1): a NEW chain is a NEW guest life — a device reset rebuilds it
+    // A NEW chain is a NEW guest life — a device reset rebuilds it
     // (`reset_life`), and so does the fn-1 re-selection — and every per-life link (the channel link's
     // identity above all) starts undeclared. The profile is shared with planes that live outside the chain
     // (the display and memory planes), so its declaration is cleared HERE, with the chain it belongs to:
@@ -548,7 +548,7 @@ pub fn served_chain(
     // guest that boots Linux or only the basic display adapter). The guest's fn 1, which follows, declares
     // its own identity through the observer seated below.
     windows.declare(false);
-    // ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile. The identity observer is
+    // The Windows support profile. The identity observer is
     // seated FIRST, so every Windows-gated link below sees the declaration of the SAME fn 1 that
     // reaches it (a `CommandObserver` cannot answer: seating it first changes no reply). With the
     // `windows-support` property off it never records anything, and every gated link below is
@@ -556,7 +556,7 @@ pub fn served_chain(
     chain.push(Box::new(kf_gsp::Observing(Box::new(
         winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
     ))));
-    // ★ 2026-11-15: software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
+    // Software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
     // identity observer refuses every allocation until the guest declares the measured Windows build.
     if windows.support()
         && let Some(policy) = objects.take()
@@ -570,7 +570,7 @@ pub fn served_chain(
         objects = Some(policy.with_sw_runlist_probe(probe));
         chain.push(Box::new(observer));
     }
-    // ★ 2026-10-07 (Windows Code43): two links that claim only their own generated ids, so their
+    // Two links that claim only their own generated ids, so their
     // place only has to be ahead of every link that might shadow them. The host-owned stub watches
     // fn1 for its Windows-build identity (`hoststub.rs`, §S ASSUMED, owner to confirm); the
     // FECS-trace query is answered "disabled" (`fecstrace.rs`). ★ 2026-11-15: the stub is part of
@@ -580,7 +580,7 @@ pub fn served_chain(
         chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
     }
     chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
-    // ★ 2026-11-17: GPU utilisation (`report-utilization`, default on): claims the GPUMON samples control and the
+    // GPU utilisation (`report-utilization`, default on): claims the GPUMON samples control and the
     // two RUSD controls, for a guest driver version that has a generated layout row; nothing is seated with the
     // property off. Ahead of `InitTablePolicy`/the ledger, which would refuse the three ids.
     if let Some(seat) = &utilization
@@ -656,7 +656,7 @@ pub fn served_chain(
             u8::from(xbar)
         );
     }
-    // ★ 2026-11-15 (was `KF3_MEMORY_LIST_PROBE`): contiguous SYSRAM descriptors backed by checked guest
+    // Contiguous SYSRAM descriptors backed by checked guest
     // RAM, for a declared Windows guest only (the policy checks the profile per command).
     if windows.support()
         && let Some(policy) = objects.take()
@@ -723,17 +723,17 @@ pub fn served_chain(
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
     chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 10]>([
-        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
+        // (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
         // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
         // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
         Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes, host.die)),
-        // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
+        // RC-recovery GET/SET and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),
-        // ★ 2026-11-18: queue priority (`VK_KHR_global_priority`): the runlist scheduling policy and the
+        // Queue priority (`VK_KHR_global_priority`): the runlist scheduling policy and the
         // two interleave-level SETs, accepted as the VM's own virtual state, never forwarded and never
         // applied on the host (`queuepriority.rs`, `docs/design/V3_QUEUE_PRIORITY.md`).
         Box::new(queuepriority::QueuePriorityPolicy::new(driver)),

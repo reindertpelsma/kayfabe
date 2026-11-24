@@ -17,7 +17,7 @@
 //! test. This file records the gap; it does NOT fix it. The public headers define no OFA method
 //! layout, so no OFA table entry may be added or aliased without an owner ruling.
 //!
-//! 2026-11-15: the list lives in `kf_chip::video_gaps` (it is also the offer filter's input: an engine
+//! The list lives in `kf_chip::video_gaps` (it is also the offer filter's input: an engine
 //! whose classes are listed is not offered to a guest that builds kernel rings on it, see that
 //! module). It is imported here as `KNOWN_GAPS`.
 use kf_abi::submit::method_header_inc;

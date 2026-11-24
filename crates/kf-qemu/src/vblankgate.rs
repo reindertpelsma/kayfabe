@@ -1,4 +1,4 @@
-//! ★ 2026-10-10 (Windows TDR hunt, shape F) — **hardware order at a vblank: latch, complete, THEN the vblank event.**
+//! **Hardware order at a vblank: latch, complete, THEN the vblank event.**
 //!
 //! On NVDisplay the window update pending for a vblank is latched AT the vblank, and the head's vblank / `LAST_DATA` event
 //! is raised after it; a driver's VSync handler therefore always reads the post-latch state (GET past the UPDATE, the

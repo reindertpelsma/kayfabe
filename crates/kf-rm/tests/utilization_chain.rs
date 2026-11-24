@@ -1,4 +1,4 @@
-//! ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, device property `report-utilization`): GPU utilisation
+//! (`docs/design/V3_UTILIZATION_FLAG.md`, device property `report-utilization`): GPU utilisation
 //! through the WHOLE served chain, flag ON and flag OFF, with a hostile guest.
 //!
 //! The claims pinned here, each by name:

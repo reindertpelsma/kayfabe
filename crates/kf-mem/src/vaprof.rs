@@ -1,4 +1,4 @@
-//! ★ 2026-11-16 (`docs/design/V3_VA_PROFILE.md`): **bounded phase profiling of the VA apply path**
+//! (`docs/design/V3_VA_PROFILE.md`): **bounded phase profiling of the VA apply path**
 //! — OBSERVATION ONLY. Nothing here decides anything; the VA manager's acknowledgements, commits,
 //! capacity limits and ordering are unchanged by it (`vasmgr::tests::profiling_*`).
 //!

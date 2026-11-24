@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 — **the Windows USER-ring lifecycle: Scan, Pointer, Window**
+//! **The Windows USER-ring lifecycle: Scan, Pointer, Window**
 //! (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`).
 //!
 //! The pure state machine the relay (`crates/kf-qemu/src/userpump.rs`), the exhaustive model
@@ -30,7 +30,7 @@ pub enum Start {
     Fresh,
 }
 
-/// ★ 2026-10-16 (PHASE 1c, second review N2). The measurement-class switch of the lifecycle, read ONCE from the
+/// . The measurement-class switch of the lifecycle, read ONCE from the
 /// environment variable [`LifecycleMode::ENV`] when a relay is created (never per turn, never required to boot; an
 /// unknown value is reported loudly and means [`LifecycleMode::Default`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

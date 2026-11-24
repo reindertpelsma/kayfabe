@@ -84,7 +84,7 @@ pub struct TrapPath<'a> {
     pub worker_wake: &'a WakeWord,
     pub drainer_wake: &'a WakeWord,
     pub ring: &'a PrivRing,
-    /// ★ 2026-09-26: doorbell value → table index, per family (`crate::tokenindex`).
+    /// Doorbell value → table index, per family (`crate::tokenindex`).
     pub index: crate::tokenindex::TokenIndex,
     /// The time-setting registers this device's timer HAL writes — refused by name on the
     /// privileged arm. `[fable w824, HIGH 2]`: the refusal used to sit on the READ path.
@@ -115,7 +115,7 @@ impl TrapPath<'_> {
     fn doorbell(&self, val: u64) -> Action {
         // ⊘ MASK, never validate (§5.1). Masking is what the hardware does with undecoded bits,
         // and it removes an error path an adversary could aim at.
-        // ★ 2026-09-26: per family (`crate::tokenindex`) — `& mask` through Hopper, runlist|chid on
+        // Per family (`crate::tokenindex`) — `& mask` through Hopper, runlist|chid on
         // Blackwell; a value naming no slot does nothing.
         let Some(tok) = self.index.of_doorbell(val as u32) else {
             return Action::None;

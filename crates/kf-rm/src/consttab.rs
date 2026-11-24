@@ -38,7 +38,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// The table as published in the repository.
 pub const TABLE_TSV: &str = include_str!("../data/measured_constants.tsv");
 
-/// 2026-10-23: privileged PRECOMP rows; each carries its source and evidence path.
+/// Privileged PRECOMP rows; each carries its source and evidence path.
 pub const PRECOMP_TSV: &str = include_str!("../data/precomp_measured.tsv");
 
 /// Which die a row answers.
@@ -406,7 +406,7 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
                     .map_err(|e| format!("line {ln}: branch {:?}: {e}", f[2]))?,
             )
         };
-        // ★ 2026-10-15: ONE stated exception to "a measurement is never a wildcard": a HOST-STATE key (`zbc.*`, the table the host's
+        // ONE stated exception to "a measurement is never a wildcard": a HOST-STATE key (`zbc.*`, the table the host's
         // physical RM installs in hardware at load) may be measured per DIE with the branch `*`, because no driver the GUEST runs
         // changes it (the guest never installs it; its branch names the GSP the guest believes it talks to). The die stays exact.
         let host_state = is_host_state_key(f[0]);

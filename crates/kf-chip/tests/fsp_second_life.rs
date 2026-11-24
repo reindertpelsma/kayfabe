@@ -1,4 +1,4 @@
-//! ★★★★★ 2026-10-24 — **the Windows GSP second life on Blackwell, replayed from the logged ordinals.**
+//! **The Windows GSP second life on Blackwell, replayed from the logged ordinals.**
 //!
 //! MEASURED (B1n, lease 57472433, GB205 RTX 5070, Windows 11 LTSC 2024, guest 580.88 keyed as 580.65.06, binary
 //! `cb80cbd29`; private capture `on_diag_pnp/vm_logs/on_diag_pnp_b1_qemu.log`):

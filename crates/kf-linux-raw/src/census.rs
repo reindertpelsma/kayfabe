@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(mine[0].magic, 0x46, "the driver magic is carried");
         assert_eq!(mine[0].size, 8, "the copy length is carried");
         assert_ne!(mine[0].errno, 0, "a REFUSAL is recorded AS a refusal");
-        // ⊘ 2026-09-28: NOT `== before + 1`. The total is process-wide, and the chardev tests issue
+        // NOT `== before + 1`. The total is process-wide, and the chardev tests issue
         // their own ioctls (`0x2A` on `/dev/null`) on other test threads, so one can land between
         // `before` and ours — measured: 1 failure in 8 full `kf-*` runs, 0 in 6 of this crate alone.
         // The property is the position, so bound it by the two snapshots around our call.
@@ -243,7 +243,7 @@ mod tests {
         let req = ioctl::readwrite(0x46, 201, 8).expect("8 bytes encodes");
         let _ = d.ioctl(req, &mut arg, &mut []);
         let off = snapshot();
-        // ⊘ 2026-09-28: at least ours (sibling tests' ioctls may also land — see (a)).
+        // At least ours (sibling tests' ioctls may also land — see (a)).
         assert!(off.total > before_off, "counted with the log off");
         assert!(
             !off.log.iter().any(|r| r.nr == 201),

@@ -181,7 +181,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// ★ 2026-10-03 (the review of `v3-gop`): the nested build is `--locked` against the
+    /// The nested build is `--locked` against the
     /// firmware's own lock, which pins kf-oprom — a path dependency whose version is the
     /// workspace's (`crates/kf-oprom/Cargo.toml`: `version.workspace = true`, as this crate's). A
     /// version bump without `cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom`

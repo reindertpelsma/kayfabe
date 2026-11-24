@@ -329,7 +329,7 @@ fn claimed() -> Vec<(u32, Vec<u8>)> {
             x if Some(x) == l.k32("NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS") => {
                 Some("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS")
             }
-            // ★ 2026-10-14: MAP_SHARED_DATA is decoded now (the vblank-count page), at its derived size
+            // MAP_SHARED_DATA is decoded now (the vblank-count page), at its derived size
             x if Some(x) == l.k32("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA") => {
                 Some("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS")
             }

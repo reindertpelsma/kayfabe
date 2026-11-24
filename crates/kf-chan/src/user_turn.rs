@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 (PHASE 1b) — **the per-entry turn of the Windows USER-ring relay**, as PRODUCTION code behind an I/O
+//! **The per-entry turn of the Windows USER-ring relay**, as PRODUCTION code behind an I/O
 //! trait (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`, review finding T1).
 //!
 //! `crates/kf-qemu/src/userpump.rs` runs this code with the real accessors ([`Io`]); the interleaving model, the
@@ -336,7 +336,7 @@ pub struct Relay {
     pub raw: u64,
     /// The `GP_PUT` value read this turn.
     pub put: u32,
-    /// ★ 2026-10-17: lazy observe (rules A and B, `crate::user_lazy`). `Relay::new` leaves both OFF; the owner opts in with
+    /// Lazy observe (rules A and B, `crate::user_lazy`). `Relay::new` leaves both OFF; the owner opts in with
     /// [`Relay::with_lazy`].
     pub lazy: Lazy,
     /// The packet the scan had open when this turn read `GP_PUT` (Scan / Window only): for the owner's

@@ -496,7 +496,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `kf-rm/tests/host_facts_query_ga106.rs::gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none`
         // (the row is the host's own reply word for word; engine 0 only).
         WantedTable::GrZcullInfo,
-        // ⚠ 2026-09-26: `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
+        // `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
         // closure limit. ★ Covered by the host's own client reply at realize
         // (`HostFacts::gr_sm_issue_rate_modifier`), engine 0 only; `[measured GB203]` libcuda's
         // `cuInit` needs the guest's client control served from it.
@@ -610,13 +610,13 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::CudartInit9064,
         WantedTable::CudartInit9A001,
         WantedTable::CudartPerfLevelInfoV2,
-        // ★ 2026-09-26 (`v3-families`): `BiosGetInfoV2` (`0x20800810`) — served from the HOST's
+        // `BiosGetInfoV2` (`0x20800810`) — served from the HOST's
         // VBIOS version so guest `nvidia-smi` shows the real one. `[measured by this test]` the
         // replay never reaches it on `cap1b`'s queue (the C never served it, so the guest's
         // `nvidia-smi` ask is not in the envelope this file judges). Its reply is pinned in
         // `kf-rm/tests/init_tables.rs::bios_get_info_v2_is_the_hosts_version_or_refused`.
         WantedTable::BiosGetInfoV2,
-        // ★ 2026-09-26 (`v3-mapfix` 56032c46): `McServiceInterrupts` (`0x20801702`) — asked only
+        // `McServiceInterrupts` (`0x20801702`) — asked only
         // by a runtime WAITER after 1 s with no interrupt (clpeak's `clFinish`), never by the cold
         // boot this capture records, so the replay cannot reach it. Refusing it forged the end of
         // the guest's wait (`kf_abi::mcintr`); its reply is pinned in

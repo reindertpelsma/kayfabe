@@ -113,7 +113,7 @@ impl PutCache {
 }
 
 // ------------------------------------------------------------------------------------------------
-// ★ 2026-10-17 production integration
+// Production integration
 
 use crate::user_lifecycle::Mode;
 

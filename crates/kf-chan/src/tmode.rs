@@ -242,7 +242,7 @@ pub struct HostSem {
     pub form: HostSemForm,
 }
 
-/// ★ 2026-10-14 — one video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
+/// One video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
 /// is resolved at bind through the placement rows and emitted by the perimeter
 /// ([`crate::tspace_unsafe::put_video_semaphore`]); the payloads are data, re-emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,7 +282,7 @@ pub enum Ir {
         /// The bytes the engine may write there.
         bytes: u64,
     },
-    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
+    /// The VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
     VideoSem(VideoSem),
     /// The guest invalidated a VA space here (a split; `None` = `PDB_ALL`).
     Invalidate {
@@ -365,7 +365,7 @@ pub struct TState {
     video_payload64: Option<(u32, u32)>,
     /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
     pub video_methods: u64,
-    /// ★ 2026-10-19 — the CE-IMPLICIT binding of a guest-KERNEL copy-engine ring: the CE class the
+    /// The CE-IMPLICIT binding of a guest-KERNEL copy-engine ring: the CE class the
     /// ring's own HOST channel holds from birth (`0` = none: a user-tier or unconfigured ring, or
     /// a class that is not a known copy-engine class). Hardware subchannels 0-4 are fixed to the
     /// channel's engine and `SET_OBJECT` is not required by any engine (public `dev_ram.ref`, as
@@ -403,7 +403,7 @@ pub struct GrConfig {
     /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
     /// refuses by name. Takes precedence over `inert_sw_subch`.
     pub deferred_api: bool,
-    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
+    /// The VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
     /// runlist and its host channel holds an object of this video class (0 = not a video ring).
     /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
     /// derived table instead of the copy engine's.
@@ -528,7 +528,7 @@ fn one(
             SubKind::Ce
         };
         c.method(st.ce_tier().map_or(0, tier_class), kind, m);
-        // ★ 2026-10-08 (owner question, run64): the T-mode path never recorded the LAUNCH_DMA words,
+        // The T-mode path never recorded the LAUNCH_DMA words,
         // so a census could not say whether a channel named a PHYSICAL operand (`SRC_TYPE` bit 12,
         // `DST_TYPE` bit 13). Count-only, as every census entry.
         if kind == SubKind::Ce && m == ce::LAUNCH_DMA {
@@ -656,7 +656,7 @@ fn one(
     Ok(())
 }
 
-/// ★ 2026-10-14 — the VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
+/// The VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
 /// decoded against the channel's video class's DERIVED table ([`crate::vtables`]). Only the
 /// semaphore rows are admitted; every other method the header names is refused by name, an offset
 /// it does not name is unclassified.

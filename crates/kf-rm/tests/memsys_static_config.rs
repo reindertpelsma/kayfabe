@@ -331,7 +331,7 @@ fn a_zero_ltc_factor_is_unencodable_because_ampere_multiplies_and_branches_on_it
 
 #[test]
 fn a_zero_slice_count_is_served_verbatim_where_no_hal_reads_it() {
-    // ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 2): `[measured TU116]` the GR litter
+    // `[measured TU116]` the GR litter
     // `ltsPerLtcCount` comes from is 0 on Turing, and only GA100/GA10x's `kmemsysIsPagePLCable`
     // reads the product. The family row decides; a zero LTC count stays refused everywhere.
     use kf_chip::Family;

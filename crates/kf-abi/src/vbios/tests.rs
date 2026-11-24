@@ -43,7 +43,7 @@ struct Parsed {
     desc_size: usize,
     /// `signaturesTotalSize = descSize - 44` (`kernel_gsp_fwsec.c:985`); 0 for V2.
     signatures_total_size: usize,
-    /// ★ 2026-09-28: the descriptor version the parser took (2 → `BOOT_WITH_LOADER`, 3 →
+    /// The descriptor version the parser took (2 → `BOOT_WITH_LOADER`, 3 →
     /// `BOOT_FROM_HS`, `kernel_gsp_fwsec.c:1058-1080`).
     desc_version: u32,
     /// `pUcode->size = RM_ALIGN_UP(StoredSize, 256)` (`:912`).
@@ -346,7 +346,7 @@ fn parse(img: &[u8]) -> Result<Parsed, ParseFail> {
     })
 }
 
-/// ★ 2026-09-28 — `s_vbiosFillFlcnUcodeFromDescV2`, transcribed (`kernel_gsp_fwsec.c:705-866`):
+/// `s_vbiosFillFlcnUcodeFromDescV2`, transcribed (`kernel_gsp_fwsec.c:705-866`):
 /// every inequality it tests, in its order, before it copies code and data into two sysmem buffers.
 fn fill_from_desc_v2(
     img: &[u8],
@@ -1348,7 +1348,7 @@ fn every_shipped_profile_carries_a_walkable_interface_table() {
     assert!(checked >= 2, "the table must exercise more than one row");
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 4) — **a V2 image for the `_TU102` HS HAL.**
+/// **A V2 image for the `_TU102` HS HAL.**
 /// The same geometry and interface table, a 60-byte V2 descriptor with no signatures, parsed by the
 /// transcription of `s_vbiosFillFlcnUcodeFromDescV2`; the DMEM the driver patches is where V3 has
 /// it, so the FRTS command lands at the offsets the device reads back (`kf_gsp::boot`).

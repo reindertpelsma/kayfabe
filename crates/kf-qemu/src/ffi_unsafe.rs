@@ -30,7 +30,7 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `kf3_display_cursor_done`) joins the broker's surface while it is unmerged — the bump is per
 /// surface reaching master, and an archive without these symbols fails to LINK with a kf3.c that
 /// calls them, never at run time.
-/// ★ 16 (2026-10-04, `v3-maxfps`, `docs/design/V3_DISPLAY.md` §8.16, `OWNER_RULINGS.md` §M): the
+/// ★ 16: the
 /// configurable frame-rate bound — [`kf3_realize`] gains `display_max_fps` after `display_broker`
 /// (whole Hz, 0 unset), and the console's on-demand refresh joins the surface
 /// ([`kf3_display_refresh`], [`kf3_display_refresh_fd`], [`kf3_display_refresh_drain`]). The
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn kf3_realize(
                 err.write("could not start the display worker thread");
                 return -1;
             }
-            // ★ 2026-10-14: the live scan-line publisher (`display=on` only).
+            // The live scan-line publisher (`display=on` only).
             if d.display.is_some()
                 && std::thread::Builder::new()
                     .name("kf3-scanline".into())
@@ -381,7 +381,7 @@ pub unsafe extern "C" fn kf3_realize(
                 err.write("could not start the scan-line thread");
                 return -1;
             }
-            // ★ 2026-11-17: the utilisation sampler (`report-utilization` on and the host has a source). It makes
+            // The utilisation sampler (`report-utilization` on and the host has a source). It makes
             // the one fixed host read; no guest request ever reaches it. Not a fail-closed service thread: if it
             // dies the snapshot ages out and the guest sees N/A.
             if d.util.is_some()
@@ -906,7 +906,7 @@ impl CheckedFrame {
     }
 }
 
-/// ★ ABI 23 (2026-10-08, `OWNER_RULINGS.md` §V; `docs/design/V3_DISPLAY.md` §8.20): one pointing
+/// ★ ABI 23: one pointing
 /// device the guest has, as the C device's pointers verb lists it (`InPointersFn`). ⊘ Replaces
 /// ABI 12's `Kf3BrokerEvent` (the per-packet event array) and `Kf3Cursor`: the C device no longer
 /// receives events to interpret — kf-broker calls its verbs ([`Kf3InputOps`]).
@@ -959,7 +959,7 @@ impl Kf3Pointer {
     }
 }
 
-/// ★ ABI 23 (`OWNER_RULINGS.md` §V): the C device's input and console-cursor verbs — QEMU's half
+/// ★ ABI 23: the C device's input and console-cursor verbs — QEMU's half
 /// of `kf_broker::InputSink` and `kf_broker::CursorSink`, handed over at [`kf3_broker_start`] and
 /// copied there (every verb must be present). The verbs' contracts are their types'
 /// (`crate::raw_unsafe`).
@@ -1144,7 +1144,7 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
 /// broker's socket (absolute, shorter than `sun_path`); `extra_uid` is the `display-broker-uid`
 /// property — `-1` none, or one more uid accepted as the broker (any other value is refused by
 /// name); `watch`/`timer` are the C device's fd-handler and timer verbs, called back only from
-/// inside the `kf3_broker_*` entries. ★ ABI 23 (`OWNER_RULINGS.md` §V, §8.20): `ops` is the C
+/// inside the `kf3_broker_*` entries. ★ ABI 23: `ops` is the C
 /// device's input and console-cursor verbs (copied here; every one must be present), called with
 /// the same `opaque` under the same rules. Returns 0, or -1 with a message (a broker that is not
 /// running yet is NOT an error: the first attempt runs from the main loop's timer, and a failed

@@ -98,7 +98,7 @@ pub struct Row {
     pub size: usize,
     /// The input words that select the answer (everything else is zero in the request).
     pub inputs: &'static [(usize, u32)],
-    /// ★ Lane C 2026-10-14: the guest's request must equal [`Row::request`] byte for byte
+    /// The guest's request must equal [`Row::request`] byte for byte
     /// (every byte not named in `inputs` zero). For controls whose request layout is unknown but
     /// whose real-driver request was MEASURED all-zero: no word is guessed to be an input, and any
     /// non-zero byte makes it a different question.
@@ -155,7 +155,7 @@ pub const ROWS: &[Row] = &[
             (0x30, 0),
         ],
     },
-    // ★★ Lane C 2026-10-14 — cudart's init gate asked of the HOST (tier 2) instead of served from
+    // cudart's init gate asked of the HOST (tier 2) instead of served from
     // one GA106 capture to every die (`crate::cudartinit` rows → `kf_rm::consttab`, now the
     // fallback). `[measured AD104 / 595.91.07, 2026-10-14, unprivileged libcudart 13.3 under the
     // nvdiff recorder, traces/constants_night_20261014/]` cudart's own requests: `0x20809009` and
@@ -179,7 +179,7 @@ pub const ROWS: &[Row] = &[
         exact: false,
         inputs: &[(0, 0), (4, 2), (8, 1), (0x18, 4)],
     },
-    // ★ 2026-11-04 (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): the Windows 580.88 guest's OWN
+    // (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): the Windows 580.88 guest's OWN
     // `0x20809064` request. MEASURED (AD102, host 595.91.07, gate run ada102p, `W343GSSREQ`, 8 of 8 lines identical): 520 B,
     // words 0..9 `{0, 3, 1, 0, 0, 0, 4, 0, 0, 0}` -- cudart's question with word 1 = 3 instead of 2. Without this row it
     // matched no row and was refused (52 of 53 calls in run ada102a). The host answers it at realize like every row here.
@@ -189,7 +189,7 @@ pub const ROWS: &[Row] = &[
         exact: false,
         inputs: &[(0, 0), (4, 3), (8, 1), (0x18, 4)],
     },
-    // ★ 2026-11-04 (die coverage, Ada): `0x2080852c`, the Windows 580.88 guest's own question. MEASURED (AD102, host 595.91.07,
+    // `0x2080852c`, the Windows 580.88 guest's own question. MEASURED (AD102, host 595.91.07,
     // gate run ada102q, `W343GSSREQ`, 6 of 6 lines identical): 1440 B, words 0..9 `{0, 0, 0x1f, 0, 0, 0, 0, 0, 0, 0}`; bytes past
     // word 9 not printed. (An all-zero exact row at this size was tried in run ada102p and never matched.) Asked of the host at
     // realize with both probes; only the bytes the host wrote are served.
@@ -207,7 +207,7 @@ pub const ROWS: &[Row] = &[
         exact: false,
         inputs: &[(0, 0), (4, 0), (8, 0), (0x0c, 0)],
     },
-    // ★★ Lane C 2026-10-14 — Windows-only GSS-legacy queries whose real-driver request is MEASURED
+    // Windows-only GSS-legacy queries whose real-driver request is MEASURED
     // all-zero (`[measured AD103 / Windows 580.88, GSP firmware 580.65.05, kfwc capture, 2026-10-14]`
     // request bodies: 0x2080852a x61, 0x20808524 x3, 0x2080a70a x3, 0x2080852e x55, 0x2080853a x3,
     // 0x2080a618 x58, 0x2080a088 6 of 12 calls) and that the host answers NV_OK to a zero request
@@ -257,7 +257,7 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[],
     },
-    // ★★ Lane C 2026-10-14 (resumed, daytime) — the SAME controls at the 595 firmware branch. Their paramsSize changed with
+    // The SAME controls at the 595 firmware branch. Their paramsSize changed with
     // the branch (the request stays all-zero): `[measured GA104 / Windows 596.51, GSP firmware 595.76, kfwc capture,
     // 2026-10-14, traces/constants_measure_20261014b/ga104_596.51/]` 0x2080852e 596 (was 528), 0x2080853a 15352 (was 1456),
     // 0x2080a618 8632 (was 8620), 0x2080853b 14320 with request word 1 = 1 (the AD103 580.88 capture issued it once at 1832);
@@ -324,7 +324,7 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[],
     },
-    // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
+    // `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
     // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
     // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
     // wrong there. Asked of the host at realize instead.
@@ -447,7 +447,7 @@ pub fn answer(answers: &[Answer], cmd: u32, params: &mut [u8]) -> bool {
 mod tests {
     use super::*;
 
-    /// ★ 2026-11-04 (die coverage, Ada): the Windows 580.88 guest's own `0x20809064` request
+    /// The Windows 580.88 guest's own `0x20809064` request
     /// (`W343GSSREQ ... words0_9=[0x0,0x3,0x1,0x0,0x0,0x0,0x4,0x0,0x0,0x0]`, AD102 gate run ada102p) is its own
     /// row: it is asked of the host at realize, and it is neither cudart's question nor the encoder's.
     #[test]
@@ -467,7 +467,7 @@ mod tests {
         assert!(!hits[0].matches(GSS_CLOCK_DOMAINS, &cudart));
     }
 
-    /// ★ 2026-11-04: the Windows 580.88 guest's `0x2080852c` request (word 2 = 0x1f) is asked; an all-zero one is not.
+    /// The Windows 580.88 guest's `0x2080852c` request (word 2 = 0x1f) is asked; an all-zero one is not.
     #[test]
     fn the_windows_852c_request_is_its_own_row() {
         let mut win = vec![0u8; 1440];

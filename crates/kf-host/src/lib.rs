@@ -134,7 +134,7 @@ pub const HOST_ABI_REFUSED: u32 = 0x4B72;
 /// ★★★ A channel host RM stamped `ADMIN` or `KERNEL` (`NVOS04_FLAGS_PRIVILEGED_CHANNEL` set in the
 /// alloc reply, or a non-`USER` privilege level) — the birth is refused by name and the channel
 /// freed (`channel::birth_privilege`). Guest-authored work runs on these channels, so every kf3
-/// host channel must be a `USER` channel (`docs/design/THE_CONSTRAINTS.md` §30; OWNER_RULINGS §P).
+/// host channel must be a `USER` channel.
 pub const PRIVILEGED_CHANNEL_REFUSED: u32 = 0x4B73;
 /// `CAP_SYS_ADMIN` could not be cleared from the calling thread's effective set for a
 /// channel-alloc call (`kf_linux_raw::capability`), so the call was not made: refused before any
@@ -535,7 +535,7 @@ pub struct HostRm {
     /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
     /// bring-up; read by no behaviour yet.
     tier: tier::HostTier,
-    /// ★ 2026-11-18: what an unmapped VA of the static guest ranges reads as in every mirror space
+    /// What an unmapped VA of the static guest ranges reads as in every mirror space
     /// allocated after it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property).
     /// `false` = [`channel::GuestVaFill::Fault`], the default.
     guest_va_zero: std::sync::atomic::AtomicBool,
@@ -1678,7 +1678,7 @@ impl HostRm {
 
     /// ★ The ONE ioctl of a CPU view — `NV_ESC_RM_MAP_MEMORY` of `h_memory[offset, offset+len)`
     /// onto a node from [`HostRm::open_view_node`]. The PRAMIN re-point's only RM call on a vCPU
-    /// (owner ruling 2026-09-25: one map + one `mmap` per window move, nothing else).
+    ///.
     ///
     /// # Errors
     /// The ioctl or RM's status (the node is dropped with the error).
@@ -2481,7 +2481,7 @@ mod display_slot_tests {
 
 #[cfg(test)]
 mod control_plan_tests {
-    //! ★★ 2026-11-18: kf-host refused 852e/853a/a618/853b by name at realize on every 595 host, so a
+    //! Kf-host refused 852e/853a/a618/853b by name at realize on every 595 host, so a
     //! guest's 595-sized F-4 question was never answered (host-ABI coverage; not a CUDA fix, see
     //! `kf_abi::hostabi` HOST_CONTROLS). The decision
     //! `raw_control` takes before its ioctl, through the real `kf_abi::hostabi` table.
@@ -2691,7 +2691,7 @@ mod control_plan_tests {
         }
     }
 
-    /// ★★ 2026-11-18 (owner: "across ALL supported versions"): every host tag of the driver matrix
+    /// Every host tag of the driver matrix
     /// (`kf_abi::generated::matrix::MEASURED`, 29 tags) x the five controls, through `control_plan`.
     /// The three lists must cover MEASURED exactly, so a new matrix tag fails here until classified.
     #[test]

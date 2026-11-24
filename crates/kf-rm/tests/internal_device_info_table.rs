@@ -706,7 +706,7 @@ fn copy_engine_fault_ids_that_are_not_one_run_are_unencodable() {
             count: 2
         }
     );
-    // ★ 2026-09-26: a floorswept LCE's slot is NOT "nobody's" — GB203 presents LCEs {0,1,4,5}
+    // A floorswept LCE's slot is NOT "nobody's" — GB203 presents LCEs {0,1,4,5}
     // with ids CE0+i = {65,66,69,70}; the gap 67/68 is CE2/CE3's by the family's dev_fault.h.
     let lce = |name, id: u32, inst: u32| {
         let mut e = synth(name, id, DEV_TYPE_ENUM_LCE, 1, 0x00c0_0000);

@@ -761,7 +761,7 @@ pub fn encode_internal_device_info_table(
     let first = lce_fault_ids[0];
     let last = lce_fault_ids[lce_fault_ids.len() - 1];
     let span = u64::from(last) - u64::from(first) + 1;
-    // ⊘ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): a GAP is legal when it is a floorswept
+    // A GAP is legal when it is a floorswept
     // LCE's own slot. `[measured GB203]` the host presents LCEs {0,1,4,5} → fault ids
     // {65,66,69,70} (`blackwell/gb202/dev_fault.h:74-79`: CE<i> = 65 + i). The ids in the gap
     // (67, 68) ARE copy-engine ids in the family's header — CE2/CE3, fused off — so RM's range

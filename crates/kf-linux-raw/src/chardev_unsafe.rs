@@ -990,7 +990,7 @@ mod tests {
     /// how a silent no-op would look.
     #[test]
     fn a_nested_pointer_is_patched_and_scrubbed_at_both_levels() {
-        // ⊘ 2026-11-13 (B-02): the nest is now the one shape `companion::RULES` covers —
+        // The nest is now the one shape `companion::RULES` covers —
         // NV_ESC_RM_ALLOC, a memory-list class, `pageNumberList` @128, `pageCount` @68 — so the
         // call reaches the kernel and the patch and scrub really run.
         let d = dev_null();
@@ -1116,7 +1116,7 @@ mod tests {
         assert_eq!(p.len() as u64, page.bytes());
         assert!(!p.is_empty());
 
-        // ⊘ 2026-11-13 (B-02): the NVOS02 shape `companion::RULES` covers — `pMemory` @24,
+        // The NVOS02 shape `companion::RULES` covers — `pMemory` @24,
         // `limit` @32 = len - 1 — so the call reaches the kernel and the patch really runs.
         let d = dev_null();
         let mut arg = [0u8; 56];

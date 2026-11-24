@@ -1,4 +1,4 @@
-//! ★★★ 2026-09-26 — **the doorbell token → token-table index, per family** (`V3_FAMILY_PORT_BLACKWELL.md` §4).
+//! **The doorbell token → token-table index, per family** (`V3_FAMILY_PORT_BLACKWELL.md` §4).
 //!
 //! The guest computes its channels' work-submit tokens itself (`kchannelCtrlCmdGpfifoGetWorkSubmitToken`
 //! never reaches the GSP), and a doorbell write carries one. Our token table is indexed by a function
@@ -123,7 +123,7 @@ impl TokenIndex {
     }
 }
 
-/// ★★★ 2026-09-30 — **the exact 32-bit value the GUEST writes to the doorbell for its channel
+/// **The exact 32-bit value the GUEST writes to the doorbell for its channel
 /// `(runlist, chid)`** (`docs/design/V3_DOORBELL_IOEVENTFD.md` §3): what a KVM `DATAMATCH`
 /// ioeventfd must equal, byte for byte, for the fast path to take that channel's doorbells.
 ///
@@ -329,7 +329,7 @@ mod tests {
         );
     }
 
-    // ---- 2026-10-31: the contracts of the retired GB202 doorbell tests ------------------------
+    // The contracts of the retired GB202 doorbell tests
     //
     // `kayfabe-chips-modules/tests/gb20x_doorbell_and_regs.rs` and the `Arch`-level half of
     // `host_classes.rs` (both archived, `archive/crates/kayfabe-chips-modules/tests/`) asserted that

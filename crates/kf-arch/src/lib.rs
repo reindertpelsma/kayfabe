@@ -792,7 +792,7 @@ pub struct CpuOperand {
 
 /// ★★★ **WHO GUARANTEES THE BYTES STAY WHERE THEY ARE**, for the duration of an operation.
 ///
-/// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant (owner, 2026-08-08)
+/// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant
 ///
 /// The first attempt at this seam added a *"not ours, refuse"* arm to the plane, and the
 /// owner corrected it against the C artifact's own measured design

@@ -13,12 +13,12 @@
 //! - **the relay seat** ([`BrokerSeat::start`] / [`BrokerSeat::ready`] / [`BrokerSeat::stop`],
 //!   QEMU's MAIN LOOP only): the C device registers the socket and a timer through the hooks it
 //!   passed, wakes the relay for socket readiness, the worker's frame eventfd and the timer.
-//!   ★ ABI 23 (`OWNER_RULINGS.md` §V, `V3_DISPLAY.md` §8.20): the [`Input`] that comes back is
+//!   ★ ABI 23: the [`Input`] that comes back is
 //!   delivered HERE by kf-broker's [`InputPolicy`] through the C device's verbs
 //!   ([`QemuSink`], kf-broker's VMM-neutral `InputSink`), and the console cursor through the same
 //!   verbs (`CursorSink`) — the C device decides nothing.
 //!
-//! - ★ **the guest's cursor** ([`BrokerSeat::cursor`], `OWNER_RULINGS.md` §O): the
+//! - ★ **the guest's cursor**: the
 //!   [`CursorShare`] the relay publishes the hover/grab mode in and the worker posts the guest's
 //!   cursor image to (`kf_broker::cursor`).
 //!
@@ -113,7 +113,7 @@ impl BrokerSeat {
         })
     }
 
-    /// ★ §8.13, ⊘ ABI 23 (`OWNER_RULINGS.md` §V), **main loop** (the console's `gfx_update`, its
+    /// ★ §8.13, ⊘ ABI 23, **main loop** (the console's `gfx_update`, its
     /// refresh answer, and each broker pump): bring QEMU's console cursor to the guest's — kf-broker
     /// decides ([`kf_broker::ConsoleCursor::apply`]) given `point` (the cursor image's top-left on
     /// the console's frame), `frame` (what the frame the console shows carries) and `now_ms` (the

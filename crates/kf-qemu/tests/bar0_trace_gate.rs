@@ -1,5 +1,5 @@
 //! ★★ The BAR0 trace mode (`KF3_BAR0_READ_TRACE`, `x-gsp-observer`) is OFF by default, and off it
-//! leaves the device exactly as it was (owner ruling 2026-10-09, `docs/OWNER_RULINGS.md` §X):
+//! leaves the device exactly as it was:
 //! BAR0's ops are `kf3_piece_ops` (the untouched vCPU functions), every shadow piece keeps ROMD
 //! (reads never exit), MSI-X stays on KVM irqfds through the vector notifiers, and no trace event
 //! or observer call is reachable.

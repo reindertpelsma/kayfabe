@@ -9,7 +9,7 @@
 //! Hostile input: the read file is operator input, the page is guest-visible. The parse is bounded
 //! (at most 1024 words, 4-aligned offsets inside the 4 KiB page, one header naming the PCI id) and the
 //! caller refuses a read whose PCI id is not the host GPU's own ([`PageRead::is_die`]): a neighbour's
-//! page is never laid over (OWNER_RULINGS §AH).
+//! page is never laid over.
 //!
 //! 2026-11-03, Blackwell Windows lane (`traces/blackwell_win_20261103/PREREG.md`).
 

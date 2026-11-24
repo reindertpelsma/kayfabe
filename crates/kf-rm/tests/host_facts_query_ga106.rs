@@ -293,7 +293,7 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
         "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}"
     );
     // ⊘ BIOS_GET_INFO_V2 was never captured — and a host that does not answer it is NOT a refused
-    // field: the version is cosmetic (coordinator, 2026-09-26). It is asked, and `None`.
+    // field: the version is cosmetic. It is asked, and `None`.
     assert!(host.asked.contains(&0x2080_0810));
     assert!(!refused.fields().contains(&"vbios_version"));
     assert_eq!(
@@ -1353,7 +1353,7 @@ fn a_host_without_the_subtree_map_control_gets_the_family_map() {
 }
 
 // =====================================================================================
-// ★ 2026-11-15 — engines with no derived method table are not offered to the guest
+// Engines with no derived method table are not offered to the guest
 // (`hostquery::HostFactsPolicy::hide_untabled_video`, run profile `KF3_WIN_HIDE_UNTABLED_VIDEO=1`)
 //
 // The guest-visible engine set of the captured GA106 host, before and after. ⚠ The replay holds no

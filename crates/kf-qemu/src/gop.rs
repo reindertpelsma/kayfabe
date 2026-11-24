@@ -351,7 +351,7 @@ mod tests {
         assert!(e.contains("not a display controller"), "{e}");
     }
 
-    /// ★ 2026-10-04 (v3-windows): `gop-efi=` — a signed copy of the embedded driver is served as the
+    /// `gop-efi=` — a signed copy of the embedded driver is served as the
     /// ROM's image; everything else is refused by name before anything is reserved.
     #[test]
     fn a_signed_copy_is_served_and_gop_efi_without_gop_is_refused() {

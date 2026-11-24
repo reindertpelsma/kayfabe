@@ -1,4 +1,4 @@
-//! ★★ 2026-10-08 — **the USERD relay's step** (`docs/design/V3_USERD_RELAY.md` §2), pure so its bounds and
+//! **The USERD relay's step** (`docs/design/V3_USERD_RELAY.md` §2), pure so its bounds and
 //! its ordering are tested without a GPU.
 //!
 //! A Passthrough twin whose USERD the host cannot adopt (a Windows per-process channel's USERD is a slot
@@ -21,7 +21,7 @@ pub struct RelayState {
     pub refused: u64,
     /// `GP_GET` write-backs made.
     pub gets: u64,
-    /// ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`, [`refresh`]): the `GP_GET` last stored into the guest's slot.
+    /// The `GP_GET` last stored into the guest's slot.
     pub guest_get: u32,
     /// Refreshes that stored a new `GP_GET` (outside a doorbell step).
     pub refreshed: u64,
@@ -129,7 +129,7 @@ pub enum Refresh {
     Refused(u32),
 }
 
-/// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.2's follow-up, `KF3_RELAY_GET_REFRESH`, default off) — **the
+/// **the
 /// `GP_GET` write-back alone, outside a doorbell**: a plain load of the engine-written `GP_GET` from the
 /// twin's USERD and, when it moved, a plain store of it into the guest's slot. Run on a host event (an
 /// engine's non-stall wake, BEFORE the guest's interrupt is raised, so the guest's handler reads the

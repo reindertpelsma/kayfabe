@@ -133,7 +133,7 @@ fn main() {
         );
         std::process::exit(3);
     }
-    // ★ Lane C 2026-10-14: `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
+    // `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
     // a 4th column of request words `off=value,...` (hex) — a measured request shape, never guessed.
     let extra_only = std::env::var("KF_PROBE_EXTRA_ONLY").as_deref() == Ok("1");
     type ProbeRow = (String, u32, Vec<u32>, Vec<(usize, u32)>);
@@ -171,7 +171,7 @@ fn main() {
         .map_err(|e| e.to_string())
         .expect("host RM session");
     println!("PROBE_SESSION driver={}", rm.driver_version());
-    // ★ Lane C 2026-10-14 (resumed): the die as the HOST states it (`MC_GET_ARCH_INFO`, the same two words kayfabe derives
+    // The die as the HOST states it (`MC_GET_ARCH_INFO`, the same two words kayfabe derives
     // `DieId` from at realize), so a rental's evidence names the die by the host's own answer, not by a PCI-id table.
     {
         let (arch, imp, _) = rm.arch_info();
@@ -183,7 +183,7 @@ fn main() {
     }
     let mut counts: std::collections::BTreeMap<&'static str, u32> =
         std::collections::BTreeMap::new();
-    // ★ Lane C 2026-10-14: `KF_PROBE_GSS_ROWS=1` asks exactly what kayfabe asks at realize — every
+    // `KF_PROBE_GSS_ROWS=1` asks exactly what kayfabe asks at realize — every
     // `kf_abi::gssreplay::ROWS` request (zero background; plus the 0xa5 background for non-exact
     // rows, as `kf_rm::hostquery::query_gss_replay` does) — and prints RM's status and how many
     // bytes the host changed. Reply bytes are not printed (unknown layouts; nothing board-specific
@@ -220,7 +220,7 @@ fn main() {
         println!("PROBE_END admin_run={admin} mode=gss_rows");
         return;
     }
-    // ★ Lane C 2026-10-14 (resumed): `KF_PROBE_ZBC=1` — the ZBC clear table of the host GPU, read-only and unprivileged:
+    // `KF_PROBE_ZBC=1` — the ZBC clear table of the host GPU, read-only and unprivileged:
     // `GET_ZBC_CLEAR_TABLE_SIZE` then `GET_ZBC_CLEAR_TABLE_ENTRY` for every index of each of the three tables, on a
     // `GF100_ZBC_CLEAR` object allocated under the subdevice exactly as kayfabe's own `rmfacts` does at realize. On an idle
     // rental the occupied entries are the defaults physical RM installs (`kf-rm/src/zbc.rs` carries a GA102 capture of
@@ -284,7 +284,7 @@ fn main() {
         println!("PROBE_END admin_run={admin} mode=zbc");
         return;
     }
-    // ★ Lane C 2026-10-14 (resumed): `KF_PROBE_SCAN=0xCMD,0xCMD:LO:HI` — which `paramsSize` does this host accept for a control?
+    // `KF_PROBE_SCAN=0xCMD,0xCMD:LO:HI` — which `paramsSize` does this host accept for a control?
     // The Windows-only GSS-legacy controls have no open header, and their size changes between firmware branches (580: 852e 528,
     // 595: 596). A zero request of every size LO..=HI step 4 (default 4..=16384) is sent to the SUBDEVICE and the sizes whose
     // status is not INVALID_ARGUMENT/INVALID_PARAM_STRUCT are printed with their status and the number of non-zero reply

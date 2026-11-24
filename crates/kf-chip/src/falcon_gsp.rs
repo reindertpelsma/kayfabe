@@ -117,7 +117,7 @@ const GSP_RISCV_IRQDEST: u64 = 0x0011_152c;
 const GSP_RISCV_BCR_CTRL: u64 = 0x0011_1668;
 /// `NV_PRISCV_RISCV_BCR_CTRL_VALID_TRUE` (0:0, `dev_riscv_pri.h:56-57`).
 const BCR_CTRL_VALID: u64 = 1;
-/// ★ 2026-09-26 — the **TU102-style** RISC-V block, bound for `TU102…TU117` **and GA100**
+/// The **TU102-style** RISC-V block, bound for `TU102…TU117` **and GA100**
 /// (`ogkm-580: g_kernel_falcon_nvoc.c`: `kflcnIsRiscvActive_TU102`, `kflcnRiscvReadIntrStatus_TU102`,
 /// `kflcnRiscvProgramBcr_f2d351`, `kflcnSwitchToFalcon_TU102` for those chips; `_GA102` for GA102+).
 /// Offsets from `ogkm-580: swref/published/turing/tu102/dev_riscv_pri.h:27-33` (identical in
@@ -422,7 +422,7 @@ impl FalconGspModel {
                 QUEUE_HEAD0 + u64::from(i) * 8
             }
             GspReg::GspQueueHead(_) => return None,
-            // ★ 2026-10-14: the `RESET_STATUS` handshake exists on the FSP generations only
+            // The `RESET_STATUS` handshake exists on the FSP generations only
             // (`kf_arch::gsp::GspReg::GspFalconEngine`); this regime's reset has no status field to wait on.
             GspReg::GspFalconEngine => return None,
         };

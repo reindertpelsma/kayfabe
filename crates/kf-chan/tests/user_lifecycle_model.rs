@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 — **Exhaustive interleaving model of the USER-ring lifecycle** (Scan / Pointer / Window,
+//! **Exhaustive interleaving model of the USER-ring lifecycle** (Scan / Pointer / Window,
 //! `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`). GPU-free, deterministic, NO wall-clock time: there is
 //! no timer step at all, so every liveness result is "with time forbidden" (G4, I6).
 //!
@@ -176,7 +176,7 @@ pub struct Cfg {
     /// PHASE 1c: the measurement-class mode (`KF3_LIFECYCLE_MODE`).
     pub mode: LifecycleMode,
     pub max_states: usize,
-    /// ★ 2026-10-17: lazy observe (rules A and B) for the relay under test. `Cfg::new` leaves it OFF unless the
+    /// Lazy observe (rules A and B) for the relay under test. `Cfg::new` leaves it OFF unless the
     /// process runs with `KF_TEST_LAZY=1` (the `lazy_*` re-run of this file's tests, see below).
     pub lazy: kf_chan::user_lazy::LazyConfig,
 }
@@ -1167,7 +1167,7 @@ fn i5_the_whole_cycle_uses_only_the_listed_transitions() {
 fn i4_a_trigger_published_before_the_reply_may_reach_the_hardware_unscanned_and_nothing_wedges() {
     // HOSTILE: the guest publishes the trigger without waiting for the reply. In some interleavings the
     // worker forwards it before the registration is visible; the hardware then executes a trigger nobody
-    // scanned (an unregistered handle: the guest's own channel resets, owner ruling 2026-10-13). The
+    // scanned. The
     // model counts it, every entry is still relayed in order, and no state is stuck.
     let script = vec![
         Op::Push(ge(0, Kind::SetObj)),
@@ -2626,7 +2626,7 @@ fn a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_s
 }
 
 // ------------------------------------------------------------------------------------------------
-// ★ 2026-10-17 lazy observe ON in the interleaving model (the relay is the production `Relay::with_lazy`)
+// Lazy observe ON in the interleaving model (the relay is the production `Relay::with_lazy`)
 
 /// `flip`, with three more Pointer entries in the first batch so that a cached `GP_PUT` is used more than once.
 fn lazy_flip(kind: Registration) -> Cfg {

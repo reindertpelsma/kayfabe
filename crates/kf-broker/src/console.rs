@@ -127,7 +127,7 @@ impl FrameCursors {
 /// ★ §8.13: the guest cursor image's top-left on the console's frame, as ONE word the display
 /// worker writes every pass and the console reads — 31-bit signed `x` and `y` (clamped to ±2^30,
 /// far outside any head) and a valid bit, so `None` is a word no point packs to. ⊘ The review of
-/// 2026-10-04: the sentinel was `u64::MAX`, which is also `(-1, -1)` packed (a crosshair with hot
+/// The sentinel was `u64::MAX`, which is also `(-1, -1)` packed (a crosshair with hot
 /// spot 11,11 at guest pointer 10,10), and the console kept a stale position there.
 #[derive(Debug, Default)]
 pub struct CursorPoint(AtomicU64);
@@ -727,7 +727,7 @@ mod tests {
         }
     }
 
-    /// ★ §8.20 (`OWNER_RULINGS.md` §V): the console cursor through the VMM-neutral sink — the
+    /// ★ §8.20: the console cursor through the VMM-neutral sink — the
     /// decisions kf3.c made (hidden for no image, a define only with its own pixels, a move only
     /// under an ABSOLUTE pointer, a part not applied handed out again) are `apply`'s now.
     #[test]

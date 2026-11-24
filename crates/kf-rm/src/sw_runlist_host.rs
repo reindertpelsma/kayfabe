@@ -6,7 +6,7 @@
 //! neither half. ⚠ The answer is a FABRICATED `NV_OK` (class (c)): the guest's runlist contents are
 //! ignored and the host scheduler decides. The text below is the 2026-10-07 task-B experiment's own.
 //!
-//! 2026-10-07 (Windows Code43, task B): the software-runlist submit treated as **host-owned
+//! The software-runlist submit treated as **host-owned
 //! scheduling**, option (b) of `traces/windows_code43_walls_20261007/README.md` ("Stop: an owner
 //! decision is needed for the software runlist"). The owner has NOT decided between (a), (b) and
 //! (c); the controller recommended (b) for one experiment, behind this flag.
@@ -19,7 +19,7 @@
 //! calls of the five Windows captures, `docs/design/tier_checks/tier2_compute_host.tsv`). The second graphics TSG of a Windows kernel
 //! client is scheduled ONLY by it.
 //!
-//! ★ 2026-10-31 (provenance fix): an earlier version of this paragraph quoted the control's
+//! An earlier version of this paragraph quoted the control's
 //! privilege flags from a closed binary's export row. That is withdrawn: nothing here depends on
 //! it, and the control is only ever answered under the guest identity and size checks below.
 //!

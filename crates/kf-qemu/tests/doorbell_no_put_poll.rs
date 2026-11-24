@@ -1,4 +1,4 @@
-//! ★ DOORBELL CONTRACT pin (owner, 2026-10-17): the relay's look (`ChanPlane::user_ring_peek_one`,
+//! ★ DOORBELL CONTRACT pin: the relay's look (`ChanPlane::user_ring_peek_one`,
 //! driven by the spin, the completion events and the BACKSTOP timer) must never read the guest's
 //! `GP_PUT`. The last doorbell covers every `GP_PUT` write before it; nothing else announces it.
 //! A structural test, because the look needs a live plane to run; the decision itself is

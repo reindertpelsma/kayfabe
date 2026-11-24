@@ -686,7 +686,7 @@ fn both_ids_of_the_page_directory_publication_answer_identically() {
     }
 }
 
-/// ★ 2026-09-26: the guest's own `BIOS_GET_INFO_V2` (`0x20800810`) is answered from the HOST's VBIOS
+/// The guest's own `BIOS_GET_INFO_V2` (`0x20800810`) is answered from the HOST's VBIOS
 /// version (so guest `nvidia-smi` shows the real VBIOS), and refused when the host gave none — never
 /// a zero version, and never an index the header does not define.
 #[test]
@@ -737,7 +737,7 @@ fn bios_get_info_v2_is_the_hosts_version_or_refused() {
     );
 }
 
-/// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE` is the HOST's row
+/// `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE` is the HOST's row
 /// for the guest's `engineID` (`[measured vfio-10 2855]` COPY2: gp 0x20, pb 0xe00), at the
 /// guest's measured layout; an engine the host gave no row for is INVALID_ARGUMENT, as the `_VF`
 /// body refuses one its table lacks (`kernel_fifo_ctrl.c:983-1008`).

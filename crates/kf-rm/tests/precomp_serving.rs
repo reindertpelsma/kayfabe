@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! 2026-10-23: production serving, exact coverage, and explicit provisional inheritance.
+//! Production serving, exact coverage, and explicit provisional inheritance.
 use kf_chip::DieId;
 use kf_disp::capsderive::{self, Derived, Die, HostFacts, Tier};
 use kf_disp::regs::Regs;

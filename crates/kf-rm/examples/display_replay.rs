@@ -50,7 +50,7 @@ fn main() {
     .expect("a measured driver version");
     let mut link = kf_rm::display::DisplayPolicy::new(driver, &kf_chip::display::ADA)
         .offering_display_sw(false);
-    // ★ 2026-11-15: the echo probe is a Windows-profile link now (no env flag); this replay tool keeps its own switch.
+    // The echo probe is a Windows-profile link now (no env flag); this replay tool keeps its own switch.
     let probe = std::env::var("KF3_DISPLAY_CTRL_PROBE").as_deref() == Ok("1");
     let private = kf_rm::display_ctrl_probe::private_enabled();
     let stdin = std::io::stdin();

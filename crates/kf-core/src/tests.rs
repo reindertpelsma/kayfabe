@@ -1375,7 +1375,7 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
 
 #[test]
 fn a_hostile_guest_past_its_channel_budget_is_refused_by_name_per_runlist() {
-    // ★ 2026-10-11 (channel budget): the cap is per RUNLIST and equals the count the guest was told.
+    // The cap is per RUNLIST and equals the count the guest was told.
     // A guest asking for budget+1 is refused loudly (cap and asked in the refusal, counted), another
     // runlist's share is untouched, and a free gives the slot back.
     let vmm = plane::Vmm::new();

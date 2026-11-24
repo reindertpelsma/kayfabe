@@ -19,7 +19,7 @@
 //! refused by name, never answered with a fallback to mirror windows (that would reopen S1-21), and
 //! the build never runs on a birth path (it pins and maps inside a held reply).
 //!
-//! ★ **Hardwired (owner ruling 2026-10-10, `OWNER_RULINGS.md` §AB): `KF3_TSPACE` is deleted.** The
+//! ★ **Hardwired: `KF3_TSPACE` is deleted.** The
 //! T-space is built at every prewarm and every Translated channel runs in it. No mirror, spare or
 //! recycled spare carries a window or a ring (§AB rule 2), so the legacy P5 path that mapped the
 //! whole guest store and all guest RAM into every mirrored space (audit S1-21) is gone.
@@ -49,7 +49,7 @@ use kf_host::{HostRm, MapPerm, VaSpace};
 /// gate) are reached only by their unit tests.
 pub const INCA_STRICT: bool = true;
 
-/// ★★ §AB rule 4 (owner, 2026-10-10) — **the proof that a Translated channel is PRIVILEGED**, the
+/// ★★ §AB rule 4 — **the proof that a Translated channel is PRIVILEGED**, the
 /// only key to the T-space's whole-RAM and whole-store windows ([`TSpace::ring`],
 /// [`TSpace::windows`]). Only [`Privileged::of`] makes one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

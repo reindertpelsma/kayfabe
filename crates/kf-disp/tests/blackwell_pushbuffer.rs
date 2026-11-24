@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`): a display channel's DMA
+//! A display channel's DMA
 //! pushbuffer format is the CLASS's, not Volta's. `NVC37D`..`NVC77D` (and their window classes) have
 //! `DMA_METHOD_OFFSET 13:2` and `DMA_JUMP_OFFSET 11:2` (a 4 KiB ring); `NVCA7D`/`NVCA7E`/`NVCA7B` (GB20x)
 //! have `15:2` for both (a 64 KiB ring, methods up to `0xfffc`: `TILE_SET_*` at `0x6000`,

@@ -1,4 +1,4 @@
-//! ★★ Lane C 2026-10-14 — libcudart's init gate (`0x20809009`, `0x20809001`, `0x20809064`,
+//! libcudart's init gate (`0x20809009`, `0x20809001`, `0x20809064`,
 //! `0x2080a001`, `0x20802209`) is no longer ONE GA106 capture served to every die
 //! (`docs/design/V3_CONSTANT_MATRIX_20261014.md`, `kf_rm::consttab`). Through `InitTablePolicy`:
 //!

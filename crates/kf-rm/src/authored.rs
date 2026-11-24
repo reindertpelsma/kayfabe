@@ -1,7 +1,7 @@
 //! ★★★★★ **What WE state as the GSP of the device we present** — the physical-RM answers a
 //! usermode host session cannot reach, authored per family.
 //!
-//! Ruling (coordinator, w827): *"WE ARE THE GSP, so physical-RM answers a usermode control
+//! Ruling: *"WE ARE THE GSP, so physical-RM answers a usermode control
 //! cannot reach are ours to AUTHOR, per FAMILY, from ogkm's own physical-RM source, with
 //! `Ogkm(file:line)` or `Advertised(why)` provenance — never a GA106 capture in production code;
 //! the capture stays the test oracle."*
@@ -487,7 +487,7 @@ fn nv2080_of_rm(rm: u32) -> Option<u32> {
     }
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the runlist the served FIFO table puts an
+/// The runlist the served FIFO table puts an
 /// `NV2080_ENGINE_TYPE_*` on — what the guest's `kchannelGetRunlistId` answers for a channel on that
 /// engine, and so what its Blackwell work-submit token carries in `RUNLIST_ID`.
 #[must_use]
@@ -499,7 +499,7 @@ pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Optio
         .map(|e| e.engine_data[slot::RUNLIST])
 }
 
-/// ★ 2026-10-11 (channel budget, `docs/design/V3_CHANNEL_BUDGET.md`): one `NV2080_ENGINE_TYPE_*` per distinct
+/// (channel budget, `docs/design/V3_CHANNEL_BUDGET.md`): one `NV2080_ENGINE_TYPE_*` per distinct
 /// runlist of the served FIFO table (the first host-driven engine on each), in runlist order: the engines the
 /// host is asked about to learn how many channels each served runlist can really give.
 #[must_use]

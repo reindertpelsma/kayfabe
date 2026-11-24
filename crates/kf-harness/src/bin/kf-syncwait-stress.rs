@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — **SYNC_WAIT / ring stress for the USER-ring relay** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`
+//! **SYNC_WAIT / ring stress for the USER-ring relay** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`
 //! §8). A raw RM client that creates its OWN channels and authors their GPFIFO, USERD and
 //! pushbuffer contents, then checks that the GPU executed EXACTLY what was written. Runs natively
 //! (the bare-metal control: no relay) and in a Linux guest under `KF3_DEBUG=1

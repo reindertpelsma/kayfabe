@@ -17,11 +17,11 @@
 //!   blocking, deterministic under a caller-supplied clock;
 //! - [`link`] — the real socket ([`UnixLink`]) and the peer policy's inputs (root, the VMM's
 //!   effective uid at each connect, `display-broker-uid`);
-//! - [`cursor`] — ★ the guest's cursor as the host pointer in hover mode (`OWNER_RULINGS.md` §O):
+//! - [`cursor`] — ★ the guest's cursor as the host pointer in hover mode:
 //!   the [`CursorShare`] the worker and the relay meet in, and what the broker is sent;
 //! - [`console`] — ★ the same cursor for the VMM's own console while a broker hovers (§8.13),
 //!   applied through the VMM-neutral [`CursorSink`];
-//! - [`input`] — ★ the input policy (`OWNER_RULINGS.md` §V, §8.20) and the VMM-neutral
+//! - [`input`] — ★ the input policy and the VMM-neutral
 //!   [`InputSink`] it drives.
 //!
 //! The VMM's part is small and is the only VMM-specific code: register the socket and a timer

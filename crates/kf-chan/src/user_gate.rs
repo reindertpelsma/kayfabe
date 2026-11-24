@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — **when the USER-ring relay may READ a guest GP entry's pushbuffer**
+//! **When the USER-ring relay may READ a guest GP entry's pushbuffer**
 //! (`docs/design/V3_USER_RING_SCAN_RACE.md`).
 //!
 //! Public `dev_pbdma.ref` (`NV_PPBDMA_GP_ENTRY1_SYNC`): with `SYNC_WAIT`, Host does not begin
@@ -17,7 +17,7 @@
 //! preceding segment's processing, is then complete. That is the moment the hardware itself would
 //! fetch.
 //!
-//! ★ 2026-10-14 (MEASURED, bare metal RTX 4070 / 595.91.07, `kf-syncwait-stress --families
+//! (MEASURED, bare metal RTX 4070 / 595.91.07, `kf-syncwait-stress --families
 //! barrier`): the proof is `USERD.REFERENCE` written by a `SET_REFERENCE` method in the marker,
 //! NOT `GP_GET`. With an ACQUIRE stalling entry 0 and a SYNC_WAIT barrier behind it, `GP_GET`
 //! already covered every published entry, the segment behind the barrier had not executed and
@@ -60,7 +60,7 @@ pub enum Gate {
     Wait,
 }
 
-/// ★ 2026-10-14 (Win11 Minecraft in-world Xid 32 PBENTRY) — **which witness follows the barrier.**
+/// **Which witness follows the barrier.**
 ///
 /// Public `dev_pbdma.ref` (`NV_PPBDMA_GP_ENTRY1_SYNC`): "in the case where the final PB entry of
 /// the preceding PB segment is a method header representing a PB compressed method sequence of
@@ -559,7 +559,7 @@ mod tests {
         assert!(!g.retrying());
     }
 
-    // ---- 2026-10-31: the retired `kayfabe-completion` fence-arm contracts, on the live structure ----
+    // The retired `kayfabe-completion` fence-arm contracts, on the live structure
     //
     // `Marks` is where v3 reads a value the guest can influence as progress (`USERD.REFERENCE` of the
     // relay's private channel; the guest's own forwarded `SET_REFERENCE` can write it, and a forged

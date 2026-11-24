@@ -214,7 +214,7 @@ fn bar2_never_exits_and_bar1_never_exits_at_setup() {
             .iter()
             .filter(|r| r.bar == Bar(1) && r.how.write_exits())
             .collect();
-        // ⊘⊘⊘ 2026-09-26 (`V3_BAR1_DOORBELL.md`): no family carves a BAR1 page at SETUP. The
+        // (`V3_BAR1_DOORBELL.md`): no family carves a BAR1 page at SETUP. The
         // Hopper+ view is where the guest's BAR1 PTEs put it and is overlaid at runtime
         // (`kf_trap::bar1db`); the old fixed `0x9_0000` page had no ogkm source.
         assert!(exiting.is_empty(), "{f:?}: BAR1 must not exit at setup");

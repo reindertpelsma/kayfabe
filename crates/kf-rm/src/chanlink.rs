@@ -51,7 +51,7 @@ pub const EVICT_CTX: u32 = 0x2080_012c;
 const EVICT_CTX_PARAMS_SIZE: usize = 20;
 /// `NVA06F_CTRL_CMD_STOP_CHANNEL` (`ogkm-580: ctrla06fgpfifo.h:237`) — `{bImmediate}`.
 pub const STOP_CHANNEL: u32 = kf_abi::submit::NVA06F_CTRL_CMD_STOP_CHANNEL;
-/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS`
+/// (`docs/design/V3_S3_RESUME.md`): `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS`
 /// (`ogkm-580: ctrl2080fifo.h:843`, params `{NvBool bDisable}` at `:847-849`) — ROUTE_TO_PHYSICAL
 /// (export flags `0x40`, `g_subdevice_nvoc.c:5050-5063`), sent by the Linux driver's suspend and
 /// resume (`rm_stop_user_channels` / `rm_restart_user_channels`, `osapi.c:2671-2725`).
@@ -64,14 +64,14 @@ pub const TSG_PREEMPT: u32 = kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT;
 const NV_ERR_INSUFFICIENT_PERMISSIONS: u32 = 0x1b;
 /// `NV_ERR_INVALID_OBJECT_HANDLE` (`nvstatuscodes.h:80`).
 const NV_ERR_INVALID_OBJECT_HANDLE: u32 = 0x33;
-/// ★ 2026-10-07 (Windows run29): `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` (`ogkm-580.65.06:
+/// `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` (`ogkm-580.65.06:
 /// ctrl0080dma.h:748-778`) — `{NvHandle hVASpace}`, `[IN]`: make an allocated address-space
 /// object the Device's default. Windows sends it for each new kernel client's Device right after
 /// allocating that Device's `FERMI_VASPACE_A` (vfio-10 RPC 2846). Answered from this link's own
 /// Device/VA-space records; nothing reaches the host (the default only decides which VA space a
 /// later `hVASpace = 0` channel resolves to, [`ChannelPolicy::device_default_va`]).
 ///
-/// ★ 2026-10-07 (audit S5): the id and `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` are
+/// The id and `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` are
 /// read at the guest's version from the driver matrix (`ctrl_values:NV0080_CTRL_DMA_SET_DEFAULT_VASPACE`
 /// — the SDK spells this id without `_CMD_` — and the params' measured layout), not typed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,15 +242,15 @@ pub struct ChannelAlloc {
     /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
     /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
     pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
-    /// ★ 2026-10-08: `ProcessID` as declared (generated layout; `None` when unmeasured or short).
+    /// `ProcessID` as declared (generated layout; `None` when unmeasured or short).
     pub process_id: Option<u32>,
-    /// ★★ 2026-10-08 (OWNER_RULINGS §V; `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off): a Windows
+    /// A Windows
     /// guest-KERNEL-stamped channel classified at birth as per-process USER work
     /// ([`windows_user_work`]) — the plane births it as a Passthrough twin (never inspected,
     /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
     /// the alloc's facts; it never changes over the channel's life.
     pub user_work: bool,
-    /// ★ 2026-11-15 (flag cleanup, Stage 1): the guest declared the measured Windows build at fn 1 AND
+    /// The guest declared the measured Windows build at fn 1 AND
     /// `windows-support` is on, as of this alloc ([`ChannelPolicy`]'s identity). The channel plane gates
     /// every Windows-profile birth behaviour on this one fact (the kernel-GR tier, the deferred-API
     /// trigger, the copy-engine relay, host-owned scheduling): a Linux guest's channels carry `false`
@@ -262,8 +262,8 @@ pub struct ChannelAlloc {
     pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
 
-/// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
-/// ★ 2026-11-15 (was the default-off `KF3_ASYNC_PREEMPT`): `enabled` is now "the guest declared the
+/// May a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
+/// `enabled` is now "the guest declared the
 /// measured Windows build and `windows-support` is on" ([`ChannelPolicy`]'s identity), so a Linux guest's
 /// asynchronous form is refused exactly as before.
 /// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
@@ -274,7 +274,7 @@ pub fn async_preempt_admitted(enabled: bool, ev: u64, disable: bool) -> bool {
     ev == 0 || (enabled && disable)
 }
 
-/// ★★ 2026-10-08 — the facts [`windows_user_work`] decides from, all known at the channel's alloc.
+/// The facts [`windows_user_work`] decides from, all known at the channel's alloc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UserWorkFacts {
     /// `windows-support=on` (the device property, default on; was `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`).
@@ -641,7 +641,7 @@ pub enum ChanStatement {
         /// `timesliceUs`.
         us: u64,
     },
-    /// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES` with property
+    /// `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES` with property
     /// `ENGINETIMESLICEINMICROSECONDS` on ONE channel (`kf_abi::fifoctl`). The plane applies it as
     /// the host's `NVA06C_CTRL_CMD_SET_TIMESLICE` on that channel's own host group — the same
     /// unprivileged verb as [`ChanStatement::Timeslice`]; never forwarded, never a privileged verb.
@@ -731,13 +731,13 @@ pub enum ChanStatement {
         rewind_gp_put: bool,
         /// `(hClient, hChannel)` entries.
         list: ChanList,
-        /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, default off): `pRunlistPreemptEvent` — an opaque
+        /// `pRunlistPreemptEvent` — an opaque
         /// guest-kernel value, never dereferenced; echoed back as the `RUNLIST_PREEMPT_COMPLETE`
         /// `eventData` once the HOST's disable+preempt completed (vfio-10: the GSP posts it so).
         /// `None` for the synchronous form.
         preempt_event: Option<u64>,
     },
-    /// ★ 2026-10-14: `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS` on the subdevice — "disable or
+    /// `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS` on the subdevice — "disable or
     /// enable scheduling of all usermode channels" (`ctrl2080fifo.h:832-841`), this VM's.
     DisableUsermode {
         /// `hClient` of the call.
@@ -880,19 +880,19 @@ pub struct ChannelPolicy {
     /// ORIGINAL — the same relation `barpde::PageDirPolicy` keeps, needed here because a channel
     /// (via its context share) may name the alias while the root was stated for the original.
     vas_aliases: crate::alias_index::AliasIndex,
-    /// ★ 2026-10-07: `(hClient, hVASpace)` → the `hParent` it was allocated under — the check
+    /// `(hClient, hVASpace)` → the `hParent` it was allocated under — the check
     /// `serverutilGetResourceRefWithParent(client, device, hVASpace, VaSpaceApi)` makes
     /// (`device_share.c:376-386`).
     vas_parents: std::collections::BTreeMap<(u32, u32), u32>,
-    /// ★ 2026-10-07: Devices whose RM `pVASpace` is set: by `SET_DEFAULT_VASPACE`, or because a
+    /// Devices whose RM `pVASpace` is set: by `SET_DEFAULT_VASPACE`, or because a
     /// `FERMI_VASPACE_A` with `index = GPU_DEVICE` acquired (and so lazily created) the Device's
     /// default (`deviceGetDefaultVASpace`, `device_share.c:322-347`). A second set on such a Device
     /// is refused as RM refuses it (`device_share.c:390-394`).
     device_vas_bound: std::collections::BTreeSet<(u32, u32)>,
-    /// ★ 2026-10-07: `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
+    /// `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
     /// matrix has no layout for it: the control then stays unserviced, as before).
     chan_props: Option<kf_abi::fifoctl::ChannelPropsLayout>,
-    /// ★ 2026-10-07: `SET_DEFAULT_VASPACE` at the guest's measured version.
+    /// `SET_DEFAULT_VASPACE` at the guest's measured version.
     default_vas: Option<DefaultVaspaceCtl>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
@@ -904,13 +904,13 @@ pub struct ChannelPolicy {
     /// [`ChanStatement::DisplaySw`] ([`Self::with_display_sw_twins`]); `false` (the default) leaves
     /// them graph nodes, byte for byte as before.
     display_sw_twins: bool,
-    /// ★ 2026-11-15: the `windows-support` device property (default on; replaces the 2026-10-08
+    /// The `windows-support` device property (default on; replaces the 2026-10-08
     /// `KF3_WIN_USER_CHANNELS_PASSTHROUGH` environment read). With it off, [`ChannelPolicy::windows_identity`]
     /// can never become true, so no Windows route below is reachable by any declaration.
     windows_support: bool,
-    /// ★ 2026-10-08: the guest declared the Windows build of its driver (fn 1).
+    /// The guest declared the Windows build of its driver (fn 1).
     windows_identity: bool,
-    /// ★ 2026-10-08: `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
+    /// `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
     windows_kernel_pid: Option<u32>,
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` ([`kernel_pid4_enabled`], read once).
     system_pid_is_kernel: bool,
@@ -961,7 +961,7 @@ impl ChannelPolicy {
         self
     }
 
-    /// ★ 2026-11-15: the `windows-support` device property (default on). Off: a Windows declaration
+    /// The `windows-support` device property (default on). Off: a Windows declaration
     /// is never recorded as an identity, so none of the Windows routes (user-work Passthrough twins,
     /// the user-ring permit, asynchronous preempt, the kernel-GR tier, the deferred-API trigger, the CE
     /// relay, host-owned scheduling) can be reached by any guest.
@@ -1075,7 +1075,7 @@ impl ChannelPolicy {
                     self.refused += 1;
                     Some(Self::refusal(status, &why, cmd))
                 }
-                // ⚠ 2026-10-08 (EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT`, default off): the plane
+                // The plane
                 // authors a host object on a Windows user-work twin as an act — held exactly like an
                 // engine object's alloc ([`Self::settle_alloc`]). `[measured, run74 at 082117df]`
                 // without this arm the act ran but the guest read `0x56`.
@@ -1216,7 +1216,7 @@ impl ChannelPolicy {
                     .vas_under
                     .entry((h.client, h.parent))
                     .or_insert(h.handle);
-                // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared index,
+                // The declared index,
                 // flags and size, read through the generated layout (logged, never acted on).
                 let vp = crate::rmrpc::alloc_params_window(&self.abi, body);
                 let vf = |path: &'static str| {
@@ -1240,7 +1240,7 @@ impl ChannelPolicy {
                     vf("vaBase"),
                     vf("vaSize")
                 );
-                // ★ 2026-10-08 (task A): the full 64-bit declaration, checked and named (logged only;
+                // The full 64-bit declaration, checked and named (logged only;
                 // no twin space takes its start or size from it — `kf_host::channel::TWIN_VA_FLOOR`).
                 let v64 = |path: &'static str| {
                     vp.and_then(|p| {
@@ -1449,7 +1449,7 @@ impl ChannelPolicy {
             windows: self.windows_identity,
             user_ring_permit: windows_user_ring_permit(&user_facts).ok(),
         };
-        // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
+        // The declared process ids and
         // raw internal flags beside the facts the route uses — logged for the criterion's evidence.
         let cf = |path: &'static str| {
             layout_u32(
@@ -1943,7 +1943,7 @@ impl ChannelPolicy {
                 }
             }
             DISABLE_USERMODE_CHANNELS => {
-                // ★ 2026-10-14: `[measured b2-b6]` refused, the Linux suspend's
+                // `[measured b2-b6]` refused, the Linux suspend's
                 // `nv_preempt_user_channels` failed and its error path released nvidia-uvm's PM lock
                 // it never took (`nv.c:4759-4810` → `uvm_resume`, `uvm_global.c:360-400`): every
                 // UVM ioctl then answered EAGAIN for the rest of the boot (nvidia-smi spun on it).
@@ -1998,7 +1998,7 @@ impl ChannelPolicy {
                 // in-tree caller lists channels of the calling client (`nv_gpu_ops.c:957-981`,
                 // `RES_GET_CLIENT_HANDLE` of channels iterated from that very client), and one
                 // guest process must never stop another's twin.
-                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, run82 at 54b12063): the ASYNC form is the guest
+                // The ASYNC form is the guest
                 // KERNEL's own scheduler (CPU-RM admits `pRunlistPreemptEvent` from kernel clients
                 // only, `kernel_fifo_ctrl.c:725-730`), and Windows' kernel client names the
                 // per-process clients' channel groups — physical RM resolves every entry's own
@@ -2091,7 +2091,7 @@ impl ChannelPolicy {
         }
     }
 
-    /// ★ 2026-10-07: `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` on a Device this link knows, with RM's
+    /// `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` on a Device this link knows, with RM's
     /// checks in RM's order (`deviceSetDefaultVASpace_IMPL`, `ogkm-580.65.06:
     /// src/nvidia/src/kernel/gpu/device_share.c:363-400`): a null handle is INVALID_ARGUMENT; a
     /// handle that is not a VA-space object allocated under this Device is INVALID_OBJECT_HANDLE;
@@ -2169,7 +2169,7 @@ impl ChannelPolicy {
         })
     }
 
-    /// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES`. Only the
+    /// `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES`. Only the
     /// engine-timeslice property is carried ([`ChanStatement::ChannelTimeslice`]); the plane applies
     /// it as a real `SET_TIMESLICE` on the channel's own host group and the reply is held until
     /// that host act resolves (the `[IN]` params echoed, as vfio-10 2860 answers). The other
@@ -2493,8 +2493,8 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::Free => self.on_free(cmd),
             RpcFunction::DupObject => self.on_dup(cmd),
             RpcFunction::SetGuestSystemInfo => {
-                // ★ 2026-10-08: every declaration replaces the previous one (as the host stub does).
-                // ★ 2026-11-15: and only with `windows-support` on ([`ChannelPolicy::with_windows_support`]).
+                // Every declaration replaces the previous one (as the host stub does).
+                // And only with `windows-support` on ([`ChannelPolicy::with_windows_support`]).
                 self.windows_identity = self.windows_support
                     && kf_abi::hoststub::cell(self.abi.driver_version())
                         .is_some_and(|c| c.matches_identity(&cmd.payload));
@@ -2505,7 +2505,7 @@ impl CommandPolicy for ChannelPolicy {
     }
 }
 
-/// ★ 2026-10-08: a `u32` field of a generated params layout at `version`, or `None` (unmeasured
+/// A `u32` field of a generated params layout at `version`, or `None` (unmeasured
 /// layout, missing field, short params).
 fn layout_u32(
     runs: &'static kf_abi::matrix::StructRuns,
@@ -2519,7 +2519,7 @@ fn layout_u32(
     Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
-/// ★ 2026-10-08 (task A): a `u64` field of a generated params layout, as [`layout_u32`].
+/// A `u64` field of a generated params layout, as [`layout_u32`].
 fn layout_u64(
     runs: &'static kf_abi::matrix::StructRuns,
     version: kf_abi::DriverVersion,
@@ -2538,7 +2538,7 @@ pub const VASPACE_FLAGS_SHARED_MANAGEMENT: u32 = 1 << 2;
 /// `gpu_vaspace.c:1107`; the MMU format's root covers bits 48:47).
 pub const GMMU_VA_CEILING: u64 = 1 << 49;
 
-/// ★ 2026-10-08 (task A) — what a guest's `FERMI_VASPACE_A` DECLARES, checked. Diagnostic only: the
+/// What a guest's `FERMI_VASPACE_A` DECLARES, checked. Diagnostic only: the
 /// twin's host space never takes its start or size from it (`kf_host::channel::TWIN_VA_FLOOR`), so
 /// a declaration can only be logged and named; the guest's own RM performs the same overflow check
 /// AFTER its RPC (`vaspace_api.c:351-362`), so the RPC carries whatever a hostile guest wrote.
@@ -2603,7 +2603,7 @@ pub fn vas_declaration(
 #[cfg(test)]
 mod tests {
 
-    /// ★ 2026-10-08 (task A): the declarations Windows made in runs 70-72, and hostile ones.
+    /// The declarations Windows made in runs 70-72, and hostile ones.
     mod vas_decl {
         use super::super::{GMMU_VA_CEILING, VasDeclRefusal, vas_declaration};
 
@@ -2645,7 +2645,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-08: [`super::windows_user_work`] over the channels of `[measured, run60 at 3a578d50]`
+    /// [`super::windows_user_work`] over the channels of `[measured, run60 at 3a578d50]`
     /// and hostile variants of them.
     mod user_work {
         use super::super::{UserWorkFacts, windows_user_work};
@@ -3223,7 +3223,7 @@ mod tests {
         c
     }
 
-    /// ★ 2026-10-07 (Windows run34, vfio-10 RPC 2860): `SET_CHANNEL_PROPERTIES` engine timeslice is
+    /// `SET_CHANNEL_PROPERTIES` engine timeslice is
     /// carried as a [`ChanStatement::ChannelTimeslice`] on the named channel and answered only by
     /// the plane's act; other properties and channels the plane does not own stay unserviced.
     #[test]
@@ -3314,7 +3314,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-07 (Windows run29, vfio-10 RPCs 2844-2846): RM's checks for
+    /// RM's checks for
     /// `SET_DEFAULT_VASPACE`, in order, and the default it sets.
     #[test]
     fn set_default_vaspace_follows_rm_checks_and_sets_the_device_default() {
@@ -3895,7 +3895,7 @@ mod tests {
                 wait: true
             })
         );
-        // ★ 2026-10-14: DISABLE_USERMODE_CHANNELS reaches the plane with its one byte decoded; any
+        // DISABLE_USERMODE_CHANNELS reaches the plane with its one byte decoded; any
         // other params size is refused by name.
         for (byte, disable) in [(1u8, true), (0, false)] {
             let r = link
@@ -3972,7 +3972,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the asynchronous DISABLE_CHANNELS reaches the plane only
+    /// The asynchronous DISABLE_CHANNELS reaches the plane only
     /// with the switch on and as a disable; the synchronous form is unchanged either way.
     #[test]
     fn an_async_preempt_needs_the_switch_and_a_disable() {
@@ -4430,7 +4430,7 @@ mod tests {
         "windows, windows-support=off",
     ];
 
-    /// ★ 2026-11-15 (flag cleanup, Stage 1): the link's Windows identity, end to end from a REAL fn 1.
+    /// The link's Windows identity, end to end from a REAL fn 1.
     /// Only the measured Windows build on a `windows-support=on` VM is an identity; a Linux declaration,
     /// no declaration, and a Windows declaration on an `off` VM are not, and a later declaration replaces
     /// the earlier one. Every other behaviour of this file keys on this one fact.
@@ -4479,7 +4479,7 @@ mod tests {
         std::mem::take(&mut *seen.lock().unwrap())
     }
 
-    /// ★ 2026-11-15 (was `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off): the per-process USER-work
+    /// The per-process USER-work
     /// reclassification reaches the plane only for a declared Windows guest; for a Linux guest, an
     /// undeclared guest and an `off` VM the same allocs stay Translated kernel work, exactly as before the
     /// profile existed.
@@ -4495,7 +4495,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-11-15: the plane's gate for every other Windows behaviour (the kernel-GR tier, the deferred-API
+    /// The plane's gate for every other Windows behaviour (the kernel-GR tier, the deferred-API
     /// trigger, the copy-engine relay, host-owned scheduling) is `ChannelAlloc::windows`: true for every
     /// alloc of a declared Windows guest, false for every alloc of any other guest.
     #[test]
@@ -4560,7 +4560,7 @@ mod tests {
     const MINE: (u32, u32) = (0xc1d0_000b, 0xcafe_0013);
     const OTHERS: (u32, u32) = (0xc1d0_000c, 0xcafe_0001);
 
-    /// ★ 2026-11-15 (was `KF3_ASYNC_PREEMPT`, default off): the asynchronous `DISABLE_CHANNELS`
+    /// The asynchronous `DISABLE_CHANNELS`
     /// (`pRunlistPreemptEvent != 0`) of the caller's own channel reaches the plane for a declared Windows
     /// guest and is refused by name for every other guest, as before.
     #[test]

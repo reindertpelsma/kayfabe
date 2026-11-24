@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **The holder-handoff protocol** (`kf_chan::handoff::Handoff`), checked three ways: every interleaving of a loser and
+//! **The holder-handoff protocol** (`kf_chan::handoff::Handoff`), checked three ways: every interleaving of a loser and
 //! a holder (the lost-registration race included), the same enumeration against a NAIVE loser that must be found stranded (the checker has
 //! teeth), and real threads on a real mutex.
 //!

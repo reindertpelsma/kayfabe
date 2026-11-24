@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! 2026-10-23: tier-3 rows must match the committed public-interface measurements.
+//! tier-3 rows must match the committed public-interface measurements.
 use kf_chip::DieId;
 use kf_rm::consttab::{self, BranchScope, DieScope, SourceTag};
 
@@ -7,7 +7,7 @@ const GB202: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt"
 ));
-// 2026-11-03: GB203 measured on its own die, own Vast lease 58957600 (equal to GB202 on every word).
+// GB203 measured on its own die, own Vast lease 58957600 (equal to GB202 on every word).
 const GB203: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt"

@@ -358,7 +358,7 @@ fn an_interlocked_group_waits_for_every_member() {
     assert_eq!(h[1].period_ns, 0);
 }
 
-/// ★ 2026-10-10 (run 293, measured): a ONE-SIDED interlock. The overlay window 4 interlocks with window 0 and with
+/// A ONE-SIDED interlock. The overlay window 4 interlocks with window 0 and with
 /// its immediate channel; window 0's own UPDATE names nothing. Window 0's update must latch TOGETHER with the waiting
 /// overlay update (and its immediate channel), never alone ahead of it — alone, the overlay starves.
 #[test]
@@ -490,7 +490,7 @@ fn an_update_naming_a_channel_parked_only_for_its_vblank_waits_for_that_channels
     assert!(!e.waiting(w0) && !e.waiting(w4) && !e.waiting(i4));
 }
 
-/// ★ 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`, measured on a bare-metal AD104 under the open 580.159.04
+/// (`V3_DISPLAY_PLANES_ORACLE.md`, measured on a bare-metal AD104 under the open 580.159.04
 /// modules: a commit that only disables a plane gets its DRM event within a frame; under kayfabe every such
 /// commit timed out after 3 s). A window flipped to NO surface (NVKMS programs the new entry with NO
 /// notifier, `nvkms-evo3.c` EvoFlipC3Common) raises the channel's AWAKEN through the one notifier its latch
@@ -561,7 +561,7 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     assert_eq!(awakens(&s), vec![(false, false)], "{:?}", s.effects);
 }
 
-/// ★ 2026-10-14, the Linux plane oracle (`V3_DISPLAY_PLANES_ORACLE.md`, run planes-run1, stock
+/// The Linux plane oracle (`V3_DISPLAY_PLANES_ORACLE.md`, run planes-run1, stock
 /// nvidia-drm/NVKMS 580.159.04, measured engine ring): the sequence NVKMS pushes when a client enables
 /// an overlay plane in one atomic commit and flips BOTH planes in the next one, before the enable's
 /// vblank. NVKMS (`nvkms-evo3.c` nvEvoUpdateC3) gives every window of an update the same interlock set
@@ -1457,7 +1457,7 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
     assert_eq!(e.cursor_scan(&cv, 9), None, "no such head");
 }
 
-/// ★ 2026-10-15: a head whose cursor format is `A1R5G5B5` with `MODE_XOR` (what a guest's inverting
+/// A head whose cursor format is `A1R5G5B5` with `MODE_XOR` (what a guest's inverting
 /// pointer would program) is scanned as that, the raw format kept; an unknown format is neither.
 #[test]
 fn an_a1r5g5b5_xor_cursor_is_scanned_as_one() {
@@ -1503,7 +1503,7 @@ fn an_a1r5g5b5_xor_cursor_is_scanned_as_one() {
     }
 }
 
-/// ★ 2026-10-15: the cursor vocabulary kf plans from — the two formats and the two composition modes —
+/// The cursor vocabulary kf plans from — the two formats and the two composition modes —
 /// is the class table's (derived from ogkm's headers by `tools/derive_display_classes.sh`) in every
 /// cursor-capable class of both table versions, and where ogkm's headers are present (`KF_OGKM_CLASS_DIR`,
 /// default the host's `/data/claude-ogkm-580` checkout) the headers themselves say the same.
@@ -1824,7 +1824,7 @@ fn a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experimen
     }
 }
 
-/// ★ 2026-10-11 (overlay stall H1, runs 408-416; `traces/windows_playback_tdr_20261010/README.md`): the Windows
+/// (overlay stall H1, runs 408-416; `traces/windows_playback_tdr_20261010/README.md`): the Windows
 /// driver's enable sequence for the overlay plane (window 4), as kicked in REAL TIME (PUT writes of run 416, µs
 /// apart): core UPDATE; core UPDATE naming window 4 and window 4's ownership; window 4 UPDATE naming the core (A);
 /// window 4 UPDATE naming nothing (B, no surface yet); window 0's UPDATE naming window 4; window 0's immediate
@@ -2595,7 +2595,7 @@ fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
     }
 }
 
-/// ★ 2026-10-27 (TU106 rental 57882297; ported 2026-11-01 onto the Blackwell branch's
+/// (TU106 rental 57882297; ported 2026-11-01 onto the Blackwell branch's
 /// `WindowSemaphores` vocabulary): Turing's window class (C57E) has one semaphore context DMA and one
 /// control word with only an OFFSET field, a 32-bit ACQUIRE and a 32-bit RELEASE value. The 64-bit
 /// payload bit, the release mode and the separate acquire semaphore are C67E and later, so the

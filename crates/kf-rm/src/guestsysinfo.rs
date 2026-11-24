@@ -119,7 +119,7 @@ impl GuestSystemInfoPolicy {
     /// # Errors
     /// [`VersionCheck::Undecodable`] / [`VersionCheck::Mismatch`].
     pub fn check_driver_version(&self, payload: &[u8]) -> Result<(), VersionCheck> {
-        // ★ 2026-10-04 (v3-windows, C2): a Windows twin is keyed as its Linux tag
+        // A Windows twin is keyed as its Linux tag
         // (`kf_abi::guestsysinfo::ReportedDriver`); a refused twin's reason rides the mismatch.
         let r = guestsysinfo::ReportedDriver::decode(payload).map_err(VersionCheck::Undecodable)?;
         let declared = self.driver.driver_version();
@@ -178,7 +178,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match cmd.function {
             RpcFunction::SetGuestSystemInfo => {
-                // ★ 2026-10-04 (v3-windows, runbook C3): what the guest says it is, every field, for
+                // What the guest says it is, every field, for
                 // the log only — a Windows guest's strings and changelist are unmeasured.
                 match guestsysinfo::GuestIdentity::decode(&cmd.payload) {
                     Ok(id) => eprintln!(
@@ -198,7 +198,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                         rpc_result: NV_OK,
                         body: encode_set_guest_system_info_reply(ours),
                     }),
-                    // ★ 2026-10-13: the protocol's own answer to a pair we do not speak — OK in the
+                    // The protocol's own answer to a pair we do not speak — OK in the
                     // envelope (a non-zero `rpc_result` ends the handshake before the guest reads
                     // anything), a private status, and OUR pair in the body. The guest follows it once
                     // or fails by name; it never lands on its own pair.

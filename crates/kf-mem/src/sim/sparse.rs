@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — **SPARSE RESIDENCY, GPU-free** (`docs/design/V3_SPARSE_RESIDENCY_RCA.md`).
+//! **SPARSE RESIDENCY, GPU-free** (`docs/design/V3_SPARSE_RESIDENCY_RCA.md`).
 //!
 //! `[measured, box kf-openguest-172333, traces/open_rows_guest_20261117/confirm]` the Vulkan CTS
 //! sparse-residency cases (`multisampled_image_sparse_residency.rgba16ui.samples_4`,
@@ -29,7 +29,7 @@
 //!   (`V3_BUILD.md` C: today they fail LOUDLY, a forwarded RC and CUDA 719), into silent zero reads.
 //!   GREEN; it is the guard on any fix.
 //!
-//! ★ 2026-11-18, option B as an opt-in (`unmapped-reads-zero=on`, [`GuestVaFill::Zero`]): S1 holds
+//! Option B as an opt-in (`unmapped-reads-zero=on`, [`GuestVaFill::Zero`]): S1 holds
 //! with it ON ([`on_s1_guest_sparse_slots_read_zero`], [`on_s1_an_unbound_slot_returns_to_zero`]),
 //! and S2 is then broken BY DESIGN ([`on_s2_consequence_guest_invalid_vas_read_zero_silently`]
 //! documents it). With it OFF (the default) nothing changes: S2 holds, S1 is the known gap.

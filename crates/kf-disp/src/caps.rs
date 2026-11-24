@@ -523,7 +523,7 @@ pub fn page(
             set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
         }
     }
-    // ★ 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`): CA73 names two more
+    // CA73 names two more
     // existence registers no earlier caps class has, and the page left both 0 (the Ada shape: "no virtual
     // window, no output link"). They state the virtual engine's own topology, never the die's word:
     // - `SYS_CAPE.VIRWIN_EXISTS(i)`: one virtual window per presented window. Public NVKMS for GB20X:
@@ -572,7 +572,7 @@ pub fn page(
     // laid over the derived page light head 0, the die's widths without them do not. [INFERRED] the
     // driver drives a head only from a tile with a post-composition scaler (NVKMS's own name for it:
     // `NV_EVO_HW_TILE_TYPE_0`, `nvkms-evo4.c` EvoGetHwTileType).
-    // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
+    // The per-TILE post-composition pipe of a class that names it
     // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
     // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
     // (ogkm 580.65.06 nvkms-evo4.c:1826-1831, EvoGetHwTileType) — a class invariant, so it is stated
@@ -659,7 +659,7 @@ pub fn page(
             set(capa, f(fld)?, 1);
         }
     }
-    // ★ 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`): semi-planar YUV windows. kayfabe's engine executes a
+    // Semi-planar YUV windows. kayfabe's engine executes a
     // window of any format (its UPDATE/notifier/latch path is format-blind) and the console composes the
     // semi-planar formats (`scanout::ScanFormats`, `cuda/display/kf_yuv.cu`), so the page says so. NVKMS
     // reads it per class (`nvkms-evo3.c` nvEvoParseCapabilityNotifier6 / EvoParseCapabilityNotifierC5):
@@ -808,7 +808,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-14: every family's authored page claims semi-planar YUV windows in the field its NVKMS
+    /// Every family's authored page claims semi-planar YUV windows in the field its NVKMS
     /// parser reads (C673+ CAPC.SUPPORT_SEMI_PLANAR; Turing CAPA.SUPPORT_PLANAR), and never claims
     /// 3-plane YUV (C673+ CAPA.SUPPORT_PLANAR) — what a real AD104 under 580.159.04 offers.
     #[test]

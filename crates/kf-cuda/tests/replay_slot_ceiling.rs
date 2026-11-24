@@ -576,7 +576,7 @@ fn fixture_layouts_hold_the_logged_number_of_slots() {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// 2026-11-18: the fix's own cases, on small synthetic pools (`seam`: 4096 runs, `max_cap` 4096, default
+// The fix's own cases, on small synthetic pools (`seam`: 4096 runs, `max_cap` 4096, default
 // 1024). Nothing below is measured; each is a state built to hit one edge of the in-place rule.
 // ---------------------------------------------------------------------------------------------------
 

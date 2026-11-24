@@ -682,7 +682,7 @@ pub enum WantedTable {
     /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
     /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
     GrZcullInfo,
-    /// ★ 2026-09-26: `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` — 72 bytes,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` — 72 bytes,
     /// engine 0 from the host's unprivileged `GR_GET_SM_ISSUE_RATE_MODIFIER`
     /// (`HostFacts::gr_sm_issue_rate_modifier`). Boot survives its refusal (`kernel_graphics.c:
     /// 1405-1408`), but the guest's client control is served ONLY from this cache, and
@@ -1565,7 +1565,7 @@ impl InitTablePolicy {
 }
 
 /// A reply that carries no body and a non-zero envelope result — the short-circuit.
-/// ★ 2026-09-26: an ENCODER's refusal, named — `w349c`'s rule for the gates above, applied to the
+/// An ENCODER's refusal, named — `w349c`'s rule for the gates above, applied to the
 /// 34 arms whose `Err(_)` was silent. `[measured GB203 bw1]` `INTERNAL_GET_DEVICE_INFO_TABLE`
 /// refused in a loop with nothing in the log but the guest's `NV_ERR_NOT_SUPPORTED`.
 fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
@@ -1573,7 +1573,7 @@ fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
     refuse()
 }
 
-/// ★ 2026-10-08 (run51 follow-up, diagnostic only): the indices an info-list request names, for the
+/// The indices an info-list request names, for the
 /// refusal log. The owner's decision to answer the Windows `FB_GET_INFO_V2` / `BUS_GET_INFO_V2` needs the
 /// WHOLE list before any exposure table can be written (`UnmeasuredIndex` names only the first). The
 /// decode is the bounded one the answerers use (count <= the ogkm list size, fixed-size buffer); a
@@ -1973,7 +1973,7 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
-        // ★ 2026-10-15: the Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
+        // The Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
         // this guest branch for exactly the measured request is served; anything else falls through UNCHANGED to the refusal
         // the control got before (counted notice naming the key). Keys whose serving is an owner decision are `Withheld`.
         if let Some(key) = crate::rowserve::key_of_control(req.cmd)
@@ -2037,7 +2037,7 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
-        // ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`, answered with
+        // `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`, answered with
         // the HOST's own reply for the guest's engine (asked at realize, `kf_abi::fifoctl`), the
         // command id and layout at the GUEST's measured version. An engine the host gave no row for
         // is refused with INVALID_ARGUMENT, as the `_VF` body refuses one its table lacks
@@ -2331,7 +2331,7 @@ impl CommandPolicy for InitTablePolicy {
             // itself (`kern_gmmu.c:1909`), and a size that is not a multiple of
             // `NVC369_BUF_SIZE` is a partial fault packet in a queue whose capacity is a
             // division (`kern_gmmu.c:1725`).
-            // ★ 2026-10-15 (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
+            // (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
             // branch (the Windows-captured GSP statics) wins; otherwise the AUTHORED value is served, labelled and counted
             // (the matrix says AUTHORED; the AD104 states other numbers - owner decision D-1, so no AD104 row is published).
             WantedTable::GmmuStaticInfo => {
@@ -2477,7 +2477,7 @@ impl CommandPolicy for InitTablePolicy {
                     // ★ 2026-10-07, owner ruling §S: stub / absent-on-virtual-display / posted
                     // by the display plane (`RULED_NOTIFIERS`, every row with its argument).
                     && !eventnotify::is_ruled_notifier(self.driver.driver_version(), reg.event)
-                    // ★ 2026-10-08: an engine's non-stall notifier — the guest's own CPU-RM
+                    // An engine's non-stall notifier — the guest's own CPU-RM
                     // delivers it from the vector this device raises (`ENGINE_NONSTALL_NOTIFIERS`).
                     && !eventnotify::is_engine_nonstall_notifier(
                         self.driver.driver_version(),
@@ -2609,7 +2609,7 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: mem_desc.c:239-241`) — and a policy whose worst case is a *silent*
             // wall is exactly the shape `#127`'s named-refusal default forbids.
             WantedTable::CeFaultMethodBufferSize => {
-                // ★ 2026-10-15: measured row for (die, guest branch), else the authored value, labelled and counted.
+                // Measured row for (die, guest branch), else the authored value, labelled and counted.
                 let size = match crate::rowserve::ce_fault_method_buffer_size(
                     self.host.die,
                     self.driver.driver_version().major,
@@ -3110,7 +3110,7 @@ impl CommandPolicy for InitTablePolicy {
             // site exists — a synchronous host verb from `respond` trips R1. This table is
             // what makes the runtime work in the meantime, and it carries its own expiry
             // conditions in `kf_abi::cudartinit`.
-            // ★ 2026-11-01 (Blackwell-into-next merge): `0x20802209` is RM SOFTWARE STATE (watchdog
+            // `0x20802209` is RM SOFTWARE STATE (watchdog
             // INITIALIZED | DISABLED, `ogkm-595.84: kernel_rc_watchdog_ctrl.c:30-60`), not a die fact, so
             // the published table holds no row for it (next's `tests/consttab_data.rs`: "software-state rule
             // is separate"). It is answered here by the rule in `kf_abi::cudartinit`, for every die, as
@@ -3125,7 +3125,7 @@ impl CommandPolicy for InitTablePolicy {
             | WantedTable::CudartInit9001
             | WantedTable::CudartInit9064
             | WantedTable::CudartInit9A001 => {
-                // ★★ Lane C 2026-10-14: no longer one GA106 capture served to every die. The
+                // No longer one GA106 capture served to every die. The
                 // host's own answer to the identical request was tried above (`gssreplay`,
                 // tier 2); only when the host did not answer does the PUBLISHED table answer,
                 // and only with a row measured on THIS die at THIS guest branch (or a row whose
@@ -3153,7 +3153,7 @@ impl CommandPolicy for InitTablePolicy {
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
             // a real GA106 overwrites. A constant body here would clobber content the guest
             // sent — the `#203` zero-fill defect pointing the other way.
-            // ★ 2026-09-26: the words are the HOST's reply to the same question, asked once at
+            // The words are the HOST's reply to the same question, asked once at
             // realize (`HostFacts::perf_level_info_v2`) — never the GA106 clock table
             // (`kf_abi::cudartinit::SPLICED`, now the test oracle). A host that refused it, or a
             // guest asking a different question, is refused.
@@ -3193,7 +3193,7 @@ impl CommandPolicy for InitTablePolicy {
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
-            // ★ Lane C 2026-10-14: `0x20808162` writes a byte the guest did not send, and that byte
+            // `0x20808162` writes a byte the guest did not send, and that byte
             // differs per die (GA106/580: 1, AD104/595: 0 [measured]). The host's answer was tried
             // above (`gssreplay` exact row); otherwise the published table, per die; else refused.
             WantedTable::GssLegacy8162 => {

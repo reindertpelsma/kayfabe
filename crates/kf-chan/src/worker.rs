@@ -22,7 +22,7 @@ const SCAN_LIMIT: usize = 64;
 /// How long a parked worker sleeps before re-checking `stop` and the relays' safety net
 /// ([`user_loop::BACKSTOP_MS`]): never a correctness timeout, every firing that finds work is counted.
 const PARK_MS: u32 = user_loop::BACKSTOP_MS;
-/// ★ 2026-10-08: how long a parked worker sleeps while `on_tick` says a raise is owed (the
+/// How long a parked worker sleeps while `on_tick` says a raise is owed (the
 /// paced Passthrough relay's trailing raise, `kf_chan::ptnsi::Pacer::flush`).
 const OWED_PARK_MS: u32 = 1;
 
@@ -56,19 +56,19 @@ pub struct WorkerStats {
 /// are handed to `on_other`; nothing else reaches it.
 pub const OTHER_TAG_BASE: u64 = 2 << 32;
 
-/// ★ 2026-10-08: the tag `on_other` receives once after EVERY park wait of a worker ends (events or the
+/// The tag `on_other` receives once after EVERY park wait of a worker ends (events or the
 /// [`PARK_MS`] timeout) — a bounded-period tick on the worker, never a vCPU. No fd carries it. Used by
 /// `KF3_RELAY_GET_REFRESH` (the USERD relay's `GP_GET` refresh while a relayed twin lives); a caller
 /// that ignores it loses nothing.
 pub const TICK_TAG: u64 = u64::MAX;
 
-/// ★ 2026-10-14 — what the worker needs from the USER-ring relays to be an EVENT loop
+/// What the worker needs from the USER-ring relays to be an EVENT loop
 /// (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`): the look at the relays' not-yet-fd state
 /// (the private `GP_GET` / `REFERENCE` words are not an fd) and whether the worker may sleep. Neither blocks.
 pub trait RelayLoop {
     /// Some relay records a private-word wait (the look has something to evaluate).
     fn waiting(&self) -> bool;
-    /// ★ 2026-10-20 (owner): some relay holds an obligation NO registered wake source will announce (a carried `Popped` wait, a marker whose
+    /// Some relay holds an obligation NO registered wake source will announce (a carried `Popped` wait, a marker whose
     /// interrupt came and found the words not yet visible: [`user_loop::Obligation`]). The worker must not block while this is true: it keeps
     /// evaluating inside its one loop. Every other obligation has a wake source that reaches EVERY worker (level-triggered fds in each
     /// worker's own poller, the lock holder's ring through the shared token word and eventfd).
@@ -116,7 +116,7 @@ fn park_infinite() -> bool {
 /// One worker thread's loop, until `stop`. `poller` watches `efd` at [`WORKER_EFD_TAG`] and
 /// `completions` at [`COMPLETIONS_TAG`]; any fd the caller watched at a tag `>=`
 /// [`OTHER_TAG_BASE`] is reported to `on_other` (P5b: engine non-stall events → guest MSI-X).
-/// ★ 2026-10-08: `on_completion` runs once per readiness of `completions` (a REAL host
+/// `on_completion` runs once per readiness of `completions` (a REAL host
 /// `FIFO_EVENT_MTHD` edge), after the in-flight tokens were rung — the device's Passthrough relay
 /// (`kf_chan::ptnsi`) judges it there. `on_tick` runs once per loop iteration, edge or not (the
 /// relay's timer: it raises what pacing owes) and answers whether anything is still owed — the

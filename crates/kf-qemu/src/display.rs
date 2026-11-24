@@ -60,7 +60,7 @@ const SCAN_LINE_STEP: Duration = Duration::from_micros(250);
 /// …and how often it looks for a running raster when none runs.
 const SCAN_LINE_IDLE: Duration = Duration::from_millis(20);
 
-/// ★ 2026-10-08 EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
+/// EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
 /// `NV_PDISP_FE_EVT_STAT_HEAD_TIMING(h)`. ⚠ NOT in ogkm's published `dev_disp.h` (v03_00 names only
 /// LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6), so it is named here by hand, from:
 /// nouveau `nvkm/engine/disp/gv100.c` `gv100_disp_intr_head_timing` ("`/* LAST_DATA, LOADV. */`",
@@ -114,7 +114,7 @@ fn armed_defaults_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
 }
 
-/// ★ 2026-11-15 (flag cleanup, Stage 1; owner: "set the measured Windows profile as the default"): the
+/// the
 /// two colour decoder behaviours of the Windows SDR colour path, formerly the default-off experiments
 /// `KF3_DISPLAY_LUT_MIRROR` and `KF3_DISPLAY_ILUT_OFFSET_256` (H-mirror, 2026-10-09;
 /// `traces/windows_reset_20261009/`). `[measured, runs 98/99 vs 100, RTX 4070]` Windows' first colour
@@ -187,7 +187,7 @@ fn frame_edge_out(
     if let Some((lb, ls)) = dp.map.loadv {
         store(lb + h as u64 * ls, f);
     }
-    // ★ 2026-10-14: the raster is at the start of its vertical blank now — the scan-line words read
+    // The raster is at the start of its vertical blank now — the scan-line words read
     // so (VBLANK, line BLANK_START.Y) before the interrupt the guest reads them in.
     let now = dp.ports.now_ns();
     dp.ports.note_frame_edge_at(h, now);
@@ -206,7 +206,7 @@ fn frame_edge_out(
     irq
 }
 
-/// ★ 2026-10-14 — **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
+/// **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
 /// `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` (normal latency) from `kHeadVblankCount[head]` in the
 /// display shared-data page it handed physical RM (`MAP_SHARED_DATA`; ogkm
 /// `disp_common_kern_ctrl_minimal.c:401-410`, `kern_disp.c:557-627`), and physical RM keeps it. kf3 is
@@ -1195,11 +1195,11 @@ enum Shown {
     Armed(Composition),
     /// The boot layer, until the guest arms its first head (`gop=on`).
     Boot(LayerPlan, (u32, u32)),
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the scanout the guest freed its channels from
+    /// The scanout the guest freed its channels from
     /// with `PRESERVE_HW` (NVKMS, after restoring the console, `nvkms-rm.c:2990-3017`) — planned
     /// layers of the last armed composition, kept: the hardware keeps scanning them.
     Preserved(Vec<LayerPlan>, (u32, u32)),
-    /// ★ 2026-10-03 (B5): nothing is scanned (no head lit, or a lit head with no window): the
+    /// Nothing is scanned (no head lit, or a lit head with no window): the
     /// monitor shows black, never the last frame.
     Blank((u32, u32)),
 }
@@ -1235,7 +1235,7 @@ impl Held {
 /// Window channels any family has (`chan_of`: channel numbers 1..=32).
 const MAX_WINDOWS: usize = 32;
 
-/// ★★ 2026-10-04 (B5 on box vmb, `V3_DISPLAY.md` §4.11.13): the ISO context DMA each window's ARMED
+/// The ISO context DMA each window's ARMED
 /// state was resolved to — kept until that window latches again, because the display engine scans
 /// the surface its ARMED state latched, not whatever the instance-memory hash says on a later frame.
 ///
@@ -1790,7 +1790,7 @@ impl VramWorker {
 /// lay the read's words over the derived page — every group, or the groups named in
 /// `KF3_DISPLAY_CAPS_OVERLAY_GROUPS` (`sys,bwexist,unnamed,…`) plus the offsets in
 /// `KF3_DISPLAY_CAPS_OVERLAY_WORDS` (`0x030,0x034`). A read of any other PCI id refuses the realize
-/// (OWNER_RULINGS §AH: never a neighbour's page). Unset: the page is returned unchanged.
+///. Unset: the page is returned unchanged.
 fn caps_overlay_diagnostic(
     caps: kf_disp::caps::CapsPage,
     bdf: &str,
@@ -1901,7 +1901,7 @@ pub struct DisplayPlane {
     pub ports: Arc<Ports>,
     /// Resolved registers.
     pub map: RegMap,
-    /// ★ 2026-11-15 (flag cleanup, Stage 1; review of PR #438 F2): the SDR colour path, its caps page and the
+    /// The SDR colour path, its caps page and the
     /// Windows profile that selects them, in ONE value ([`ColorPath`]) whose methods are the only readers of
     /// the gate: [`DisplayPlane::sdr`], [`DisplayPlane::static_words`] and [`DisplayPlane::sync_caps_page`].
     color: ColorPath<(&'static kf_disp::class::ClassTable, u32, u32)>,
@@ -1946,25 +1946,25 @@ pub struct DisplayPlane {
     /// How many S3 wakes kept the guest's display life ([`DisplayPlane::kept_wake`]); the worker
     /// logs each DMA channel's first PUT after each.
     kept_wakes: AtomicU64,
-    /// ★ 2026-10-18: whether store `[0, G)` may be shown as the boot picture
+    /// Whether store `[0, G)` may be shown as the boot picture
     /// ([`crate::bootclean`]). Tainted by a guest RM life, the seed's retirement and a device
     /// reset; cleaned only by a scrub that completed.
     pub boot_clean: crate::bootclean::BootClean,
 }
 
-/// ★ 2026-11-15: whether the SDR colour path is wanted: the Windows profile is active, or the explicit lab
+/// Whether the SDR colour path is wanted: the Windows profile is active, or the explicit lab
 /// override (`KF3_DISPLAY_SDR_COLOR=1`) forces it. Pure.
 fn sdr_wanted(forced: bool, profile_active: bool) -> bool {
     forced || profile_active
 }
 
-/// ★ 2026-11-15: the SDR colour path is reached only while it is wanted (the Windows profile is active, or
+/// The SDR colour path is reached only while it is wanted (the Windows profile is active, or
 /// the explicit lab override forces it). Pure; the one place that rule lives ([`DisplayPlane::sdr`]).
 fn sdr_for<T>(profile_active: bool, built: Option<T>) -> Option<T> {
     if profile_active { built } else { None }
 }
 
-/// ★ 2026-11-15 (review of PR #438, F2): the SDR colour path as ONE value — the profile that selects it, the
+/// The SDR colour path as ONE value — the profile that selects it, the
 /// lab override, the path itself (built unless a constructor probe replaced the engine) and the two caps
 /// pages. Every reader of the gate is a method here, so the tests exercise the real use site with the real
 /// [`kf_rm::winprofile::WindowsProfile`] (a Linux declaration, nothing declared, `windows-support=off` and a
@@ -2012,7 +2012,7 @@ impl<T: Copy> ColorPath<T> {
     }
 }
 
-/// ★ 2026-11-15 (flag cleanup, Stage 1): the caps page the guest sees, in its two variants — the BASE page
+/// The caps page the guest sees, in its two variants — the BASE page
 /// (what every guest always saw) and the SDR-colour page (what a declared Windows guest sees; was
 /// `KF3_DISPLAY_SDR_COLOR=1`). Realize precedes any guest declaration, so both pages are derived there
 /// and the shadow holds the base page until the drainer sees the declaration ([`CapsVariants::sync`]).
@@ -2094,7 +2094,7 @@ impl CapsVariants {
 }
 
 impl DisplayPlane {
-    /// 2026-10-23: capability construction shared by production and GPU-free tests.
+    /// Capability construction shared by production and GPU-free tests.
     ///
     /// # Errors
     /// Missing public vocabulary, incomplete constants or unsupported host scope refuse.
@@ -2311,7 +2311,7 @@ impl DisplayPlane {
         } else {
             kf_disp::caps::page
         };
-        // ★ 2026-11-15 (was `KF3_DISPLAY_SDR_COLOR=1`, with `KF3_DISPLAY_LUT_MIRROR` and
+        // (was `KF3_DISPLAY_SDR_COLOR=1`, with `KF3_DISPLAY_LUT_MIRROR` and
         // `KF3_DISPLAY_ILUT_OFFSET_256`): the SDR colour path is part of the Windows profile. It is built
         // here, at realize, but it is only USED, and its caps page only SHOWN, while the guest's declared
         // identity is Windows ([`DisplayPlane::sdr`], [`CapsVariants`]): realize precedes any
@@ -2323,7 +2323,7 @@ impl DisplayPlane {
                 "kf3: display: a constructor probe is on: the SDR colour path (Windows profile) is not built"
             );
         }
-        // ★ 2026-10-15 (H01): the page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
+        // The page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
         // the window-layer family rows (T1) and this die's measured words (T3, `data/caps_measured.tsv`).
         // The captured AD104 page that `KF3_DISPLAY_CAPS_PROBE` served is gone; it is a test oracle.
         // The constructor-only diagnostics keep their own nested pages.
@@ -2367,7 +2367,7 @@ impl DisplayPlane {
                 );
                 caps_overlay_diagnostic(d.page, bdf)
             };
-            // ★ 2026-11-15: BOTH pages are derived at realize; the guest is shown the base page until it
+            // BOTH pages are derived at realize; the guest is shown the base page until it
             // declares the Windows identity, then the SDR page ([`CapsVariants`]).
             // ★ review of PR #438 F8: the SDR page is the Windows profile's, so a refusal to derive it
             // must never refuse `display=on` for a Linux guest: it is logged and the SDR variant is absent.
@@ -2388,7 +2388,7 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
-        // ★ 2026-10-10: a WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
+        // A WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
         // display writes it BEGUN when it performs the flip, `ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:
         // 1925-1952`; `kf_disp::engine::Effect::Notify`); the core's completion notifier is FINISHED
         // (`nvkms-evo3.c:6224-6243`)
@@ -2414,7 +2414,7 @@ impl DisplayPlane {
             );
         }
         let ports = model.ports.clone();
-        // ★ 2026-10-09 EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
+        // EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
         // value `NV_PDISP_FE_RM_INTR_EN_HEAD_TIMING(h)` (0x611D80) reads back before the guest writes it.
         // `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08/09, traces/windows_reset_20261009
         // README §13.1 point 3]` real hardware reads `0x3f0060` (firmware's enabled RG_LINE_A/B and
@@ -2560,7 +2560,7 @@ impl DisplayPlane {
         self.boot.as_ref()
     }
 
-    /// ★★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR=1`): the SDR colour path, `Some`
+    /// The SDR colour path, `Some`
     /// ONLY while the Windows profile is active (`windows-support=on` and the guest's fn-1 declaration is
     /// the measured Windows build) and the path was built. Every colour decision of the worker goes
     /// through here, so a Linux guest, an undeclared guest and `windows-support=off` take the plain
@@ -2572,7 +2572,7 @@ impl DisplayPlane {
         self.color.sdr()
     }
 
-    /// ★ 2026-11-15: re-publish the caps page when the guest's declared identity changed which page it
+    /// Re-publish the caps page when the guest's declared identity changed which page it
     /// should see. Called by the register drainer at the top of every pass (an atomic compare when
     /// nothing changed), so the page is right before the guest's next RPC is served — display init reads
     /// it long after fn 1. `store` writes one shadow word (BAR0 offset, value); the vCPU never calls this.
@@ -3170,7 +3170,7 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
-        // ★ 2026-10-10: a head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
+        // A head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
         let mut gate = crate::vblankgate::VblankGate::default();
         let mut edge_frame = [0u32; MAX_HEADS];
         let mut forced_logged = 0u64;
@@ -3710,7 +3710,7 @@ impl Device {
                 // only the composition shown right before a preserving free is kept
                 _ => scan.last_plan = None,
             }
-            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): every change of WHAT the console shows,
+            // Every change of WHAT the console shows,
             // timed — the boot layer, a head's windows, black, the preserved scanout, or no new frame
             // and why. Keyed without what a flip changes; bounded.
             let key = shown_key(shown.as_ref(), &held, boot_done);
@@ -4550,7 +4550,7 @@ struct ScanState {
     /// preserving free that follows the unbind in NVKMS's teardown kept nothing. Windows now
     /// resolve through [`LatchedDmas`]: such a copy is whole and this keeps the console.
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
-    /// ★ 2026-10-04: each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
+    /// Each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
     latched: LatchedDmas,
     colors: ColorDmas,
     /// ★ The GPU-copy rung's worker half (§8.11).
@@ -6191,7 +6191,7 @@ mod tests {
         assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
 
-    /// ★★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR` + `KF3_DISPLAY_LUT_MIRROR` +
+    /// (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR` + `KF3_DISPLAY_LUT_MIRROR` +
     /// `KF3_DISPLAY_ILUT_OFFSET_256`): the SDR colour path is reached only while it is wanted. A guest that
     /// has not declared the Windows identity (every Linux guest, an undeclared one, a `windows-support=off`
     /// VM) does not want it, and gets `None`: the plain compose path it always had.
@@ -6275,7 +6275,7 @@ mod tests {
         )
     }
 
-    /// ★ 2026-11-15 (review of PR #438, F2): the worker's gate and the shadow's page, through the REAL
+    /// The worker's gate and the shadow's page, through the REAL
     /// [`ColorPath`] and the real profile. A guest that did not declare the Windows identity — a Linux
     /// declaration, nothing declared, a Windows declaration on a `windows-support=off` VM — gets no SDR
     /// colour path and the base caps page.
@@ -6435,7 +6435,7 @@ mod tests {
         assert_eq!(v.seal(true), CapsVariants::words(&only));
     }
 
-    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row. The GB206
+    /// Every piece of the GPU-free realize path resolves for every display row. The GB206
     /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
     /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
     #[test]
@@ -7548,7 +7548,7 @@ mod tests {
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
     }
 
-    /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
+    /// THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
     /// `D3DKMTGetScanLine` (`[measured run 2990, BAR0 read trace]` `0x680220` = core
     /// `GET_RG_SCAN_LINE(0)`, `0x690208` = window 0 `GET_LINE`) are derived at those offsets on Ada and
     /// Ampere; a frame edge reads VBLANK at line `BLANK_START.Y`, the raster then moves and leaves the
@@ -7788,7 +7788,7 @@ mod tests {
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
     }
 
-    /// ★ 2026-10-08 (H-flip, the VFIO DVI reference): the head-timing interrupt follows the frame
+    /// The head-timing interrupt follows the frame
     /// edges while the guest keeps LAST_DATA enabled, and only then. Replays Windows' measured order
     /// on hardware (boot3, 113/113 enables): read `0x611800`, write-1-clear LAST_DATA, enable — no
     /// interrupt at the enable; one at EVERY following frame edge while enabled (the ISR clears it
@@ -7966,7 +7966,7 @@ mod tests {
         assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
     }
 
-    /// ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): when a guest life
+    /// When a guest life
     /// ends — the guest's RM unloads (fn 47 without a PM transition), or the device is reset — the
     /// console goes back to the BOOT LAYER (store `[0, G)`, what BAR1 `[0, G)` shows again), from
     /// every state the old life left: an armed scanout lost, a `PRESERVE_HW` scanout, black. Without
@@ -8026,7 +8026,7 @@ mod tests {
         }
     }
 
-    /// ★★ 2026-10-18 (branch `claude/bootlayer-20261018`): the boot layer is shown only while store
+    /// The boot layer is shown only while store
     /// `[0, G)` is clean. A guest RM life writes its own vidmem there (`[measured, run 3081]` coloured
     /// rows at fixed positions on the boot screen and after an unload), so while it is tainted the
     /// console shows no boot layer: the last frame before any guest scanout, black after one was
@@ -8091,7 +8091,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is
+    /// A head's scanout that WAS shown and is lost is
     /// black (box run b5 kept the last fbcon frame after `rmmod nvidia_drm`) — at once when no head
     /// is lit, after [`WINDOWLESS_HOLD`] when a lit head has no window — and a scanout freed with
     /// `PRESERVE_HW` stays until a head is armed again.
@@ -8180,7 +8180,7 @@ mod tests {
         }
     }
 
-    /// ★★ 2026-10-04 — B5 arm (a2) on box vmb, failed 5 of 5 runs with the candidate's and
+    /// B5 arm (a2) on box vmb, failed 5 of 5 runs with the candidate's and
     /// master's code (`traces/v3_candidates/cand1_20261003/display/`). NVKMS's teardown after X
     /// restores the console (window 6 latches context DMA `0x10088`), frees the console surface —
     /// RM clears `0x10088` from display instance memory while window 6 stays armed on it — and only

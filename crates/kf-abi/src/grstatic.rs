@@ -287,7 +287,7 @@ pub struct GpcRow {
     pub rop_mask: Option<HostFsAnswer>,
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 3) — one per-GPC `GRMGR_GET_GR_FS_INFO`
+/// One per-GPC `GRMGR_GET_GR_FS_INFO`
 /// answer, **as the host gave it**: its word, or its own per-query status.
 ///
 /// ⊘ Until 2026-09-28 a per-query refusal was stored as "not measured" (`None`), so the guest's

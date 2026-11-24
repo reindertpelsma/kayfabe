@@ -33,7 +33,7 @@ pub(crate) struct Probe {
     allocation: Option<sw_runlist::AllocationCell>,
     identity: Arc<AtomicBool>,
     engines: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
-    /// ★ 2026-11-15 (was `KF3_SW_RUNLIST_PROBE`): the probe exists for a declared Windows guest only.
+    /// The probe exists for a declared Windows guest only.
     /// While the profile is inactive ([`crate::winprofile::WindowsProfile::active`]: a Linux
     /// declaration, nothing declared, or `windows-support=off`) the probe does not see the allocation
     /// at all, so the alloc takes the default path exactly as with no probe installed.
@@ -680,7 +680,7 @@ mod tests {
         assert_eq!(g.node(key(1, 4)), Some(&previous));
     }
 
-    /// ★ 2026-11-15 (was `KF3_SW_RUNLIST_PROBE`): while the Windows profile is inactive (a Linux
+    /// While the Windows profile is inactive (a Linux
     /// declaration, nothing declared, `windows-support=off`) the probe does not see the allocation at all,
     /// so the alloc takes the default path exactly as with no probe installed; the SAME probe, with the
     /// profile active and the probe's own identity observed, decodes it.
@@ -709,7 +709,7 @@ mod tests {
         let _ = &mut observer;
     }
 
-    /// ★ 2026-11-15: with the profile inactive the probe is installed but answers EXACTLY as an object
+    /// With the profile inactive the probe is installed but answers EXACTLY as an object
     /// policy that never had one — the same reply bytes, the same counters — so a Linux guest that sends
     /// this class sees no difference.
     #[test]

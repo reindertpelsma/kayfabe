@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-03 — the caps sweep (`traces/caps_sweep_20261103/README.md`): the display caps word `0x00c` read with
+//! The caps sweep (`traces/caps_sweep_20261103/README.md`): the display caps word `0x00c` read with
 //! `tools/read_display_caps_page.py` (root, read-only BAR0) on plain Vast container leases, one die per lease, host
 //! driver branch recorded. `[measured]` GA104, GA106, TU102, TU104, TU116, AD103, AD106 on 580.x hosts; AD107 on a
 //! 595.71.05 host (no 580 AD107 offer existed). These tests pin: every measured die is fully derived (nothing
 //! unmeasured) with its own read value, only for the branch it was read on; no family wildcard exists; and the dies
 //! the sweep could not reach (GA107, TU117, GB207, AD107 on 580) still get the clean page and the notice, never a
-//! neighbour's row (OWNER_RULINGS §AH).
+//! neighbour's row.
 
 use kf_chip::display::{ADA, AMPERE, DisplayRow, TURING};
 use kf_disp::capsderive::{Derived, Die, HostFacts, derive, shipped_measured, shipped_rows};
@@ -100,7 +100,7 @@ fn each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die() {
 
 #[test]
 fn the_sweep_adds_no_family_wildcard() {
-    // a family rule needs every die measured in the 2026-11-03 sweep to agree plus a mechanism, and the owner's call (OWNER_RULINGS §AH)
+    // a family rule needs every die measured in the 2026-11-03 sweep to agree plus a mechanism, and the owner's call
     for m in shipped_measured() {
         assert_ne!(m.branch, "*", "{:?}", m.die);
     }

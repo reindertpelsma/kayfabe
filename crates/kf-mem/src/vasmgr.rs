@@ -327,7 +327,7 @@ pub struct EntryDiff {
     /// ★ Its maps were withheld (slot capacity), or only a window of its diff is in the report
     /// ([`EntryDiff::cut`]): walk again once what is here has landed.
     pub partial: bool,
-    /// ★ 2026-11-15 (M4): `KFWR_V_CUT` — the diff was larger than the report, so only a window of it
+    /// `KFWR_V_CUT` — the diff was larger than the report, so only a window of it
     /// (or nothing of it, while an earlier entry fills the report) is here; the rest comes on the next
     /// walk. Also `partial`. Unlike a capacity-withheld diff it stays partial over a refused MAP
     /// (absence): the split must not complete while runs remain unreported, and a window in which
@@ -387,7 +387,7 @@ pub trait Walker {
     /// How many slots the walker holds.
     fn slots(&self) -> u32;
 
-    /// ★ 2026-11-16 (observation only, `crate::vaprof`): hidden capacity re-walks so far
+    /// Hidden capacity re-walks so far
     /// (cumulative; a walk the walker re-submitted itself before reporting). `0`: it has none.
     fn capacity_retries(&self) -> u64 {
         0
@@ -512,7 +512,7 @@ impl Walker for GpuWalker {
             );
         }
         if r.header.flags & kf_cuda::abi::KFWR_HF_CUT != 0 {
-            // ★ 2026-11-15 (M4): the diff was larger than the report. Not an error: this window is
+            // The diff was larger than the report. Not an error: this window is
             // applied, the rest comes on the next walk (bounded: the first 32 lines).
             static CUT_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if CUT_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
@@ -558,7 +558,7 @@ impl Walker for GpuWalker {
     }
 }
 
-/// ★ 2026-11-15: one report's entries as the apply sees them (split out of [`GpuWalker`]'s `poll`
+/// One report's entries as the apply sees them (split out of [`GpuWalker`]'s `poll`
 /// so that the mapping of the report's per-entry flags is testable without a GPU).
 ///
 /// A window of a diff larger than the report (`KFWR_V_CUT`) is a PARTIAL diff, like one whose maps
@@ -707,15 +707,15 @@ fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
-/// ★ 2026-11-13 (enscape TDR hunt): one space's apply longer than this is named (`SLOW-APPLY`).
+/// One space's apply longer than this is named (`SLOW-APPLY`).
 pub const SLOW_APPLY_MS: u64 = 500;
-/// ★ 2026-11-13: a split longer than this, request -> done, is named (`SPLIT-LATE`); the user-ring
+/// A split longer than this, request -> done, is named (`SPLIT-LATE`); the user-ring
 /// counterpart (`USER_RING_SPLIT_WAIT`) uses the same figure.
 pub const SLOW_SPLIT_MS: u64 = 1000;
-/// ★ 2026-11-13: lines per boot for each slow-path line; the rest are only counted.
+/// Lines per boot for each slow-path line; the rest are only counted.
 pub const SLOW_LOG_CAP: u64 = 20;
 
-/// ★ 2026-11-15 (M4, review of PR #424 F2): the most walks ONE request (a split ticket or an
+/// The most walks ONE request (a split ticket or an
 /// invalidate) may spend on a diff larger than the report. A clean drain of the per-space maximum
 /// (1 Mi runs, a staged diff of up to three times that) is about a dozen windows at the report's
 /// 262 144 runs; refused runs re-carried by every window, or a guest that keeps editing its tables
@@ -731,7 +731,7 @@ pub fn exceeds_ms(ns: u64, ms: u64) -> bool {
     ns > ms.saturating_mul(1_000_000)
 }
 
-/// ★ 2026-11-13: process-wide host-map call statistics, fed from the two host call sites in
+/// Process-wide host-map call statistics, fed from the two host call sites in
 /// `ledger.rs` (one stitched batch = one call carrying `rows` rows as `pieces` file-contiguous
 /// pieces, i.e. `pieces` `MAP_FIXED` mmaps plus one reservation; one per-run map = one host RM map)
 /// and read by the apply logging. Relaxed atomics, written by the single VA thread; two clock
@@ -888,7 +888,7 @@ impl MapStatSnap {
     }
 }
 
-/// ★ 2026-11-13: whether the boot-wide worst apply / split (ns) differs, in whole milliseconds,
+/// Whether the boot-wide worst apply / split (ns) differs, in whole milliseconds,
 /// from what was last printed `(apply_ms, split_ms)` -- the periodic `VA_WORST` line prints then.
 #[must_use]
 pub fn worst_changed(printed_ms: (u64, u64), apply_ns_max: u64, split_ns_max: u64) -> bool {
@@ -945,9 +945,9 @@ enum Want {
         /// Walk exactly this space instead (a deferred TLB invalidate names
         /// the triggering channel's own space; `pdb` is then `None` and ignored).
         key: Option<VasKey>,
-        /// ★ 2026-11-13: when the channel asked (request -> done is `SPLIT-LATE`'s clock).
+        /// When the channel asked (request -> done is `SPLIT-LATE`'s clock).
         at: std::time::Instant,
-        /// ★ 2026-11-16 (observation only): this ticket's profile across its windows.
+        /// This ticket's profile across its windows.
         prof: crate::vaprof::TicketProf,
     },
 }
@@ -979,9 +979,9 @@ struct Batch {
     /// ★ `KF3_MAPLOG`: this walk's number (the n-th submitted), so its runs can be traced to its
     /// wants.
     id: u64,
-    /// ★ 2026-11-16 (observation only): the submit call's wall, ns.
+    /// The submit call's wall, ns.
     submit_ns: u64,
-    /// ★ 2026-11-16: [`Walker::capacity_retries`] at submit.
+    /// [`Walker::capacity_retries`] at submit.
     retries0: u64,
 }
 
@@ -1084,7 +1084,7 @@ pub struct VaStats {
     pub carve_kernel: u64,
     /// ★ P1+P2 inc A: the same on the guest kernel's CPU views (BAR1/BAR2) — count-only.
     pub carve_cpu: u64,
-    /// ★ 2026-10-10: carve-out bytes left absent from runs straddling the carve-out base
+    /// Carve-out bytes left absent from runs straddling the carve-out base
     /// ([`crate::apply::Applied::carve_clipped_bytes`]).
     pub carve_clipped_bytes: u64,
     /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
@@ -1116,15 +1116,15 @@ pub struct VaTiming {
     pub leaves_last: u64,
     /// Host verbs issued (maps + unmaps + invalidates).
     pub host_calls: u64,
-    /// ★ 2026-11-13: the longest ONE space's apply of the boot (ns; a max, never windowed).
+    /// The longest ONE space's apply of the boot (ns; a max, never windowed).
     pub apply_ns_max: u64,
-    /// ★ 2026-11-13: the longest split request -> done of the boot (ns; a max, never windowed).
+    /// The longest split request -> done of the boot (ns; a max, never windowed).
     pub split_ns_max: u64,
     /// ★ Applies over [`SLOW_APPLY_MS`] (all counted; only the first [`SLOW_LOG_CAP`] are printed).
     pub slow_applies: u64,
     /// ★ Splits over [`SLOW_SPLIT_MS`] (same rule).
     pub slow_splits: u64,
-    /// ★ 2026-11-16: the bounded phase profile (`crate::vaprof`, `V3_VA_PROFILE.md`).
+    /// The bounded phase profile (`crate::vaprof`, `V3_VA_PROFILE.md`).
     pub prof: crate::vaprof::VaProfCounters,
 }
 
@@ -1190,13 +1190,13 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     store_bytes: u64,
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
     pending: Vec<Want>,
-    /// ★ 2026-11-13: line budgets of `SLOW-APPLY` and `SPLIT-LATE`.
+    /// Line budgets of `SLOW-APPLY` and `SPLIT-LATE`.
     slow_apply_lines: LineBudget,
     slow_split_lines: LineBudget,
-    /// ★ 2026-11-15: windows spent so far per request (`(0, ticket)` for a split, `(1, seq)` for an
+    /// Windows spent so far per request (`(0, ticket)` for a split, `(1, seq)` for an
     /// invalidate); dropped when the request completes or fails.
     cut_windows: BTreeMap<(u8, u64), u32>,
-    /// ★ 2026-11-15: [`MAX_CUT_WINDOWS_PER_REQUEST`] (a test lowers it).
+    /// [`MAX_CUT_WINDOWS_PER_REQUEST`] (a test lowers it).
     pub cut_window_budget: u32,
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
@@ -1217,7 +1217,7 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// refused ([`VaManager::with_carve`]); `store_bytes` (no bound) until set.
     carve: u64,
     carve_refuse: bool,
-    /// ★ 2026-11-16 (observation only): the slow-record ring, its print budget, the clock origin of
+    /// The slow-record ring, its print budget, the clock origin of
     /// both, and the threshold (ns; [`crate::vaprof::SLOW_PROFILE_NS`], a test lowers it).
     slow: crate::vaprof::SlowSink,
     /// See above.
@@ -1491,7 +1491,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.on_split_queued(pdb, ticket, None, trigger);
     }
 
-    /// ★ 2026-11-16: [`Self::on_split`] with the worker's enqueue time `queued` (observation only:
+    /// [`Self::on_split`] with the worker's enqueue time `queued` (observation only:
     /// enqueue -> acceptance is profiled; nothing else differs).
     pub fn on_split_queued(
         &mut self,
@@ -1529,7 +1529,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.pump(trigger);
     }
 
-    /// ★ 2026-11-16 (observation only): a ticket accepted at `at` that a worker queued at `queued`.
+    /// A ticket accepted at `at` that a worker queued at `queued`.
     fn accept_prof(
         &mut self,
         queued: Option<std::time::Instant>,
@@ -1553,7 +1553,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.on_split_space_queued(key, ticket, None, trigger);
     }
 
-    /// ★ 2026-11-16: [`Self::on_split_space`] with the worker's enqueue time (observation only).
+    /// [`Self::on_split_space`] with the worker's enqueue time (observation only).
     pub fn on_split_space_queued(
         &mut self,
         key: VasKey,
@@ -1737,7 +1737,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
-    /// ★ 2026-11-13: account one space's apply; name it (`SLOW-APPLY`) when it exceeded
+    /// Account one space's apply; name it (`SLOW-APPLY`) when it exceeded
     /// [`SLOW_APPLY_MS`]. Hot path: one compare and a max; nothing is formatted below the threshold.
     /// Everything printed is host-measured or a host-assigned id/count (nothing guest bytes).
     fn note_apply(
@@ -1805,7 +1805,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         );
     }
 
-    /// ★ 2026-11-13: a split finished; account request -> done and name it (`SPLIT-LATE`) when it
+    /// A split finished; account request -> done and name it (`SPLIT-LATE`) when it
     /// exceeded [`SLOW_SPLIT_MS`]. Never prints below the threshold.
     fn note_split_done(
         &mut self,
@@ -1836,7 +1836,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
-    /// ★ 2026-11-16 (observation only, `crate::vaprof`): account one space's apply and its phases;
+    /// Account one space's apply and its phases;
     /// keep a detailed record when it is longer than `threshold_ns` ([`Self::slow_profile_ns`]).
     /// An associated function: the apply loop holds `self.table` and the apply configuration.
     fn note_apply_prof(
@@ -1894,7 +1894,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         );
     }
 
-    /// ★ 2026-11-16 (observation only): a split reached its verdict after an apply walk; account its
+    /// A split reached its verdict after an apply walk; account its
     /// request latency (enqueue, else acceptance, to verdict) and keep a record when it is slow.
     fn note_ticket_prof(
         &mut self,
@@ -1939,14 +1939,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         );
     }
 
-    /// ★ 2026-11-16 (observation only): the slow records held now, oldest first, with their
+    /// The slow records held now, oldest first, with their
     /// sequence number and whether they were printed.
     #[must_use]
     pub fn slow_records(&self) -> Vec<(u64, crate::vaprof::SlowRecord, bool)> {
         self.slow.ring.held()
     }
 
-    /// ★ 2026-11-16: at teardown — the held slow records that were NOT printed (oldest first), then
+    /// At teardown — the held slow records that were NOT printed (oldest first), then
     /// one summary line. Bounded by the ring ([`crate::vaprof::SLOW_RING`] + 1 lines); the records
     /// returned are marked printed, so a second call returns only the summary.
     pub fn slow_ring_dump(&mut self) -> Vec<String> {
@@ -2044,7 +2044,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 return out;
             }
         };
-        // ★ 2026-11-16 (observation only): this window's collect/decode and hidden re-walks.
+        // This window's collect/decode and hidden re-walks.
         let collect_ns = ns_since(t_poll);
         out.collected = true;
         let Some(mut batch) = self.inflight.take() else {
@@ -2082,7 +2082,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
         let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
-        // ★ 2026-11-15 (M4): the spaces whose report was a window of a larger diff.
+        // The spaces whose report was a window of a larger diff.
         // (space, its entry carries no runs, a run of its own entry applied)
         let mut cut_keys: Vec<(VasKey, bool, bool)> = Vec::new();
         let cfg = ApplyCfg {
@@ -2341,7 +2341,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.stats.spaces_reconciled = self.stats.spaces_reconciled.saturating_add(1);
             }
             if e.cut {
-                // ★ 2026-11-15 (M4): the diff goes on past this window. A refused MAP (absence) must
+                // The diff goes on past this window. A refused MAP (absence) must
                 // not complete the split early — runs, UNMAPs among them, are still unreported — so a
                 // cut entry stays partial unless the failure is a hard one. Whether the window did
                 // anything is decided below, over the whole report.
@@ -2350,7 +2350,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             out.applied.push((key, a));
         }
-        // ★ 2026-11-15 (M4): a window of a larger diff continues unless it was a hard failure, and a
+        // A window of a larger diff continues unless it was a hard failure, and a
         // window in which NOTHING of ITS OWN space applied is refused by name rather than re-walked for
         // ever or completed over runs still unreported. (Review of PR #424 F1: this was judged over the
         // whole report, so a space whose window never applies was re-walked for ever while another
@@ -2377,7 +2377,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             }
         }
-        // ★ 2026-11-15 (review of PR #424 F2): the walks one request may spend on windows are bounded.
+        // The walks one request may spend on windows are bounded.
         for (w, keys, _) in &batch.wants {
             let id = match w {
                 Want::Split { ticket, .. } => (0u8, *ticket),
@@ -2418,7 +2418,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 done.generation
             ));
         }
-        // ★ 2026-11-16 (observation only): each split this window carried rides one more window.
+        // Each split this window carried rides one more window.
         let applied_ns = applied_ns.get(..n_applied).unwrap_or(&[]);
         let apply_all_ns = applied_ns
             .iter()
@@ -2622,9 +2622,9 @@ mod tests {
         diff_runs: Vec<usize>,
         /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
         refuse_in: Option<u64>,
-        /// ★ 2026-11-15 (M4): the report's run capacity; a larger diff is cut as the kernel cuts it.
+        /// The report's run capacity; a larger diff is cut as the kernel cuts it.
         report_cap: Option<usize>,
-        /// ★ 2026-11-16: hidden capacity re-walks so far ([`Walker::capacity_retries`]; a test bumps it).
+        /// Hidden capacity re-walks so far ([`Walker::capacity_retries`]; a test bumps it).
         retries: u64,
     }
 
@@ -4063,7 +4063,7 @@ mod tests {
         assert!(e.iter().all(|x| x.partial && x.runs.is_empty()));
     }
 
-    /// ★★★ 2026-11-15 (M4) — `[measured f4a b20fd84b]` one diff larger than the report's run
+    /// `[measured f4a b20fd84b]` one diff larger than the report's run
     /// capacity was refused (`walk report TRUNCATED`), the split failed and the channel died. Now
     /// the report carries a window, every window is applied and acknowledged, and the split is NOT
     /// done until the diff is empty: 25 scattered maps at a report capacity of 10 are three walks.
@@ -4893,7 +4893,7 @@ mod tests {
         assert!(busy(&r.port), "never cleared: nothing was applied");
     }
 
-    // ---- 2026-11-13 slow-path instrumentation (enscape TDR hunt) ----
+    // Slow-path instrumentation (enscape TDR hunt)
 
     /// The threshold is STRICTLY greater: exactly at it is not slow, one ns over is.
     #[test]
@@ -5331,7 +5331,7 @@ mod tests {
         assert!(!worst_changed((6, 7), 6_000_000, 7_000_000));
         assert!(worst_changed((6, 7), 6_000_000, 9_000_000));
     }
-    /// ★ 2026-11-16 (`V3_VA_PROFILE.md`): a fixed sequence of splits (windowed, PDB_ALL, a remap),
+    /// (`V3_VA_PROFILE.md`): a fixed sequence of splits (windowed, PDB_ALL, a remap),
     /// invalidates and a refused map, rendered as everything the manager decided: host ops in
     /// order, each walk's verdict codes, the split outcomes, the reconciled spaces and the
     /// decision counters. `split` asks for one split (the caller chooses the API).

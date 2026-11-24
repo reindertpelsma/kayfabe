@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! The checks a PE must pass before kf3 serves it as its GOP.
 //!
-//! ★ Arch-neutral (`docs/OWNER_RULINGS.md` §K, 2026-10-03): the driver is built for the arch kayfabe
+//! ★ Arch-neutral: the driver is built for the arch kayfabe
 //! itself is built for, so a PE is accepted for either machine the ROM can name — x86-64 (`0x8664`)
 //! or AArch64 (`0xAA64`) — and [`crate::pack`] copies the PE's own COFF `Machine` into the ROM's
 //! `EfiMachineType`. Any other machine is refused by name. Which of the two a kf3 build serves is
@@ -158,7 +158,7 @@ pub fn check(pe: &[u8]) -> Result<PeInfo, PeError> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// ★ A Secure Boot signature, supplied at run time (2026-10-04, branch `v3-windows`, OWNER_RULINGS §K)
+// ★ A Secure Boot signature, supplied at run time
 // ---------------------------------------------------------------------------------------------
 
 /// `WIN_CERTIFICATE.wRevision` for the current Authenticode format (PE/COFF spec, "The Attribute
@@ -428,7 +428,7 @@ mod tests {
     }
 
     /// ★ §K: an AArch64 driver is a driver kf3 serves, with its own machine reported — before
-    /// 2026-10-03 (v3-gop) `check` refused every machine but x86-64.
+    /// `check` refused every machine but x86-64.
     #[test]
     fn an_aarch64_driver_passes_with_its_own_machine() {
         let info = check(&synthetic(
@@ -494,7 +494,7 @@ mod tests {
         synthetic(MACHINE_X64, SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER, true)
     }
 
-    /// ★ 2026-10-04 (v3-windows): an sbsign-shaped signature of the embedded driver is accepted,
+    /// An sbsign-shaped signature of the embedded driver is accepted,
     /// and says where its table is.
     #[test]
     fn an_sbsign_shaped_signature_of_the_same_driver_is_accepted() {

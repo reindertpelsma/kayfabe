@@ -146,7 +146,7 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
     let mut c = chain(&log);
     objects(&mut *c);
 
-    // 1. RC recovery (stub, owner ruling §S): GET reports ENABLED whatever the guest's input
+    // 1. RC recovery: GET reports ENABLED whatever the guest's input
     //    word, SET(ENABLED) is recorded (the VFIO sequence), a third value is refused 0x1f.
     assert_eq!(
         params(

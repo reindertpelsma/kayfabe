@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — **the VIDEO tier of the T-mode rewriter** (Win11 Edge/YouTube TDR, defect 2 of
+//! **The VIDEO tier of the T-mode rewriter** (Win11 Edge/YouTube TDR, defect 2 of
 //! `traces/win11_userring_20261014/`).
 //!
 //! A guest-KERNEL channel on a video engine (NVDEC, NVENC, NVJPG, OFA) is born Translated on a host

@@ -362,7 +362,7 @@ fn a_floorswept_hosts_fb_masks_are_served_verbatim_never_rebuilt_from_a_count() 
     );
 }
 
-/// ★ 2026-10-08 (Windows 580.88): the one boot-time `FB_GET_INFO_V2` Windows sends — the 19 indices of
+/// The one boot-time `FB_GET_INFO_V2` Windows sends — the 19 indices of
 /// vfio-8/9/10 (`[measured, run53 at 80169b57, 2026-10-08]`) — is served whole once the host facts carry
 /// the seven extra rows (`kf_rm::hostquery::FORWARDED_FB_EXTRA_INDICES`), each word the host's own, in
 /// the guest's order. Values: the real RTX 4070's replies (`vfio8-9-10-fb-bus-info.txt`).

@@ -25,7 +25,7 @@ impl GuestRamAuthority for Ram {
         panic!("no registration write")
     }
 }
-/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_MEMORY_LIST_PROBE`, isolated in child processes): the
+/// the
 /// contiguous-SYSRAM descriptor is served to a guest that declared the measured Windows build with
 /// `windows-support` on, and to NO other: a Linux declaration, no declaration, and `windows-support=off`
 /// with a Windows declaration all reach the refusal the descriptor always got.
@@ -189,7 +189,7 @@ fn run(
             payload[off..off + 4].copy_from_slice(&v.to_le_bytes());
         }
         let reply = policy.respond(&command(RpcFunction::RmControl, payload));
-        // ★ 2026-11-15: the one control the Windows profile answers is the software-runlist submit
+        // The one control the Windows profile answers is the software-runlist submit
         // (`0x20801111`, host-owned scheduling), and only for a declared Windows guest; the memory-list
         // opt-in itself never widens a control.
         let profile_answer = enabled && control == 0x2080_1111;

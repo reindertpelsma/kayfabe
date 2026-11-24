@@ -244,12 +244,12 @@ pub struct VbiosProfile {
     pub vbios_oem_version: u8,
     /// The FWSEC ucode descriptor this profile declares.
     pub fwsec: FwsecProfile,
-    /// ★ 2026-09-28 — which FWSEC descriptor version the image carries: the one the guest's
+    /// Which FWSEC descriptor version the image carries: the one the guest's
     /// HS-falcon HAL can run ([`FwsecDescVersion`]).
     pub fwsec_desc: FwsecDescVersion,
 }
 
-/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 4) — **the FWSEC descriptor version, a
+/// **The FWSEC descriptor version, a
 /// family fact of the guest's HS-falcon HAL.**
 ///
 /// The descriptor version decides the boot type (`ogkm-580: kernel_gsp_fwsec.c:1058-1080`): V2 →
@@ -690,7 +690,7 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
 
     // ── Descriptor and payload geometry, validated against the driver's own
     //    inequalities before a single byte is written. ──────────────────────
-    // ★ 2026-09-28: V2 carries no signatures in the descriptor (the WITH_LOADER path copies code
+    // V2 carries no signatures in the descriptor (the WITH_LOADER path copies code
     // and data verbatim, `kernel_gsp_fwsec.c:705-866`); V3 carries `SignatureCount` of them.
     let v3 = profile.fwsec_desc == FwsecDescVersion::V3FromHs;
     if v3 && fw.signature_count == 0 {
@@ -1012,7 +1012,7 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
         c.u16(desc + 42, 0); // Reserved
     } else {
         // ── The FWSEC descriptor, V2 ("15d" = 60 bytes) ──────────────────────
-        // ★ 2026-09-28 (Turing). `s_vbiosFillFlcnUcodeFromDescV2` (`kernel_gsp_fwsec.c:705-866`)
+        // . `s_vbiosFillFlcnUcodeFromDescV2` (`kernel_gsp_fwsec.c:705-866`)
         // reads code at `descOffset + descSize` and data `DMEMOffset` bytes further, so the same
         // payload layout as V3 (`dataOffset = IMEMLoadSize`) holds with `DMEMOffset =
         // IMEMLoadSize`; the DMEM interface table below is therefore where V3 has it. The

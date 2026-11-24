@@ -1,4 +1,4 @@
-//! ★ 2026-10-31 (provenance fix): the Windows-cell tables (`kf_abi::hoststub`,
+//! The Windows-cell tables (`kf_abi::hoststub`,
 //! `kf_abi::sw_runlist`) may carry only values with a public source. This test is the CI gate:
 //! every row has a source tag of an accepted kind (`ogkm-<version>:<ref>`, `measured:...`,
 //! `host-derived:...`; a `binary`/`re`/`blob` origin is refused), and every trace line a
@@ -43,7 +43,7 @@ fn every_row_of_every_windows_cell_has_an_accepted_source_tag() {
     }
     let s = sw_runlist::cell(windows_wire()).unwrap();
     check_rows(s.rows, sw_runlist::ITEMS).unwrap_or_else(|e| panic!("sw_runlist: {e}"));
-    // 2026-11-01: the measured allocation-only cell merged from the Blackwell branch follows the same rule.
+    // The measured allocation-only cell merged from the Blackwell branch follows the same rule.
     let native: Vec<_> = sw_runlist::native_cell_rows().collect();
     assert!(
         !native.is_empty(),

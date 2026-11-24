@@ -176,7 +176,7 @@ pub const VF_USERMODE_PAGE: u64 = 0x00BB_0000;
 /// dev_vm.h`, `class/clc361.h:29-30`) — what `kfifoGetUsermodeMapInfo_GV100` hands a user client
 /// (`kernel_fifo_gv100.c:170-171`: `*pSize = DRF_SIZE(NVC361)`), on every family.
 ///
-/// ⊘⊘ 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`, security): the trap classified only the FIRST
+/// (`V3_HW_BOUNDARY_INVENTORY.md`, security): the trap classified only the FIRST
 /// 4 KiB page ([`PAGE`]) as userspace-mappable, so an unprivileged guest process writing
 /// `0xBB1000..0xBBFFFF` through its own usermode mapping reached the PRIVILEGED arm — a shadow
 /// store plus a privileged-ring push per write, i.e. guest userspace could fill the ring reserved
@@ -246,7 +246,7 @@ pub fn memory_map(
     }
 
     // ---- BAR1: plain RAM throughout, on EVERY family — one memslot (`THE_CONSTRAINTS.md` §23). ----
-    // ⊘⊘⊘ 2026-09-26: Hopper+ used to carve a fixed "doorbell page" at 0x9_0000 here. RM places
+    // Hopper+ used to carve a fixed "doorbell page" at 0x9_0000 here. RM places
     // the BAR1 usermode view where ITS BAR1 allocator chooses, per mapping, so a setup-time carve
     // can only be wrong; the view is overlaid at runtime where the guest's BAR1 PTEs put it
     // (`crate::bar1db`, `V3_BAR1_DOORBELL.md`). `doorbell` no longer shapes BAR1 at all.

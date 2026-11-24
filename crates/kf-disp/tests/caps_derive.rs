@@ -569,7 +569,7 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.unmeasured.len(), 1);
     }
     // GB205 now has its own independently measured580 row.
-    // ★ 2026-10-20 (bw-resume): GB202 (impl 2) has its OWN measured 580 row now; it is served
+    // GB202 (impl 2) has its OWN measured 580 row now; it is served
     // from that row, never from GB205/GB206.
     {
         let die = Die {
@@ -582,7 +582,7 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
         assert!(p.why.contains("GB202"), "{}", p.why);
     }
-    // ★ 2026-11-03 (lease 58957600): GB203 (impl 3) has its OWN measured 580 row now, served from
+    // GB203 (impl 3) has its OWN measured 580 row now, served from
     // that row; GB207 (impl 7) stays unmeasured and cannot borrow a neighbour's.
     {
         let die = Die {
