@@ -65,6 +65,7 @@ class Qmp:
             except OSError:
                 time.sleep(0.2)
         self.f = self.s.makefile("rw")
+        self.events = []
         self.f.readline()
         self.cmd("qmp_capabilities")
 
@@ -76,8 +77,24 @@ class Qmp:
             if not line:
                 raise RuntimeError("QMP closed")
             msg = json.loads(line)
+            if "event" in msg:
+                self.events.append([time.time(), msg["event"]])
             if "return" in msg or "error" in msg:
                 return msg
+
+
+def acpi_io(qmp):
+    """The ACPI PM I/O regions as the machine maps them now (HMP `info mtree -f`)."""
+    r = qmp.cmd("human-monitor-command", **{"command-line": "info mtree -f"}).get("return", "")
+    return sorted({ln.strip() for ln in r.splitlines() if re.search(r"acpi-(cnt|evt|tmr)|apm-io|pm-smi", ln)})
+
+
+def xp_page(qmp, gpa):
+    """The first 24 bytes of the TSC page as QEMU sees guest memory (HMP xp): sequence, reserved, scale, offset."""
+    if gpa is None:
+        return None
+    r = qmp.cmd("human-monitor-command", **{"command-line": "xp /3gx 0x%x" % gpa}).get("return", "")
+    return " ".join(r.split())
 
 
 def ssh_argv(key, cmd):
@@ -133,6 +150,9 @@ def main():
     ap.add_argument("--key", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--cycles", type=int, default=3)
+    ap.add_argument("--machine", default="q35,accel=kvm,smm=on")
+    ap.add_argument("--ovmf-code", default=None, help="OVMF code image (pflash unit 0; default: QEMU's SeaBIOS)")
+    ap.add_argument("--ovmf-vars", default=None, help="OVMF variable store template, copied per variant (pflash unit 1)")
     a = ap.parse_args()
     out = Path(a.out) / a.variant
     out.mkdir(parents=True, exist_ok=True)
@@ -144,13 +164,19 @@ def main():
     subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", "qcow2", "-b", a.base, str(disk)], check=True)
     qmp_path = str(run / "qmp.sock")
     argv = [a.qemu, "-name", "wakemsr-" + a.variant,
-            "-machine", "q35,accel=kvm,smm=on", "-m", "1024", "-smp", "2,sockets=1,cores=2,threads=1", "-cpu", a.cpu,
+            "-machine", a.machine, "-m", "1024", "-smp", "2,sockets=1,cores=2,threads=1", "-cpu", a.cpu,
             "-global", "ICH9-LPC.disable_s3=0", "-global", "ICH9-LPC.disable_s4=1",
             "-rtc", "base=utc", "-global", "kvm-pit.lost_tick_policy=discard",
             "-drive", "file=%s,if=virtio,format=qcow2" % disk, "-drive", "file=%s,if=virtio,format=raw,readonly=on" % a.cidata,
             "-netdev", "user,id=n0,hostfwd=tcp:127.0.0.1:%d-:22" % PORT, "-device", "virtio-net-pci,netdev=n0",
             "-qmp", "unix:%s,server=on,wait=off" % qmp_path, "-serial", "file:%s" % (out / "serial.log"),
-            "-display", "none", "-vga", "std"]
+            "-display", "none", "-vga", "std", "-trace", "system_wakeup_request"]
+    if a.ovmf_code:
+        vars_copy = run / "OVMF_VARS.fd"
+        vars_copy.write_bytes(Path(a.ovmf_vars).read_bytes())
+        argv += ["-global", "driver=cfi.pflash01,property=secure,value=on",
+                 "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=%s" % a.ovmf_code,
+                 "-drive", "if=pflash,format=raw,unit=1,file=%s" % vars_copy]
     (out / "qemu_argv.json").write_text(json.dumps(argv[1:], indent=1))
     ver = subprocess.run([a.qemu, "--version"], capture_output=True, text=True).stdout.strip()
     res = {"variant": a.variant, "cpu": a.cpu, "seeded": a.seed, "qemu_version": ver, "cycles": []}
@@ -166,16 +192,24 @@ def main():
         gssh(a.key, "cat > /tmp/guest_msr.py", stdin=helper)
         rc, so, _ = gssh(a.key, "uname -r; cat /proc/cmdline; sudo dmesg | grep -i -E 'hypervisor detected|hyper-v|clocksource' | head -20")
         (out / "guest_boot_info.txt").write_text(so)
-        if a.seed:
-            rc, so, se = gssh(a.key, "sudo python3 /tmp/guest_msr.py seed")
-            (out / "seed.json").write_text(so + se)
         boot_trace = trace_take(out / "boot_trace.txt.gz")
+        page_gpa = 0x3D001000 if a.seed else None
+        for m in re.finditer(r"msr_write 40000021 = (0x[0-9a-f]+)", boot_trace):
+            v = int(m[1], 16)
+            page_gpa = (v & ~0xFFF) if v & 1 else page_gpa
+        res["tsc_page_gpa"] = hex(page_gpa) if page_gpa is not None else None
         res["boot_trace"] = summarize_trace(boot_trace)["counts"]
         for n in range(1, a.cycles + 1):
             cyc = {"n": n}
             gssh(a.key, "sudo rm -rf /root/wm; sudo mkdir -p /root/wm")
+            if a.seed:
+                rc, so, se = gssh(a.key, "sudo python3 /tmp/guest_msr.py seed")
+                (out / ("c%d_seed.json" % n)).write_text(so + se)
+            qmp.events.clear()
+            cyc["acpi_io_before"] = acpi_io(qmp)
+            cyc["tsc_page_before"] = xp_page(qmp, page_gpa)
             wput("trace_marker", "WAKEPROBE cycle %d start" % n)
-            subprocess.Popen(ssh_argv(a.key, "sudo setsid nohup python3 /tmp/guest_msr.py cycle /root/wm %d >/dev/null 2>&1 &" % n),
+            subprocess.Popen(ssh_argv(a.key, "sudo sh -c 'setsid nohup python3 /tmp/guest_msr.py cycle /root/wm %d >/root/wm/c%d_helper.log 2>&1 &'" % (n, n)),
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             t0 = time.time()
             status = None
@@ -185,12 +219,20 @@ def main():
                     break
                 time.sleep(0.5)
             cyc["status_before_wake"] = status
+            cyc["qmp_events_before_wake"] = list(qmp.events)
             if status != "suspended":
                 cyc["verdict"] = "no suspend"
+                time.sleep(3)
+                cyc["acpi_io_after"] = acpi_io(qmp)
+                for name in ("c%d_helper.log" % n, "c%d_pre.json" % n, "c%d_post.json" % n, "c%d_dmesg.txt" % n):
+                    rc, so, se = gssh(a.key, "sudo cat /root/wm/%s" % name)
+                    (out / ("nosuspend_" + name)).write_text(so + se)
                 res["cycles"].append(cyc)
                 continue
             cyc["host_mono_suspended"] = time.clock_gettime(time.CLOCK_MONOTONIC)
-            time.sleep(5)
+            time.sleep(2)
+            cyc["tsc_page_suspended"] = xp_page(qmp, page_gpa)
+            time.sleep(3)
             wput("trace_marker", "WAKEPROBE cycle %d system_wakeup" % n)
             cyc["host_realtime_wake"] = time.time()
             cyc["host_mono_wake"] = time.clock_gettime(time.CLOCK_MONOTONIC)
@@ -212,6 +254,10 @@ def main():
             s = summarize_trace(text)
             (out / ("c%d_trace_summary.json" % n)).write_text(json.dumps(s, indent=1))
             cyc["trace_counts"] = s["counts"]
+            cyc["acpi_io_after"] = acpi_io(qmp)
+            cyc["tsc_page_after"] = xp_page(qmp, page_gpa)
+            qmp.cmd("query-status")
+            cyc["qmp_events"] = list(qmp.events)
             res["cycles"].append(cyc)
             (out / "result.json").write_text(json.dumps(res, indent=1))
         try:

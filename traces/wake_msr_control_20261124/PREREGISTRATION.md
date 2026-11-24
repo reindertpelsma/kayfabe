@@ -88,3 +88,20 @@ Stable host TSC required (`current_clocksource` = `tsc`, no "TSC unstable" in `d
 `tsc=reliable clocksource=tsc` as `traces/win11_s3_wake_20261123/` did, and say so. A cycle whose guest does not reach
 `suspended` within 60 s is reported as "no suspend" and does not count for or against H1. Measured and inferred are kept
 apart in the README. Cap: 1.5 USD and 2 box-hours.
+
+## Addendum 1 (2026-11-24 ~00:57Z, written before the OVMF runs' results were read)
+
+Changes to the method, with the reason. The hypotheses and falsifiers above are unchanged.
+
+- **Firmware: OVMF instead of SeaBIOS** (`OVMF_CODE_4M.secboot.fd` + `OVMF_VARS_4M.fd`, `cfi.pflash01 secure=on`, as
+  `win_vm.sh` uses). With SeaBIOS + `smm=on`, only the first S3 of a boot reaches QEMU: after the wake QEMU's memory map
+  has no `acpi-evt`/`acpi-cnt`/`acpi-tmr` I/O regions any more (HMP `info mtree -f`, run `dbg-A-seabios`, arm A, so not
+  Hyper-V related): the wake reset disables the ICH9 PMBASE and SeaBIOS's resume path does not restore it, so the guest's
+  second `SLP_EN` write goes nowhere and Linux "resumes" in 12 ms. OVMF restores it (run `dbg-A-ovmf2`: 2/2 cycles
+  reached `suspended`, regions present after each wake). Disclosed: the SeaBIOS runs `K-stock-try2`/`-seabios-try3`
+  already showed cycle 1's values before this addendum; they are kept in the evidence and reported as such.
+- **The K probe re-seeds the MSRs before every cycle** (before: once after boot), since a wipe in cycle 1 would leave
+  nothing to wipe in cycle 2.
+- **The TSC page is read by the host** (HMP `xp /3gx` at the page's GPA, before the suspend, while suspended, after the
+  wake): under OVMF the guest's `/dev/mem` read of that page dies with SIGILL, so the guest-side copy is reported as an
+  error there. For H-* the GPA is the guest kernel's last `REFERENCE_TSC` write in the boot trace.

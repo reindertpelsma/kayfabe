@@ -62,6 +62,15 @@ def seed_plan():
 
 
 def tsc_page():
+    """Read in a child with a time limit: under OVMF the /dev/mem read of this page was seen to block."""
+    try:
+        r = subprocess.run([sys.executable, os.path.abspath(__file__), "tscpage"], capture_output=True, text=True, timeout=3)
+        return json.loads(r.stdout) if r.stdout.strip() else {"error": "rc=%d %s" % (r.returncode, r.stderr[-200:])}
+    except (subprocess.TimeoutExpired, ValueError) as e:
+        return {"error": str(e)[:200]}
+
+
+def tsc_page_direct():
     try:
         fd = os.open("/dev/mem", os.O_RDONLY | os.O_SYNC)
         try:
@@ -129,6 +138,8 @@ def main(argv):
         print(json.dumps(res))
     elif argv[0] == "read":
         print(json.dumps(snapshot(), sort_keys=True))
+    elif argv[0] == "tscpage":
+        print(json.dumps(tsc_page_direct()))
     elif argv[0] == "cycle":
         cycle(argv[1], argv[2])
     else:
