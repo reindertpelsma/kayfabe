@@ -80,7 +80,7 @@ fn the_use_sites_read_the_property() {
             "DEFINE_PROP_BOOL(\"report-utilization\", Kf3State, report_utilization, true),",
         ),
         (
-            "the C header declares the parameter after windows_support and before unmapped_reads_zero (ABI 36)",
+            "the C header declares the parameter after windows_support and before unmapped_reads_zero (ABI 36 and later)",
             &h,
             "uint32_t windows_support, uint32_t report_utilization, uint32_t unmapped_reads_zero, void **out,",
         ),

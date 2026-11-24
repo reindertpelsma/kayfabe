@@ -84,7 +84,10 @@
  * zero on the host) after windows_support. 34 is taken by an unmerged branch (claude/util-flag-20261117). */
 /* 36 (2026-11-19, merge of claude/util-flag-20261117 into next): both 34 and 35, in that order: kf3_realize takes
  * report_utilization (34) and then unmapped_reads_zero (35) after windows_support. */
-#define KF3_ABI 36
+/* 37 (2026-11-24, claude/sparse-fill-on-20261124, docs/design/V3_SPARSE_RESIDENCY_RCA.md): no signature change. The
+ * unmapped-reads-zero property defaults to ON for every guest (it was off). The default is C text, so the number
+ * moves: a QEMU built from the old kf3.c would otherwise keep the old default against this archive without a word. */
+#define KF3_ABI 37
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u

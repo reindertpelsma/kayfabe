@@ -190,7 +190,7 @@ pub struct SimRm {
     /// (the mirror's own reservation pad, a stray, a remnant): such an answer reaches the apply as
     /// `HeldByHost` and the guest's leaf is silently absent. Must stay empty (`sim::check`).
     pub self_held: Vec<String>,
-    /// ★ 2026-11-18: the fill of the STATIC guest ranges (`HostRm::set_guest_va_fill`; the
+    /// The fill of the STATIC guest ranges (`HostRm::set_guest_va_fill`; the
     /// `unmapped-reads-zero` property). Micro reservations always take `NVOS32_RESERVE_FLAGS`.
     pub fill: kf_host::channel::GuestVaFill,
 }
