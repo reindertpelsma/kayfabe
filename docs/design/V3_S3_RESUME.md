@@ -8,7 +8,9 @@ guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in
 fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** **UPDATE 2026-11-23 (§7c, above §7b):
 that TDR has two causes; the first (every RAM lease revoked by the wake's flat-view re-split) is fixed, the second (kf3's display
 engine stops window channel 1 after the wake) is open, so Windows still takes a TDR after every wake.** **UPDATE 2026-11-23 (§7d, above §7c): the second cause is root-caused and fixed (a kept wake's register-shadow restore showed the
-guest GET 0 on every display channel); with it, 3 consecutive S3 cycles in one boot without a TDR on one box.** Measured = a run or a GPU-free test named here; inferred =
+guest GET 0 on every display channel); with it, 3 consecutive S3 cycles in one boot without a TDR on one box.** **UPDATE 2026-11-24 (§7e, above §7d):
+a real-passthrough control (RTX 4070 on vfio-pci, stock QEMU, no kf3 device, stable host TSC) shows the same post-wake storm with
+the Hyper-V flags (7/7), none with `host,-vmx` (5/5 clean) or with the wake hunk (5/5 clean), and no post-wake TDR.** Measured = a run or a GPU-free test named here; inferred =
 read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
@@ -164,6 +166,19 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   `V3_DISPLAY_PLANES_ORACLE.md` §tables. `traces/linux_s3_resume_20261014/fixed/validation-559db30c/`
   (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
   target dir — a harness slip, rerun).
+
+## 7e. UPDATE 2026-11-24: the wake storm without kayfabe (VFIO control; refines §7b's symptom)
+
+**STATUS: RESEARCH, 2026-11-24. MEASURED on the owner's pc (bare metal, clocksource tsc, RTX 4070 through vfio-pci, no kf3
+device), Windows 11 Pro 25H2 with 580.88, q35; evidence `traces/vfio_s3_control_20261124/README.md` (hypotheses and the
+owner's falsifier committed before the run).**
+- [measured] Arm B flags on stock QEMU (distro 10.2.1: 5/5; upstream 10.2.4: 2/2) storm after every wake: TSC page
+  byte-identical across the wake, TSC offset moved by about minus the uptime, 1-5 million exits/s, no ssh. Arm A
+  (`host,-vmx`) 5/5 clean; arm B on 10.2.4 with the `hyperv-wake` hunk 5/5 clean. The storm is QEMU's wake, not kf3's.
+- [measured] The symptom differs from §7b: here the stale page time was positive (about +4 s), so every post-wake
+  deadline was ~122 s in the past and KVM expired each at once (an expiry storm, all delivered); in §7b's R1t it was
+  negative and the deadline wrapped and never fired. Same cause, the sign decides the form [inferred].
+- [measured] 0 `nvlddmkm` 153 in 10 clean VFIO wakes: the real driver does not TDR after a QEMU wake on this die.
 
 ## 7d. UPDATE 2026-11-23: the display window-channel stop, root cause and fix (corrects §7c's "Still open" below)
 
