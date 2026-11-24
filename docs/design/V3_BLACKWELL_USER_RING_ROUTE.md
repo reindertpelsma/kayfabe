@@ -1,8 +1,15 @@
 # Blackwell Windows user-work route: the creo-04 Xid 32 and a Blackwell-capable private ring
 
-**STATUS: DESIGN-ONLY, 2026-11-18.** Section 1 is a root-cause analysis from on-disk evidence: each link is
-marked MEASURED or INFERRED. Section 2 is a design. Nothing in section 2 is implemented or measured on
-hardware yet. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
+**STATUS: DESIGN-ONLY, 2026-11-18. CORRECTION, 2026-11-24 (above the text it corrects):** one part of section 2 was
+measured on hardware after this status was written, in one run on 2026-11-18, and section 2.7 reports it. That run
+measured, on one GB203 die with host driver 595.91.07: variant A raised one `Xid 32 ... intr 00200000` on its single
+attempt (A has N=1, not the N=3 that was asked for; the run stopped there, fail closed), and the witness release
+after it landed. The verdict function that stopped the run was revised AFTER the run, to accept that result, and
+the revised verdict has not been used on hardware: one run of three planned. B ran 5 times and C 3 times without a
+host Xid. The text outputs of that run are in `traces/semprobe_gb203_20261118/`. Nothing else in section 2 is
+implemented (stage 1 is a pure module that no production path calls) or measured on hardware, and the
+Windows user-work route is still declined on Blackwell. Section 1 is a root-cause analysis from on-disk evidence:
+each link is marked MEASURED or INFERRED. Section 2 is a design. The GPU-free reproduction is `crates/kf-qemu/src/chan.rs` `mod replay_creo04_gb203_xid32`
 (fixture `crates/kf-qemu/tests/fixtures/creo04_gb203_xid32_replay.txt`); its invariant test is ignored as a
 known defect, and a pin test proves the replay still reproduces.
 
@@ -181,3 +188,185 @@ Stages:
    - Baseline for that falsifier on the SPEC 5070 Ti: 2 host Xid 32 (`intr 00800000`) in 3 SPEC viewset boots
      (2026-11-18, S2). "No host Xid 32 over full SPEC viewset boots" is measurable against it.
    - Control: the same tree on an Ada box (creo-04 PASS).
+
+### 2.4 Stage 1 as built (GPU-free, not wired)
+
+`crates/kf-chan/src/user_semaphore.rs` (2026-11-18). The route stays declined on Blackwell by default. The
+family gate (`userrelay::ring_relay_serves`) flips only in the PR that carries the Blackwell box evidence.
+
+- `ProgressSource::for_family`: `EngineUserd` wherever `engine_writes_userd_gp_get`, `SemaphoreMarker` on
+  Blackwell.
+- `marker_cell`:
+  - On `EngineUserd` it returns `user_storage::host_marker_words`, the words `write_host_marker` writes. A test
+    pins them byte for byte for every non-Blackwell family. `write_host_marker` now calls that function; its
+    bytes are unchanged.
+  - On `SemaphoreMarker` it returns `[SEM_ADDR_LO x5 (incrementing): lo, hi, value, 0, SEM_EXECUTE 1]`
+    then `[NON_STALL_INTERRUPT 0]`, 32 bytes. This is UVM's own sequence on ca6f:
+    `uvm_hal_hopper_host_semaphore_release` (`ogkm-595 kernel-open/nvidia-uvm/uvm_hopper_host.c:31-52`; the
+    push is at :45), reached by `BLACKWELL_CHANNEL_GPFIFO_B` through `uvm_hal.c:198-232`. The interrupt is
+    `uvm_hal_turing_host_interrupt`, `uvm_turing_host.c:79-81`.
+  - Difference from UVM (design choice, unmeasured): UVM precedes the release with `uvm_hal_wfi_membar`. The
+    relay needs only "processed", not memory ordering of the guest's work, so the cell has none.
+- `SemaphoreProgress`: the credit ledger. Tests cover:
+  - credit from processed markers only;
+  - publication bounded by capacity - 1;
+  - the 16-bit count extended across its wrap;
+  - fail-closed on untagged, not-issued and regressing words, sticky.
+- `tests/user_turn_unit.rs` `with_the_semaphore_source_the_first_gate_opens_on_blackwell`: the twin of
+  `without_engine_written_userd_words_the_first_gate_never_opens`, through the real relay turn.
+
+### 2.5 Hostile-guest analysis of the semaphore word
+
+**Where it lives (stage 2 design).** One host-owned 4 KiB vidmem page per Windows user-work private ring, in
+the ring's private storage allocation. It is mapped GPU-WRITABLE at a kayfabe-chosen VA in the twin's restricted
+address space, which is the guest's mirrored space: the twin's GPU work, the guest's included, runs there. The
+ring, descriptors and marker cells stay read-only mappings, as today. So the word IS guest-addressable: any
+forwarded pushbuffer of that channel can release a semaphore to its VA.
+
+**What a forging guest can achieve** (every case bounded by `SemaphoreProgress`):
+
+| forged write | effect | bound |
+|---|---|---|
+| untagged value, or `0` after progress | the channel fails closed (sticky). The relay stops publishing, and the existing dead path RCs the guest's own channel | no host state touched |
+| a tagged value of a marker not issued, or older than the last seen | fails closed, as above | same |
+| the NEXT issued value, early (before the engine processed the marker) | the relay believes entries were consumed early. It may reuse its own private slots and open its own SYNC_WAIT gates early. The guest's own channel then runs its own work out of order, or re-reads its own descriptors | self-harm to that channel only. Publication never exceeds capacity - 1 (`free()`), slots are this ring's own, staging stays in this ring's fixed cells (`CELL_BYTES`), and no host verb or mapping is taken from the word |
+| any value, to wrap the 16-bit count | refused: at most `entries` <= 0x8000 markers are outstanding, so a wrapped value has delta > outstanding | fails closed |
+
+Not reachable from the word (by construction of stage 1 and the existing storage):
+- writes into another channel's memory, or into host memory outside this page;
+- unbounded publication;
+- a credit beyond what was published;
+- any host RM call.
+
+The word is readable by the guest's GPU work too. It only holds this channel's own marker counts.
+
+**The rule this needs.** OWNER_RULINGS §AI, owner clarification 2026-10-12 (verbatim): *"no host owned maps
+should remain for linux guests, but can be lifted for windows if its the only thing fixing the migration linux
+doesn't use". The owner also authorizes necessary Windows-specific rule changes, with an afterwards report of
+what changed and why.*
+
+The same section says the read-only target stands "because the native reference mechanism works without a
+GPU-writable private fence". That premise fails on Blackwell, where no engine writes `REFERENCE`. The "only
+thing" condition holds while O2 (authored native relocation) is unproven on GB20x. If O2 is proven there
+first, the lift is not needed. OWNER_RULINGS.md is not edited by this change.
+
+### 2.6 REPORT for the owner (Windows-only GPU-writable private word), to be shown before stage 2 merges
+
+- **What changes:** a Windows user-work private ring on a family whose engine writes no `USERD` back (today:
+  Blackwell) gets one host-owned 4 KiB vidmem page mapped GPU-writable in that twin's restricted address space.
+  Linux guests: unchanged. No host-owned writable map is ever made for them, and `WindowsUserRingPermit` stays
+  Windows-only. Ada and every other family: unchanged, byte for byte.
+- **What is written:** one 32-bit word, the marker value (`0x4B46_0000 | count`). It is written by the channel's
+  host engine executing kayfabe's own marker cell (read-only, authored), or by the guest's own forwarded methods
+  if it forges.
+- **Who reads it:** the kayfabe relay worker, through its CPU view, never on a vCPU. The guest's GPU work could
+  read it too; it holds only this channel's own counts.
+- **Bounds:**
+  - one page per ring, freed with the twin;
+  - credit at most capacity - 1, from markers that were issued only;
+  - monotonic;
+  - 16-bit extension safe because at most 0x8000 markers are outstanding;
+  - no host action derived from it.
+- **Failure mode:** any value the relay did not issue (untagged, not issued, regressed) fails that channel
+  closed: the relay stops, and an RC goes to that guest channel. Other channels and the host are untouched.
+  A forged early-but-valid value can only reorder that channel's own work.
+- **Why:** SPEC creo-04 on GB203 took Xid 32 because Blackwell Windows user-work twins cannot use the private
+  ring (§1). The private ring is the route that serves Windows' ring-growth trigger, and on Blackwell its only
+  progress proof needs a GPU-written word.
+
+### 2.7 Probe: is `SET_REFERENCE` the METHOD Xid on GB20x? (MEASURED once on GB203 for A, 2026-11-18; B and C 5 and 3 runs; nothing yet on GB205 or another driver)
+
+**Result, MEASURED 2026-11-18 05:30-05:32Z** (SPEC box, RTX 5070 Ti GB203, host 595.91.07, no kf3 guest running;
+probe `d360cd651`, binary sha256 `f0bdeb65...`; USER channel class `0xca6f`). The text outputs are committed in
+`traces/semprobe_gb203_20261118/` (its README says what each file shows and what was not kept). **One run of three
+planned:** A has ONE attempt, so the Xid 32 is a single observation on one die and one driver.
+
+| variant | attempts | host Xid | word |
+|---|---|---|---|
+| A `SET_REFERENCE` then witness | 1 (the run stopped after it, fail-closed) | `Xid 32 ... channel 0x00000002 intr 00200000` | witness `0x57170041` LANDED |
+| B stage-1 semaphore cell | 5 (2 as canary, then 3 children) | none | `0x4b460001` every time |
+| C `NON_STALL_INTERRUPT` then witness | 3 children | none | witness `0x57170043` every time |
+
+**Two intr bits, two causes:**
+- **`intr 00200000` (bit 21, METHOD in the GA100 meaning)** is what `SET_REFERENCE` (`0x50`) raises on GB203. So on GB203
+  the private ring's own `SET_REFERENCE` marker is refused, not only its progress words. INFERRED (B1n ran on a GB205,
+  not measured here): GB205 round B1n's "Xid 32 METHOD at the relay's first publication" is the same marker.
+  - The PBDMA raised the Xid AND executed the later witness release.
+  - The probe's first verdict expected the witness to be missing, so it stopped the run. The verdict is now
+    "exactly one Xid 32 with intr bit 21, whatever the witness".
+- **`intr 00800000` (bit 23, DEVICE)** is the creo-04 / enscape-01 event (§1): a software-subchannel method kicked
+  back to RM, the unserved ring-growth trigger. SET_REFERENCE is NOT that event.
+- **The stage-1 marker** (`SEM_*` release plus `NON_STALL_INTERRUPT`) processes cleanly on a USER ca6f channel, 5 of 5.
+  `NON_STALL_INTERRUPT` alone is clean too, 3 of 3.
+- The host stayed healthy after the deliberate A Xid: the later B/C runs raised no Xid, and `nvidia-smi -q` changed
+  only in throughput and temperature.
+
+**Built (2026-11-18):** `kf-harness` binary `kf-semmarker-probe`, pure part `kf_harness::semprobe` (unit-tested).
+It is a v3 tool. Nothing in the frozen `kayfabe-rm-ladder` is touched, and there is no unsafe code.
+
+How it differs from the sketch below:
+- The channel is a USER **copy-engine** channel. Host methods (`SET_REFERENCE`, `SEM_*`,
+  `NON_STALL_INTERRUPT`) are PBDMA methods whatever the engine, and B1n's METHOD Xids hit both its GR and CE
+  rings.
+- Instead of a non-stall event count, A and C end with a WITNESS release into the owned word. It lands only if
+  the PBDMA processed everything before it.
+
+Each attempt is one child process with:
+- a fresh VA space and USER channel;
+- a read-only command mapping;
+- one owned GPU-writable 64 KiB buffer;
+- USERD with no GPU mapping.
+
+Safety:
+- The parent kills a child after 20 s (10 s to reap) and reads the dmesg delta per attempt.
+- It records the exact words and methods.
+- It STOPS at the first outcome that is neither `Clean` nor (A only) `MethodRefused`: exactly one Xid 32 with
+  `intr 00200000`, whatever the witness (the first version of the verdict required the witness to be missing; the
+  2026-11-18 run showed it lands, and the verdict was revised after that run).
+- It refuses to start unless `--i-am-on-a-spec-box` is given, and refuses when the GPU's display connector is
+  connected or enabled, when another process holds the GPU's device node, or when a `qemu` or kf3 process is alive
+  (`kf_harness::semprobe_host`). Variant A raises a host Xid 32 on purpose, so the probe belongs on a dedicated
+  test box.
+
+Verdicts:
+- A: `MethodRefused` supports the inference; `Clean` falsifies it.
+- B: must be `Clean` with the word reading `0x4B460001`.
+- C: must be `Clean`.
+
+On a Blackwell box, bare metal first (the raw client, `kayfabe-rm-ladder` / `kf-rawclient`). A USER `0xca6f`
+channel on GR, three variants, each its own process with a fresh channel, N=3 each:
+
+| variant | pushes | if 0x50 is invalid on GB20x |
+|---|---|---|
+| A | `SET_REFERENCE 0x4B460001` alone | Xid 32 with `intr 00200000` (METHOD, bit 21, GA100 meaning) |
+| B | the stage-1 semaphore cell into an owned word | no Xid; the word reads `0x4B460001`; one non-stall event |
+| C | `NON_STALL_INTERRUPT 0` alone | no Xid |
+
+Capture:
+- host dmesg (`Xid` lines with `intr`) in a journal window per process;
+- the word's value;
+- the non-stall event count;
+- the binary's revision.
+
+Falsifier: A gives no Xid (then B1n's METHOD has another cause, to be named from its saved trace).
+
+### 2.8 Hardware runs to ask for
+
+1. **Now (stage 1 is GPU-free):** nothing on a Windows workload. Stage 1 is not wired, and a property-on run
+   needs stage 2.
+2. **After the probe arms exist (small raw-client PR):** §2.7 on one Blackwell box (GB203 or GB205),
+   bare metal, N=3 per variant. Pass for O1: A/B/C as in the table's right column, with B correct.
+3. **After stage 2 (the route admitted behind a property, default declined):** one Blackwell box, serial:
+   - `v3_gates.sh` 9/9;
+   - `build_kf3.sh`;
+   - the fast suite 30/30.
+   Then, with the property on:
+   - SPEC creo-04 (N=2) and GravityMark 1.89 Vulkan (N=1), each with `KF3_RPC_TRACE=1`;
+   - capture: the kf3 log, host dmesg with timestamps, SMI before/after, and the rows.
+   PASS means all of:
+   - no host Xid;
+   - no `USER_RING_ROUTE_DECLINED` line for `0xca6f`;
+   - a `0x50800104` registration served by the relay (the migration path logged);
+   - the rows PASS.
+   Control: the same tree on an Ada box, creo-04 PASS. Repeat property-off once on the Blackwell box to show
+   the failure is the route (H-F).

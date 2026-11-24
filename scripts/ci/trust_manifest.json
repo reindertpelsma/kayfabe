@@ -1867,6 +1867,12 @@
    "row": 35,
    "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
   },
+  "scripts/bench/windows/imgb_offline/zip_verify.py": {
+   "count": 3,
+   "class": "user-input",
+   "row": null,
+   "reason": "ranged reads of the head and tail of the private sealed Adobe image zip from the operator's own presigned-URL file (private R2 object, never public, no public origin to anchor): user input, trusted, recorded; the whole zip's sha256 is checked against the pin the operator passes before any member is used, and the image never enters git or leaves the box"
+  },
   "scripts/bench/windows/open_rows/kfopen_build.py": {
    "count": 4,
    "class": "native-route3",

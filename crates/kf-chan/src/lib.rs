@@ -39,6 +39,7 @@ pub mod user_loop;
 pub mod user_progress;
 pub mod user_ring;
 pub mod user_scan;
+pub mod user_semaphore;
 pub mod user_storage;
 pub mod user_stream;
 pub mod user_turn;

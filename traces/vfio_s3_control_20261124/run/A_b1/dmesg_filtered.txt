@@ -1,0 +1,400 @@
+[ 2324.143379] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2324.145743] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2324.145744] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2324.145745] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2324.145746] NVRM: No NVIDIA devices probed.
+[ 2324.342515] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2324.345389] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2324.345391] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2324.345392] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2324.345393] NVRM: No NVIDIA devices probed.
+[ 2324.544515] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2324.546866] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2324.546868] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2324.546870] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2324.546871] NVRM: No NVIDIA devices probed.
+[ 2324.718116] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2324.720431] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2324.720432] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2324.720434] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2324.720435] NVRM: No NVIDIA devices probed.
+[ 2324.890002] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2324.892573] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2324.892575] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2324.892576] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2324.892577] NVRM: No NVIDIA devices probed.
+[ 2325.091167] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2325.093745] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2325.093747] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2325.093748] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2325.093749] NVRM: No NVIDIA devices probed.
+[ 2325.288689] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2325.291365] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2325.291366] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2325.291367] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2325.291369] NVRM: No NVIDIA devices probed.
+[ 2325.492545] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2325.495315] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2325.495316] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2325.495318] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2325.495319] NVRM: No NVIDIA devices probed.
+[ 2325.687613] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2325.690163] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2325.690164] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2325.690166] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2325.690167] NVRM: No NVIDIA devices probed.
+[ 2325.875088] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2325.877676] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2325.877678] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2325.877679] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2325.877680] NVRM: No NVIDIA devices probed.
+[ 2326.063492] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.066093] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.066096] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.066098] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.066099] NVRM: No NVIDIA devices probed.
+[ 2326.254009] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.256587] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.256590] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.256591] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.256593] NVRM: No NVIDIA devices probed.
+[ 2326.427925] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.430658] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.430661] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.430663] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.430665] NVRM: No NVIDIA devices probed.
+[ 2326.621372] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.624134] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.624136] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.624137] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.624138] NVRM: No NVIDIA devices probed.
+[ 2326.806178] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.809423] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.809426] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.809427] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.809429] NVRM: No NVIDIA devices probed.
+[ 2326.995592] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2326.998263] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2326.998265] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2326.998267] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2326.998268] NVRM: No NVIDIA devices probed.
+[ 2327.205420] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2327.207982] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2327.207984] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2327.207985] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2327.207986] NVRM: No NVIDIA devices probed.
+[ 2327.395994] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2327.398801] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2327.398803] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2327.398804] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2327.398806] NVRM: No NVIDIA devices probed.
+[ 2327.592333] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2327.594904] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2327.594905] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2327.594906] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2327.594908] NVRM: No NVIDIA devices probed.
+[ 2327.770873] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2327.773378] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2327.773379] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2327.773381] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2327.773382] NVRM: No NVIDIA devices probed.
+[ 2327.949481] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2327.951931] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2327.951934] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2327.951936] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2327.951938] NVRM: No NVIDIA devices probed.
+[ 2328.134566] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2328.136915] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2328.136916] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2328.136917] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2328.136918] NVRM: No NVIDIA devices probed.
+[ 2328.332032] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2328.334623] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2328.334624] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2328.334626] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2328.334627] NVRM: No NVIDIA devices probed.
+[ 2328.525335] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2328.528985] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2328.528987] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2328.528988] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2328.528989] NVRM: No NVIDIA devices probed.
+[ 2328.708521] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2328.711365] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2328.711367] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2328.711368] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2328.711369] NVRM: No NVIDIA devices probed.
+[ 2328.899077] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2328.901657] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2328.901659] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2328.901660] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2328.901662] NVRM: No NVIDIA devices probed.
+[ 2329.086733] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2329.089288] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2329.089289] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2329.089291] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2329.089292] NVRM: No NVIDIA devices probed.
+[ 2329.277953] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2329.280365] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2329.280367] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2329.280368] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2329.280370] NVRM: No NVIDIA devices probed.
+[ 2329.453400] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2329.455748] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2329.455750] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2329.455751] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2329.455752] NVRM: No NVIDIA devices probed.
+[ 2329.657175] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2329.659896] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2329.659899] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2329.659900] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2329.659902] NVRM: No NVIDIA devices probed.
+[ 2329.847182] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2329.849792] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2329.849795] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2329.849796] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2329.849798] NVRM: No NVIDIA devices probed.
+[ 2330.057769] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2330.060305] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2330.060307] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2330.060308] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2330.060309] NVRM: No NVIDIA devices probed.
+[ 2330.264369] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2330.267635] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2330.267637] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2330.267639] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2330.267640] NVRM: No NVIDIA devices probed.
+[ 2330.494409] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2330.497085] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2330.497088] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2330.497089] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2330.497091] NVRM: No NVIDIA devices probed.
+[ 2330.701116] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2330.703473] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2330.703475] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2330.703476] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2330.703478] NVRM: No NVIDIA devices probed.
+[ 2330.977620] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2330.980408] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2330.980409] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2330.980410] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2330.980411] NVRM: No NVIDIA devices probed.
+[ 2331.082943] vfio-pci 0000:01:00.0: resetting
+[ 2331.083016] vfio-pci 0000:01:00.1: resetting
+[ 2331.206513] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2331.209389] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2331.209390] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2331.209392] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2331.209393] NVRM: No NVIDIA devices probed.
+[ 2331.330768] vfio-pci 0000:01:00.0: reset done
+[ 2331.330798] vfio-pci 0000:01:00.1: reset done
+[ 2331.381216] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2331.383594] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2331.383596] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2331.383597] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2331.383598] NVRM: No NVIDIA devices probed.
+[ 2331.594204] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2331.596998] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2331.597000] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2331.597001] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2331.597002] NVRM: No NVIDIA devices probed.
+[ 2331.779243] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2331.782263] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2331.782265] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2331.782266] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2331.782267] NVRM: No NVIDIA devices probed.
+[ 2331.972872] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2331.976083] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2331.976085] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2331.976086] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2331.976087] NVRM: No NVIDIA devices probed.
+[ 2332.156445] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2332.159471] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2332.159472] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2332.159474] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2332.159475] NVRM: No NVIDIA devices probed.
+[ 2332.326519] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2332.329174] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2332.329176] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2332.329177] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2332.329178] NVRM: No NVIDIA devices probed.
+[ 2332.500078] NVRM: GPU 0000:01:00.0 is already bound to vfio-pci.
+[ 2332.502438] NVRM: The NVIDIA probe routine was not called for 1 device(s).
+[ 2332.502440] NVRM: This can occur when another driver was loaded and 
+               NVRM: obtained ownership of the NVIDIA device(s).
+[ 2332.502441] NVRM: Try unloading the conflicting kernel module (and/or
+               NVRM: reconfigure your kernel without the conflicting
+               NVRM: driver(s)), then try loading the NVIDIA kernel module
+               NVRM: again.
+[ 2332.502442] NVRM: No NVIDIA devices probed.

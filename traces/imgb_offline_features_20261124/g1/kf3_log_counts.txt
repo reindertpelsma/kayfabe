@@ -1,0 +1,30 @@
+walk per-space CEILING	0
+walk report CUT	0
+refuse_mask=0x1000	0
+DEAD	0
+VA_SLOW	256
+refuse_mask=0x400	581
+CLEARED OVER ABSENCE	64
+panic	0
+error	15
+kf3: family=Ada phase=Running trapped=6284275 applied=51494 refused=0 serviced=47730 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81410 mem[inval=20662 walks=219969/219969 cleared=20662 
+101451 /workspace/img/work/g1/run/qemu.log
+41235:kf3: VA_SLOW n=1 kind=apply t_ms=601627 ticket=35555 walk=42423 key=0xc1d00027ff000850 pdb=0x1efa3a000 slot=8 window=1 apply_us=307398 maps=16386 unmaps=0 prep_n=1 prep_us=3495 prep_max_us=3495 unmapph_n=1 unmapph_us=39 unmapph_max_us=39 mapph_n=1 mapph_
+41237:kf3: VA_SLOW n=2 kind=ticket t_ms=601627 ticket=35555 walk=42423 key=0x0 pdb=0x1efa3a000 windows=1 req_us=322011 q_inbox_us=18 mgr_us=321992 submit_us=16 walk_us=14482 collect_us=510 apply_own_us=307398 apply_all_us=307398 cap_retries=2
+41240:kf3: VA_SLOW n=3 kind=ticket t_ms=601923 ticket=35560 walk=42428 key=0x0 pdb=0x1efa3a000 windows=1 req_us=251160 q_inbox_us=15 mgr_us=251144 submit_us=8 walk_us=7970 collect_us=313 apply_own_us=243090 apply_all_us=243090 cap_retries=0
+kf3:
+1003:kf-rm: chanlink: CHAN-FACTS 0xc1e00007:0xbaba0045 parent=0xcaf00000 class=0xc56f engine=Some(1) flags=0x200120 hVASpace=0xbaba0042 ctxShare=0x0 vas=0xc1e00007:Some(baba0042) tsg=None device=0xcaf00000 kernel=true privilege=Some(ChannelPrivilege { level: 2
+1138:kf-rm: chanlink: CHAN-FACTS 0xc1e00008:0x2 parent=0xb class=0xc56f engine=Some(b) flags=0xa00120 hVASpace=0xa ctxShare=0x0 vas=0xc1e00008:Some(a) tsg=None device=0xb kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags
+1819:kf-rm: chanlink: CHAN-FACTS 0xc1d00013:0xff040000 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200220 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff010000 kernel=true privilege=Some(ChannelPrivilege { level
+1869:kf-rm: chanlink: CHAN-FACTS 0xc1d00015:0xff040001 parent=0xff0e0000 class=0xc56f engine=Some(1) flags=0x200320 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff010000 kernel=true privilege=Some(ChannelPrivilege { level
+2029:kf-rm: chanlink: CHAN-FACTS 0xc1d00016:0xff040002 parent=0xff020000 class=0xc56f engine=Some(b) flags=0x200420 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_o
+2075:kf-rm: chanlink: CHAN-FACTS 0xc1d00018:0xff040003 parent=0xff020000 class=0xc56f engine=Some(13) flags=0x200520 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_
+2118:kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level
+2153:kf-rm: chanlink: CHAN-FACTS 0xc1d0001a:0xff040005 parent=0xff020000 class=0xc56f engine=Some(1c) flags=0x200720 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_
+2935:kf-rm: chanlink: CHAN-FACTS 0xc1d0002d:0xff04000d parent=0xff0e0000 class=0xc56f engine=Some(1) flags=0x201720 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00027:Some(ff000850) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level
+10501:kf3: USER_RING_LIFECYCLE (c1d0012c, ff040010) mode=Pointer Counts { entries_scan: 17, entries_pointer: 50, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_stream
+10530:kf3: USER_RING_LIFECYCLE (c1d0012b, ff04000f) mode=Pointer Counts { entries_scan: 17, entries_pointer: 50, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_stream
+10615:kf3: USER_RING_LIFECYCLE (c1d0012e, ff040011) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+10640:kf3: USER_RING_LIFECYCLE (c1d0012d, ff040012) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+11810:kf-rm: chanlink: CHAN-FACTS 0xc1d00144:0xff040019 parent=0xff0e0000 class=0xc56f engine=Some(c) flags=0x203320 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00129:Some(ff000850) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { leve
+11876:kf3: USER_RING_LIFECYCLE (c1d00133, ff04000f) mode=Pointer Counts { entries_scan: 17, entries_pointer: 50, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_stream

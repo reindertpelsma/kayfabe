@@ -1,0 +1,23 @@
+holders before stopping gdm: [2140, 2939]
+                     USER        PID ACCESS COMMAND
+/dev/nvidia-modeset: ubuntu     2939 F.... gnome-shell
+/dev/nvidia0:        ubuntu     2939 F...m gnome-shell
+/dev/nvidiactl:      ubuntu     2939 F...m gnome-shell
+/dev/dri/card1:      root          1 F.... systemd
+                     root       2140 F.... systemd-logind
+                     ubuntu     2939 F...m gnome-shell
+/dev/dri/renderD128: ubuntu     2939 F.... gnome-shell
+
+gdm stop: (0, '')
+persistenced stop: (0, '')
+holders after: []
+
+audio function 0000:01:00.1 released from snd_hda_intel rc=0 
+nvidia_drm refcnt 0: quiet
+rmmod nvidia_uvm rc=0 
+rmmod nvidia_drm rc=0 
+rmmod nvidia_modeset rc=0 
+rmmod nvidia rc=0 
+modprobe vfio-pci rc=0 
+0000:01:00.0 vfio-pci
+0000:01:00.1 vfio-pci

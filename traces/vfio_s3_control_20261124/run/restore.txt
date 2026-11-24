@@ -1,0 +1,12 @@
+rmmod vfio_pci rc=0 
+rmmod vfio_pci_core rc=0 
+modprobe nvidia rc=0 
+modprobe nvidia_modeset rc=0 
+modprobe nvidia_drm rc=0 
+modprobe nvidia_uvm rc=0 
+audio function driver after restore: snd_hda_intel
+persistenced: (0, '')
+gdm start: (0, '')
+nvidia-smi rc=0 NVIDIA GeForce RTX 4070, 595.91.07
+udevadm settle: (1, 'Timed out while waiting for udev queue to empty.\n')
+nvidia_uvm live refcnt 2 stable 60s, no nvidia modprobe/rmmod running: settled
