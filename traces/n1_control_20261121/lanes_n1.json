@@ -1,0 +1,37 @@
+{
+ "_comment": "N1 control table (traces/n1_control_20261121): same constants as scripts/bench/specviewperf/lanes.json; lane pcn1 = solidworks-08, enscape-01, unreal_engine-01; budget_s shortened (named deviation D2).",
+ "release": "15.0.0",
+ "setup_s": 2700,
+ "factor": 1.25,
+ "tail_reserve_s": 600,
+ "settle_s": 300,
+ "gather_retry_wait_s": 120,
+ "max_guest_boots": 3,
+ "min_free_gb": {
+  "pcn1": 60
+ },
+ "viewsets": {
+  "solidworks-08": {
+   "native_s": 989,
+   "budget_s": 2700,
+   "tree_gb": 7.5
+  },
+  "enscape-01": {
+   "native_s": 2042,
+   "budget_s": 5400,
+   "tree_gb": 2.2
+  },
+  "unreal_engine-01": {
+   "native_s": 1236,
+   "budget_s": 3600,
+   "tree_gb": 21.5
+  }
+ },
+ "lanes": {
+  "pcn1": [
+   "solidworks-08",
+   "enscape-01",
+   "unreal_engine-01"
+  ]
+ }
+}

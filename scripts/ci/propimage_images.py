@@ -47,6 +47,14 @@ FAILURE_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
 PINS_GLOB = "propimage_apps*_pins.json"
 MAX_URL_BYTES = 200 * 1024 ** 3
 PLAIN_ARGS = ("--superposition-run", "--fb-mb")            # the harness switches propimage_plain.py understands
+SWTPM_MIN = (0, 10, 0)
+SWTPM_ROLES = ("libtpms", "swtpm")                          # the order the recipe builds them in
+URLS_SCHEMA = "kayfabe.download-urls/1"
+# Route git of the swtpm build (2026-11-17): the commit that upstream's tag v0.10.1 points at, per project: `git ls-remote <url> 'refs/tags/v0.10.1^{}'`
+# (annotated tags: the peeled commit, not the tag object). Fetched by commit and verified with `git rev-parse HEAD`. These are not sha256 pins of a
+# built binary (there is none); the GitHub archive tarballs are not used standalone (MEASURED 2026-11-16 on a Vast box: the download fails the size check).
+SWTPM_GIT = {"libtpms": ("https://github.com/stefanberger/libtpms", "56c9f8b0b816391135f5a3112cb2feac4298caac"),
+             "swtpm": ("https://github.com/stefanberger/swtpm", "53841482b0a9a1dfe63a120b00283acfe588ee72")}
 
 
 # ---------------------------------------------------------------- sources
@@ -581,11 +589,82 @@ def summary_line(rec):
                                                            (" (%s)" % why) if why else "", "; STRICT: any skip is a failure" if rec["strict"] else "", lanes)
 
 
+# ---------------------------------------------------------------- swtpm >= 0.10 (docs/design/V3_PROPIMAGE_RUNNER.md, 2026-11-17)
+def url_file_names(path, refs):
+    """True when the presigned-URL file (kayfabe.download-urls/1) carries a URL for every one of `refs`. Only the names are looked at, never a value;
+    a file that is missing, not a plain small JSON file or of another shape just does not name them (the box then takes route git)."""
+    p = Path(path)
+    try:
+        if p.is_symlink() or not p.is_file() or p.stat().st_size > 1 << 20:
+            return False
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return False
+    urls = doc.get("urls") if type(doc) is dict and doc.get("schema") == URLS_SCHEMA else None
+    return type(urls) is dict and all(type(urls.get(r)) is str for r in refs)
+
+
+def tools_by_signed_ref(ctx, pins):
+    """The pins items of libtpms and swtpm when route signed applies (the pins file has both, each with a private `ref`, and the URL file names both
+    refs), else None."""
+    items = {i["role"]: i for i in pins["items"] if i["role"] in SWTPM_ROLES}
+    if set(items) != set(SWTPM_ROLES) or not all("ref" in i for i in items.values()):
+        return None
+    return items if url_file_names(ctx.urls, [i["ref"] for i in items.values()]) else None
+
+
+def clone_pinned(ctx, role, work, logs):
+    """`git init`, a fetch of the ONE pinned commit (depth 1) and a checkout of it; then `git rev-parse HEAD` must equal the pin. -> the directory."""
+    url, commit = SWTPM_GIT[role]
+    src = work / role
+    src.mkdir(parents=True, exist_ok=True)
+    env = dict(ctx.environ, GIT_TERMINAL_PROMPT="0", GIT_ALLOW_PROTOCOL="https")
+    try:
+        for argv in (["git", "init", "-q", str(src)], ["git", "-C", str(src), "fetch", "-q", "--depth", "1", url, commit],
+                     ["git", "-C", str(src), "-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"]):
+            if pa.run_command(ctx, argv, logs / "swtpm_source.log", 900, env=env) != 0:
+                raise pa.Refused("SWTPM_SOURCE")
+        done = ctx.runner(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=60, env=env)
+    except (OSError, subprocess.SubprocessError):
+        raise pa.Refused("SWTPM_SOURCE") from None
+    if done.returncode != 0 or (done.stdout or "").strip() != commit:
+        raise pa.Refused("SWTPM_SOURCE_COMMIT")
+    return src
+
+
+def build_tools(ctx, work, logs):
+    """Build swtpm 0.10.1 under /opt/tpm exactly as the legacy stage does (pa.build_swtpm), from the private signed tarballs when the URL file names
+    their refs (route signed; the tools pins hold in every mode: PIN_UNSET:<role> refuses before anything is fetched) and from the pinned upstream
+    commits otherwise (route git). Then every later boot uses it: SWTPM and LD_LIBRARY_PATH in ctx.environ, as the legacy stage sets them.
+    -> ("signed" | "git"). A named pa.Refused on every failure."""
+    base = work / "swtpm"
+    dl, src = base / "dl", base / "src"
+    for d in (dl, src):
+        d.mkdir(parents=True, exist_ok=True)
+    pins = pa.load_pins(ctx.pins_path)
+    items = tools_by_signed_ref(ctx, pins)
+    try:
+        if items:
+            manifest = pa.build_manifest(pins, True, roles=SWTPM_ROLES)
+            for it in manifest["items"]:
+                it["sources"] = [x for x in it["sources"] if x["kind"] == "signed"]           # the GitHub archive mirror is never tried here
+            (base / "manifest.json").write_text(json.dumps(manifest))
+            pa.fetch(ctx, base / "manifest.json", dl, logs)
+            env = pa.build_swtpm(ctx, dl, src, logs)
+        else:
+            env = pa.build_swtpm(ctx, dl, src, logs, trees={role: clone_pinned(ctx, role, src, logs) for role in SWTPM_ROLES})
+    except OSError:
+        raise pa.Refused("SWTPM_BUILD") from None                  # a program of the recipe is not on the box
+    ctx.environ.update(SWTPM=pa.SWTPM_PREFIX + "/bin/swtpm", LD_LIBRARY_PATH=env["LD_LIBRARY_PATH"])
+    ctx.environ.update(pa.swtpm_env(ctx.environ))
+    return "signed" if items else "git"
+
+
 def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
     """The generic stage. Returns the record; never raises for a named refusal."""
     rec = {"schema": SCHEMA, "verdict": "RETRY", "reason": "INTERRUPTED", "sha": ctx.sha, "strict": False, "pins_enforced": False, "family": None, "cpu_vendor": None,
            "preflight": [], "images": [], "summary": {"ran": 0, "passed": 0, "failed": 0, "skipped": 0, "classes": {}, "lanes": {"gate": {"ran": 0, "passed": 0}, "discovery": {"ran": 0, "passed": 0}}},
-           "strict_failures": [], "breakages": [], "platform": "kf3", "rows": []}
+           "strict_failures": [], "breakages": [], "platform": "kf3", "rows": [], "swtpm": {"version": None, "built": False}}
     klog = None
     try:
         pa.check_prefix(ctx.prefix)
@@ -608,11 +687,13 @@ def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
         rows = pa.cpu_rows(cpuinfo, pi=pi)
         rec["cpu_vendor"] = {"AuthenticAMD": "amd", "GenuineIntel": "intel"}.get(pi.parse_cpuinfo(cpuinfo)[0], "other")
         frow, rec["family"] = pa.family_row(ctx.hardware or {})
-        version = pa.swtpm_version(pa.swtpm_binary(ctx.environ), ctx.runner, ctx.environ)
+        version = pa.swtpm_version(pa.swtpm_binary(ctx.environ), ctx.runner, pa.swtpm_env(ctx.environ))
+        have_swtpm = bool(version and version >= SWTPM_MIN)
         free = ctx.free_bytes if ctx.free_bytes is not None else shutil.disk_usage(pa._existing(ctx.prefix)).free
         rows += [frow,
-                 pa.row("swtpm", "MATCH" if version and version >= (0, 10, 0) else "MISMATCH",
-                        ("%d.%d.%d" % version) if version else "missing or older than 0.10"),
+                 pa.row("swtpm", "MATCH" if have_swtpm else "WARN",
+                        ("%d.%d.%d" % version) if have_swtpm else "%s: swtpm 0.10.1 is built under %s before the first boot" % (
+                            ("%d.%d.%d" % version) if version else "missing", pa.SWTPM_PREFIX)),
                  pa.row("kf3_qemu", "MATCH" if os.access(ctx.qemu, os.X_OK) else "MISMATCH", "the kf3 QEMU of this revision"),
                  pa.row("disk", "MATCH" if free >= pa.DISK_HEADROOM else "MISMATCH", "free %d GiB" % (free >> 30))]
         rec["preflight"] = rows
@@ -622,6 +703,21 @@ def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
             return rec
         for d in ("logs", "out", "work", "gop"):
             (ctx.prefix / d).mkdir(parents=True, exist_ok=True)
+        swrow = next(r for r in rows if r["name"] == "swtpm")
+        if have_swtpm:
+            ctx.environ.update(pa.swtpm_env(ctx.environ))
+            rec["swtpm"]["version"] = "%d.%d.%d" % version
+        else:
+            # a box older than 0.10 (MEASURED 2026-11-17: a stock Vast Ubuntu 22.04 box has 0.6.3) is not refused: the legacy stage's build, before the first boot
+            try:
+                route = build_tools(ctx, ctx.prefix / "work", ctx.prefix / "logs")
+            except pa.Refused as r:
+                swrow.update(status="MISMATCH", detail=pa.clean("build failed: " + r.reason, 160))
+                raise
+            built = pa.swtpm_version(pa.swtpm_binary(ctx.environ), ctx.runner, ctx.environ)         # build_swtpm proved >= 0.10 with this environment
+            rec["swtpm"] = {"version": ".".join(str(x) for x in built) if built else None, "built": True}
+            swrow.update(status="MATCH", detail="built %s under %s (%s)" % (rec["swtpm"]["version"], pa.SWTPM_PREFIX,
+                                                                         "private signed tarballs" if route == "signed" else "pinned upstream commits"))
         klog = pa.KernelLog(ctx.prefix / "kernel", ctx.klog_source)
         klog.start()
         broker = ctx.checkout / "broker/nvkvm-display-broker"

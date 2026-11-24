@@ -1,0 +1,7 @@
+[2026-11-20T22:01:04+00:00] stage 595.84: clone ogkm 595.84 (HEAD must be the pinned commit)
+KF_TRUST name=ogkm-595.84 anchor=upstream-pin sha256=- size=- mode=trust-git-only gating=yes
+[2026-11-20T22:01:16+00:00] stage 595.84: make modules against 6.8.0-59-generic (-j30, CC=x86_64-linux-gnu-gcc-12)
+[2026-11-20T22:02:26+00:00] stage 595.84: modules ✔ version=595.84 vermagic=6.8.0-59-generic
+KF_TRUST name=nvidia-linux-run-595.84 anchor=official-checksum-url sha256=99c404e52131bf27bca6da0268dcce3ebedc7a73ab174071a995cf1a6c5eba06 size=423524924 mode=trust-git-only gating=yes
+[2026-11-20T22:02:47+00:00] stage 595.84: firmware ✔ gsp_ga10x.bin gsp_tu10x.bin 
+[2026-11-20T22:02:48+00:00] stage 595.84: STAGED ✔ /workspace/drivers/595.84

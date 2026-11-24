@@ -1,0 +1,49 @@
+{
+  "schema": "kf-vkcts-pins/1",
+  "status": "LIVE, 2026-11-17. Source pins for the open Vulkan CTS row (docs/design/V3_VULKAN_CTS_ROW.md). Only upstream git commits and upstream-published source digests; no pin of any binary or artifact that this repository builds.",
+  "cts": {
+    "url": "https://github.com/KhronosGroup/VK-GL-CTS.git",
+    "tag": "vulkan-cts-1.4.7.1",
+    "commit": "0d18b347943e5e843529a05c95220e27fe30c538"
+  },
+  "externals_git": {
+    "spirv-tools": {"url": "https://github.com/KhronosGroup/SPIRV-Tools.git", "commit": "1d0401cd2b68ae34cda9ff625bedd1be4ed6214a"},
+    "glslang": {"url": "https://github.com/KhronosGroup/glslang.git", "commit": "2ff6f609379ce43c4291c732cf6a19dd2461a680"},
+    "spirv-headers": {"url": "https://github.com/KhronosGroup/SPIRV-Headers.git", "commit": "cb42dec3830d3ac67fa449ecdc0c0f73d5e74498"},
+    "vulkan-docs": {"url": "https://github.com/KhronosGroup/Vulkan-Docs.git", "commit": "01aaacd99480487bf63830959513c5ca8ceb996d"},
+    "amber": {"url": "https://github.com/google/amber.git", "commit": "c9f1e2871ccbb0b0564c4a33e359801144f6b7c1"},
+    "jsoncpp": {"url": "https://github.com/open-source-parsers/jsoncpp.git", "commit": "89e2973c754a9c02a49974d839779b151e95afd6"},
+    "vulkansc-pcutil": {"url": "https://github.com/KhronosGroup/VulkanSC-pcutil.git", "commit": "f67d9e8e1c04f179ebeb837d21ab06192ad43fa0"},
+    "vulkan-video-samples": {"url": "https://github.com/KhronosGroup/Vulkan-Video-Samples.git", "commit": "a193f6496760d69afcd39eab4ae63bf32ec8b5e1"},
+    "video_generator": {"url": "https://github.com/Igalia/video_generator.git", "commit": "9703a0c9d8dcb25f71860a4978fe73922d05004a", "upstream_ref": "v0.1.1"}
+  },
+  "externals_files": {
+    "zlib": {"url": "https://github.com/madler/zlib/releases/download/v1.2.13/zlib-1.2.13.tar.gz", "sha256": "b3a24de97a8fdbc835b9833169501030b8977031bcb54b3b3ac13740f846ab30"},
+    "libpng": {"url": "https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.50.tar.gz", "sha256": "71158e53cfdf2877bc99bcab33641d78df3f48e6e0daad030afe9cb8c031aa46"},
+    "renderdoc": {"url": "https://raw.githubusercontent.com/baldurk/renderdoc/v1.1/renderdoc/api/app/renderdoc_app.h", "sha256": "e7b5f0aa5b1b0eadc63a1c624c0ca7f5af133aa857d6a4271b0ef3d0bdb6868e"}
+  },
+  "fetch_scripts": ["external/fetch_sources.py", "external/fetch_video_decode_samples.py", "external/fetch_video_encode_samples.py"],
+  "build": {
+    "target": "deqp-vk",
+    "cmake_args": [
+      "-DDEQP_TARGET=vulkan_headless",
+      "-DSELECTED_BUILD_TARGETS=deqp-vk",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DCMAKE_CXX_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+      "-DCMAKE_C_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+      "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+    ],
+    "min_free_gb": 25,
+    "mem_gb_per_job": 2.0,
+    "time_box_s": 5400
+  },
+  "run": {
+    "info_cases": ["dEQP-VK.info.device_properties", "dEQP-VK.info.device_extensions"],
+    "batch_cases": 40,
+    "case_timeout_s": 300,
+    "budget_s": 2100,
+    "max_idle_restarts": 6,
+    "caselist": "caselist.tsv",
+    "caselist_sha256": "a6e3d642a1e5b2fea3f103c6d16e416864fb6550ffd4f83dd3536c25693ea192"
+  }
+}

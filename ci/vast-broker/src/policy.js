@@ -49,6 +49,7 @@ export const BOOLEAN_VARS = Object.freeze([
   'ALLOW_UNKNOWN_COUNTRY',
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  'PROPIMAGES_ENABLED',
 ]);
 // The deployment's identity: without these no request can be authorized. A configuration error in
 // any other (policy) var must not stop the cron's teardown, which then runs on these vars and the
@@ -178,6 +179,8 @@ export function configuration(env) {
     deniedCountries,
     // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
     middleAppsEnabled: env.MIDDLE_APPS_ENABLED !== 'false',
+    // default OFF: a release leg builds and stores a payload instruction (src/legs.js) only when the owner sets this to 'true'
+    propimagesEnabled: env.PROPIMAGES_ENABLED === 'true',
     allowUnknownCountry: env.ALLOW_UNKNOWN_COUNTRY === 'true',
     maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.payloadProfiles.small.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,
@@ -606,10 +609,48 @@ export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = c
     )
       refuse('CONFIG_RESOURCE_PROFILE', 503);
   if (profile === 'release') validateStagePolicy(cfg.releaseStages ?? []);
+  // The instruction-derived estimate (src/bandwidth.js, `cfg.bandwidthEstimate = {downGb, upGb}`) REPLACES the profile number when
+  // it is present and valid (a finite number above zero), so it can lower a leg's allowance as well as raise it; it is capped at
+  // the profile's hard maximum (defaults.json payloadBandwidthMax, which may not be below the profile row). An invalid estimate
+  // is ignored: the profile number stays. The owner's BANDWIDTH_*_GB override still only raises (max) what the estimate gave.
+  let down = base.bandwidthDownGb,
+    up = base.bandwidthUpGb,
+    estimate;
+  const given = cfg.bandwidthEstimate;
+  if (given !== undefined) {
+    const top = DEFAULTS.payloadBandwidthMax?.[name];
+    if (
+      !top ||
+      !finite(top.downGb, 10000) ||
+      !finite(top.upGb, 10000) ||
+      top.downGb < base.bandwidthDownGb ||
+      top.upGb < base.bandwidthUpGb
+    )
+      refuse('CONFIG_RESOURCE_PROFILE', 503);
+    const usable = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0;
+    const pick = (n, max) => (usable(n) ? Math.min(Math.ceil(n), max) : undefined);
+    const d = pick(given?.downGb, top.downGb),
+      u = pick(given?.upGb, top.upGb);
+    if (d !== undefined) down = d;
+    if (u !== undefined) up = u;
+    estimate = {
+      downGb: down,
+      upGb: up,
+      source: [
+        d !== undefined ? 'down:estimate' : 'down:profile',
+        u !== undefined ? 'up:estimate' : 'up:profile',
+      ],
+      capped: [
+        usable(given?.downGb) && Math.ceil(given.downGb) > top.downGb,
+        usable(given?.upGb) && Math.ceil(given.upGb) > top.upGb,
+      ],
+    };
+  }
   return {
     ...base,
-    bandwidthDownGb: Math.max(base.bandwidthDownGb, cfg.bandwidthDownOverride ?? 0),
-    bandwidthUpGb: Math.max(base.bandwidthUpGb, cfg.bandwidthUpOverride ?? 0),
+    bandwidthDownGb: Math.max(down, cfg.bandwidthDownOverride ?? 0),
+    bandwidthUpGb: Math.max(up, cfg.bandwidthUpOverride ?? 0),
+    ...(estimate === undefined ? {} : { estimate }),
     maxInetUsdPerGb: Math.min(base.maxInetUsdPerGb, cfg.maxInetOverride ?? base.maxInetUsdPerGb),
   };
 }
@@ -661,6 +702,45 @@ export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
     total,
   };
 }
+// The listed-RAM floor of the kfml row `managed_oversub` (2026-11-20). MEASURED: a Vast KVM box listed with an RTX 4090
+// of 49140 MiB (the 48 GB variant) and 125 GB of RAM (MemTotal 103.5 GB) made the row NOT_RUN ("host RAM too small to
+// oversubscribe VRAM by 25%"). The row manages VRAM x KFML_OVERSUB_FACTOR bytes and needs that to fit in
+// KFML_OVERSUB_HOST_FRACTION of MemAvailable (scripts/kfml/kfml/workloads/managed_oversub.py: OVERSUB_FACTOR,
+// OVERSUB_HOST_RAM_FRACTION; test/offer-ram-vram.test.js reads them there and fails when these two differ). A KVM box
+// gets only part of the LISTED RAM as MemTotal. MEASURED 2026-11-20 (as reported): 64 GB listed gave 47.6 GiB, 125 GB
+// listed gave 103.6 GiB, a share of about 0.75 to 0.83; KVM_RAM_FRACTION is the conservative end of that range
+// (MemAvailable is below MemTotal by what the earlier stages leave in the page cache; that margin is not measured).
+// The flat `quality.ramMb` floor was calibrated on 24 GB dies and cannot hold for a 48 GB one, so the floor is derived
+// from the offer's own VRAM. Units: Vast reports both gpu_ram and cpu_ram in MiB.
+export const KFML_OVERSUB_FACTOR = 1.25;
+export const KFML_OVERSUB_HOST_FRACTION = 0.6;
+export const KVM_RAM_FRACTION = 0.75;
+// The floor is the requirement of ONE row of ONE stage, so it binds a LEG, never a profile: a leg is { tier, stages }, the
+// tier it runs and the stage names it will run (src/bandwidth.js legStages: plannedStages with the payload's --only/--skip).
+// The row is a large-tier row of the kfml stage (scripts/kfml/kfml/workloads/managed_oversub.py, tier="large"); the middle
+// tier plans kfml too but its kfml run leaves that row out. Other stages keep their own minimums (the Adobe images' 48 GiB
+// listed is not touched here). An evaluation that names no leg (the profile alone, /availability, the plan's market read)
+// does not apply it; the release plan applies it per leg (src/release.js) and so does the rent path (src/index.js).
+export const KFML_OVERSUB_TIERS = ['large'];
+export const kfmlOversubRuns = (leg) =>
+  Array.isArray(leg?.stages) &&
+  leg.stages.includes('kfml') &&
+  KFML_OVERSUB_TIERS.includes(leg.tier);
+// Listed MiB of RAM an offer with `gpuRamMb` MiB of VRAM needs for the row to run.
+export const listedRamNeededMb = (gpuRamMb) =>
+  (KFML_OVERSUB_FACTOR * gpuRamMb) / KFML_OVERSUB_HOST_FRACTION / KVM_RAM_FRACTION;
+// Offer sizes are whole MiB; the floor itself is admitted despite binary floating point.
+const LISTED_RAM_TOLERANCE_MB = 1e-6;
+const atLeast = (value, floor) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= floor;
+// True when the offer is refused for the leg: the leg runs the row and the listed RAM is below the floor. An offer
+// without a numeric gpu_ram or cpu_ram fails closed.
+export const refusedByRamRule = (offer, leg) =>
+  kfmlOversubRuns(leg) &&
+  !(
+    atLeast(offer.gpu_ram, 1) &&
+    atLeast(offer.cpu_ram, listedRamNeededMb(offer.gpu_ram) - LISTED_RAM_TOLERANCE_MB)
+  );
 // The explicit per-profile caps: price per hour, daily USD, daily rental count, concurrent rentals,
 // hard runtime and the die set offers are admitted from. Every admission, contract and budget
 // check reads its numbers here, so a tier cannot borrow another tier's cap.
@@ -703,7 +783,14 @@ export function profileCaps(cfg, profile) {
 export function offerRejections(
   offer,
   cfg,
-  { profile = 'check', median = offer.dlperf, badMachines = [], badHosts = [], reserved = [] } = {},
+  {
+    profile = 'check',
+    median = offer.dlperf,
+    badMachines = [],
+    badHosts = [],
+    reserved = [],
+    leg,
+  } = {},
 ) {
   const q = cfg.quality[profile],
     reasons = [],
@@ -749,6 +836,9 @@ export function offerRejections(
     !enough('cpu_ram', q.ramMb)
   )
     reasons.push('CPU_RAM');
+  // The kfml row `managed_oversub` needs host RAM in proportion to the die's VRAM (see KVM_RAM_FRACTION above); only for a
+  // leg that runs it (`leg`: { tier, stages }; no leg, no rule).
+  if (refusedByRamRule(offer, leg)) reasons.push('RAM_BELOW_VRAM_RULE');
   if (
     !enough('dlperf', Number.MIN_VALUE) ||
     typeof median !== 'number' ||

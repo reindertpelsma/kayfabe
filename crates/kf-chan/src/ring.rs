@@ -57,7 +57,7 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
-    /// ★ OWNER_RULINGS §U: a software method on a subchannel bound to one of the channel's own
+    /// A software method on a subchannel bound to one of the channel's own
     /// software objects. Like a split: everything before it must COMPLETE before its action runs,
     /// and nothing after it is fetched into the host ring until the action is done.
     Sw {
@@ -220,7 +220,7 @@ impl TranslatedRing {
         r
     }
 
-    /// ★ Owner rulings 2026-10-07: the kernel-GR tier and the software-subchannel rule for this
+    /// The kernel-GR tier and software-subchannel configuration for this
     /// T-mode ring ([`crate::tmode::GrConfig`]). No effect on a ring that is not in T-mode.
     pub fn set_gr(&mut self, gr: crate::tmode::GrConfig) {
         if let Some((st, _)) = self.tmode.as_deref_mut() {
@@ -246,7 +246,7 @@ impl TranslatedRing {
             .map_or((0, 0), |(st, _)| (st.gr_methods, st.inert_binds))
     }
 
-    /// ★ OWNER_RULINGS §U: software-object binds accepted so far (T-mode only).
+    /// Software-object binds accepted so far (T-mode only).
     #[must_use]
     pub fn swobj_binds(&self) -> u64 {
         self.tmode.as_deref().map_or(0, |(st, _)| st.swobj_binds)

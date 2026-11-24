@@ -1,6 +1,6 @@
 # Run applications on your own Windows images
 
-STATUS: DESIGN-ONLY, 2026-11-16. The runner is built and tested without a GPU; no box has run it yet. Plain mode (no `state.json`) was never booted. Treat every step below as unproven until a run is recorded.
+Experimental: the runner is built and tested without a GPU; it has not yet run on a GPU box. Plain mode (no `state.json`) has not been booted. Treat every step below as unproven on hardware.
 
 The runner starts any number of Windows disk images as throwaway copies, finds out which applications each one has, runs the applications it has a driver for, and reports one verdict per application. It never writes to the image you give it.
 
@@ -48,9 +48,13 @@ An image without `state.json` needs a login for the guest (an ssh key with acces
 ... --image prebuilt:/data/mydisk.qcow2 --ssh-user me --ssh-key ~/.ssh/id_ed25519 --net on --apps 3dmark
 ```
 
+## swtpm 0.10 or newer
+
+The images' TPM state needs swtpm 0.10 or newer; Ubuntu 22.04 ships 0.6.3. If the box's `swtpm` is older (or missing), the runner builds swtpm 0.10.1 under `/opt/tpm` before the first image starts, as the legacy stage does, instead of refusing the run (not yet run on a box; the build recipe is not verified). This needs root, `apt-get`, `git` and network access to the upstream source repositories, and takes several minutes. A failed step ends the run as REFUSED with a name (`SWTPM_SOURCE`, `SWTPM_SOURCE_COMMIT`, `SWTPM_BUILD`, `DOWNLOAD`, `PIN_UNSET:<role>`), never as a failed application. A swtpm of 0.10 or newer, including one already built under `/opt/tpm`, is used as it is.
+
 ## Which applications run
 
-Each application has a short name (`resolve`, `3dmark`, `superposition`, `solidworks`, `edrawings`, `edge`, `wukong`; more can be added, see `docs/design/V3_PROPIMAGE_RUNNER.md`). For an image the runner uses, in this order: the applications you declare with `--app NAME=present`; else the `software` list of the `state.json`; else the installed programs it reads from the guest (plain images only); else the names in `--apps`. `--app NAME=skip` removes one; `--apps` restricts the set.
+Each application has a short name (`resolve`, `3dmark`, `superposition`, `solidworks`, `edrawings`, `edge`, `wukong`; more can be added). For an image the runner uses, in this order: the applications you declare with `--app NAME=present`; else the `software` list of the `state.json`; else the installed programs it reads from the guest (plain images only); else the names in `--apps`. `--app NAME=skip` removes one; `--apps` restricts the set.
 
 Anything installed that has no driver is listed as not run (no driver) and is never an error. An application you name that is not on the image is reported not run (not on image).
 
@@ -68,10 +72,20 @@ Your images are yours: you can build a Windows image yourself, install software 
 
 - **A normal run records, it does not judge.** For every image the result file has the sha256 and size that were read, so you can tell later exactly which file a result belongs to. A `#sha256=<64 hex>` after a path or URL (or `sha256` in a spec file) is kept as a pin. In a normal run a pin that does not match is recorded (`identity: differs`, and one `KF_PROPIMAGE_RUN_PIN_NOTE` line) and the run goes on.
 - **Make a check yourself with `--expect-sha256 NAME=<64 hex>`.** NAME is the image's `--label`, or the file name of its source. A file with another hash is refused before anything starts (`EXPECT_SHA256_MISMATCH`, exit code 2). It also works with `--strict`. A directory has no single hash, so an expectation on a directory is refused (`EXPECT_SHA256_ON_DIRECTORY`). A name that matches no image is an error, so a typo is never silently ignored.
-- **`--strict` enforces pins.** A strict run is a deployment's check, for example a CI service that lists exactly the images it means. There, a pin that does not match refuses the image (`SOURCE_SHA256_MISMATCH`). Pins that are not about your own images, such as those of tools the repository downloads itself, always hold.
+- **`--strict` enforces pins.** A strict run is a deployment's check, for example a CI service that lists exactly the images it means. There, a pin that does not match refuses the image (`SOURCE_SHA256_MISMATCH`). Pins that are not about your own images, such as those of tools the repository downloads itself, hold as integrity checks on what the repository fetches by itself; something you pass yourself (a path, a URL, a mirror) is yours and is never refused on a pin (see the next section).
 - The integrity of an image you give is still checked: the three-member image zip must match its own `manifest.json` (hashes of the disk and the state), and its seed must match.
 
-To fetch images from your own object store, run your own deployment as described in `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`: build the images with the scripts in this repository, upload them to your own bucket (any S3-compatible store), write a pins file that names them, and pass it with `--pins FILE`. Then `--image prebuilt:pin:NAME` fetches the object `NAME` through presigned URLs that you supply with `--urls FILE`.
+To fetch images from your own object store, run your own deployment: build the images with the scripts in this repository, upload them to your own bucket (any S3-compatible store), write a pins file that names them, and pass it with `--pins FILE`. Then `--image prebuilt:pin:NAME` fetches the object `NAME` through presigned URLs that you supply with `--urls FILE`. <!-- src: docs/design/V3_PROPIMAGE_RUNNER.md; docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md -->
+
+## What the repository downloads, and what you have to trust
+
+By default a run trusts **git and nothing we host**. When the repository's own scripts download something (the NVIDIA installer of the host driver, `rustup-init`, the Blender, vkpeak and Geekbench files of the graphics set, VirtualGL, the open kernel modules source), it checks the bytes against an **anchor that does not depend on us**: the checksum the upstream site itself publishes next to the file, or a pin in this repository of something upstream authored that you can re-check yourself (a git commit id, a vendor checksum, a registry digest, the hash of a source tarball). The list is `scripts/ci/trust_manifest.json`; each entry says where its pin came from and when it was measured (or which file it was carried from). A hash of a file *we* built or host is not accepted as an anchor. <!-- src: docs/design/V3_STANDALONE_TRUST.md, scripts/ci/kf_trust.py -->
+
+- **What you pass is trusted.** A path or URL you give explicitly (`RUN_URL=...` for the host driver, `VGL_URL`, `BLENDER_URL`, `VKPEAK_URL`, `BOD_URL`, `GB_URLS`, your own presigned URL file for the SPECviewperf archive) is never refused on our pin, even when it is a mirror of something the repository normally downloads. Its sha256 and size are recorded. Add your own check with `--expect-sha256` where a command has one (the SPECviewperf stage takes `KF_SPEC_EXPECT_SHA256=<64 hex>`). <!-- src: scripts/ci/kf_trust.py, scripts/bench/provision_host_driver.sh, scripts/bench/box/specviewperf_stage.sh -->
+- **Lifting the default is explicit.** `KF_TRUST_LIFT="<why>"` (or `--trust-lift` on `scripts/ci/kf_trust.py`) lets an artifact whose check failed or has no anchor through. The computed sha256 is recorded, the result is marked `unverified-lifted` and is not a gating result, and a `KF_TRUST_LIFTED` line is printed. Nothing else lifts it: not a reachable network, not a URL scheme. A version of the NVIDIA installer that the manifest does not list is refused by name (`TRUST_UNKNOWN_ARTIFACT`); pass the file or URL yourself, or lift. <!-- src: scripts/ci/kf_trust.py -->
+- **Where it is recorded.** Each checked artifact prints one `KF_TRUST name=... anchor=... sha256=... size=...` line on stderr and, when `KF_TRUST_EVIDENCE_DIR` is set, appends one line to `trust.jsonl` there: the anchor that verified it, the computed sha256 and size, and the origin without any query string. `python3 scripts/ci/kf_trust.py check-evidence trust.jsonl` exits 3 if any line was lifted. <!-- src: scripts/ci/kf_trust.py -->
+- **A deployment is stricter.** With `KF_TRUST_MODE=strict` (an operator sets it for a deployment; the Worker does not set it yet) an object you pass is also held to the pin the repository or the operator keeps, so a CI service can insist on exactly the objects it means. The default is `trust-git-only`. <!-- src: scripts/ci/kf_trust.py -->
+- **Not covered yet.** The public Windows apps bundle and the test-assets ISO are built by us and have no anchor a third party can check yet; the attestation route that would give them one is not built. Build them yourself or lift. A few provisioning downloads are still plain TLS and are listed in `trust_manifest.json` under `unrouted` with the reason. <!-- src: docs/design/V3_STANDALONE_TRUST.md -->
 
 ## What happens to things that cannot run
 

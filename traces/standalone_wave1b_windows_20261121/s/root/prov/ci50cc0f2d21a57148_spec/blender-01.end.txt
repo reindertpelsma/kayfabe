@@ -1,0 +1,1 @@
+SPECRUN_END workload=blender-01 rc=0 start=2026-11-21T13:45:29Z end=2026-11-21T15:01:10Z secs=4541

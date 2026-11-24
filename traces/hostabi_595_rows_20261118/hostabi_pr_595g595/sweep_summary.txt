@@ -1,0 +1,24 @@
+SWEEP_START 2026-11-19T01:11:39+00:00 rev=8a4bd4b0 tag=hostabi_pr_595g595 arch=GA102
+SWEEP_ARCH arch=GA102 src=pci.ids gpu="NVIDIA GeForce RTX 3090" pci=10de:2204 family="Ampere" gpus=1 bdf=0000:00:07.0 lspci="00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204] (rev a1)"
+SWEEP_PLAN hosts=595.84 ref_host=595.84 guests=595.84 mixed=none default_guest=595.84 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/8a4bd4b0/qemu-system-x86_64 rev=8a4bd4b0 mtime=2026-11-19 01:12:34.509777893 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+SWEEP_HOST_START 2026-11-19T01:12:34+00:00 rev=8a4bd4b0 host=595.84 arch=GA102
+SWAP host=595.84 already installed arch=GA102
+SWEEP_ROW_START 2026-11-19T01:12:34+00:00 row=bare:595.84:cup2
+BARE host=595.84 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS verdict=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:12:36+00:00 row=bare:595.84:cup2 rc=0 secs=2
+SWEEP_ROW_START 2026-11-19T01:12:36+00:00 row=gates:595.84
+GATES host=595.84 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:13:01+00:00 row=gates:595.84 rc=0 secs=25
+SWEEP_ROW_START 2026-11-19T01:13:01+00:00 row=ladder:595.84:595.84
+SWEEP_ROW_START 2026-11-19T01:13:01+00:00 row=stage:595.84
+STAGE 595.84 rc=0 [2026-11-19T01:14:49+00:00] stage 595.84: STAGED ✔ /workspace/drivers/595.84 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:14:49+00:00 row=stage:595.84 rc=0 secs=108
+SWEEP_ROW_START 2026-11-19T01:14:49+00:00 row=fat:595.84
+FAT 595.84 rc=0 [2026-11-19T01:17:09+00:00] fat 595.84: STAGED ✔ /workspace/bench/guest-595.84.qcow2 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:17:09+00:00 row=fat:595.84 rc=0 secs=140
+LADDER host=595.84 guest=595.84 rev=8a4bd4b0 4/4 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:21:36+00:00 row=ladder:595.84:595.84 rc=0 secs=515
+SWEEP_HOST_EXIT 2026-11-19T01:21:36+00:00 host=595.84
+SWEEP_EXIT 2026-11-19T01:21:36+00:00 rc=0 rows_run=5

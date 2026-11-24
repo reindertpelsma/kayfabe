@@ -133,8 +133,8 @@ impl OsEventRegistration {
     }
 }
 
-/// ★★★ **The guest's non-stall subscriptions, by slot** (2026-10-08, owner ruling §X) — read
-/// lock-free by the device's interrupt plane on every host non-stall edge.
+/// **The guest's non-stall subscriptions, by slot**. The device's interrupt plane reads them
+/// lock-free on every host non-stall edge.
 ///
 /// A slot (`kf_abi::eventnotify::nonstall_slot`) is "the guest has a live event with
 /// `NV01_EVENT_NONSTALL_INTR` on this notifier": the guest CPU-RM's own subscription, which it

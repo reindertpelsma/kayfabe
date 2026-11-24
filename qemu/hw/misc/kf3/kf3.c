@@ -180,6 +180,8 @@ struct Kf3State {
     uint32_t channel_budget; /* ABI 26: channel-budget property (0 = derive from the host) */
     uint32_t user_view_keep; /* ABI 30: user-view-keep property (0 = the default, 16 views per channel) */
     bool windows_support;    /* ABI 33: windows-support property (default on); off = a Linux-only VM */
+    bool report_utilization; /* ABI 34: report-utilization property (default on); off = no GPU utilisation shown, no host call */
+    bool unmapped_reads_zero; /* ABI 35: unmapped-reads-zero property (default off) */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -198,6 +200,10 @@ struct Kf3State {
      * that pins guest RAM for DMA can join the VM while it lives. Released at exit, or by
      * realize's `fail` path. */
     bool discard_required;
+    /* ★ 2026-11-19: the machine-init-done check for a memory balloon created after this device
+     * (kf3_balloon_refusal). Registered in realize, removed in exit. */
+    Notifier balloon_check;
+    bool balloon_check_armed;
     /* ★ ABI 12 (display step 3): the display-broker relay. Main loop only, BQL held. */
     char *display_broker;            /* property: the broker's socket path; NULL = off */
     int64_t display_broker_uid;      /* property: one more uid accepted as the broker; -1 = none */
@@ -1550,6 +1556,43 @@ static bool kf3_option_rom_build(Kf3State *s, PCIDevice *pci, Error **errp)
     return true;
 }
 
+/* ★★ 2026-11-19 (the AD104 reboot hang, reset probes 1-4): NO MEMORY BALLOON beside kf3. kf3 hands
+ * the host driver ONE view of the guest's memfd (kf-qemu mem.rs guest_ram_object: an OS descriptor
+ * built once per QEMU) and holds ram_block_discard_require(true) (realize, below), so QEMU may still
+ * discard guest RAM. A virtio-balloon then discards (free-page reporting, or an inflate) pages the
+ * GPU keeps using: the guest's next write lands in a NEW page while the GPU reads the old one (a page
+ * table copied by a Translated channel read back as zeros or old bytes, Xid 31 FAULT_PDE, CUDA hangs).
+ * The repo's rule already says so (docs/howto/attach-to-existing-vm.md: <memballoon model='none'/>;
+ * the Windows harness: no balloon). The type name is virtio-balloon's TYPE_VIRTIO_BALLOON
+ * (hw/virtio/virtio-balloon.h), spelled out so this file needs no virtio header; with the balloon
+ * not built in, no object of the type exists and this finds nothing. NULL = no balloon. */
+#define KF3_BALLOON_TYPE "virtio-balloon-device"
+static const char *kf3_balloon_refusal(void)
+{
+    bool ambiguous = false;
+    Object *b = object_resolve_path_type("", KF3_BALLOON_TYPE, &ambiguous);
+    if (!b && !ambiguous) {
+        return NULL;
+    }
+    return "kf3: a virtio-balloon device is in this VM; kf3 refuses to run beside a memory balloon, "
+           "because a balloon discards guest pages the GPU keeps using (stale GPU reads, Xid 31, "
+           "CUDA hangs). Remove it: drop -device virtio-balloon-pci, or set <memballoon model='none'/> "
+           "in libvirt (docs/howto/attach-to-existing-vm.md)";
+}
+
+/* A balloon created after kf3 (a later -device): checked once every device exists. Realize cannot be
+ * failed any more, so the process exits before the guest runs, with the same text. */
+static void kf3_balloon_check(Notifier *n, void *data)
+{
+    const char *why = kf3_balloon_refusal();
+    (void)n;
+    (void)data;
+    if (why) {
+        error_report("%s", why);
+        exit(1);
+    }
+}
+
 static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 {
     Kf3State *s = KF3(pci);
@@ -1623,6 +1666,15 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
      * nothing come before it: KVM, the archive ABI, and property checks); every later failure
      * goes to `fail`, which gives it back (QEMU calls no exit for a failed realize: 10.2.4
      * hw/pci/pci.c pci_qdev_realize only unregisters the device). */
+    /* ★ 2026-11-19: no memory balloon (kf3_balloon_refusal): one created before kf3 is refused here,
+     * one created after it at machine-init-done. Before anything is built, like the check below. */
+    {
+        const char *why = kf3_balloon_refusal();
+        if (why) {
+            error_setg(errp, "%s", why);
+            return;
+        }
+    }
     if (ram_block_discard_require(true) != 0) {
         error_setg(errp, "kf3: RAM discard is already disabled by something that pins guest RAM "
                    "(a VFIO, iommufd or vfio-user device, an nvme:// drive, a libblkio drive that may "
@@ -1632,6 +1684,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         return;
     }
     s->discard_required = true;
+    s->balloon_check.notify = kf3_balloon_check;
+    qemu_add_machine_init_done_notifier(&s->balloon_check);
+    s->balloon_check_armed = true;
 
     /* ABI 22: the VM's identity is the vm-id property, else QEMU's -uuid when one was given. A VM
      * with neither passes NULL and Rust says so by name (gpu-uuid=auto then uses a random value). */
@@ -1640,7 +1695,8 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     const char *vm_id = (s->vm_id && s->vm_id[0]) ? s->vm_id : qemu_vm_id;
     int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
-                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->windows_support ? 1 : 0, &s->h, err, sizeof(err));
+                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->windows_support ? 1 : 0, s->report_utilization ? 1 : 0,
+                    s->unmapped_reads_zero ? 1 : 0, &s->h, err, sizeof(err));
     g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
     if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
@@ -1869,6 +1925,10 @@ fail:
     /* Every failure after the discard requirement was taken. QEMU calls no exit for a failed
      * realize, so it is given back here. ⊘ Pre-existing and unchanged: a failure after kf3_realize
      * still leaves what kf3_realize built (s->h) in place. */
+    if (s->balloon_check_armed) {
+        qemu_remove_machine_init_done_notifier(&s->balloon_check);
+        s->balloon_check_armed = false;
+    }
     ram_block_discard_require(false);
     s->discard_required = false;
 }
@@ -1923,6 +1983,10 @@ static void kf3_dev_exit(PCIDevice *pci)
             msix_unset_vector_notifiers(pci);
         }
         msix_uninit(pci, &s->msix_bar, &s->msix_bar);
+    }
+    if (s->balloon_check_armed) {
+        qemu_remove_machine_init_done_notifier(&s->balloon_check);
+        s->balloon_check_armed = false;
     }
     if (s->discard_required) {
         ram_block_discard_require(false);
@@ -2001,6 +2065,13 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("user-view-keep", Kf3State, user_view_keep, 0),
     /* ABI 33: the one coarse opt-out of the Windows support profile (V3_WINDOWS_SUPPORT_PROFILE.md). */
     DEFINE_PROP_BOOL("windows-support", Kf3State, windows_support, true),
+    /* ABI 34: show the guest the PHYSICAL GPU's utilisation (NVML / nvidia-smi utilization.gpu and friends), read by one
+     * fixed host-authored unprivileged control, never from a guest byte (docs/design/V3_UTILIZATION_FLAG.md). Default
+     * on; off for hosts that share a GPU between tenants that must not see each other's load. */
+    DEFINE_PROP_BOOL("report-utilization", Kf3State, report_utilization, true),
+    /* ABI 35: unmapped guest VAs read zero on the host (Vulkan sparse residency); default off.
+     * docs/howto/installing.md states the cost: faults the guest expects become silent zeros. */
+    DEFINE_PROP_BOOL("unmapped-reads-zero", Kf3State, unmapped_reads_zero, false),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

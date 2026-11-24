@@ -1,0 +1,25 @@
+{
+ "compute_cap": "7.5",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "595.91.07",
+ "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+ "measured_on": {
+  "compute_cap": "7.5",
+  "cuda": "12.8",
+  "driver": "595.91.07",
+  "driver_cuda": "13.2",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+  "run_id": "kfml_run_20261117_second_die",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "arch_list": "7.5+PTX",
+  "build_s": 21.9554922580719,
+  "spin_clock_cycles": 37117
+ },
+ "test": "cuda_ext_inline",
+ "torch": "2.7.1+cu128",
+ "wall_s": 24.011
+}

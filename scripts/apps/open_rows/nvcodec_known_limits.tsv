@@ -1,0 +1,9 @@
+# STATUS: LIVE, 2026-11-17. Documented kayfabe limitations that explain a guest result which differs from the host control, per case
+# (scripts/apps/open_rows/nvcodec_lib.py classify_pair). A line is added only with the document that decides it. Columns: case_glob, the guest result
+# it explains, the reason. First guest run (RTX 3090, 2026-11-17, traces/open_rows_guest_20261117/): the host opens 8 NVENC sessions, the guest 3, every
+# other probe line and every other case equal; the guest's 3 is the per-VM cap of crates/kf-qemu/src/encquota.rs (design choice, security review S1-42).
+# Up to the cap (n01 to n03) the guest must serve what the host serves, so those cases are NOT in the globs.
+# (V3_VIDEO_ENGINES.md measured the first matrix byte-identical to bare metal on one GA106 before the per-VM cap existed.)
+case_glob	result	reason
+sess_*_n0[4-9]	NOT_SUPPORTED	kf-qemu encquota ENC_SESSIONS_PER_VM = 3 per VM (security review S1-42, docs/design/V3_SECURITY_MODEL.md): the guest opens 3 NVENC sessions, the host 8
+sess_*_n[1-9][0-9]	NOT_SUPPORTED	kf-qemu encquota ENC_SESSIONS_PER_VM = 3 per VM (security review S1-42, docs/design/V3_SECURITY_MODEL.md): the guest opens 3 NVENC sessions, the host 8

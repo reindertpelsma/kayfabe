@@ -1,0 +1,24 @@
+--- os
+PRETTY_NAME="Ubuntu 22.04.5 LTS"
+NAME="Ubuntu"
+--- kernel
+6.8.0-149-generic
+--- cpu
+Model name:                              Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+--- gcc
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
+--- nvcc (system)
+Cuda compilation tools, release 12.6, V12.6.85
+Build cuda_12.6.r12.6/compiler.35059454_0
+--- python
+Python 3.10.12
+--- nvidia-smi query
+name, driver_version, memory.total [MiB], compute_cap
+NVIDIA GeForce GTX 1080 Ti, 580.178.04, 11264 MiB, 6.1
+--- nvidia-smi header
+Tue Nov 17 09:19:30 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+--- disk
+overlay          60G   55M   60G   1% /

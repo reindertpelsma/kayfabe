@@ -658,18 +658,23 @@ def run_command(ctx, argv, log, timeout, cwd=None, env=None):
     return done.returncode
 
 
-def build_swtpm(ctx, dl, work, logs):
+def build_swtpm(ctx, dl, work, logs, trees=None):
     """libtpms then swtpm 0.10.x under /opt/tpm from the pinned tarballs. NOT TESTED on a box: the maintainers' recipe was not
-    recorded (traces/hwrun_20261113/README.md only says 'built from source under /opt/tpm worked')."""
+    recorded (traces/hwrun_20261113/README.md only says 'built from source under /opt/tpm worked').
+    `trees` (the generic runner, 2026-11-17): {"libtpms": DIR, "swtpm": DIR}, the sources of the same release already checked out and verified
+    (propimage_images.py, route git); the recipe is the same, only the unpacking of the tarballs is skipped."""
     log = logs / "swtpm_build.log"
     env = dict(ctx.environ, PKG_CONFIG_PATH=SWTPM_PREFIX + "/lib/pkgconfig", LD_LIBRARY_PATH=SWTPM_PREFIX + "/lib",
                DEBIAN_FRONTEND="noninteractive")
     steps = [(["apt-get", "install", "-y", "--no-install-recommends", *SWTPM_DEPS], None, 1200)]
     for name, args in (("libtpms-0.10.1.tar.gz", ["--with-openssl", "--with-tpm2"]), ("swtpm-0.10.1.tar.gz", ["--with-openssl"])):
-        src = work / name.replace(".tar.gz", "")
-        src.mkdir(parents=True, exist_ok=True)
-        steps += [(["tar", "--strip-components=1", "-xzf", str(dl / "tools" / name), "-C", str(src)], None, 600),
-                  (["./autogen.sh", "--prefix=" + SWTPM_PREFIX, *args], src, 1800),
+        if trees is None:
+            src = work / name.replace(".tar.gz", "")
+            src.mkdir(parents=True, exist_ok=True)
+            steps.append((["tar", "--strip-components=1", "-xzf", str(dl / "tools" / name), "-C", str(src)], None, 600))
+        else:
+            src = Path(trees[name.split("-")[0]])
+        steps += [(["./autogen.sh", "--prefix=" + SWTPM_PREFIX, *args], src, 1800),
                   (["make", "-j", str(min(8, os.cpu_count() or 2))], src, 3600), (["make", "install"], src, 600)]
     for argv, cwd, timeout in steps:
         if run_command(ctx, argv, log, timeout, cwd=cwd, env=env) != 0:

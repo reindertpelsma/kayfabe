@@ -1,6 +1,6 @@
 # The surface, at constant level — every RPC, class, control, register and method we touch
 
-**STATUS: LIVE, 2026-09-20 (w821).** Companion to `THE_ARCHITECTURE_v3.md`. Supersedes the
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE (2026-09-20, w821) on 2026-11-20 by the freshness gate: this is the w821 survey of the surface, not a description of the current tree. ⊘ **Correction 2026-11-20, read before the body.** (1) Every `[CODE]` pointer and every `kayfabe-*` path below cites the **pre-v3 tree** as it stood at w821. Those crates are frozen under `archive/crates/` and a citation of `crates/kayfabe-X/...` resolves to `archive/crates/kayfabe-X/...` (`archive/README.md`); the 23 pre-v3 source paths the gate flagged in this document (of `kayfabe-core`, `-device`, `-fwd`, `-gsp`, `-qemu-raw`, `-rmrpc`, `-rt`, `-vmm-qemu`) were each found at that archive path on 2026-11-20; other `kayfabe-*` citations were not individually checked. `kayfabe-abi/src/submit.rs` is the one cited file still in `crates/`. `kayfabe-gsp` and `kayfabe-vmm` are crate names that no longer exist outside `archive/crates/`. (2) Statements of what is implemented or missing (§3.3, §4.2, §5.1 and the `[CODE]` rows) describe that pre-v3 tree and are **not** the v3 state; the v3 equivalents are the `kf-*` crates in `ARCHITECTURE.md` (`kf-gsp` for the faked GSP, `kf-rm` for RPC answers and object graph, `kf-abi` for the generated ABI, `kf-chan` for channels, `kf-qemu` for the device). (3) The ogkm file names and line numbers point into `third_party/ogkm` (an uninitialised submodule in a default checkout) and were not re-verified on 2026-11-20. The constant-level tables (RPC functions, classes, controls, registers, methods) are still cited by `V3_P4_PORT_MAP.md`, `V3_MULTI_GPU_AUDIT.md` and `THE_V3_PLAN.md`. Original header: Companion to `THE_ARCHITECTURE_v3.md`. Supersedes the
 *data* in `THE_SURFACE_v2.md`; that document's KEEP/DELETE *plans* still stand and are kept.
 
 ⊘ **Written for a reader who does not know NVIDIA's constants.** Every entry gives the constant
@@ -248,8 +248,12 @@ at `:1146`), and **all ten** are wired through it — `eventnotify`, `businfo`, 
 ⚠ **The lesson is about the instrument, not the tree:** *"not in the dispatch table I read"* was
 reported as *"not dispatched"*. A negative from one grep is a statement about the grep.
 
+⊘ **SUPERSEDED 2026-11-20 (task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):** the gate has no rule-based
+admissions any more; every admitted id is a generated row, and a bit-15 or `NV2081_BINAPI` control without one
+is refused. The paragraph below describes the gate before that date.
+
 ★ **Two rule-based admissions that are not enumerable as rows**: any control with the
-**GSS-legacy mask** bit 15 set (ported from gVisor's `nvproxy`), and any control on a
+**GSS-legacy mask** bit 15 set, and any control on a
 `NV2081_BINAPI` object. ⇒ Both admit *classes of number*, not numbers. ⚠ An allowlist that admits
 by rule cannot be audited by listing it.
 

@@ -1,0 +1,19 @@
+# STATUS: LIVE, 2026-11-17. Fixture of crates/kf-rm/tests/utilization_replay.rs (docs/design/V3_REPLAY_TESTS.md pattern).
+# `logged-*` rows are copied VERBATIM from the cited committed logs (path:line). `synthetic-*` rows are what the logs do
+# not carry and are labelled. This is one boot's request shapes, never a per-die table.
+source-1 traces/real_ga106/rpc_transcript_real_ga106.txt:19,20,88 (a REAL GA106 behind VFIO: the guest's own GSP answers; gspst is its reply status)
+logged-1 [ 6178.505986] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800afe psize=16 gspst=0x0 head=01 00 00 00 00 00 00 00 
+logged-2 [ 6178.506141] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800aff psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 
+logged-3 [ 6178.744522] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800afe psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 
+source-2 traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log:596,599,600,603 (the kf3 device, Linux guest 580.65.06, before this feature: both ids refused)
+logged-4 kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+logged-5 kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+logged-6 kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+logged-7 kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+source-3 traces/windows_code43_walls_20261007/run51-fields.json, field utilization.gpu, rep 1 (a Windows 580.88 guest on kf3: requests the query added to the `name` baseline; `result=none` = refused)
+logged-8 RmControl 0x20800aff result=none
+logged-9 RmControl 0x00800294 result=none
+logged-10 RmControl 0x2080a097 result=none
+logged-11 RmControl 0x20810108 result=none
+synthetic-1 The transcripts show only the first 8 bytes of the 16-byte params. INIT's physAddr (bytes 8..16) is not logged: replayed as 0x0000000123456000 (page aligned, in guest RAM in the model).
+synthetic-2 The poll interval (bytes 8..12 of POLL) is not logged; replayed as 1000 ms. It is never read by the code under test.

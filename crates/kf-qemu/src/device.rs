@@ -62,8 +62,7 @@ pub struct Config {
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
     /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note;
-    /// option A, the design by `docs/OWNER_RULINGS.md` §N — default-on only once §N's conditions
-    /// hold): offer the
+    /// option A, default-on only after the design conditions hold): offer the
     /// `GF100_DISP_SW` object X11 compositors and X11 Vulkan presentation need, twinning each one
     /// under its channel's host twin with authored params (head 0, displayMask 0, caps 0) and
     /// refusing it by name where the host cannot (`kf_rm::DisplaySeat::x11_dispsw`). Needs
@@ -80,7 +79,7 @@ pub struct Config {
     /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
     /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
     pub gop: bool,
-    /// ★ `display-max-fps` (`OWNER_RULINGS.md` §M, `V3_DISPLAY.md` §8.16): the cap on every head's
+    /// `display-max-fps` (`V3_DISPLAY.md` §8.16): the cap on every head's
     /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
     /// Validated by [`Config::check`]; needs `display=on`.
     pub display_max_fps: u32,
@@ -109,9 +108,34 @@ pub struct Config {
     /// then fails by name at its first Windows-only control). The only opt-out; never an environment
     /// variable and never inferred from the guest.
     pub windows_support: bool,
+    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization`
+    /// property, default ON. On, the guest's GPU-utilisation controls (NVML / `nvidia-smi`
+    /// `utilization.gpu` and friends) are answered with the PHYSICAL GPU's whole-device load, read by ONE fixed,
+    /// host-authored, unprivileged host control on the `kf3-util` thread; no guest byte is ever sent to the host
+    /// for this. On a shared GPU that is a cross-tenant load side channel: this is the switch. Off, nothing is
+    /// seated, no thread starts, no host call is made: exactly the behaviour before the feature. Never an
+    /// environment variable, never inferred from the guest.
+    pub report_utilization: bool,
+    /// ★ 2026-11-18 (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B): the
+    /// `unmapped-reads-zero` property, default OFF. On, an unmapped VA of the static guest ranges
+    /// reads ZERO on the host twin instead of faulting ([`kf_host::channel::GuestVaFill::Zero`]):
+    /// the guest's sparse pages (Vulkan sparse residency) work, and every other unmapped VA the
+    /// guest's GPU touches silently reads zero. Never an environment variable; never inferred from
+    /// the guest.
+    pub unmapped_reads_zero: bool,
 }
 
 impl Config {
+    /// The host fill of the static guest ranges this configuration asks for.
+    #[must_use]
+    pub const fn guest_va_fill(&self) -> kf_host::channel::GuestVaFill {
+        if self.unmapped_reads_zero {
+            kf_host::channel::GuestVaFill::Zero
+        } else {
+            kf_host::channel::GuestVaFill::Fault
+        }
+    }
+
     /// ★ The properties that refuse each other or a value, by name — before anything is opened,
     /// so a refusal costs nothing: `display-broker` and `x11-dispsw` need `display`, and
     /// `display-max-fps` is
@@ -250,6 +274,9 @@ pub const MSIX_VECTORS: usize = 32;
 pub struct Device {
     /// The host RM session (process-lifetime: the memory plane's views borrow it).
     pub rm: &'static kf_host::HostRm,
+    /// ★ 2026-11-17: GPU-utilisation reporting (`report-utilization`); `None` with the property off, or when the
+    /// host has no unprivileged source ([`crate::utilhost::enable`]).
+    pub util: Option<crate::utilhost::UtilRuntime>,
     /// Opt-in native timer backing; present only after host/guest layout and map validation.
     pub timer: Option<kf_host::timer::TimerWindow<'static>>,
     /// The host's family.
@@ -361,7 +388,7 @@ pub struct Device {
     /// ★★ The device reset (`docs/design/V3_DEVICE_RESET.md`): the vCPU gate and the drainer's
     /// sequence ([`crate::reset`]).
     pub reset: crate::reset::Reset,
-    /// The VM's deferred-API tables (OWNER_RULINGS §U) — per guest life, cleared by a reset.
+    /// The VM's deferred-API tables are per guest life and cleared by a reset.
     defapi_reg: std::sync::Arc<kf_rm::defapi::Registry>,
     /// ★ Device reset: the VA thread / the display worker is in its loop (set on entry, cleared on
     /// every exit). A reset never waits for an owner that is not running: one that never started
@@ -405,6 +432,13 @@ impl Device {
             )
             .map_err(|e| e.to_string())?,
         ));
+        // ★ 2026-11-18: before any mirror space exists, so every space's static guest ranges take it.
+        rm.set_guest_va_fill(cfg.guest_va_fill());
+        if cfg.unmapped_reads_zero {
+            eprintln!(
+                "kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)"
+            );
+        }
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
             .map_err(|e| format!("family: {e:?}"))?;
@@ -716,7 +750,7 @@ impl Device {
         } else {
             16 << 20
         };
-        // Production default (owner, 2026-10-11): use the host's unprivileged
+        // Production default: use the host's unprivileged
         // read-only timer view without an environment opt-in. A missing or
         // incompatible view is an explicit unsupported capability; never borrow
         // a layout from another driver or expose a wider register mapping.
@@ -839,7 +873,7 @@ impl Device {
                 token_fmt,
             )?));
         chans.start()?;
-        // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
+        // The object seat fills the VM's deferred-API tables (from the guest's
         // class-5080 registration controls), read by the channel plane at the trigger.
         let defapi_reg = std::sync::Arc::new(kf_rm::defapi::Registry::new(
             kf_rm::defapi::Bounds::default(),
@@ -894,6 +928,12 @@ impl Device {
         // records the guest's fn-1 identity), the memory plane (the mirror-space start) and the display
         // plane (the SDR colour path).
         let windows = kf_rm::winprofile::WindowsProfile::new(cfg.windows_support);
+        // ★ 2026-11-17: GPU-utilisation reporting. One host reading on THIS thread (realize, never a vCPU) says
+        // whether the host has an unprivileged source; the `kf3-util` thread (`ffi_unsafe`) then samples.
+        let util = crate::utilhost::enable_if(cfg.report_utilization, || {
+            Box::new(crate::utilhost::HostUtil::new(rm))
+        });
+        let util_seat = util.as_ref().map(crate::utilhost::UtilRuntime::seat);
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
                 let export = rm
@@ -901,7 +941,7 @@ impl Device {
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
                 // ★ §8.11: the GPU-copy rung's probe — at realize (QEMU still has its privileges
                 // for the render node), AFTER the store (the guest's memory wins), on the display's
-                // own RM client (OWNER_RULINGS §N)
+                // own RM client.
                 let broker = cfg.display_broker.then(|| {
                     use kf_broker::gpucopy::VramMode;
                     let mode = cfg.display_broker_vram;
@@ -972,7 +1012,7 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows) = (
+            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows, util_seat) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
@@ -981,6 +1021,7 @@ impl Device {
                 console.clone(),
                 defapi_reg.clone(),
                 windows.clone(),
+                util_seat.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -1025,6 +1066,7 @@ impl Device {
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
                         console: console.seat(),
                         windows: windows.clone(),
+                        utilization: util_seat.clone(),
                     },
                 )
             })
@@ -1199,6 +1241,7 @@ impl Device {
 
         Ok(Device {
             rm,
+            util,
             timer,
             family,
             identity: Identity { pci, bar0_bytes },
@@ -1878,12 +1921,25 @@ impl Device {
         fd: Option<crate::raw_unsafe::BackendFd>,
         fd_off: u64,
     ) {
-        self.ram.add(crate::mem::RamBlock {
+        let len = mem.len();
+        let revoked = self.ram.add(crate::mem::RamBlock {
             gpa,
             mem,
             fd,
             fd_off,
         });
+        // A machine reset (an S3 wake included) re-splits the flat view; only a changed
+        // translation ends the leases (`RamMap`'s docs).
+        let generation = self.ram.try_generation().unwrap_or(0);
+        if revoked {
+            kf_arch::rate_eprintln!(
+                "kf3: RAM add gpa={gpa:#x} len={len:#x} fd_off={fd_off:#x}: the translation CHANGED, every RAM lease revoked (generation {generation})"
+            );
+        } else {
+            kf_arch::rate_eprintln!(
+                "kf3: RAM add gpa={gpa:#x} len={len:#x} fd_off={fd_off:#x}: translation kept (generation {generation})"
+            );
+        }
         // the main loop was a holder of the RAM topology lock (a relay's `admit_user_generation` answers Busy): ring the relays that lost to it
         self.chans.handoff_released();
     }
@@ -1912,6 +1968,7 @@ impl Device {
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
+        kf_arch::rate_eprintln!("kf3: RAM del gpa={gpa:#x}");
         self.chans.handoff_released();
     }
 
@@ -2068,7 +2125,7 @@ impl Device {
             if let Some(line) =
                 crate::tspace::prewarm(&self.tspace, &self.mem, self.rm, self.store.handle, carve)
             {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: mem t={:.3}s {line}",
                     self.born.elapsed().as_secs_f64()
                 );
@@ -2082,7 +2139,7 @@ impl Device {
                 && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle)
             {
                 prewarmed += 1;
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: mem t={:.3}s [{prewarmed}/{}] {line}",
                     self.born.elapsed().as_secs_f64(),
                     crate::mem::PREWARM_SPARES
@@ -2472,7 +2529,7 @@ impl Device {
             let armed = self.mem.port.armed_request().map(|r| r.seq);
             if armed != armed_seen {
                 if m.stats.unreconciled > 0 {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: mem t={:.3}s trigger {} (seq {:?}; unreconciled so far {})",
                         self.born.elapsed().as_secs_f64(),
                         if armed.is_some() { "armed" } else { "idle" },
@@ -2626,6 +2683,18 @@ impl Device {
             if let Some(dp) = self.display {
                 dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));
             }
+            // ★ 2026-11-17: the guest's RUSD utilisation record (`report-utilization`), on this thread (never a
+            // vCPU): relaxed loads when nothing is wanted or due, otherwise three guarded writes of one 56-byte
+            // record into a guest page the guest named. No host call, no lock a vCPU takes.
+            // Not while a reset is pending: the reset request has come in, the guest life that offered the page is
+            // ending, and the link is forgotten only when the reset reaches its drainer stage (security review 2 of
+            // PR #459, R2). One relaxed load, on this thread.
+            if !self.reset.pending()
+                && let Some(u) = &self.util
+            {
+                u.state
+                    .publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes));
+            }
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
@@ -2685,7 +2754,7 @@ impl Device {
                 if let crate::reset::Progress::Completed(e) = self.reset.poll(self)
                     && crate::reset::loud(e)
                 {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: device reset #{e} COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: {})",
                         self.reset.gate.dropped()
                     );
@@ -3125,7 +3194,11 @@ impl Device {
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
-        let db = format!(" {}", self.dbfast.status());
+        let db = format!(" {}", self.dbfast.status())
+            + &self
+                .util
+                .as_ref()
+                .map_or_else(String::new, |u| format!(" {}", u.state.status()));
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
@@ -3422,7 +3495,7 @@ impl Device {
         let mut posted = 0usize;
         for e in evs {
             let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: RC chid {:#x}: engine type 0 — no route; NOT posted",
                     e.chid
                 );
@@ -3464,13 +3537,16 @@ impl Device {
                 Ok(()) => {
                     posted += 1;
                     self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})",
-                        e.chid, e.engine, e.except_type, e.host_token
+                        e.chid,
+                        e.engine,
+                        e.except_type,
+                        e.host_token
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => back.push(e),
-                Err(f) => eprintln!(
+                Err(f) => kf_arch::rate_eprintln!(
                     "kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}",
                     e.chid
                 ),
@@ -3575,7 +3651,7 @@ impl Device {
             return;
         }
         let Some(dp) = self.display else {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: preempt-complete for {} async preempt(s) NOT posted: no display model holds the registrations",
                 done.len()
             );
@@ -3586,7 +3662,7 @@ impl Device {
         for (i, &(client, ev)) in done.iter().enumerate() {
             let target = dp.model.lock().ok().and_then(|g| g.preempt_target(client));
             let Some(t) = target else {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: RUNLIST_PREEMPT_COMPLETE for client {client:#x} NOT posted: no live registration"
                 );
                 continue;
@@ -3600,7 +3676,7 @@ impl Device {
             let payload = match n.encode() {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE NOT posted: {e}");
+                    kf_arch::rate_eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE NOT posted: {e}");
                     continue;
                 }
             };
@@ -3609,16 +3685,19 @@ impl Device {
             match g.fsm.post_subdevice_event(&mut ram, payload) {
                 Ok(()) => {
                     posted_any = true;
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned",
-                        t.client, t.event
+                        t.client,
+                        t.event
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => {
                     back.extend_from_slice(&done[i..]);
                     break;
                 }
-                Err(f) => eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE REFUSED by the queue: {f:?}"),
+                Err(f) => kf_arch::rate_eprintln!(
+                    "kf3: RUNLIST_PREEMPT_COMPLETE REFUSED by the queue: {f:?}"
+                ),
             }
         }
         if posted_any {
@@ -3825,26 +3904,44 @@ impl Device {
         w
     }
 
+    /// Every allocated display DMA channel: `(chn, engine PUT, engine GET, the GET word the shadow
+    /// holds)`, in hex (bounded by the channel count).
+    fn display_chan_words(&self) -> Vec<(u32, String, String, String)> {
+        let Some(dp) = self.display else {
+            return Vec::new();
+        };
+        (0..kf_disp::ports::NUM_CHANNELS as u32)
+            .filter(|&c| dp.ports.generation(c) % 2 == 1)
+            .filter_map(|c| {
+                let (_, get) = dp.chan_put_get(c)?;
+                Some((
+                    c,
+                    format!("{:#x}", dp.ports.put(c)),
+                    format!("{:#x}", dp.ports.get(c)),
+                    format!("{:#x}", self.shadow_word(get)),
+                ))
+            })
+            .collect()
+    }
+
     /// ★ Device reset, stage Finish: the BAR0 register shadow as realize left it — every shadow
     /// piece zeroed and refilled exactly as [`Device::attach_shadow`] filled it (boot registers,
     /// the VBIOS image, the timer PLM), every hole page as built, and then what [`Device::seal_shadow`]
     /// published (the GSP registers, the display's static words and events) plus the reset
     /// interrupt tree's read-back. Drainer only (it owns publication); the vCPU gate is closed, so
     /// no guest write lands in between.
-    fn restore_shadow(&self) {
-        // ⊘ Word by word, and only the words that differ (the review of 2026-10-13): the vCPUs run
-        // during a reset and read the shadow without an exit — zeroing a piece and refilling it
-        // would show them a 0 `PMC_BOOT_0` for a moment.
+    ///
+    /// ★ A [`crate::reset::Life::Kept`] S3 wake keeps the display aperture's words ([`wake_keeps`]):
+    /// the display engine, its ports and its channels are kept, so the GET, PUT, channel status and
+    /// armed words it published stay what the guest reads.
+    fn restore_shadow(&self, life: crate::reset::Life) {
         if let Some(pieces) = self.pieces.get() {
-            for p in pieces {
-                let want = self.piece_image(p.base, p.mem.len());
-                for (i, w) in want.as_chunks::<4>().0.iter().enumerate() {
-                    let v = u32::from_le_bytes(*w);
-                    if p.mem.load_u32(i * 4) != Some(v) {
-                        p.mem.store_u32(i * 4, v);
-                    }
-                }
-            }
+            restore_pieces(
+                pieces,
+                &|base, len| self.piece_image(base, len),
+                self.display.map(|dp| &dp.map),
+                life,
+            );
         }
         for h in &self.holes {
             h.reset(&self.boot);
@@ -3910,6 +4007,11 @@ impl crate::reset::Owners for Device {
             }
             Err(_) => (kf_arch::BootPhase::Cold, 0),
         };
+        // ★ The utilisation link of the dead guest life goes with it, whatever the rebuilt chain is for (a
+        // version with no layout row seats no link and would otherwise never clear it).
+        if let Some(u) = &self.util {
+            u.state.forget_guest();
+        }
         if let Ok(mut q) = self.held_stamps.lock() {
             q.clear();
         }
@@ -3979,7 +4081,20 @@ impl crate::reset::Owners for Device {
         // latched between the Drainer stage and the owners' acknowledgements is the old life's.
         self.intr.reset();
         self.hotplug_pending.store(0, Ordering::Release);
-        self.restore_shadow();
+        let wake_words = (life == crate::reset::Life::Kept).then(|| self.display_chan_words());
+        self.restore_shadow(life);
+        if let (Some(before), Some(dp)) = (wake_words, self.display) {
+            let after = self.display_chan_words();
+            kf_arch::rate_eprintln!(
+                "kf3: device reset #{epoch} (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): {:?}",
+                before
+                    .into_iter()
+                    .zip(after)
+                    .map(|(b, a)| (b.0, b.1, b.2, b.3, a.3))
+                    .collect::<Vec<_>>()
+            );
+            dp.kept_wake();
+        }
         // An interrupt raised for the old life and still counted in a vector's eventfd (QEMU's
         // msix_reset already released every KVM route) would be injected at the next life's first
         // unmask: drained here, after everything that could raise one has stopped.
@@ -4014,6 +4129,45 @@ impl crate::reset::Owners for Device {
             "kf3: ⚠ device reset #{epoch} WAITING at {stage:?} for {waited:?} — the gate stays closed (a device that cannot reset accepts nothing); {}",
             self.reset.status()
         );
+    }
+}
+
+/// ★ Whether a device reset that ended as `life` leaves the shadow word at BAR0 `off` as it is.
+/// Only an S3 wake that KEPT the guest's life keeps anything: the display aperture (`map`), whose
+/// words the kept display engine published (each channel's GET, its status, the core's armed
+/// state) or the guest wrote (PUT). Restoring them to their realize values would show the resumed
+/// guest a GET of 0 on channels whose engine GET is not 0, and the worker republishes a GET only
+/// when it moves.
+fn wake_keeps(map: Option<&crate::display::RegMap>, life: crate::reset::Life, off: u64) -> bool {
+    life == crate::reset::Life::Kept && map.is_some_and(|m| m.owns(off))
+}
+
+/// Rewrite every shadow piece to its realize image (`image(base, len)`), except the words a reset
+/// that ended as `life` keeps ([`wake_keeps`] over the display aperture `map`).
+fn restore_pieces(
+    pieces: &[Piece],
+    image: &dyn Fn(u64, usize) -> Vec<u8>,
+    map: Option<&crate::display::RegMap>,
+    life: crate::reset::Life,
+) {
+    let keep = |off: u64| wake_keeps(map, life, off);
+    for p in pieces {
+        restore_piece(p, &image(p.base, p.mem.len()), &keep);
+    }
+}
+
+/// Rewrite shadow piece `p` to `want`, word by word and only the words that differ, skipping every
+/// word `keep` names. ⊘ Never zero-then-refill: the vCPUs run during a reset and read the shadow
+/// without an exit, so a refill would show them a 0 `PMC_BOOT_0` for a moment.
+fn restore_piece(p: &Piece, want: &[u8], keep: &dyn Fn(u64) -> bool) {
+    for (i, w) in want.as_chunks::<4>().0.iter().enumerate() {
+        if keep(p.base + (i * 4) as u64) {
+            continue;
+        }
+        let v = u32::from_le_bytes(*w);
+        if p.mem.load_u32(i * 4) != Some(v) {
+            p.mem.store_u32(i * 4, v);
+        }
     }
 }
 
@@ -4255,13 +4409,13 @@ impl HostOps for Device {
         let after = g.fsm.phase();
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
-            eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+            kf_arch::rate_eprintln!("kf3: GSP phase {before:?} -> {after:?}");
         }
         // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
         // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
         // last). One guest-RAM read of ≤ 8 words at offsets of the ROM we generated.
         if let Some(read) = g.fsm.resolve_frts_command(&mut ram) {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} → served WPR2_ADDR_LO={:?}",
                 read.map_or("unreadable/not FRTS — derived".to_string(), |o| format!(
                     "{o:#x}"
@@ -4424,6 +4578,37 @@ mod config_tests {
             vm_id: None,
             pci_devfn: 0,
             windows_support: true,
+            report_utilization: true,
+            unmapped_reads_zero: false,
+        }
+    }
+
+    /// ★ 2026-11-18 `unmapped-reads-zero`: off by default (the host faults on an unmapped guest VA,
+    /// S2 of `V3_SPARSE_RESIDENCY_RCA.md`); on asks for the ZERO fill, and nothing else changes.
+    #[test]
+    fn unmapped_reads_zero_is_off_by_default_and_maps_to_the_fill() {
+        use kf_host::channel::GuestVaFill;
+        let off = cfg(false, false);
+        assert!(!off.unmapped_reads_zero, "default off");
+        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
+        let on = Config {
+            unmapped_reads_zero: true,
+            ..cfg(false, false)
+        };
+        assert_eq!(on.guest_va_fill(), GuestVaFill::Zero);
+        assert!(on.check().is_ok(), "the property needs no other property");
+    }
+
+    /// ★ 2026-11-18: the property and the fill agree for both values (the ZERO fill exactly when on).
+    #[test]
+    fn the_property_and_the_fill_round_trip() {
+        use kf_host::channel::GuestVaFill;
+        for on in [false, true] {
+            let c = Config {
+                unmapped_reads_zero: on,
+                ..cfg(true, false)
+            };
+            assert_eq!(c.guest_va_fill() == GuestVaFill::Zero, on, "on={on}");
         }
     }
 
@@ -4437,5 +4622,229 @@ mod config_tests {
         assert!(cfg(true, true).check().is_ok(), "the experiment");
         let e = cfg(false, true).check().expect_err("refused");
         assert!(e.contains("x11-dispsw=on needs display=on"), "{e}");
+    }
+}
+
+/// ★ The S3 wake's shadow restore against the Ada display registers: a kept life keeps what the
+/// display published, an ended life gets the realize image back.
+#[cfg(test)]
+mod wake_shadow_tests {
+    use super::{Piece, restore_piece, restore_pieces, wake_keeps};
+    use crate::display::RegMap;
+    use crate::reset::Life;
+    use kf_disp::model::ChannelKind;
+
+    fn ada() -> RegMap {
+        let r = kf_disp::regs::Regs::for_ip("580.159.04", 0x0404_0000).unwrap();
+        let t = kf_disp::class::for_version("580.159.04").unwrap();
+        RegMap::resolve(&r, t, &kf_chip::display::ADA).expect("AD10x register map")
+    }
+
+    /// A shadow piece of `len` bytes at BAR0 `base`, all zero (the realize image of a display page).
+    fn piece(base: u64, len: usize) -> Piece {
+        let (mem, _fd) = crate::raw_unsafe::test_owned_ram(len);
+        Piece { base, mem }
+    }
+
+    /// ★ Falsifier: after the restore of a kept S3 wake, window 1's GET word reads anything but the
+    /// GET its engine kept. The values are the ones measured at the stop in run T1b at revision
+    /// `0c16cb72` (`traces/win11_s3_tdr_20261123/t1b/`): GET 0xe20 kept, the guest's next PUT 0x1130.
+    #[test]
+    fn a_kept_wake_leaves_the_display_words_the_engine_published() {
+        let map = ada();
+        let user = map.user_base(ChannelKind::Window, 1);
+        assert!(
+            map.owns(user),
+            "window 1's user area is in the display aperture"
+        );
+        let p = piece(user, 0x1000);
+        // GET at +0x4, PUT at +0x0 (`NVC67E_GET` / `NVC67E_PUT`)
+        p.mem.store_u32(0x0, 0xe20);
+        p.mem.store_u32(0x4, 0xe20);
+        let realize = vec![0u8; 0x1000];
+
+        restore_piece(&p, &realize, &|off| wake_keeps(Some(&map), Life::Kept, off));
+        assert_eq!(p.mem.load_u32(0x4), Some(0xe20), "GET kept across the wake");
+        assert_eq!(p.mem.load_u32(0x0), Some(0xe20), "PUT kept across the wake");
+
+        restore_piece(&p, &realize, &|off| {
+            wake_keeps(Some(&map), Life::Ended, off)
+        });
+        assert_eq!(
+            p.mem.load_u32(0x4),
+            Some(0),
+            "an ended life gets the realize image"
+        );
+        assert_eq!(p.mem.load_u32(0x0), Some(0));
+    }
+
+    /// A kept wake still restores every register outside the display aperture, and keeps nothing
+    /// when there is no display.
+    #[test]
+    fn a_kept_wake_restores_everything_outside_the_display() {
+        let map = ada();
+        // NV_PMC (BAR0 0x0): never a display register
+        let p = piece(0x0, 0x1000);
+        assert!(!map.owns(0x0));
+        p.mem.store_u32(0x100, 0x1234);
+        let mut want = vec![0u8; 0x1000];
+        want[0..4].copy_from_slice(&0x1b4_000a1u32.to_le_bytes());
+        restore_piece(&p, &want, &|off| wake_keeps(Some(&map), Life::Kept, off));
+        assert_eq!(p.mem.load_u32(0x100), Some(0));
+        assert_eq!(p.mem.load_u32(0x0), Some(0x1b4_000a1));
+
+        let user = map.user_base(ChannelKind::Core, 0);
+        let q = piece(user, 0x1000);
+        q.mem.store_u32(0x4, 0xc30);
+        restore_piece(&q, &[0u8; 0x1000], &|off| wake_keeps(None, Life::Kept, off));
+        assert_eq!(q.mem.load_u32(0x4), Some(0), "no display: nothing to keep");
+    }
+
+    /// The realize image of every test piece: all zero.
+    fn zeros(_base: u64, len: usize) -> Vec<u8> {
+        vec![0u8; len]
+    }
+
+    /// The body of `fn <name>(` in this file's own source, up to the next item at the same depth.
+    fn body_of<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("{sig} not found"));
+        let rest = &src[start..];
+        let end = rest[1..].find("\n    fn ").map_or(rest.len(), |e| e + 1);
+        &rest[..end]
+    }
+
+    /// ★★ Falsifier: after a kept wake, an ENDED reset (a cold reset, a reboot, a new OS) leaves any
+    /// display word of the old life in the shadow. Two halves, because the device itself cannot be
+    /// built without a GPU: the restore over a piece set keeps the display words for a kept life and
+    /// restores them for the ended one that follows (kills a restore that ignores the keep check);
+    /// and the Finish stage passes ITS life to the restore, unchanged (kills a call site that passes
+    /// `Life::Kept`, which would carry one life's PUT, GET, channel-control and armed words into the
+    /// next boot with every functional test green).
+    #[test]
+    fn an_ended_reset_restores_the_display_aperture_even_after_a_kept_wake() {
+        let map = ada();
+        let user = map.user_base(ChannelKind::Window, 1);
+        let pieces = [piece(user, 0x1000), piece(0x0, 0x1000)];
+        pieces[0].mem.store_u32(0x0, 0xe20);
+        pieces[0].mem.store_u32(0x4, 0xe20);
+        pieces[1].mem.store_u32(0x100, 0x1234);
+
+        restore_pieces(&pieces, &zeros, Some(&map), Life::Kept);
+        assert_eq!(
+            pieces[0].mem.load_u32(0x4),
+            Some(0xe20),
+            "kept wake: GET kept"
+        );
+        assert_eq!(
+            pieces[0].mem.load_u32(0x0),
+            Some(0xe20),
+            "kept wake: PUT kept"
+        );
+        assert_eq!(
+            pieces[1].mem.load_u32(0x100),
+            Some(0),
+            "kept wake: NV_PMC restored"
+        );
+
+        // the next life's guest moves PUT, then the machine is reset cold
+        pieces[0].mem.store_u32(0x0, 0xf00);
+        restore_pieces(&pieces, &zeros, Some(&map), Life::Ended);
+        assert_eq!(
+            pieces[0].mem.load_u32(0x4),
+            Some(0),
+            "ended: GET back to realize"
+        );
+        assert_eq!(
+            pieces[0].mem.load_u32(0x0),
+            Some(0),
+            "ended: PUT back to realize"
+        );
+
+        let src = include_str!("device.rs");
+        let finish = body_of(
+            src,
+            "fn finish(&self, epoch: u64, life: crate::reset::Life) -> bool {",
+        );
+        assert_eq!(
+            finish.matches("restore_shadow(").count(),
+            1,
+            "one restore in Finish"
+        );
+        assert!(
+            finish.contains("self.restore_shadow(life);"),
+            "Finish restores the shadow for the life the reset ended as"
+        );
+        assert!(
+            !finish.contains("let life"),
+            "Finish never rebinds its life"
+        );
+        let restore = body_of(src, "fn restore_shadow(&self, life: crate::reset::Life) {");
+        assert!(
+            restore.contains("restore_pieces("),
+            "the shadow goes through restore_pieces"
+        );
+        let flat: String = restore.split_whitespace().collect();
+        assert!(
+            flat.contains("self.display.map(|dp|&dp.map),life,);"),
+            "restore_shadow passes its own life to restore_pieces"
+        );
+        assert!(
+            !restore.contains("Life::"),
+            "restore_shadow names no life of its own"
+        );
+    }
+
+    /// ★ Falsifier: the first word of the aperture is restored on a kept wake, or the word after its
+    /// last byte is kept. For every display row, at its derived `NV_PDISP` bounds.
+    #[test]
+    fn the_display_aperture_boundaries_are_exact_words() {
+        for row in kf_chip::display::ALL {
+            let r = kf_disp::regs::Regs::for_ip("580.159.04", row.ip_version).unwrap();
+            let t = kf_disp::class::for_version("580.159.04").unwrap();
+            let map = RegMap::resolve(&r, t, row).expect("register map");
+            let (lo, hi) = map.aperture();
+            assert_eq!(lo % 4, 0, "{}", row.chips);
+            let last = hi & !3;
+            let keeps = |off| wake_keeps(Some(&map), Life::Kept, off);
+            assert!(keeps(lo), "{}: first word {lo:#x}", row.chips);
+            assert!(!keeps(lo - 4), "{}: word before {:#x}", row.chips, lo - 4);
+            assert!(keeps(last), "{}: last word {last:#x}", row.chips);
+            assert!(
+                !keeps(last + 4),
+                "{}: word after {:#x}",
+                row.chips,
+                last + 4
+            );
+        }
+    }
+
+    /// ★ Falsifier: in a piece that starts below the aperture and ends inside it, a word below the
+    /// aperture is kept on a kept wake, or a word inside it is restored (a restore that indexes the
+    /// piece by byte instead of by word keeps the wrong words).
+    #[test]
+    fn a_piece_straddling_the_aperture_keeps_only_its_display_words() {
+        let map = ada();
+        let (lo, _) = map.aperture();
+        let base = lo - 0x800;
+        let p = piece(base, 0x1000);
+        for i in (0..0x1000).step_by(4) {
+            p.mem.store_u32(i, 0xaaaa_0000 | i as u32);
+        }
+        restore_piece(&p, &[0u8; 0x1000], &|off| {
+            wake_keeps(Some(&map), Life::Kept, off)
+        });
+        for i in (0..0x1000u64).step_by(4) {
+            let want = if base + i >= lo {
+                0xaaaa_0000 | i as u32
+            } else {
+                0
+            };
+            assert_eq!(
+                p.mem.load_u32(i as usize),
+                Some(want),
+                "word at {:#x}",
+                base + i
+            );
+        }
     }
 }

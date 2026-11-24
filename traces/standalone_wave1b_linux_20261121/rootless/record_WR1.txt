@@ -1,0 +1,131 @@
+{
+ "schema": 1,
+ "verdict": "ROOTLESS",
+ "user": "ci",
+ "memlock_raised": false,
+ "stages": {
+  "cuda_guest": {
+   "as": "user",
+   "status": "probed"
+  },
+  "cuda_host": {
+   "as": "user",
+   "status": "probed"
+  }
+ },
+ "steps": [
+  {
+   "step": "user",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "user"
+  },
+  {
+   "step": "nvidia_modeset",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "nvidia_modeset"
+  },
+  {
+   "step": "dmesg_readable",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "dmesg_readable"
+  },
+  {
+   "step": "workspace",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "workspace"
+  },
+  {
+   "step": "chown_tree",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "chown_tree"
+  },
+  {
+   "step": "chown_tree",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "chown_tree"
+  },
+  {
+   "step": "chown_tree",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "chown_tree"
+  },
+  {
+   "step": "chown_tree",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "chown_tree"
+  },
+  {
+   "step": "gpu_lock",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "gpu_lock"
+  },
+  {
+   "step": "sudo_log",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "bootstrap",
+   "detail": "sudo_log"
+  },
+  {
+   "step": "toolchain_for_user",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "payload",
+   "detail": "cp -a /root/.cargo /home/ci/.cargo"
+  },
+  {
+   "step": "toolchain_for_user",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "payload",
+   "detail": "chown -R ci:ci /home/ci/.cargo"
+  },
+  {
+   "step": "toolchain_for_user",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "payload",
+   "detail": "cp -a /root/.rustup /home/ci/.rustup"
+  },
+  {
+   "step": "toolchain_for_user",
+   "stage": "cuda_host",
+   "rc": 0,
+   "source": "payload",
+   "detail": "chown -R ci:ci /home/ci/.rustup"
+  }
+ ],
+ "refused": [],
+ "unaudited": []
+}
+---sudolog
+---
+uid=1002(ci) gid=1002(ci) groups=1002(ci),109(kvm)
+total 8
+-r--r----- 1 root root  183 Nov 21 11:03 90-cloud-init-users
+-r--r----- 1 root root 1096 Feb  8  2022 README
+ci /workspace/bench
+ci /workspace/kf-ci-src
+ci /workspace/apps
+ci /workspace/prov
+ci /home/ci/.cargo
+crw-rw---- 1 root kvm 10, 232 Nov 21 13:27 /dev/kvm
+0

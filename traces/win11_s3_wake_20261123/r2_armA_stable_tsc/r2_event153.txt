@@ -1,0 +1,3 @@
+2026-11-23T03:47:55.3910070+00:00 \Device\Video0 | Restarting TDR occurred on GPUID:5
+2026-11-23T03:47:55.2510554+00:00 \Device\Video0 | Reset TDR occurred on GPUID:5
+2026-11-23T03:47:50.3916024+00:00 \Device\Video0 | Resetting TDR occurred on GPUID:5

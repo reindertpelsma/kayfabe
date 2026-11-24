@@ -1,0 +1,42 @@
+--pre-rootless state 2026-11-21T13:22:14Z
+crw-rw---- 1 root kvm   10, 232 Nov 21 13:21 /dev/kvm
+crw-rw-rw- 1 root root 236,   0 Nov 21 11:04 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 236,   1 Nov 21 11:04 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 21 11:04 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 21 11:04 /dev/nvidiactl
+
+/dev/dri:
+total 0
+drwxr-xr-x 2 root root         80 Nov 21 11:09 by-path
+crw-rw---- 1 root video  226,   0 Nov 21 11:09 card0
+crw-rw---- 1 root render 226, 128 Nov 21 11:09 renderD128
+
+12558992
+1
+no ci user
+kvm:x:109:user
+drwxr-xr-x  8 root root  4096 Nov 21 12:33 /workspace/apps
+drwxr-xr-x  7 root root 12288 Nov 21 13:21 /workspace/bench
+-rw-r--r--  1 root root   197 Nov 21 11:05 /workspace/instruction.json
+drwxr-xr-x  2 root root  4096 Nov 21 13:21 /workspace/kf-ci-evidence
+drwxr-xr-x 20 root root  4096 Nov 21 11:06 /workspace/kf-ci-src
+-rw-r--r--  1 root root  2149 Nov 21 13:21 /workspace/kf-result.json
+-rw-r--r--  1 root root   952 Nov 21 12:17 /workspace/kf-result_WL1.json
+-rw-r--r--  1 root root  2149 Nov 21 13:22 /workspace/kf-result_WL2.json
+-rw-r--r--  1 root root    31 Nov 21 12:16 /workspace/payload_exit_WL1.line
+-rw-r--r--  1 root root    31 Nov 21 13:21 /workspace/payload_exit_WL2.line
+-rw-r--r--  1 root root   202 Nov 21 11:05 /workspace/payload_start_WL1.marker
+-rw-r--r--  1 root root   138 Nov 21 12:17 /workspace/payload_start_WL2.marker
+-rw-r--r--  1 root root 41416 Nov 21 12:16 /workspace/payload_stdout_WL1.log
+-rw-r--r--  1 root root  3595 Nov 21 13:21 /workspace/payload_stdout_WL2.log
+-rwxr-xr-x  1 root root   604 Nov 21 11:05 /workspace/run_leg.sh
+/root/.cargo:
+total 76
+drwxr-xr-x  4 root root  4096 Nov 21 11:13 .
+root /workspace/bench
+root /workspace/kf-ci-src
+root /workspace/apps
+root /root/prov
+Sudo version 1.9.9
+-rw-r--r-- 1 root root 0 Nov 21 13:17 /tmp/kayfabe-fastguest.lock
+9b3d1651

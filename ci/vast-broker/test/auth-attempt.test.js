@@ -50,6 +50,14 @@ for (const attempt of [3, 4]) {
         branch: 'owner-pr',
         run: '123',
         attempt: String(attempt),
+        provenance: {
+          source: 'github',
+          repository: repo,
+          headRepository: repo,
+          event: 'push',
+          headBranch: 'owner-pr',
+          actorIsOwner: true,
+        },
       });
       assert.deepEqual(paths, ['/repos/' + repo + '/actions/runs/123/attempts/' + attempt]);
     });

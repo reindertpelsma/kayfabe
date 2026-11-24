@@ -1,0 +1,28 @@
+pid=136408
+ci            136408 qemu-system-x86
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	109 
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	0
+x86_Thread_features_locked:	
+Max locked memory         12860407808          12860407808          bytes     
+pid=136828
+root          136828 bash
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+Groups:	0 
+CapInh:	0000000000000000
+CapPrm:	000001ffffffffff
+CapEff:	000001ffffffffff
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	0
+x86_Thread_features_locked:	
+Max locked memory         12860407808          12860407808          bytes     

@@ -1,4 +1,4 @@
-//! ★★ OWNER_RULINGS §U (2026-10-07) — **a software method on a Translated channel, as a stage of
+//! **A software method on a Translated channel, as a stage of
 //! the stream kayfabe writes.**
 //!
 //! On bare metal a method on a software subchannel stalls the PBDMA and the GSP runs it

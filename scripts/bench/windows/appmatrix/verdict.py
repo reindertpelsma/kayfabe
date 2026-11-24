@@ -15,7 +15,7 @@ NOTE_RX = re.compile(r"error|fail|illegal|cannot|unable|Xid|timeout|abort|segmen
                      r"device removed|DXGI_ERROR|0x887A|Code 43|is not recognized|STILL_RUNNING|EXITED_EARLY|START_FAILED", re.I)
 NOTE_SKIP_RX = re.compile(r"^=== |errors: 0|CHECK .* ok|Tests skipped: 0")
 NOTRUN_RX = re.compile(r"is not recognized as the name of a cmdlet|The system cannot find (the )?(file|path)|Cannot find path|"
-                       r"No such file or directory|KFERR|NOTFOUND|START_FAILED")
+                       r"No such file or directory|KFERR|NOTFOUND|START_FAILED|^KFNOTRUN ", re.M)
 ENGINE_MIN_UTIL = 0.5          # percent: the GPU Engine counters are integers 0..100 per engine; below this is noise
 OTHER_ADAPTER_MAX = 1.0        # percent on a non-NVIDIA LUID before it counts as "software adapter used"
 
@@ -30,8 +30,11 @@ def parse_proof(p):
     return kind, arg
 
 
-def eval_proof(proofs, log, facts):
-    """Return (ok, [descriptions of the proofs that held], [descriptions of those that did not])."""
+def eval_proof(proofs, log, facts, require_all=False):
+    """Return (ok, [descriptions of the proofs that held], [descriptions of those that did not]).
+
+    By default one proof that holds is enough. `require_all` (apps.json `proof_all`, the async-compute sample rows) wants every proof to hold,
+    so that 3D AND Compute engine activity are both required."""
     held, missed = [], []
     pdh = (facts.get("pdh") or {}).get("nv") or {}
     smi = facts.get("smi") or {}
@@ -89,7 +92,7 @@ def eval_proof(proofs, log, facts):
             mem = (smi.get("mem_used_max_mb") or 0) - (base or 0) if base is not None else 0
             ok = (smi.get("util_max") or 0) >= 1 or mem >= 64
             (held if ok else missed).append("smi")
-    return (bool(held) or not proofs), held, missed
+    return ((not missed) if require_all else (bool(held) or not proofs)), held, missed
 
 
 def first_note(log):
@@ -126,7 +129,7 @@ def decide(app, facts, log):
     if NOTRUN_RX.search(log) and not rx_ok:
         out.update(verdict="NOTRUN", note=note or "missing precondition")
         return out
-    ok, held, missed = eval_proof(app.get("proof") or [], log, facts)
+    ok, held, missed = eval_proof(app.get("proof") or [], log, facts, bool(app.get("proof_all")))
     out["proof"] = ",".join(held) if held else ("none:" + ",".join(missed)[:60] if missed else "-")
     other = (facts.get("pdh") or {}).get("other") or {}
     sw = sorted(e for e, v in other.items() if v and float(v) > OTHER_ADAPTER_MAX)

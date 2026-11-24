@@ -41,6 +41,7 @@
       "libgl1",
       "python3",
       "python3-venv",
+      "python3-dev",
       "python3-pip",
       "ca-certificates",
       "xz-utils",
@@ -1538,7 +1539,7 @@
   "local_files": [
     {
       "path": "scripts/apps/src/ai_bench.py",
-      "sha256": "87c3b8072caed23482712633a781560643b587adeea2414861d69f658d8ab1d6",
+      "sha256": "6bafcd55f829d62a0e60b4364f175a3f0d0ce2fa1cc8e66993a54807876c7905",
       "target": "/opt/apps/source/local/ai_bench.py"
     },
     {
@@ -1553,7 +1554,7 @@
     },
     {
       "path": "scripts/apps/src/blender_render.py",
-      "sha256": "7300be6bddab6bbc1d9a49097e893d2bb96bba73b6d4c59146ee1406d5135e6a",
+      "sha256": "d848c4335ef5d1ad5ee34324d4d6eb8fead8434bbc2bd6c8c7da9a0e3ed34f55",
       "target": "/opt/apps/source/local/blender_render.py"
     },
     {
@@ -1563,7 +1564,7 @@
     },
     {
       "path": "scripts/apps/src/cupy_check.py",
-      "sha256": "d771248d505f9ba887c292b87c900251e60022a8e1829bd46b24064533c525fe",
+      "sha256": "a8e0198d69d6b0a6aa4aa9111e85602083ec53423fa24f44eff45f9afc1b548c",
       "target": "/opt/apps/source/local/cupy_check.py"
     },
     {
@@ -1578,7 +1579,7 @@
     },
     {
       "path": "scripts/apps/src/hf_generate.py",
-      "sha256": "7fb3f360949dc3b6105e41182fc0b9436b82c4abf0d81e71f6f8be0c924ed32e",
+      "sha256": "4557a58684868abe436de876103af42a73c7791cac080bedc2866b6d122a8fcb",
       "target": "/opt/apps/source/local/hf_generate.py"
     },
     {
@@ -1623,12 +1624,12 @@
     },
     {
       "path": "scripts/apps/src/torch_correct.py",
-      "sha256": "7eff6e290e38676ce8ff1d6a86c604ccdea1cc50271584124cfb6fca54ace220",
+      "sha256": "0b343a3cafb763aadc3f942e8444ccd4be3e387123ab1a1e70661ff139eb575f",
       "target": "/opt/apps/source/local/torch_correct.py"
     },
     {
       "path": "scripts/apps/run_apps.sh",
-      "sha256": "c1a33bf2a2dfc44dc5a119d58bdfbb0a12cfdc84cda33cccfa47aae824792f74",
+      "sha256": "810f3d2b4dfebcdda6df0720dbf0cca7463fd966497aa12d75f7daf2464b1851",
       "target": "/opt/apps/bundle/run_apps.sh",
       "permissions": "0755"
     }

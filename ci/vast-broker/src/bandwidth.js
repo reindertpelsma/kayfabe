@@ -1,5 +1,6 @@
 // The expected download and upload of ONE leg, computed from its instruction (docs/design/V3_WORKER_PROPIMAGES.md, "Bandwidth").
-// STATUS: DESIGN-ONLY, 2026-11-16. Pure and tested; nothing in src/index.js calls it, so no rental price changes.
+// STATUS: DESIGN-ONLY, 2026-11-17. Pure and tested; the only caller is src/legs.js, which runs only behind PROPIMAGES_ENABLED (default off), so no
+// rental price changes until the owner switches it on (docs/design/V3_WORKER_PRIVATE_PRESIGN.md). Before 2026-11-17 nothing called it.
 //
 // Every number lives in ci/vast-broker/bandwidth.json (per-stage download table, margin, repo size, upload estimates); there is no
 // data number in this file. Pinned object sizes are read from propimages.json (the private images) and release-matrix.json (the
@@ -24,23 +25,45 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const count = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // The stages the payload plans for an instruction, in run order: the same rule as plan_stage_names in scripts/ci/vast_payload.py
-// (test/bandwidth.test.js compares the two). `only` is the payload's --only list: it is what puts the manual-only stage
-// `install_flow` (and `propimage_apps` without an image list) into a large plan.
-export function plannedStages(instruction, { only = [] } = {}) {
+// (test/bandwidth.test.js compares the two). `only` and `skip` are the payload's --only and --skip lists: `only` is what puts the manual-only stage
+// `install_flow` (and `propimage_apps` without an image list, and `matlab` without the instruction's object) into a large plan.
+export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   const i = instruction;
   const names = ['provision', 'cuda_host', 'merge_bar', 'cuda_guest'];
-  if (i.linux_apps !== null && i.linux_apps !== undefined) names.push('apps');
+  if (i.linux_apps !== null && i.linux_apps !== undefined) {
+    names.push('apps');
+    // manual-only (the standalone full run, scripts/ci/standalone_full.py): planned only when named by `only`
+    if (i.tier === 'large' && only.includes('apps_discovery')) names.push('apps_discovery');
+  }
+  // kfml (2026-11-17): in the default plan of the middle and the large tier; the payload's --skip kfml leaves it out; small and adhoc never plan it
+  if (
+    (i.tier === 'middle' || i.tier === 'large') &&
+    (!skip.includes('kfml') || only.includes('kfml'))
+  )
+    names.push('kfml');
   if (i.tier === 'large' && only.includes('install_flow')) names.push('install_flow');
   if (i.windows) {
     names.push('windows_gate');
     if (i.winapps) names.push('windows_apps');
     if (i.windows_runs === 2) names.push('windows_gate_2');
+    if (i.tier === 'large' && only.includes('windows_open_rows')) names.push('windows_open_rows');
   }
   if ((i.propimages ?? []).length > 0 || (i.tier === 'large' && only.includes('propimage_apps')))
     names.push('propimage_apps');
+  if (i.tier === 'large' && only.includes('propimage_apps_b')) names.push('propimage_apps_b');
+  if (i.tier === 'large' && ((i.matlab ?? null) !== null || only.includes('matlab')))
+    names.push('matlab');
   if ((i.stages ?? []).includes('specviewperf')) names.push('specviewperf');
   return names;
 }
+
+// --only / --skip over a plan: the same rule as select_stages in scripts/ci/vast_payload.py.
+export const selectStages = (plan, { only = [], skip = [] } = {}) =>
+  plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));
+// The stages a leg of `tier` will run (2026-11-20): plannedStages of the leg's instruction, then the payload's --only/--skip.
+// The tier is the only instruction field the kfml stage depends on; the offer policy reads this list (policy.js kfmlOversubRuns).
+export const legStages = (tier, options = {}) =>
+  selectStages(plannedStages({ tier }, options), options);
 
 const matches = (when, ctx) =>
   when === undefined ||
@@ -92,7 +115,7 @@ export function estimateBandwidth(instruction, tier, options = {}) {
   const plan = plannedStages(instruction, { only });
   for (const name of [...only, ...skip])
     if (!plan.includes(name)) throw Error('bandwidth stage:' + name);
-  const chosen = plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));
+  const chosen = selectStages(plan, { only, skip });
   for (const name of chosen)
     if (!isObject(table.stages[name])) throw Error('bandwidth table stage:' + name);
   const sent = (instruction.propimages ?? []).map((img) => img.label);
@@ -202,9 +225,13 @@ export function breakdown(estimate, tier) {
   return lines;
 }
 
-// What to hand the Worker's pricing today: policy.js resourceCaps takes max(profile number, override), so these overrides can only
-// RAISE a leg's bandwidth above its profile row; a leg whose estimate is lower still pays the profile number until resourceCaps
-// takes the estimate as the number (the one follow-up edit, which is a policy.js change and so a bundle pin; not made here).
+// What to hand the Worker's pricing. `bandwidthEstimateInput` is `cfg.bandwidthEstimate`: policy.js resourceCaps takes it as the
+// leg's number (it can LOWER the profile row as well as raise it, capped at the profile's hard maximum, defaults.json
+// payloadBandwidthMax). `bandwidthOverrides` is the older form: resourceCaps takes max(number, override), so an override can only raise.
+export const bandwidthEstimateInput = (estimate) => ({
+  downGb: estimate.down_gb,
+  upGb: estimate.up_gb,
+});
 export const bandwidthOverrides = (estimate) => ({
   bandwidthDownOverride: Math.ceil(estimate.down_gb),
   bandwidthUpOverride: Math.ceil(estimate.up_gb),

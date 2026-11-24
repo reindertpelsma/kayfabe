@@ -2432,7 +2432,7 @@ mod tests {
         assert_eq!(l.take_notices().len(), 1);
     }
 
-    /// G4 / I6: nothing in the machine knows about time (OWNER_RULINGS section AE: no heuristics, no timers).
+    /// G4 / I6: the machine uses no timing heuristics or timers.
     #[test]
     fn the_machine_names_no_clock_no_sleep_and_no_poll() {
         let text = include_str!("user_lifecycle.rs");

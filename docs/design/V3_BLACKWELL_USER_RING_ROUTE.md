@@ -18,6 +18,40 @@ dmesg 8468.11). The guest's RM unloaded 7 s later (kf3 log `GSP fn 47 UNLOADING_
 `t=1580.0s`, phase `Running -> Halted`). That is the Windows TDR recovery after the Xid, not a cause of it. The
 driver re-initialised, and the row failed with `reason=GUEST`.
 
+**Update, 2026-11-18 (second occurrence, re-checked on its kf3 log).** Same box, SPEC S2, boot 3 (enscape-01;
+QEMU from 03:39:00, kf3 log complete): host `Xid 32 ... channel 0x1f intr 00800000` at 03:49:23 (t of about 623 s).
+
+All MEASURED in the boot-3 kf3 log of 2026-11-18 (kf3 `049fbf3c`) unless marked:
+- **Same twin kind.** 0x1f is guest token `0x25`, born once at line 7998: a `WINDOWS-USER-WORK` Passthrough GR twin
+  (engine 1) with a 32768-entry ring. The route is declined at line 2785 (`USER_RING_ROUTE_DECLINED
+  family=Blackwell class=0xca6f`).
+- **Same registration.** The boot's only `0x50800104` is at line 11348, on that channel's own 5080 object
+  (`0xc1d00058:0xff1fe010`, alloc line 7999, parent `0xff040023`). It follows `fn=4` (line 11346), as in creo-04,
+  at t of about 621.4 s by status-line cadence (2.02 s), about 1.6 s before the Xid.
+  - The channel had forwarded 32267 entries, close to its 32768 ring.
+  - No unmap/remap burst is logged for that space; kf3 logs map applies only above a size threshold, so this is
+    not evidence of absence.
+- **Recovery was a driver reset, not "none".**
+  - The guest's RM unloaded 5 s after the Xid (`GSP fn 47 UNLOADING_GUEST_DRIVER`, `mem t=628.393s`, line 13412)
+    and re-initialised (phase Halted, then Booted, then Running; lines 13413-13434).
+  - The guest-side `tdr.txt` of enscape-01 is empty, and its cli.log ends at `[03:46:11] subtest
+    01_BistroExtFullHigh Started` (acceptance lane collect at about 04:45). The guest OS stayed up and answered
+    probes.
+  - So the app never progressed after the reset, with no TDR record on the guest side. INFERRED: the subtest was
+    still running between 03:46 and 03:49; the channel forwarded entries up to its release.
+  - creo-04's boot went the same way, but there the guest stopped answering probes.
+  - "No forged completion" holds: the host RC'd the channel, and kayfabe completed nothing for it.
+
+`CLEARED OVER ABSENCE` (`kf-mem vasmgr.rs:2525-2534`, owner ruling §AA: an invalidate is cleared although some of
+its leaves were refused as absent). It appears 6 times in boot 3 and 12 times in creo-04's boot, but never in the
+faulting channel's space before its Xid:
+- at boot, in the same early space in both logs;
+- just after each guest RM re-init (boot 3 lines 13665-13669, creo-04 lines 19214-19218);
+- in creo-04 only, at lines 6410-6451, in the space of channel 0x16's FIRST life, long before the Xid.
+
+Also, an access to an absent leaf faults as an MMU fault (Xid 31), and no Xid 31 occurred. On this evidence it is
+not a second route to these Xids.
+
 The chain, link by link:
 
 1. **Channel 0x16 is a Windows user-work Passthrough GR twin of class `0xca6f`.** MEASURED. Host token
@@ -144,6 +178,8 @@ Stages:
    (30/30), then the user-ring lane. Then SPEC creo-04 twice and GravityMark 1.89 Vulkan once, each with
    `KF3_RPC_TRACE=1`.
    - Falsifier: any host Xid on a user-work twin, or a `USER_RING_ROUTE_DECLINED` line for `0xca6f`.
+   - Baseline for that falsifier on the SPEC 5070 Ti: 2 host Xid 32 (`intr 00800000`) in 3 SPEC viewset boots
+     (2026-11-18, S2). "No host Xid 32 over full SPEC viewset boots" is measurable against it.
    - Control: the same tree on an Ada box (creo-04 PASS).
 
 ### 2.4 Stage 1 as built (GPU-free, not wired)

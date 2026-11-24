@@ -1,0 +1,230 @@
+{
+	"DCGM Diagnostic" : 
+	{
+		"test_categories" : 
+		[
+			{
+				"category" : "Deployment",
+				"tests" : 
+				[
+					{
+						"name" : "software",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Fail",
+								"warnings" : 
+								[
+									{
+										"error_category" : 8,
+										"error_id" : 29,
+										"error_severity" : 5,
+										"warning" : "Persistence Mode: Persistence mode for GPU 0 is disabled. Enable persistence mode by running \"nvidia-smi -i <gpuId> -pm 1 \" as root."
+									}
+								]
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.029 seconds"
+							],
+							"status" : "Fail",
+							"warnings" : 
+							[
+								{
+									"error_category" : 8,
+									"error_id" : 29,
+									"error_severity" : 5,
+									"warning" : "Persistence Mode: Persistence mode for GPU 0 is disabled. Enable persistence mode by running \"nvidia-smi -i <gpuId> -pm 1 \" as root."
+								}
+							]
+						}
+					}
+				]
+			},
+			{
+				"category" : "Hardware",
+				"tests" : 
+				[
+					{
+						"name" : "memory",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.057 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "diagnostic",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.040 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "nvbandwidth",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.038 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			},
+			{
+				"category" : "Integration",
+				"tests" : 
+				[
+					{
+						"name" : "pcie",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.186 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			},
+			{
+				"category" : "Stress",
+				"tests" : 
+				[
+					{
+						"name" : "memory_bandwidth",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.031 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "targeted_stress",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.034 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "targeted_power",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.037 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			}
+		]
+	},
+	"entity_groups" : 
+	[
+		{
+			"entities" : 
+			[
+				{
+					"device_id" : "2487",
+					"entity_id" : 0,
+					"serial_num" : "<<<NOT_SUPPORTED>>>"
+				}
+			],
+			"entity_group" : "GPU",
+			"entity_group_id" : 1
+		}
+	],
+	"metadata" : 
+	{
+		"Driver Version Detected" : "575.51.03",
+		"version" : "4.8.0"
+	}
+}

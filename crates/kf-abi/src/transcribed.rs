@@ -55,11 +55,9 @@ use crate::wire::{AbiError, Field, StructLayout, u32_at, u64_at};
 ///
 /// # Provenance (transcribed, three citations)
 ///
-/// 1. **gVisor nvproxy**, `gvisor/pkg/abi/nvgpu/frontend.go:625-639`
-///    (`NVOS46_PARAMETERS`: `Client, Device, Dma, Memory, Offset, Length, Flags,
-///    Pad0[4], DmaOffset, Status, Pad1[4]`), which nvproxy replaces with
-///    `NVOS46_PARAMETERS_V580` starting at driver 580.65.06
-///    (`gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1059`).
+/// 1. **The measured driver matrix** (`tools/drivermatrix`, ogkm compiled per tag): the
+///    `NVOS46_PARAMETERS` layout (`Client, Device, Dma, Memory, Offset, Length, Flags,
+///    Pad0[4], DmaOffset, Status, Pad1[4]`), which grows at driver 580.65.06.
 /// 2. **The C artifact's runtime profile**,
 ///    `nvidia-gpu-passthrough/src/common/nvkvm_abi.h:66,76` —
 ///    `.nvos46_size = 56, .nvos46_status_off = 48` for the 535 and 570/575

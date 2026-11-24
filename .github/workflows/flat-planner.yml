@@ -6,7 +6,7 @@ on:
       - 'ci/vast-broker/kfci'
       - 'ci/vast-broker/test/helpers.js'
       - 'docs/design/V3_RELEASE_PLANNER.md'
-      - 'docs/howto/kfci-plan.md'
+      - 'docs/howto/ops/kfci-plan.md'
       - '.github/workflows/flat-planner.yml'
   pull_request:
     paths:
@@ -14,7 +14,7 @@ on:
       - 'ci/vast-broker/kfci'
       - 'ci/vast-broker/test/helpers.js'
       - 'docs/design/V3_RELEASE_PLANNER.md'
-      - 'docs/howto/kfci-plan.md'
+      - 'docs/howto/ops/kfci-plan.md'
       - '.github/workflows/flat-planner.yml'
   workflow_dispatch:
 permissions:

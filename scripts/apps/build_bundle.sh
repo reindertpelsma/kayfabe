@@ -128,6 +128,12 @@ if [ ! -x "$B/bin/vkpeak" ]; then
 fi
 [ -x "$B/bin/vkpeak" ]; ok vkpeak $?
 
+# ---- the open FFmpeg/DCGM discovery rows (non-gating; docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md) ------------------------------
+# provision.sh prints OPENROWS_<step>=ok|FAIL lines (a prefix the stage's BUILD_/SETUP_ checks do not read): a failed step makes the row
+# report NOT_RUN with its reason, and can never turn a gate bundle into a failed one. It fills $B/bin/nvcodec_probe and $B/dcgm_root.tar.
+bash "$HERE/open_rows/provision.sh" "$B" || say "open rows: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
+rm -rf "$B/src" "$B/nvcodec_probe.log" "$B/ffmpeg.log" "$B/dcgm.log" "$B/nvidia.key" "$B/dcgm_files.txt" 2>/dev/null
+mkdir -p "$B/share" && cp -r "$HERE/open_rows" "$B/share/"
 cp -u "$HERE/src/ai_bench.py" "$HERE"/src/*.py "$B/share/" 2>/dev/null
 cp -u "$HERE/run_apps.sh" "$B/"
 # A bundle with any failed step is never written: the stage must see "not built", not 66 apps of which some fail.

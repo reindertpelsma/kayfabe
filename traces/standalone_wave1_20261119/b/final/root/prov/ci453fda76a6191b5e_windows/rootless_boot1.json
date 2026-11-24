@@ -1,0 +1,186 @@
+{
+ "mode": "record",
+ "ok": false,
+ "schema": 1,
+ "sudo": null,
+ "tree": {
+  "processes": [
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "bash",
+    "no_new_privs": "0",
+    "pid": 90116,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "qemu-system-x86",
+    "no_new_privs": "0",
+    "pid": 95041,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "swtpm",
+    "no_new_privs": "1",
+    "pid": 95036,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "bash",
+    "no_new_privs": "0",
+    "pid": 95231,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "python3",
+    "no_new_privs": "0",
+    "pid": 95232,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   }
+  ],
+  "violations": [
+   "90116(bash) uid_root 0/0/0/0",
+   "90116(bash) capprm_held 000001ffffffffff",
+   "90116(bash) capeff_held 000001ffffffffff",
+   "90116(bash) capbnd_held 000001ffffffffff",
+   "90116(bash) no_new_privs_not_set 0",
+   "95041(qemu-system-x86) uid_root 0/0/0/0",
+   "95041(qemu-system-x86) capprm_held 000001ffffffffff",
+   "95041(qemu-system-x86) capeff_held 000001ffffffffff",
+   "95041(qemu-system-x86) capbnd_held 000001ffffffffff",
+   "95041(qemu-system-x86) no_new_privs_not_set 0",
+   "95036(swtpm) uid_root 0/0/0/0",
+   "95036(swtpm) capprm_held 000001ffffffffff",
+   "95036(swtpm) capeff_held 000001ffffffffff",
+   "95036(swtpm) capbnd_held 000001ffffffffff",
+   "95231(bash) uid_root 0/0/0/0",
+   "95231(bash) capprm_held 000001ffffffffff",
+   "95231(bash) capeff_held 000001ffffffffff",
+   "95231(bash) capbnd_held 000001ffffffffff",
+   "95231(bash) no_new_privs_not_set 0",
+   "95232(python3) uid_root 0/0/0/0",
+   "95232(python3) capprm_held 000001ffffffffff",
+   "95232(python3) capeff_held 000001ffffffffff",
+   "95232(python3) capbnd_held 000001ffffffffff",
+   "95232(python3) no_new_privs_not_set 0"
+  ]
+ },
+ "violations": [
+  "90116(bash) uid_root 0/0/0/0",
+  "90116(bash) capprm_held 000001ffffffffff",
+  "90116(bash) capeff_held 000001ffffffffff",
+  "90116(bash) capbnd_held 000001ffffffffff",
+  "90116(bash) no_new_privs_not_set 0",
+  "95041(qemu-system-x86) uid_root 0/0/0/0",
+  "95041(qemu-system-x86) capprm_held 000001ffffffffff",
+  "95041(qemu-system-x86) capeff_held 000001ffffffffff",
+  "95041(qemu-system-x86) capbnd_held 000001ffffffffff",
+  "95041(qemu-system-x86) no_new_privs_not_set 0",
+  "95036(swtpm) uid_root 0/0/0/0",
+  "95036(swtpm) capprm_held 000001ffffffffff",
+  "95036(swtpm) capeff_held 000001ffffffffff",
+  "95036(swtpm) capbnd_held 000001ffffffffff",
+  "95231(bash) uid_root 0/0/0/0",
+  "95231(bash) capprm_held 000001ffffffffff",
+  "95231(bash) capeff_held 000001ffffffffff",
+  "95231(bash) capbnd_held 000001ffffffffff",
+  "95231(bash) no_new_privs_not_set 0",
+  "95232(python3) uid_root 0/0/0/0",
+  "95232(python3) capprm_held 000001ffffffffff",
+  "95232(python3) capeff_held 000001ffffffffff",
+  "95232(python3) capbnd_held 000001ffffffffff",
+  "95232(python3) no_new_privs_not_set 0"
+ ]
+}

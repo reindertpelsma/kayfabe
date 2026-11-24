@@ -1,0 +1,86 @@
+{
+  "schema": "kayfabe.gpu-step/1",
+  "waited": [
+    {
+      "t": 0,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ],
+      "text": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in"
+    }
+  ],
+  "polls": [
+    {
+      "t": 0,
+      "smi_rc": 0,
+      "gpu_lines": 1,
+      "other_lines": 0,
+      "observed_is_expected": true,
+      "observed_is_host": null,
+      "kind": "expected",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "OK",
+          "problem": 0,
+          "service": "nvlddmkm"
+        }
+      ]
+    }
+  ],
+  "settled_before_restart": true,
+  "pnp_before_restart": [
+    {
+      "class": "Display",
+      "present": false,
+      "status": "Unknown",
+      "problem": null,
+      "service": "nvlddmkm"
+    },
+    {
+      "class": "Display",
+      "present": true,
+      "status": "Error",
+      "problem": 43,
+      "service": "nvlddmkm"
+    }
+  ],
+  "wait_s": 15,
+  "repair": {
+    "changed": true,
+    "restarted": 1
+  },
+  "restart_at_s": 40,
+  "kind": "expected",
+  "ok": true,
+  "total_s": 121,
+  "poll_s": 80,
+  "problem_codes": [
+    0
+  ],
+  "smi_rc": 0,
+  "gpu_lines": 1,
+  "observed_is_host": null
+}

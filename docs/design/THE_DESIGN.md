@@ -1,6 +1,6 @@
 # kayfabe — the design
 
-**STATUS: LIVE, 2026-09-20 (w821).** This states the design as decided. It is written to be
+**STATUS: LIVE, 2026-11-20 (w821; refs re-checked 2026-11-20).** ⊘ *Refs re-checked 2026-11-20 by `scripts/ci/doc_freshness.py`: the one dead literal reference (an ogkm file cite in §5.7) was replaced by a pointer. The body was not re-audited against the code on that date; it is the w821 statement plus the corrections marked inside it.* This states the design as decided. It is written to be
 argued with from scratch: no correction history, no record of what earlier drafts said. That
 history is in git, and in the superseded documents this one replaces.
 
@@ -638,9 +638,10 @@ is wrong.
 Mapped as a **read-only KVM memslot over the real host doorbell page**: reads are hardware with no
 exit, writes trap into the path above, and when *we* ring we write the host page directly.
 
+> ⊘ **Cite moved 2026-11-20.** The ogkm file and line range that stood in this correction now live only in `V3_BAR1_DOORBELL.md` §1.2 (the `third_party/ogkm` submodule is not initialised in a default checkout, so the freshness gate cannot resolve a bare ogkm filename here).
 > ⊘ **CORRECTED 2026-09-26 for v3 (`V3_BAR1_DOORBELL.md` §1.4).** The paragraph below was written
 > for Mode 1, where kayfabe served the ioctl. In v3 the stock guest RM allocates the usermode object
-> **without any GSP RPC** (`resource_list.h:885-904`), so there is no handle to identify it by: the
+> **without any GSP RPC** (the ogkm cite is in `V3_BAR1_DOORBELL.md` §1.2), so there is no handle to identify it by: the
 > BAR1 view is learned from the guest's BAR1 PTE (aperture SYS_COH + kind SMSKED_MESSAGE, address =
 > the VF register offset — the GMMU's own decode, not a pattern match) and trapped at runtime where
 > RM's BAR1 allocator put it. The BAR0 doorbell stays live on Hopper+ too (RM rings its internal

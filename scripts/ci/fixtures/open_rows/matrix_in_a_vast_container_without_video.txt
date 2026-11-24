@@ -1,0 +1,9 @@
+case_id	group	expect	result	reason	rc	secs	psnr	frames	n_ok	sess_peak	detail
+enc_hevc_420_8_1080p	encode	UNKNOWN	NOT_RUN	nvenc_unavailable	-	-	-	-	-	-	enc:hevc; enc:hevc; open session NV_ENC_ERR_UNSUPPORTED_DEVICE
+enc_av1_420_8_1080p	encode	UNKNOWN	NOT_RUN	nvenc_unavailable	-	-	-	-	-	-	enc:av1; enc:av1; open session NV_ENC_ERR_UNSUPPORTED_DEVICE
+sess_h264_n03	sessions	UNKNOWN	NOT_RUN	nvenc_unavailable	-	-	-	-	-	-	enc:h264; sessions; open session NV_ENC_ERR_UNSUPPORTED_DEVICE
+dec_hevc_420_8_hw	decode	UNKNOWN	NOT_RUN	nvdec_unavailable	-	-	-	-	-	-	dec:hevc:420:8; cuvidGetDecoderCaps answered an error for every codec (ERR:cuda100)
+dec_hevc_420_8_cuvid	decode	UNKNOWN	NOT_RUN	nvdec_unavailable	-	-	-	-	-	-	dec:hevc:420:8; cuvidGetDecoderCaps answered an error for every codec (ERR:cuda100)
+# tool=nvcodec_matrix device=NVIDIA GeForce RTX 3060 cc=8.6 driver_api=13.0 header_api=12.2 sessions_opened=- ffmpeg=/usr/bin/ffmpeg ffmpeg_sha256=ed16af623947494a
+# gpu_use_why=no case passed, so there was no work to prove
+NVCODEC_MATRIX_SUMMARY pass=0 not_supported=0 fail=0 mismatch=0 not_run=5 cases=5 gpu_use=NA device=NVIDIA_GeForce_RTX_3060 driver_api=13.0 sessions_opened=-

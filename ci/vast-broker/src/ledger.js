@@ -402,6 +402,8 @@ export class Ledger {
           endpointRedactions: record.endpointRedactions,
           runnerNonce: record.runnerNonce ?? null,
           reportExpiry: record.reportExpiry,
+          // the token's scope claim (src/trust.js): the publisher re-issues the token to redact it, byte for byte
+          ...(record.scopes === undefined ? {} : { scopes: record.scopes }),
           at: now,
         });
       }

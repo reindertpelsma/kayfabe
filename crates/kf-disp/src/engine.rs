@@ -2573,6 +2573,8 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
 }
 
 #[cfg(test)]
+mod boundary_fuzz;
+#[cfg(test)]
 mod lockstep_exhaustive;
 #[cfg(test)]
 mod lockstep_soak;

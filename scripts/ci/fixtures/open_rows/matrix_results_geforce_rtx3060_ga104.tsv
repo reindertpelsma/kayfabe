@@ -1,0 +1,48 @@
+case_id	group	expect	result	reason	rc	secs	psnr	frames	n_ok	sess_peak	detail
+enc_h264_420_8_1080p	encode	SUPPORTED	PASS	ok	0	0.6	27.90	30	-	1	-
+enc_hevc_420_8_1080p	encode	SUPPORTED	PASS	ok	0	0.6	28.06	30	-	0	-
+enc_av1_420_8_1080p	encode	UNSUPPORTED	NOT_RUN	unknown_encoder	-	-	-	-	-	-	enc:av1 not offered
+enc_hevc_main10_1080p	bitdepth	SUPPORTED	PASS	ok	0	0.9	28.07	30	-	1	-
+enc_av1_10bit_1080p	bitdepth	UNSUPPORTED	NOT_RUN	unknown_encoder	-	-	-	-	-	-	enc:av1 not offered
+enc_h264_10bit_1080p	bitdepth	UNSUPPORTED	NOT_SUPPORTED	caps_not_supported	1	0.6	-	-	-	0	enc:h264:SUPPORT_10BIT_ENCODE=0 need >=1
+enc_hevc_444_8_1080p	chroma	SUPPORTED	PASS	ok	0	0.8	28.19	30	-	1	-
+enc_hevc_444_10_1080p	chroma	SUPPORTED	PASS	ok	0	1.1	28.21	30	-	1	-
+enc_h264_444_8_1080p	chroma	SUPPORTED	PASS	ok	0	0.9	28.01	30	-	1	-
+enc_av1_444_8_1080p	chroma	UNSUPPORTED	NOT_RUN	unknown_encoder	-	-	-	-	-	-	enc:av1 not offered
+enc_h264_above4096	size	UNSUPPORTED	NOT_SUPPORTED	caps_not_supported	1	0.6	-	-	-	0	enc:h264 4224x2176 outside 145x49..4096x4096
+enc_hevc_5k	size	SUPPORTED	PASS	ok	0	1.3	29.84	15	-	1	-
+enc_hevc_8k	size	SUPPORTED	PASS	ok	0	2.3	29.97	6	-	1	-
+enc_av1_8k	size	UNSUPPORTED	NOT_RUN	unknown_encoder	-	-	-	-	-	-	enc:av1 not offered
+enc_h264_8k	size	UNSUPPORTED	NOT_SUPPORTED	caps_not_supported	1	0.7	-	-	-	0	enc:h264 7680x4320 outside 145x49..4096x4096
+enc_h264_bframes_lookahead	lookahead	SUPPORTED	PASS	ok	0	0.8	28.15	40	-	1	-
+enc_hevc_bframes_lookahead	lookahead	SUPPORTED	PASS	ok	0	0.8	28.11	40	-	1	-
+enc_av1_bframes_lookahead	lookahead	UNSUPPORTED	NOT_RUN	unknown_encoder	-	-	-	-	-	-	enc:av1 not offered
+enc_hevc_bref_middle	lookahead	SUPPORTED	PASS	ok	0	0.6	28.16	40	-	0	-
+enc_h264_temporal_aq	lookahead	SUPPORTED	PASS	ok	0	0.6	28.12	40	-	1	-
+sess_h264_n01	sessions	SUPPORTED	PASS	ok	-	0.8	-	-	1/1	1	-
+sess_h264_n02	sessions	SUPPORTED	PASS	ok	-	1.2	-	-	2/2	2	-
+sess_h264_n03	sessions	SUPPORTED	PASS	ok	-	1.3	-	-	3/3	3	-
+sess_h264_n04	sessions	SUPPORTED	PASS	ok	-	1.7	-	-	4/4	4	-
+sess_h264_n05	sessions	SUPPORTED	PASS	ok	-	2.1	-	-	5/5	5	-
+sess_h264_n06	sessions	SUPPORTED	PASS	ok	-	2.6	-	-	6/6	6	-
+sess_h264_n08	sessions	SUPPORTED	PASS	ok	-	3.4	-	-	8/8	8	-
+sess_h264_n09	sessions	UNSUPPORTED	NOT_SUPPORTED	session_limit	-	3.5	-	-	8/9	8	sessions opened=8 need >=9
+sess_h264_n12	sessions	UNSUPPORTED	NOT_SUPPORTED	session_limit	-	3.8	-	-	8/12	8	sessions opened=8 need >=12
+dec_h264_420_8_hw	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_hevc_420_8_hw	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_hevc_420_10_hw	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_hevc_444_8_hw	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_vp9_420_8_hw	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_av1_420_8_hw	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_h264_420_8_cuvid	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_hevc_420_8_cuvid	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_hevc_420_10_cuvid	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_hevc_444_8_cuvid	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_vp9_420_8_cuvid	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_av1_420_8_cuvid	decode	SUPPORTED	PASS	ok	0	0.6	inf	-	-	-	-
+dec_h264_420_10_hw	decode	UNSUPPORTED	NOT_SUPPORTED	hw_decode_unsupported	1	0.7	-	-	-	-	dec:h264:420:10 unsupported
+dec_hevc_444_10_hw	decode	SUPPORTED	PASS	ok	0	1.0	inf	-	-	-	-
+dec_vp9_420_10_hw	decode	SUPPORTED	PASS	ok	0	0.8	inf	-	-	-	-
+dec_av1_420_10_hw	decode	SUPPORTED	PASS	ok	0	0.7	inf	-	-	-	-
+dec_hevc_8k_hw	decode	SUPPORTED	PASS	ok	0	2.8	inf	-	-	-	-
+dec_h264_above4096_hw	decode	UNSUPPORTED	NOT_SUPPORTED	hw_decode_unsupported	1	0.9	-	-	-	-	dec:h264:420:8 4224x2176 outside 48x16..4096x4096

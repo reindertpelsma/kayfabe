@@ -1,6 +1,6 @@
 # Proprietary test images
 
-STATUS: LIVE, 2026-11-15 (policy). This page states how the maintainers handle the private Windows test images and what the repository does and does not contain. It is not legal advice and says nothing about the licence terms of any application.
+This page states how the maintainers handle the private Windows test images and what the repository does and does not contain. It is not legal advice and says nothing about the licence terms of any application.
 
 ## What a proprietary test image is
 
@@ -17,14 +17,14 @@ Kayfabe is tested with real applications, among them commercial design, video an
 
 Anyone. You build your **own** image with the how-to [Recreate the proprietary Windows image](recreate-the-proprietary-image.md), using **your own** accounts and licences, and run the same offline tests against it. Contributors do the same. The how-to links only official download pages and never a protected installer.
 
-Standalone use is supported: someone who builds an image themselves can run the same lane. That lane is not gated (owner ruling, 2026-11-15).
+Standalone use is supported: someone who builds an image themselves can run the same lane. That lane is not gated.
 
 ## How the images are used
 
 - **Offline.** A run uses a user-mode network with `restrict=on`: the guest has no internet. Only the SSH forward from the host exists.
 - **Deterministic clock.** The clock starts at the guest time recorded at the image's last clean shutdown plus a small gap derived from the image's seed, and never starts earlier than that. The reason is reproducibility: boot behaviour, timestamps in results and application and certificate timers are the same on every run. The install session that builds an image uses the real clock, because TLS to the vendors' sites needs correct dates.
 - **Fixed hardware identity.** SMBIOS UUID and serials, MAC address, disk serial and GPU UUID of the virtual machine are derived from one seed per image, so that runs are repeatable.
-- **AMD host.** The image uses an AMD CPU profile, so the host CPU vendor must match it. Intel hosts are not supported by that image. A second image, built on an Intel host, would be needed. On 2026-11-15 the maintainers measured an Intel host that presented the AMD vendor to the guest: it hung in Windows Boot Manager.
+- **AMD host.** The image uses an AMD CPU profile, so the host CPU vendor must match it. Intel hosts are not supported by that image. A second image, built on an Intel host, would be needed. An Intel host that presented the AMD vendor to the guest hung in Windows Boot Manager.
 
 ## Why the sign-in state is revoked at the vendor before the image is distributed
 
@@ -32,14 +32,29 @@ A rented test box is not trusted, and whoever controls it can read the image del
 
 ## How the maintainers' images reach a test box
 
-The policy is a time-limited, authenticated download to the box, from the private store. The repository has a mechanism of that kind for other private test data: a Worker route that checks the box's run token and answers with a signed URL that lives at most 20 minutes (`docs/DOWNLOADS.md`, *SPECviewperf private copy*). CODE READ at revision `84b541cae` (2026-11-15): the list of objects that route will serve holds no proprietary image, and no script in the repository fetches one. So the delivery of an image to a box is the maintainers' policy and is not shown by code in this repository.
+The policy is a time-limited, authenticated download to the box, from the private store. The repository has a mechanism of that kind for other private test data: a Worker route that checks the box's run token and answers with a signed URL that lives at most 20 minutes (`docs/DOWNLOADS.md`, *SPECviewperf private copy*). The list of objects that route will serve holds no proprietary image, and no script in the repository fetches one. So the delivery of an image to a box is the maintainers' policy and is not shown by code in this repository.
+
+## A Linux test image with MATLAB GPU rows
+
+Experimental: the code described here has GPU-free tests only; it has not been run on a machine with a GPU. The repository contains the row scripts and the runner and none of the application: no installer, no image, no account data. A second kind of proprietary image is a private **Linux** disk image (Ubuntu) with MATLAB and its GPU toolboxes installed. It has no NVIDIA driver: the driver of the run is installed into a throwaway clone of the image at run time, offline. Eight small rows (`scripts/bench/linux/matlab/`) are copied into that running clone and run with `matlab -batch`. Each row computes its numbers on the GPU and on the CPU in the same script (matrix products, Fourier transforms, solvers, a small neural network, a parallel pool with a GPU per worker, a kernel from a PTX text file, a bounded memory fill) and writes a small JSON file; the host recomputes every comparison from the raw numbers with its own tolerances, asserts that the GPU was used from the host's own `nvidia-smi` counters, and records the kayfabe device's census of what it did not serve. No row prints or reads account or licence data, and the host keeps no other output of the guest. All rows start in the discovery lane: a failure is listed, it does not fail the run.
+
+Standalone use: whoever builds an image of that kind can run the same rows with `vast_payload.py --only matlab --matlab-image PATH_OR_URL --matlab-driver VERSION_OR_FILE` on a box with KVM and a GPU. No checksum of your own image is enforced (the computed one is recorded in the result), a row that cannot run is reported as skipped with its reason, and nothing of the image stays on the box. The maintainers' own run, through the Worker, pins the image and the driver and allows no skip.
+
+## Bring your own image configuration
+
+The images are described by a configuration file, not by names in the code. Each entry (a **bundle**) says whether the image is Windows or Linux, where its archive is, how large it is and which applications are installed on it. You can describe your own images in a file of the same shape, with one image holding all of your applications or several images holding some each.
+
+- Check a file: `python3 scripts/ci/propimage_config.py --config YOUR.json validate`. A mistake is refused by name and exit status 2.
+- Ask which images an application list needs: `python3 scripts/ci/propimage_config.py --config YOUR.json resolve --apps app1,app2`. The answer is the images with the fewest total bytes that hold every application, and the byte total. An application that is on no image is refused by name; it is never skipped.
+- See what a run of one image would do, without running it: `python3 scripts/ci/propimage_stage.py --config YOUR.json plan --bundle ID` prints the rows, the boots and the harness commands. `--arm vfio --vfio-gpu 0000:01:00.0` plans the same run with the real GPU (the reference arm) instead of kf3; the default is kf3.
+- Put no licence key, account, e-mail address or credential in the file; the checker refuses what looks like one.
 
 ## What the open lanes use
 
-The open lanes need none of this. A Windows 11 Enterprise LTSC evaluation guest with internet access runs only open or freely downloadable software, plus SPECviewperf, SPECworkstation and the Phoronix Test Suite as separately obtained benchmark packages. Proprietary applications run only in the offline images described above. This is the owner's scoping ruling of 2026-11-15 (`docs/OWNER_RULINGS.md`); that ruling records that whether today's code already meets every part of it has not been audited.
+The open lanes need none of this. A Windows 11 Enterprise LTSC evaluation guest with internet access runs only open or freely downloadable software, plus SPECviewperf, SPECworkstation and the Phoronix Test Suite as separately obtained benchmark packages. Proprietary applications run only in the offline images described above. In the SPECviewperf lane of the release check that guest is started with the network on and the real clock (`KF_SPEC_NET=online`, the stage's default; `KF_SPEC_NET=offline` gives the recorded clock again): the Windows evaluation guest needs the network and the real time to complete its own start-up validation. The network is for that and for incidental traffic; the guest is still untrusted and the box holds no secrets. The proprietary images do not change: they stay offline, with the clock of their state file. The lane also reads the guest's licence state (state text only) at boot, about every 15 minutes and at the end; `KF_SPEC_LICENCE_PROBE=0` switches that off. Not verified: whether today's code meets every part of this scoping.
 
 ## What is never published
 
 Never in the repository, in a release, on the site or in a public cache: a proprietary image or any part of it, an installer, a licence key, an account name or password, the contents of an image's state file (its TPM state, SSH key pair and account password), and the names and locations of the maintainers' private objects.
 
-Verified on: policy text from the owner's decisions of 2026-11-15; code statements read at `84b541cae` (`ci/vast-broker/src/benchdata.js`, `scripts/bench/windows/propimage.py`, `scripts/bench/windows/propimage_check.py`). Not verified end to end: no one has followed the how-to from scratch, and the delivery of an image to a box is not exercised by any code in the repository. <!-- src: docs/howto/recreate-the-proprietary-image.md; docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md; docs/OWNER_RULINGS.md section 1 of the 2026-11-15 release-gate rulings -->
+Not verified end to end: no one has followed the how-to from scratch, and the delivery of an image to a box is not exercised by any code in the repository. <!-- src: code statements read at 84b541cae (ci/vast-broker/src/benchdata.js, scripts/bench/windows/propimage.py, scripts/bench/windows/propimage_check.py); owner decisions of 2026-11-15, Intel-host AMD-vendor hang measured 2026-11-15; docs/howto/recreate-the-proprietary-image.md; docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md; docs/OWNER_RULINGS.md section 1 of the 2026-11-15 release-gate rulings -->

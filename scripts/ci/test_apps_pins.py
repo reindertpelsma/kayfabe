@@ -455,13 +455,27 @@ class StaticContracts(unittest.TestCase):
         self.assertIn('"$PIN_BLENDER_SHA256"', code)
 
     def test_the_guest_side_downloads_only_through_the_pin_helpers(self):
-        # the one raw curl left is the manual, owner-approved Geekbench fetch (KF_APPS_GEEKBENCH=1, docs/DOWNLOADS.md)
+        # no raw curl is left: the manual, owner-approved Geekbench fetch (KF_APPS_GEEKBENCH=1, docs/DOWNLOADS.md) is pinned too (2026-11-17)
         raw = [
             l for l in self.guest.splitlines()
             if "curl" in l and not l.lstrip().startswith("#") and "cdn.geekbench.com" not in l
             and "python3-venv python3-pip curl ca-certificates" not in l
         ]
         self.assertEqual(raw, [])
+
+    def test_the_python_headers_are_in_the_image_recipe_and_in_the_side_installer(self):
+        """2026-11-20: the guest had gcc and no Python.h (`MLROWS_FACTS ... "python_h": false`), so the vllm row could not build anything. The ML rows
+        need the headers in the apps image, and the side installer (the host and the guest are the same experiment) installs the same package."""
+        packages = json.loads((APPS / "image/recipe.json").read_text())["apt"]["packages"]
+        self.assertIn("python3-dev", packages)
+        self.assertIn("python3-venv", packages)
+        self.assertEqual(len(packages), len(set(packages)))
+        joined = self.guest.replace("\\\n", " ")          # the install line continues over three lines
+        match = re.search(r"^apt-get [^\n]*\binstall\b[^\n]*", joined, re.M)
+        self.assertIsNotNone(match)
+        words = match.group(0).split()
+        self.assertIn("python3-dev", words)
+        self.assertIn("python3-venv", words)
 
     def test_the_guest_side_refuses_to_run_without_the_pins(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -489,7 +503,7 @@ class StaticContracts(unittest.TestCase):
 
     def test_no_nvidia_package_is_in_the_setup_cache_policy(self):
         names = set()
-        for profile in ("ci", "bench", "windows", "apps"):
+        for profile in ("ci", "bench", "windows", "apps", "pybuild", "nvcodec_control"):
             names.update(
                 subprocess.run(
                     ["bash", str(ROOT / "scripts/bench/provision_box.sh"), "--packages", profile],

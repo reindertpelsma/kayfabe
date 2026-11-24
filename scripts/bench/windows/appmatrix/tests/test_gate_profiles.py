@@ -30,9 +30,10 @@ class GateProfiles(unittest.TestCase):
 
     def test_every_app_is_in_exactly_one_class(self):
         opn, owner, manual, unsupported = G.classes(self.apps, self.man, self.prof)
+        online = G.online_source(self.prof)
         ids = {a["id"] for a in self.apps["apps"]}
-        self.assertEqual(opn | owner | manual | unsupported, ids)
-        self.assertEqual(len(opn) + len(owner) + len(manual) + len(unsupported), len(ids))
+        self.assertEqual(opn | owner | manual | unsupported | online, ids)
+        self.assertEqual(len(opn) + len(owner) + len(manual) + len(unsupported) + len(online), len(ids))
 
     def test_no_open_app_needs_a_package_outside_the_bundle(self):
         needs = {p["id"]: p.get("needs", []) for p in self.man["packages"]}

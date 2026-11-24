@@ -1,0 +1,4 @@
+KF_CLOCK image=propimage-linux net=offline using=recorded base=2026-11-17T08:49:26Z recorded=2026-11-17T08:49:26Z floor_input=- inputs=1
+installer: NVRUN_RC=0
+{"version": "580.159.04", "modinfo": "580.159.04", "libcuda": "580.159.04", "cc": "x86_64-linux-gnu-gcc-13"}
+EXIT rc=0 11:21:37

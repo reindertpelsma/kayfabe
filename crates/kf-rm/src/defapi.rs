@@ -1,4 +1,4 @@
-//! ★ OWNER_RULINGS §U (2026-10-07) — **the per-object deferred-API entry tables**: what the GSP's
+//! **The per-object deferred-API entry tables**: what the GSP's
 //! `DeferredApiObject` keeps (`ogkm-580.95.05: src/nvidia/src/kernel/gpu/deferred_api.c`), held by
 //! the object graph's seat and read by the channel plane at the trigger.
 //!

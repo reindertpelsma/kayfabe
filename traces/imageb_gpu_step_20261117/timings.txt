@@ -1,0 +1,6 @@
+d1 launch 07:04:00 disk: /dev/root       291G   80G  211G  28% /
+d1 exit 07:26:28; d2 launch 07:26:35 disk: /dev/root       291G   80G  211G  28% /
+d2 exit 07:47:19; d3 rest start 07:47:26 disk: /dev/root       291G  141G  151G  49% /
+d3 boot start 07:52:26 (28ccb618); checkout moved to 612978cb at 07:53:29 after the d3 harness had loaded its module
+d3 exit 08:09:24; d4 launch 08:09:30 code 612978cb (settled gate), dev path, same unpacked base
+d4 exit 08:24:44

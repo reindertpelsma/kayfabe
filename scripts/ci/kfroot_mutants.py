@@ -3,8 +3,9 @@
 """Mutation harness for the kfroot tool, library and the rootless wiring of the Windows harness (STATUS: LIVE, 2026-11-15).
 
 Each mutant is one exact-once text replacement in a private tree (scripts/ci/kfroot.py, scripts/lib/kfroot.sh,
-scripts/bench/box/windows_gate.sh, windows_apps.sh, scripts/bench/windows/win_vm.sh); each must be killed by at least two
-independently named failing tests of scripts/ci/test_kfroot.py, like the other *_mutants.py harnesses here.
+scripts/bench/box/windows_gate.sh, windows_apps.sh, scripts/bench/windows/win_vm.sh; 2026-11-20 also scripts/ci/vast_payload.py,
+scripts/ci/vast_report.py and scripts/bench/host_xid_watch.sh); each must be killed by at least two independently named failing tests of
+scripts/ci/test_kfroot.py and scripts/ci/test_kfroot_payload.py, like the other *_mutants.py harnesses here.
 Run: python3 scripts/ci/kfroot_mutants.py [--jobs N] [--only name,name]  (exit 0 only if every mutant has >= 2 killers)
 """
 
@@ -25,6 +26,9 @@ FILES = {
     "gate": "scripts/bench/box/windows_gate.sh",
     "apps": "scripts/bench/box/windows_apps.sh",
     "vm": "scripts/bench/windows/win_vm.sh",
+    "payload": "scripts/ci/vast_payload.py",
+    "report": "scripts/ci/vast_report.py",
+    "xid": "scripts/bench/host_xid_watch.sh",
 }
 SOURCES = {k: (ROOT / v).read_text() for k, v in FILES.items()}
 
@@ -84,15 +88,15 @@ CASES = [
     # the box bootstrap
     M("bootstrap-user-not-in-kvm", "py", "useradd --create-home --shell /bin/bash --groups kvm", "useradd --create-home --shell /bin/bash"),
     M("bootstrap-dev-kvm-group-forgotten", "py", 'Step("dev_kvm_group", ["chgrp", "kvm", str(dev / "kvm")])', 'Step("dev_kvm_group", ["true"])'),
-    M("bootstrap-gpu-lock-mode", "py", "chmod 0666 {GPU_LOCK}", "chmod 0644 {GPU_LOCK}"),
+    M("bootstrap-gpu-lock-mode", "py", "chmod 0666 {lock}", "chmod 0644 {lock}"),
     M("bootstrap-sudo-log-unreadable", "py", "chmod 0640 {SUDO_LOG}", "chmod 0600 {SUDO_LOG}"),
-    M("bootstrap-dmesg-stays-restricted", "py", "kernel.dmesg_restrict=0", "kernel.dmesg_restrict=1"),
+    M("bootstrap-dmesg-stays-restricted", "py", '["sysctl", "-w", "kernel.dmesg_restrict=0"]', '["sysctl", "-w", "kernel.dmesg_restrict=1"]'),
     M("bootstrap-memlock-limited", "py", "- memlock unlimited", "- memlock 65536"),
     M("bootstrap-required-failure-continues", "py", "        if rc and step.required:", "        if False:"),
     M("bootstrap-dry-run-executes", "py", "        if dry_run:\n            results.append({**step.describe(), \"rc\": None})\n            continue", "        if False:\n            continue"),
     # the library
     M("lib-kfroot-ignores-no-new-privs", "lib", "    if grep -q '^NoNewPrivs:[[:space:]]*1'", "    if false && grep -q '^NoNewPrivs:[[:space:]]*1'"),
-    M("lib-kfroot-root-goes-through-sudo", "lib", '    if [ "${KFROOT_EUID:-$(id -u)}" = 0 ]; then\n        "$@"', '    if false; then\n        "$@"'),
+    M("lib-kfroot-root-goes-through-sudo", "lib", '    if [ "${KFROOT_EUID:-$(id -u)}" = 0 ]; then\n        kf_record root "$@"', '    if false; then\n        kf_record root "$@"'),
     M("lib-dmesg-always-direct", "lib", '    if [ "${KFROOT_EUID:-$(id -u)}" = 0 ] || [ "$(cat', '    if true || [ "$(cat'),
     M("lib-dmesg-always-kfroot", "lib", '    if [ "${KFROOT_EUID:-$(id -u)}" = 0 ] || [ "$(cat', '    if false && [ "$(cat'),
     M("lib-record-mode-fails-the-run", "lib", '    if [ "$rc" != 0 ] && [ "$mode" = record ]; then', "    if false; then"),
@@ -122,9 +126,86 @@ CASES = [
     M("vm-apparmor-without-kfroot", "vm", '%s\\n\' "$rule" | kfroot tee -a "$local" > /dev/null\n    kfroot apparmor_parser -r "$prof"', '%s\\n\' "$rule" | tee -a "$local" > /dev/null\n    apparmor_parser -r "$prof"'),
     M("vm-dmesg-direct", "vm", '    dm0=$(kf_dmesg 2>/dev/null | wc -l || echo 0)', '    dm0=$(dmesg 2>/dev/null | wc -l || echo 0)'),
     M("vm-no-prepare-command", "vm", "    prepare) install -d", "    prepare_) install -d"),
+    # the rootless payload run (2026-11-20, docs/design/V3_KFROOT_AUDIT.md): the audit as data, the static check, the record, the orchestration
+    M("stage-run-as-root", "py", "        self.common_setup(stage)\n        self.prepare(stage, tag)\n        return self.dropped(command)", "        self.common_setup(stage)\n        self.prepare(stage, tag)\n        return command"),
+    M("stage-run-as-root-by-flag-forgotten", "payload", "                command = rootless.start(name, command, approved, tag)", "                pass"),
+    M("root-stage-runs-without-approval", "py", '        elif policy["as"] == "root_stage" and name not in approved:', "        elif False:"),
+    M("unclassified-stage-passes", "py", "        if policy is None:\n            tokens.append(f\"unclassified:{name}\")", "        if policy is None:\n            pass"),
+    M("user-stage-approvable-as-root", "py", 'if name not in STAGE_POLICY or STAGE_POLICY[name]["as"] != "root_stage":', "if name not in STAGE_POLICY:"),
+    M("lint-reads-no-script", "py", '    if policy["as"] != "user":\n        return []\n    out = []', "    return []\n    out = []"),
+    M("lint-flags-kfroot-lines", "py", '        if "kfroot " in code_part or "kf_dmesg" in code_part:\n            continue', "        if False:\n            continue"),
+    M("lint-misses-dmesg", "py", "apparmor_parser|nvidia-modprobe|useradd|usermod|groupadd|setcap|swapon|dmesg\")", "apparmor_parser|nvidia-modprobe|useradd|usermod|groupadd|setcap|swapon\")"),
+    M("lint-misses-root-guards", "py", "        elif ROOT_GUARD.search(code_part):\n            found.append((n, \"root_guard\"))", "        elif False:\n            pass"),
+    M("lint-skips-a-missing-script", "py", '            out.append(f"missing_script:{stage}:{rel}")\n            continue', "            continue"),
+    M("payload-not-root-accepted", "py", '        tokens = [] if self.geteuid() == 0 else ["payload_not_root"]', "        tokens = []"),
+    M("dropped-stage-keeps-memlock-raise", "py", '([] if self.memlock else ["--no-memlock"])', "[]"),
+    M("dropped-stage-keeps-roots-home", "py", '[f"HOME={self.home}", f"USER={self.user}", f"LOGNAME={self.user}", ', "[f\"USER={self.user}\", f\"LOGNAME={self.user}\", "),
+    M("dropped-stage-keeps-roots-toolchain", "py", 'if d and not d.startswith("/root/")]', "if d]"),
+    M("dropped-command-lost", "py", '*run, *command]', '*run]'),
+    M("common-setup-runs-every-step", "py", "run=self.run, only_needed=True, memlock=self.memlock,", "run=self.run, only_needed=False, memlock=self.memlock,"),
+    M("common-setup-every-stage", "py", "        if self.common_done:\n            return\n        self.common_done = True", "        self.common_done = True"),
+    M("windows-prepare-skipped", "py", '        if "windows_prepare" not in policy["prepare"] or self.prepared:\n            return', "        return"),
+    M("windows-prepare-failure-ignored", "py", '        if p.returncode:\n            raise RootlessRefused("step_failed:windows_prepare")', "        pass"),
+    M("windows-prepare-runs-in-the-tree", "py", 'KF_KFROOT_RECORD=str(mark), KF_ROOTLESS="off")', 'KF_ROOTLESS="off")'),
+    M("toolchain-copy-failure-ignored", "py", '        if p.returncode and required:\n            raise RootlessRefused(f"step_failed:{name}")', "        pass"),
+    M("root-stage-not-recorded", "py", '            self.record.step("root_stage", stage, 0, "payload", "approved by name: " + policy["blocker"])\n', ""),
+    M("root-stage-leaves-root-files", "py", "        elif how in (\"root_stage\", \"self_drop\"):\n            self.give_back(stage)", "        elif False:\n            pass"),
+    M("root-stage-without-safe-directory", "py", '"GIT_CONFIG_KEY_0=safe.directory", ', ""),
+    M("checkout-trust-wildcard", "payload", '["git", "-c", "safe.directory=" + root, "-C", root, *args]', '["git", "-c", "safe.directory=*", "-C", root, *args]'),
+    M("checkout-trust-dropped", "payload", '["git", "-c", "safe.directory=" + root, "-C", root, *args]', '["git", "-C", root, *args]'),
+    M("xid-guard-revision-read-without-trust", "payload", 'revision = checkout_git(root, "rev-parse", "HEAD", stderr=None)', 'revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()'),
+    M("refused-kfroot-not-read", "py", '        if how == "user":\n            self.record.refusals(output_text, stage)', "        if False:\n            pass"),
+    M("refused-kfroot-not-a-violation", "py", '        if self.unaudited or self.refused:\n            return "VIOLATED"', "        if self.unaudited:\n            return \"VIOLATED\""),
+    M("unaudited-step-not-a-violation", "py", '        if self.unaudited or self.refused:\n            return "VIOLATED"', "        if self.refused:\n            return \"VIOLATED\""),
+    M("approved-root-stage-reads-as-rootless", "py", '        if any(s["as"] == "root_stage" for s in self.stages.values()):\n            return "ROOT_STAGES_APPROVED"', "        if False:\n            return \"ROOT_STAGES_APPROVED\""),
+    M("unknown-kfroot-command-audited", "py", "            if name is None:\n                self.unaudited.append(printable(command, 48))\n            else:", "            if name is None:\n                pass\n            else:"),
+    M("record-unbounded", "py", "        if len(self.steps) < self.LIMIT:", "        if True:"),
+    M("record-unprintable", "py", '    return "".join(c if " " <= c <= "~" else "?" for c in str(text))[:limit]', "    return str(text)[:limit]"),
+    M("kfroot-command-classified-by-caller", "py", '    if base[:1] == ["apparmor_parser"]:\n        return "swtpm_apparmor_load"', "    if False:\n        return \"swtpm_apparmor_load\""),
+    M("stage-without-an-audit-entry", "py", '    "specviewperf": _p("root_stage", "not_yet_run", blocker="scripts/bench/box/specviewperf_stage (.sh): a blanket \'not root\' refusal and raw dmesg"),\n', ""),
+    M("merge-bar-becomes-a-user-stage", "py", '"merge_bar": _p("root_stage", "not_yet_run", blocker="scripts/fastguest/build_fast_guest (.sh): modprobe nbd, qemu-nbd --connect, mount -o ro (host root operations)"),', '"merge_bar": _p("user", "not_yet_run", ("scripts/bench/box/merge_check.sh",)),'),
+    M("bootstrap-needed-check-always-on", "py", "    need = (lambda missing: missing) if only_needed else (lambda missing: True)", "    need = lambda missing: True"),
+    M("bootstrap-needed-check-skips-everything", "py", "    need = (lambda missing: missing) if only_needed else (lambda missing: True)", "    need = lambda missing: False"),
+    M("bootstrap-memlock-flag-ignored", "py", "    if memlock:\n        steps.append(Step(\"memlock_limit\"", "    if True:\n        steps.append(Step(\"memlock_limit\""),
+    M("bootstrap-only-needed-not-passed-on", "py", "    for step in plan(user, workspace, dev, proc, chown, audit_log, only_needed, memlock, lock, dmesg_restrict):", "    for step in plan(user, workspace, dev, proc, chown, audit_log, False, True, lock, dmesg_restrict):"),
+    M("payload-rootless-result-not-recorded", "payload", '        if rootless is not None:\n            result["rootless"] = rootless.record.to_json()', "        if False:\n            pass"),
+    M("payload-refused-setup-still-runs", "payload", '        rc = 125 if (short or refusal) else runner(command, soft, stage["output"], stage["progress"])', '        rc = 125 if short else runner(command, soft, stage["output"], stage["progress"])'),
+    M("payload-refused-setup-passes", "payload", '            if refusal:\n                raise EvidenceError("rootless_setup")\n', ""),
+    M("payload-bad-mode-is-off", "payload", '    if mode not in ROOTLESS_MODES:\n        print("KF_PAYLOAD_ROOTLESS_REFUSED bad_mode", flush=True)\n        raise EvidenceError("preflight")', "    if mode not in ROOTLESS_MODES:\n        mode = \"off\""),
+    M("payload-flag-loses-to-variable", "payload", 'mode = args.rootless if args.rootless is not None else environ.get("KF_PAYLOAD_ROOTLESS", "off")', 'mode = environ.get("KF_PAYLOAD_ROOTLESS", args.rootless or "off")'),
+    M("payload-options-without-require-ignored", "payload", '        if args.rootless_root_stage or args.rootless_memlock or args.rootless_user:\n            print("KF_PAYLOAD_ROOTLESS_REFUSED rootless_option_without_require", flush=True)\n            raise EvidenceError("preflight")\n', ""),
+    M("payload-root-account-allowed", "payload", '        load_kfroot().check_user(user)\n    except Exception:', "        pass\n    except Exception:"),
+    M("payload-preflight-not-run", "payload", "            tokens = rootless.preflight(selected, rl[\"approved\"])", "            tokens = []"),
+    M("payload-dry-run-skips-the-refusals", "payload", "            tokens = kr.stage_refusals(chosen, root, rl[\"approved\"])", "            tokens = []"),
+    M("payload-kfml-prefetch-as-root", "payload", "        PREFETCH_ALLOWED = rootless is None", "        PREFETCH_ALLOWED = True"),
+    M("payload-kfml-prefetch-ignores-the-switch", "payload", "    if not PREFETCH_ALLOWED:\n        return None\n", ""),
+    M("payload-provision-dir-is-roots", "payload", "        prov_dir = ROOTLESS_PROV_DIR if rootless else PROV_DIR", "        prov_dir = PROV_DIR"),
+    M("payload-rootless-not-handed-to-the-executor", "payload", "rootless=rootless, approved=rl[\"approved\"], tag=tag)", "rootless=None, approved=rl[\"approved\"], tag=tag)"),
+    M("payload-approvals-not-handed-to-the-executor", "payload", "rootless=rootless, approved=rl[\"approved\"], tag=tag)", "rootless=rootless, approved=(), tag=tag)"),
+    M("payload-plain-run-gets-rootless-kwargs", "payload", "        if rootless is None:\n            return execute_stages(stages, soft, result, destination)", "        if False:\n            return execute_stages(stages, soft, result, destination)"),
+    M("output-tail-read-strictly", "payload", "        return first.decode(\"utf-8\", errors=\"replace\")", "        return first.decode(\"utf-8\")"),
+    M("output-tail-not-read", "payload", "            if size > head + tail:\n                source.seek(size - tail)\n                first += b\"\\n\" + source.read(tail)", "            if size > head + tail:\n                pass"),
+    M("bootstrap-installs-the-launcher-for-the-payload", "py", "                                        install_files=False)", "                                        install_files=True)"),
+    M("bootstrap-failure-escapes-the-stage-loop", "py", "        except KfrootError as error:\n            raise RootlessRefused(\"bootstrap:\" + printable(error, 60).replace(\" \", \"_\")) from None", "        except ZeroDivisionError as error:\n            raise"),
+    M("environment-snapshot-at-construction", "py", "self._environ = None if environ is None else dict(environ)", "self._environ = dict(os.environ if environ is None else environ)"),
+    M("bootstrap-log-and-lock-settings-not-passed-on", "py", "plan(user, workspace, dev, proc, chown, audit_log, only_needed, memlock, lock, dmesg_restrict)", "plan(user, workspace, dev, proc, chown, audit_log, only_needed, memlock)"),
+    M("bootstrap-ignores-install-files-flag", "py", "    elif install_files:\n        audit_log = install(user, root, visudo, run)[\"audit_log\"]", "    elif True:\n        audit_log = install(user, root, visudo, run)[\"audit_log\"]"),
+    M("payload-rootless-env-is-an-instruction-field", "payload", 'ROOTLESS_ENV = ("KF_PAYLOAD_ROOTLESS", ', 'ROOTLESS_ENV = ("KF_RELEASE_REHEARSAL", "KF_PAYLOAD_ROOTLESS", '),
+    M("report-accepts-any-rootless-block", "report", '    if not ok:\n        raise ValueError("rootless")', "    if False:\n        raise ValueError(\"rootless\")"),
+    M("report-accepts-a-forged-clean-verdict", "report", '    ok = ok and (value["verdict"] != "ROOTLESS" or not (value["refused"] or value["unaudited"]))\n', ""),
+    M("report-drops-the-rootless-key", "report", '            "windows_open_rows",\n            "rootless",\n            "full",', '            "windows_open_rows",\n            "full",'),
+    M("record-file-not-written", "lib", "    [ -z \"${KF_KFROOT_RECORD:-}\" ] || printf", "    [ -z \"${KF_KFROOT_RECORD:-}\" ] || true || printf"),
+    M("refused-use-not-recorded", "lib", '        kf_record refused "$@"\n', ""),
+    M("root-use-not-recorded", "lib", '        kf_record root "$@"\n', ""),
+    M("xid-watch-raw-dmesg", "xid", "DMESG_RAW=$(xid_dmesg 2>/dev/null)", "DMESG_RAW=$(dmesg 2>/dev/null)"),
+    M("xid-watch-raw-dmesg-in-the-delta", "xid", "xid_lines() { xid_dmesg 2>/dev/null |", "xid_lines() { dmesg 2>/dev/null |"),
+    M("xid-watch-kfroot-first", "xid", "xid_dmesg() { dmesg 2>/dev/null || kf_dmesg; }", "xid_dmesg() { kf_dmesg; }"),
+    M("xid-watch-no-fallback", "xid", "xid_dmesg() { dmesg 2>/dev/null || kf_dmesg; }", "xid_dmesg() { dmesg; }"),
+    M("xid-watch-refusal-not-said", "xid", '  [ "$DMESG_RC" -ne 126 ] || say "KFROOT_REFUSED dmesg:', '  [ "$DMESG_RC" -ne 999 ] || say "KFROOT_REFUSED dmesg:'),
+    M("xid-watch-needs-the-library", "xid", "else\n  kf_dmesg() { dmesg; }\nfi", "fi"),
 ]
 COLLECT = """import io,json,unittest
-s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_kfroot.py',top_level_dir='scripts/ci')
+s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_kfroot*.py',top_level_dir='scripts/ci')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print(json.dumps({'tests':r.testsRun,'skipped':len(r.skipped),'killers':[t.id() for t,_ in r.failures+r.errors]}))
 """
@@ -137,7 +218,12 @@ def build(tree, key=None, source=None):
         dest.write_text(source if k == key else SOURCES[k])
         os.chmod(dest, 0o755)
     (Path(tree) / "scripts/ci").mkdir(parents=True, exist_ok=True)
-    shutil.copy(HERE / "test_kfroot.py", Path(tree) / "scripts/ci/test_kfroot.py")
+    for test in ("test_kfroot.py", "test_kfroot_payload.py"):
+        shutil.copy(HERE / test, Path(tree) / "scripts/ci" / test)
+    for rel in ("docs", "traces", "scripts/apps", "scripts/fastguest"):
+        if not (Path(tree) / rel).exists():
+            (Path(tree) / rel).parent.mkdir(parents=True, exist_ok=True)
+            (Path(tree) / rel).symlink_to(ROOT / rel)
     for rel in ("scripts/bench/windows", "scripts/bench/box", "scripts/bench", "scripts/ci"):
         # the scripts read their siblings; only the five mutable files and the test file are private copies
         where = Path(tree) / rel

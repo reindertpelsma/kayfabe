@@ -6,6 +6,10 @@ the Worker's /bench-data route; this helper serves a run where the disk cannot h
 (zstd | tarfilter | guest), the hash is computed as they pass, and the exit status says whether they matched the pin.
 Exit 0 = whole object read and the sha256 equals the pin; 3 = read to the end and the sha256 differs; 1 = transport failure
 after the retries. A resume uses a Range request at the byte already delivered. The URL is never printed or logged.
+
+2026-11-17 (docs/OWNER_RULINGS.md section AX): the URL file is the USER'S input, so our git pin is not a reason to refuse it. `--sha256` is
+the pin that is ENFORCED (the Worker/strict path, or the user's own --expect-sha256); `--note-pin` is a pin that is only COMPARED: the
+status line says pin=match|differs and the exit status is 0 either way. With neither, the status line records the computed sha256 and size.
 """
 
 import argparse
@@ -37,7 +41,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--url-file", required=True)
     ap.add_argument("--key", required=True)
-    ap.add_argument("--sha256", required=True)
+    ap.add_argument("--sha256", help="enforced pin: exit 3 when the stream differs")
+    ap.add_argument("--note-pin", help="recorded pin: compared, never enforced")
     ap.add_argument("--status", required=True)
     ap.add_argument("--retries", type=int, default=20)
     a = ap.parse_args(argv)
@@ -81,8 +86,9 @@ def main(argv=None):
         out.flush()
     except BrokenPipeError:
         pass
-    ok = h.hexdigest() == a.sha256
-    Path(a.status).write_text("STREAM_%s bytes=%d secs=%d sha256=%s\n" % ("OK" if ok else "MISMATCH", pos, time.time() - t0, h.hexdigest()))
+    ok = a.sha256 is None or h.hexdigest() == a.sha256
+    noted = "none" if a.note_pin is None else ("match" if h.hexdigest() == a.note_pin else "differs")
+    Path(a.status).write_text("STREAM_%s bytes=%d secs=%d sha256=%s pin=%s\n" % ("OK" if ok else "MISMATCH", pos, time.time() - t0, h.hexdigest(), noted))
     return 0 if ok else 3
 
 

@@ -1,0 +1,3 @@
+2026-11-21T11:51:40Z installcheck WIN_TPM_EK INFO PublicKeyHash=b9cf53ad61ddd4071e96429cf14467e9f5550c0fedcf0b0772caec1305c96bd8 ManufacturerCertificates=1
+2026-11-21T11:55:52Z check_20261121T115457Z WIN_TPM_EK INFO PublicKeyHash=b9cf53ad61ddd4071e96429cf14467e9f5550c0fedcf0b0772caec1305c96bd8 ManufacturerCertificates=1
+2026-11-21T12:16:49Z check_20261121T121622Z WIN_TPM_EK INFO PublicKeyHash=b9cf53ad61ddd4071e96429cf14467e9f5550c0fedcf0b0772caec1305c96bd8 ManufacturerCertificates=1

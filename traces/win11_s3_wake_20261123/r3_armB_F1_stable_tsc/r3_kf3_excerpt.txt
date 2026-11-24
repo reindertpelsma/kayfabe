@@ -1,0 +1,20 @@
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #2 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped
+kayfabe-F1: S3 wake kept the Hyper-V MSR block of 8 vCPU(s)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1990 cmd_seq=1909 cmd_read_ptr=17 peer_stat_read=2 [#1, rate-limited]
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #3 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped
+kayfabe-F1: S3 wake kept the Hyper-V MSR block of 8 vCPU(s)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1654 cmd_seq=1620 cmd_read_ptr=36 peer_stat_read=37 [#2, rate-limited]
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #4 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped
+kayfabe-F1: S3 wake kept the Hyper-V MSR block of 8 vCPU(s)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1236 cmd_seq=1221 cmd_read_ptr=61 peer_stat_read=43 [#3, rate-limited]
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+kf3: GSP fn 47: the guest RM unloaded with 23 client(s) still holding host objects [c1d000ee, c1d000f0, c1d000f1, c1d000f3, c1d000f4, c1d000f5, c1d000f6, c1d000f7, c1d000f8, c1d000f9, c1d000fa, c1d000fb, c1d000fc, c1d001

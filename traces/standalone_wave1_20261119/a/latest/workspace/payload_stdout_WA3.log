@@ -1,0 +1,11 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       388G   80G  309G  21% /
+KF_PREFLIGHT_FREE_BYTES=330814263296
+KF_PAYLOAD_STAGE_START name=apps_discovery
+[xid-watch] tag=ci3ccf9f55b5b33f3c_apps_discovery  host=ubuntu  utc=2026-11-20T01:14:07Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/apps_discovery_stage.py run --sha 7fb1c98a00cb79e825e4390f910141a6d4fe45a7 --checkout /workspace/kf-ci-src --out /workspace/kf-ci-evidence/apps_discovery.json --run-id ci3ccf9f55b5b33f3cd --deadline-epoch 1795156745
+[xid-watch] host_dmesg_lines=1235  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---

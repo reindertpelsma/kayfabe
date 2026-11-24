@@ -1,0 +1,30 @@
+torch.float16 (128, 128, 32, 3, 8) FAIL RuntimeError PassManager::run failed
+torch.float16 (64, 64, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.float16 (64, 128, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.float16 (32, 64, 32, 2, 2) FAIL RuntimeError PassManager::run failed
+torch.float16 (64, 64, 32, 2, 2) FAIL RuntimeError PassManager::run failed
+torch.float16 (32, 32, 32, 2, 1) FAIL RuntimeError PassManager::run failed
+torch.float16 (128, 64, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.float16 (64, 64, 16, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.float16 (16, 16, 16, 2, 1) FAIL RuntimeError PassManager::run failed
+torch.float32 (128, 128, 32, 3, 8) OK err=1.03e-06
+torch.float32 (64, 64, 32, 2, 4) OK err=1.29e-06
+torch.float32 (64, 128, 32, 2, 4) OK err=1.13e-06
+torch.float32 (32, 64, 32, 2, 2) OK err=8.69e-07
+torch.float32 (64, 64, 32, 2, 2) OK err=1.00e-06
+torch.float32 (32, 32, 32, 2, 1) OK err=1.02e-06
+torch.float32 (128, 64, 32, 2, 4) OK err=9.89e-07
+torch.float32 (64, 64, 16, 2, 4) OK err=8.45e-07
+torch.float32 (16, 16, 16, 2, 1) OK err=1.00e-06
+torch.bfloat16 (128, 128, 32, 3, 8) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (64, 64, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (64, 128, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (32, 64, 32, 2, 2) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (64, 64, 32, 2, 2) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (32, 32, 32, 2, 1) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (128, 64, 32, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (64, 64, 16, 2, 4) FAIL RuntimeError PassManager::run failed
+torch.bfloat16 (16, 16, 16, 2, 1) FAIL RuntimeError PassManager::run failed
+Unsupported conversion from f16 to f16
+LLVM ERROR: Unsupported rounding mode for conversion.
+Unsupported conversion from f16 to f16

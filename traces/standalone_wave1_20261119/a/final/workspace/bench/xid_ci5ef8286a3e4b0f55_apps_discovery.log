@@ -1,0 +1,13 @@
+[xid-watch] tag=ci5ef8286a3e4b0f55_apps_discovery  host=ubuntu  utc=2026-11-20T00:27:13Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/apps_discovery_stage.py run --sha 7fb1c98a00cb79e825e4390f910141a6d4fe45a7 --checkout /workspace/kf-ci-src --out /workspace/kf-ci-evidence/apps_discovery.json --run-id ci5ef8286a3e4b0f55d --deadline-epoch 1795154854
+[xid-watch] host_dmesg_lines=1221  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_APPS_DISCOVERY_RESULT {"breakages":["nvcodec_matrix","vkcts"],"host_control":"absent","not_run":["nvml_dcgm","vllm","tensorrt","jax"],"reason":"discovery_not_run:nvml_dcgm,vllm,tensorrt,jax","rows":[{"guest":"HANG","host":"-","name":"nvcodec_matrix","reason":"HANG","status":"KNOWN_BREAKAGE"},{"guest":"NOTRUN","host":"-","name":"nvml_dcgm","reason":"-_gpu_use=NA_gpu_auth=none_gpu_subs=0_gpu_births=0_boot=ap_ci5ef8286a3e4b0f55d_b","status":"NOT_RUN"},{"guest":"FAIL","host":"-","name":"vkcts","reason":"FAIL","status":"KNOWN_BREAKAGE"},{"guest":"NOTRUN","host":"-","name":"vllm","reason":"no_c_compiler_or_python_headers:_install_gcc_and_python3-dev_Triton_and_torch.co","status":"NOT_RUN"},{"guest":"NOTRUN","host":"-","name":"tensorrt","reason":"not_set_up:_run_mlrows.py_setup_--root_opt_apps_bundle_mlrows_--rows_tensorrt_fi","status":"NOT_RUN"},{"guest":"NOTRUN","host":"-","name":"jax","reason":"not_set_up:_run_mlrows.py_setup_--root_opt_apps_bundle_mlrows_--rows_jax_first_o","status":"NOT_RUN"}],"run_id":"ci5ef8286a3e4b0f55d","schema":1,"sha":"7fb1c98a00cb79e825e4390f910141a6d4fe45a7","steps":[{"rc":0,"s":589,"step":"build_vkcts"},{"rc":0,"s":3,"step":"setup_mlrows"},{"rc":0,"s":973,"step":"guest"}],"verdict":"FAIL"}
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1221 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5ef8286a3e4b0f55_apps_discovery.log

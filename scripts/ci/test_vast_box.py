@@ -867,7 +867,7 @@ class FinalResult(Tmp):
             ).encode(),
             "too many rows": json.dumps(
                 self.good(
-                    suites=[{"name": "s%d" % i, "pass": 1, "fail": 0, "skip": 0} for i in range(20)]
+                    suites=[{"name": "s%d" % i, "pass": 1, "fail": 0, "skip": 0} for i in range(33)]   # one more than MAX_SUITE_ROWS (32; one full run reports up to 25 rows)
                 )
             ).encode(),
             "oversize": b" " * 70000 + json.dumps(self.good()).encode(),

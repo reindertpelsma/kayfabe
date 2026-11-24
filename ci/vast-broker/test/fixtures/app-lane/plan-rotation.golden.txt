@@ -1,0 +1,100 @@
+app-lane plan (offline; rents nothing; DESIGN-ONLY, the Worker start kind app is not built) mode=rotation release_seq=4 legs=2 parallel=0 estimate_usd=2.7774 daily_cap_usd=1000 admitted=false refusals=NO_SLOTS
+  imga on ada die=AD104 machine=70005 RTX_4070_SUPER dph=0.35 down_gb=60.43 est_usd=1.8767
+  imgb on turing die=TU116 machine=70001 GTX_1660_SUPER dph=0.15 down_gb=74.1 est_usd=0.9007
+{
+ "kind": "app",
+ "mode": "rotation",
+ "release_seq": 4,
+ "window_releases": 4,
+ "families": [
+  "turing",
+  "ampere",
+  "ada",
+  "blackwell"
+ ],
+ "images": [
+  "imga",
+  "imgb"
+ ],
+ "legs": [
+  {
+   "kind": "app",
+   "image": "imga",
+   "family": "ada",
+   "die": "AD104",
+   "offer_id": 7005,
+   "machine_id": 70005,
+   "host_id": 9005,
+   "gpu_name": "RTX_4070_SUPER",
+   "country": "US",
+   "dph_total": 0.35,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 60.43,
+   "bandwidth_up_gb": 0.01,
+   "stages": [
+    "propimage_apps"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.8767
+  },
+  {
+   "kind": "app",
+   "image": "imgb",
+   "family": "turing",
+   "die": "TU116",
+   "offer_id": 7001,
+   "machine_id": 70001,
+   "host_id": 9001,
+   "gpu_name": "GTX_1660_SUPER",
+   "country": "US",
+   "dph_total": 0.15,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 74.1,
+   "bandwidth_up_gb": 0.02,
+   "stages": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 0.9007
+  }
+ ],
+ "unplaced": [],
+ "parallel": 0,
+ "estimate_usd": 2.7774,
+ "spent_today_usd": 0,
+ "daily_cap_usd": 1000,
+ "cost_model": {
+  "hard_ms": 18000000,
+  "cron_ms": 60000
+ },
+ "rotation_after": {
+  "release_seq": 4,
+  "last": {
+   "imga": {
+    "turing": 1,
+    "ampere": 3,
+    "ada": 4
+   },
+   "imgb": {
+    "ada": 2,
+    "turing": 4
+   }
+  }
+ },
+ "admitted": false,
+ "refusals": [
+  "NO_SLOTS"
+ ]
+}

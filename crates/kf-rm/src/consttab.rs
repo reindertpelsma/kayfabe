@@ -3,7 +3,7 @@
 //! Consumers are wired (2026-11-03): `inittables` (cudart/GSS init controls), `rowserve`, `zbc` and
 //! `precomp` read this table; the published subset contains only observation rows (no software-state
 //! rule such as `0x20802209`, which `kf_abi::cudartinit` answers).
-//! (owner rulings §AF/§AH; `docs/design/V3_CONSTANT_STRATEGY.md` §1-§3; `V3_PROVENANCE.md` §1;
+//! (See `docs/design/V3_CONSTANT_STRATEGY.md` §1-§3, `V3_PROVENANCE.md` §1, and the
 //! matrix `docs/design/V3_CONSTANT_MATRIX_20261014.md`). Lane C, 2026-10-14.
 //!
 //! # What it is for
