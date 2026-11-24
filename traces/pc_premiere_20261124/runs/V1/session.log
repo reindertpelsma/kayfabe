@@ -1,0 +1,6 @@
+2026-11-24T06:50:10Z swtpm: (0, '')
+2026-11-24T06:50:10Z qemu started pid 514232 (/usr/bin/qemu-system-x86_64)
+2026-11-24T07:00:25Z STOP file
+2026-11-24T07:00:25Z guest shutdown via ssh rc=0
+2026-11-24T07:00:35Z qemu exited after the guest shutdown
+2026-11-24T07:01:59Z host cuInit after: (0, 'cuInit 0\n')

@@ -1,0 +1,54 @@
+== probe before
+bind_active=yes
+  reason: GPU lock held
+$ uptime (rc=0)
+ 07:36:02 up  6:01,  2 users,  load average: 0.97, 1.04, 1.10
+PC_ACTIVE.log tail:
+  2026-11-24T03:13:44Z pc-camera-raw GUEST-UP arm K tag=K2 qemu=/workspace/bench/kf3-bins/9d143630/qemu-system-x86_64 (wall cap 60 min, STOP file /workspace/bench/pc_camera_raw_20261124/runs/K2/STOP)
+  2026-11-24T03:23:45Z pc-camera-raw END Camera Raw control arm K tag=K2: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T03:24:13Z pc-camera-raw NOGPU-INFO DELETED own throwaway overlays /workspace/pc1/winvm/pc_camera_raw_20261124/{K1,K2,V1} (9 GB) and own build checkouts src_* (kf3-bins/9d143630 and 647ba52f kept); b2_addon_cand overlay untouched
+  2026-11-24T03:30:17Z pc-camera-raw END session: runs K1, V1, K2 done; host verified (nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + DP-3 connected, cuInit 0, no vfio modules, udev queue empty, no modprobe block); lock free; evidence PR #587, guards PR #586
+  2026-11-24T05:59:07Z pc-premiere START Premiere sequence-crash control arm K tag=K1: kf3 ed41beea (origin/next); throwaway overlay on b2_addon_cand (offline restrict=on, real clock), GPU lock held
+  2026-11-24T05:59:07Z pc-premiere GUEST-UP arm K tag=K1 qemu=/workspace/bench/kf3-bins/ed41beea/qemu-system-x86_64 (wall cap 120 min, STOP file /workspace/bench/pc_premiere_20261124/runs/K1/STOP)
+  2026-11-24T06:35:50Z pc-premiere END Premiere sequence-crash control arm K tag=K1: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T06:36:02Z pc-premiere NOGPU-INFO dry run of the bind guards of PR #586 (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe
+== install block: /run/modprobe.d/kayfabe-vfio-bind-block.conf
+showconfig install lines: ['install nvidia /bin/false', 'install nvidia_modeset /bin/false', 'install nvidia_uvm /bin/false', 'install nvidia_drm /bin/false']
+modprobe -n -v --ignore-install? no; plain dry-run nvidia (1, "modprobe: ERROR: could not insert 'nvidia': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia-drm (1, "modprobe: ERROR: could not insert 'nvidia_drm': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia_uvm (1, "modprobe: ERROR: could not insert 'nvidia_uvm': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia-modeset (1, "modprobe: ERROR: could not insert 'nvidia_modeset': Module already in kernel")
+== probe with block (expect active, --gpu refused):
+bind_active=yes
+  reason: modprobe block /run/modprobe.d/kayfabe-vfio-bind-block.conf present
+  reason: GPU lock held
+$ uptime (rc=0)
+ 07:36:02 up  6:01,  2 users,  load average: 0.97, 1.04, 1.10
+REFUSED: --gpu while a bind may be active (no nvidia tool is run)
+PC_ACTIVE.log tail:
+  2026-11-24T03:13:44Z pc-camera-raw GUEST-UP arm K tag=K2 qemu=/workspace/bench/kf3-bins/9d143630/qemu-system-x86_64 (wall cap 60 min, STOP file /workspace/bench/pc_camera_raw_20261124/runs/K2/STOP)
+  2026-11-24T03:23:45Z pc-camera-raw END Camera Raw control arm K tag=K2: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T03:24:13Z pc-camera-raw NOGPU-INFO DELETED own throwaway overlays /workspace/pc1/winvm/pc_camera_raw_20261124/{K1,K2,V1} (9 GB) and own build checkouts src_* (kf3-bins/9d143630 and 647ba52f kept); b2_addon_cand overlay untouched
+  2026-11-24T03:30:17Z pc-camera-raw END session: runs K1, V1, K2 done; host verified (nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + DP-3 connected, cuInit 0, no vfio modules, udev queue empty, no modprobe block); lock free; evidence PR #587, guards PR #586
+  2026-11-24T05:59:07Z pc-premiere START Premiere sequence-crash control arm K tag=K1: kf3 ed41beea (origin/next); throwaway overlay on b2_addon_cand (offline restrict=on, real clock), GPU lock held
+  2026-11-24T05:59:07Z pc-premiere GUEST-UP arm K tag=K1 qemu=/workspace/bench/kf3-bins/ed41beea/qemu-system-x86_64 (wall cap 120 min, STOP file /workspace/bench/pc_premiere_20261124/runs/K1/STOP)
+  2026-11-24T06:35:50Z pc-premiere END Premiere sequence-crash control arm K tag=K1: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T06:36:02Z pc-premiere NOGPU-INFO dry run of the bind guards of PR #586 (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe
+rc 3
+== gate ok=True ladder=False 10s ['udev queue empty and no nvidia load pending for 10s']
+== remove block: True present: False
+install lines after: []
+== probe after
+bind_active=yes
+  reason: GPU lock held
+$ uptime (rc=0)
+ 07:36:12 up  6:01,  2 users,  load average: 0.82, 1.00, 1.09
+PC_ACTIVE.log tail:
+  2026-11-24T03:13:44Z pc-camera-raw GUEST-UP arm K tag=K2 qemu=/workspace/bench/kf3-bins/9d143630/qemu-system-x86_64 (wall cap 60 min, STOP file /workspace/bench/pc_camera_raw_20261124/runs/K2/STOP)
+  2026-11-24T03:23:45Z pc-camera-raw END Camera Raw control arm K tag=K2: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T03:24:13Z pc-camera-raw NOGPU-INFO DELETED own throwaway overlays /workspace/pc1/winvm/pc_camera_raw_20261124/{K1,K2,V1} (9 GB) and own build checkouts src_* (kf3-bins/9d143630 and 647ba52f kept); b2_addon_cand overlay untouched
+  2026-11-24T03:30:17Z pc-camera-raw END session: runs K1, V1, K2 done; host verified (nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + DP-3 connected, cuInit 0, no vfio modules, udev queue empty, no modprobe block); lock free; evidence PR #587, guards PR #586
+  2026-11-24T05:59:07Z pc-premiere START Premiere sequence-crash control arm K tag=K1: kf3 ed41beea (origin/next); throwaway overlay on b2_addon_cand (offline restrict=on, real clock), GPU lock held
+  2026-11-24T05:59:07Z pc-premiere GUEST-UP arm K tag=K1 qemu=/workspace/bench/kf3-bins/ed41beea/qemu-system-x86_64 (wall cap 120 min, STOP file /workspace/bench/pc_premiere_20261124/runs/K1/STOP)
+  2026-11-24T06:35:50Z pc-premiere END Premiere sequence-crash control arm K tag=K1: nvidia 595.91.07 on 01:00.0=nvidia, 01:00.1=snd_hda_intel, gdm active, DP-3 connected, udev queue empty=True, vfio modules [], cuInit 0; lock released
+  2026-11-24T06:36:02Z pc-premiere NOGPU-INFO dry run of the bind guards of PR #586 (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe

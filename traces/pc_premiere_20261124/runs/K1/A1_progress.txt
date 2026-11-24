@@ -1,0 +1,8 @@
+1795500116703 begin 27.0.0 mode=hold clip=sintel_trailer_1080p.mp4
+1795500118394 project created
+1795500119061 imported sintel_trailer_1080p.mp4
+1795500119066 creating sequence
+1795500120822 sequence created; setting active
+1795500121039 sequence active and selected; holding 45 s
+1795500166335 hold 45 s
+1795500166340 done clips=1 frame=1920x1080 held=45s
