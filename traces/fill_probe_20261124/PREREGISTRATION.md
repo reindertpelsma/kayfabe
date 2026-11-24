@@ -124,3 +124,8 @@ headroom of a smaller card.
   P3 (fill ON, no churn) succeed.
 - Falsifiers: P1 succeeds (the failure part is not shown at this headroom), or P3 fails too (then the fill fails the
   alias without churn, under pressure, and churn is not needed).
+
+## Addendum 4, 2026-11-24, AFTER P1-P3 (all three mapped the alias), before P1b/P3b
+
+The same P1 and P3 with about 2200 MiB left free (the fill-ON space alone takes about 2 GiB of pool reservation, so this
+is the tightest headroom where the space itself is expected to come up). Same predictions and falsifiers as Addendum 3.
