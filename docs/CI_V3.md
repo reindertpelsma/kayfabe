@@ -1,7 +1,11 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-24 (the per-PR composition section, 2026-11-24; the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
+
+## What a PR runs (owner ruling, 2026-11-24)
+
+**STATUS of this section: LIVE as a ruling, 2026-11-24 (`OWNER_RULINGS.md` §BE); the Worker side is NOT YET IN CODE.** Per-PR CI is the Rust, CUDA and repo tests (the `CI` workflow of this document), the Windows boot, the small Linux and Windows app probes, and **exactly one middle run** per PR. These are required; the middle run is not to be loaded with further stages. Propimages are not run per PR: they run only in the release run. §AZ item 5 (an app-lane run per image before a core-path merge) is waived for the batch and PR flow; the first-release rule of §AZ (every propimage on every family) is unchanged. CODE READ on 2026-11-24 at `next` `4f376f3db`: `ci/vast-broker/src/tier.js` (`additionalStages` of the release profile: `specviewperf`, `llm_parity`) and the release-matrix data (`ci/vast-broker/release-matrix.json`) still encode the earlier tiers; changing them is a separate code change that alters the Worker bundle pin, and this note changes no code. Nothing in the gates below changes.
 
 ## Job layout, concurrency and caches (2026-11-17)
 
@@ -440,6 +444,7 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
   `id-token: write` may appear; `ci/vast-broker/test/release-qemu-workflow.test.js` refuses it in every other job and file.
 - **Verifying.** Every `gh attestation verify` of this workflow and of the manual pins `--signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml`,
   `--source-ref refs/heads/master` and `--deny-self-hosted-runners`: `--repo` alone accepts an attestation from any workflow on any branch.
+- ⊘ *Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BF): the licence-review half of the next bullet is closed: the 2026-11-20 ogkm re-derivation (§BD, task I7) closes the GPL-exception item and a binary may ship once the other gates pass; a counsel check stays recommended, not blocking. The security gate and the owner's decision to publish remain.*
 - **What this does not change.** The standing blocker of a public binary is the owner's ruling (`OWNER_RULINGS.md` section BC item 1 and section P: the security gate and
   the licence review of the QEMU-linked tree). `LICENSE` exception 2 and `scripts/ci/qemu_license_closure.py` describe the licence state of that tree. The draft stays a
   draft until the owner rules.
