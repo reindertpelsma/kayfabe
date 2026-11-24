@@ -1,6 +1,8 @@
 # V3 security audit — plan and gate
 
-**STATUS: DESIGN-ONLY, 2026-10-04.** Audit plan written 2026-10-03 at the owner's request; last git change 2026-10-04. Stage 1 was written up in [docs/audits/2026-10-03-v3-stage1.md](../audits/2026-10-03-v3-stage1.md) (§6) and is done; stage 2 is the part not built, and read on 2026-11-07 `docs/audits/` holds no stage-2 findings document. The gate (no public binary before every stage-2 blocker is closed or accepted by the owner) is recorded in `docs/OWNER_RULINGS.md`. This document records what the audit must cover, how, and when. Findings go into their
+**STATUS: DESIGN-ONLY, 2026-10-04.** ⊘ *2026-11-23: stage 2 has started; its plan, coverage table and first findings are
+[docs/audits/2026-11-23-v3-stage2.md](../audits/2026-11-23-v3-stage2.md). The sentences below that say stage 2 is not
+built or has no findings document describe 2026-11-07.* Audit plan written 2026-10-03 at the owner's request; last git change 2026-10-04. Stage 1 was written up in [docs/audits/2026-10-03-v3-stage1.md](../audits/2026-10-03-v3-stage1.md) (§6) and is done; stage 2 is the part not built, and read on 2026-11-07 `docs/audits/` holds no stage-2 findings document. The gate (no public binary before every stage-2 blocker is closed or accepted by the owner) is recorded in `docs/OWNER_RULINGS.md`. This document records what the audit must cover, how, and when. Findings go into their
 own dated documents and are linked from §6; the stage-1 blockers and majors are in §4.
 
 ## 0. Why, and when
@@ -180,6 +182,11 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 | Scratch memfd host-RAM amplification; mapping growth | owner question | fixed on `v3-scratch-bound`, merge bar passed |
 | Display-SW twins uncapped | `v3-dispsw-exp` review | caps in progress. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): built, 16 live twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`, and their unit test); the experiment stays default off |
 
+⊘ *Correction 2026-11-23 (stage 2): "every row is open" is the 2026-10-03 state. Several rows were fixed by the
+security-review PRs merged on 2026-11-14 (S1-60 by #386, S1-61 by #387/#404, S1-42 by #399, S1-40 by #379, S1-04 by
+#382, among others), and S1-21 is fixed in code. The current status of every row is the coverage table, §2, of
+`docs/audits/2026-11-23-v3-stage2.md`.*
+
 **Stage-1 blockers and majors (2026-10-03).** Every row is open; the location, the check that
 catches it and who can trigger it are in `docs/audits/2026-10-03-v3-stage1.md` under the same ID.
 P1 and P2 are the rows above.
@@ -224,4 +231,6 @@ P1 and P2 are the rows above.
   from history (§2.10).
 - **The security model:** `V3_SECURITY_MODEL.md` (STATUS: LIVE, 2026-10-03), the §2.5 output, refined
   by the other stage-1 areas. Its §9 says which rows of §1 above hold today.
-- **Stage 2:** not started. §4 of the stage-1 document lists what it inherits.
+- ⊘ *2026-11-23: started.* **Stage 2:** `docs/audits/2026-11-23-v3-stage2.md` — what stage 2 must cover to be done,
+  the status of every item stage 1 handed over, and findings S2-01 to S2-04 (S1-20, S1-21, S1-60, S1-28).
+  The line it replaces read "not started" (true until 2026-11-23). §4 of the stage-1 document lists what it inherits.

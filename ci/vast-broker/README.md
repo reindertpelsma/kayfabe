@@ -370,6 +370,8 @@ Cloudflare D1, the GitHub trees API and the deployed Worker are not exercised.
 
 ## The app lane planner (DESIGN-ONLY for the Worker, 2026-11-18)
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BE):** §AZ item 5 is waived for the batch and PR flow, so `appLaneRequired` and the `core_paths` list are no merge condition of any PR; they stay as planner data. The first-release rule (every propimage on every family) is unchanged, and propimages run only in the release run, not per PR.
+
 STATUS: the planner and its offline command are implemented and tested GPU-free (`src/app-lane.js`, `app-lane.json`,
 `test/app-lane.test.js`, synthetic offers). The Worker admin Start kind `app` is **not built**: nothing in `src/` imports the
 planner, nothing is deployed, nothing is rented, and no box has run a plan. Ruling: `docs/OWNER_RULINGS.md` section AZ;
@@ -491,6 +493,10 @@ platform) cells with their runs, passes and machines.
 ## Proprietary Windows images in the instruction, and the bandwidth of a leg (built 2026-11-16, NOT DEPLOYED, wired to nothing)
 
 STATUS: DESIGN-ONLY, 2026-11-16. Design and the decisions behind it: `docs/design/V3_WORKER_PROPIMAGES.md`.
+
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BG):** the zero-skip text below ("`strict: true` and a configuration that is not strict is refused", "any skip fails it") is replaced where it conflicts by the skip rule: a row may end NOT_RUN or skipped when the cause is outside kayfabe (host RAM or VRAM too small for the test, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other NOT_RUN or skip fails its stage. NOT YET IN CODE: `propimages.js` still refuses a non-strict configuration and the strict instruction is unchanged.
+
+Propimages go into a release-profile leg only (the release run), never into a PR's runs (owner, 2026-11-24, `OWNER_RULINGS.md` §BE).
 
 `propimages.json` is the Worker's list of the private Windows images (image A and image B): per image an opaque label, the private
 object (name, size, sha256 pin; the signed GOP is the third object), its slot (1 or 2), the families it has run on, and its

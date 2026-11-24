@@ -3,6 +3,8 @@ command are implemented and tested (`ci/vast-broker/test/app-lane.test.js`, synt
 `app` is **NOT built**: no route, no rental and no deployed code reads any of this, and nothing in `ci/vast-broker/src/` imports
 the planner. No box has run an app-lane plan; no cost below is a measurement.
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BE):** §AZ item 5 is waived for the batch and PR flow, so `appLaneRequired` and the `core_paths` list are no merge condition of any PR; they stay as planner data. The first-release rule (every propimage on every family) is unchanged, and propimages run only in the release run, not per PR.
+
 # The app lane planner
 
 Ruling: `docs/OWNER_RULINGS.md` section AZ (images and SPEC leave the required release gate and run as an invoked app lane;

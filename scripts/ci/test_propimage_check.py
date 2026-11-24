@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -1363,6 +1364,8 @@ class T(unittest.TestCase):
         inspect=None,
         patch_gpu_fix=None,
         stdout=None,
+        qmp_events=None,
+        qemu_dies_in_hold=False,
     ):
         """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps. `gpu_smi` is what the guest's nvidia-smi printed; `inspect(out)` runs on the output directory."""
         self.argv_kw = []
@@ -1449,7 +1452,26 @@ class T(unittest.TestCase):
                     stderr="",
                 )
 
-            g = SimpleNamespace(ps=ps, ssh=lambda *a, **k: SimpleNamespace(returncode=0))
+            g = SimpleNamespace(ps=ps, ssh=lambda *a, **k: SimpleNamespace(returncode=0), port=1)
+            release = root / "release"
+            if qemu_dies_in_hold:
+                extra = list(extra) + ["--hold-until-file", str(release)]
+
+            def compare(s, f):
+                used_bases.append(m.PI.boot_clock(s, "ci"))
+                if qemu_dies_in_hold:
+                    processes[-1].rc = 0      # the guest ends the VM while the harness holds it
+                    # a harness that ignores the dead QEMU is released a moment later and goes on (its hold sleeps for real)
+                    timer = threading.Timer(0.5, release.touch)
+                    timer.daemon = True
+                    timer.start()
+                return [("ids", "MATCH", "")]
+
+            def qmp_recorder(sock, path):
+                if qmp_events is not None:
+                    path.write_text("".join(json.dumps(e) + "\n" for e in qmp_events))
+                return SimpleNamespace(join=lambda timeout=None: None)
+
             pi = SimpleNamespace(
                 PropError=ValueError,
                 restore_files=lambda *a: None,
@@ -1458,9 +1480,7 @@ class T(unittest.TestCase):
                 fmt=m.PI.fmt,
                 cpu_preflight=lambda *a: [],
                 run_guest_probe=lambda *a: {},
-                compare=lambda s, f: (
-                    used_bases.append(m.PI.boot_clock(s, "ci")) or [("ids", "MATCH", "")]
-                ),
+                compare=compare,
                 build_argv=lambda *a, **k: self.argv_kw.append(k)
                 or ["qemu", str(work / "run/clone.qcow2")] + (["restrict=on"] if offline else []),
                 check_ram_override=m.PI.check_ram_override,
@@ -1473,6 +1493,7 @@ class T(unittest.TestCase):
                 patch.object(m.subprocess, "Popen", Process),
                 patch.object(m, "Guest", return_value=g),
                 patch.object(m.time, "sleep"),
+                patch.object(m, "start_qmp_events", new=qmp_recorder, create=True),
                 patch.object(m, "gpu_fix", new=patch_gpu_fix or m.gpu_fix),
                 patch.object(m, "GPU_WAIT_SETTLED_S", 0),
                 patch.object(m, "GPU_POLL_S", 0),
@@ -1543,6 +1564,91 @@ class T(unittest.TestCase):
             self.assertTrue(all(pr.poll() is not None for pr in processes))
             self.assertFalse((work / "id_kf").exists())
             return rc, rows, app.call_count
+
+    # A VM that ends while the harness holds it must give a row with its cause (traces/imgb_shutdown_20261123). A Windows
+    # bugcheck reported through hv-crash ends QEMU with status 0 under QEMU's default panic action.
+    PANIC = {"event": "GUEST_PANICKED", "data": {"action": "poweroff", "info": {
+        "type": "hyper-v", "arg1": 0x116, "arg2": 0xFFFF8001, "arg3": 0, "arg4": 0, "arg5": 0}}}
+
+    def test_hold_returns_when_qemu_exits(self):
+        with tempfile.TemporaryDirectory() as td:
+            got = m.hold_for_release(Path(td) / "release", 3600, sleep=lambda _: self.fail("slept"),
+                                     clock=lambda: 0, alive=lambda: False)
+        self.assertEqual(got, "qemu-exited")
+
+    def test_hold_still_released_by_the_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            rel = Path(td) / "release"
+            got = m.hold_for_release(rel, 3600, sleep=lambda _: rel.touch(), clock=lambda: 0, alive=lambda: True)
+        self.assertEqual(got, "released")
+
+    def test_exit_cause_names_the_bugcheck(self):
+        verdict, text = m.qemu_exit_cause([{"event": "STOP"}, self.PANIC, {"event": "SHUTDOWN", "data": {"guest": True, "reason": "guest-panic"}}])
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("0x116", text)
+        self.assertIn("GUEST_PANICKED", text)
+
+    def test_exit_cause_guest_poweroff_and_host_and_none(self):
+        self.assertEqual(m.qemu_exit_cause([{"event": "SHUTDOWN", "data": {"guest": True, "reason": "guest-shutdown"}}])[0], "FAIL")
+        self.assertIn("guest-shutdown", m.qemu_exit_cause([{"event": "SHUTDOWN", "data": {"guest": True, "reason": "guest-shutdown"}}])[1])
+        self.assertIn("host-signal", m.qemu_exit_cause([{"event": "SHUTDOWN", "data": {"guest": False, "reason": "host-signal"}}])[1])
+        self.assertEqual(m.qemu_exit_cause([]), ("FAIL", "QEMU exited before the harness stopped it; no QMP SHUTDOWN or GUEST_PANICKED event recorded"))
+
+    def test_qmp_recorder_keeps_lifecycle_events_and_is_bounded(self):
+        stream = [{"QMP": {}}] + [{"event": "RTC_CHANGE"}] * 50 + [{"event": "RESET"}] * (m.QMP_MAX_EVENTS + 20) + [self.PANIC]
+
+        class Sock:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def settimeout(self, _):
+                pass
+
+        it = iter(stream[1:])
+
+        def recv(f):
+            try:
+                return next(it)
+            except StopIteration:
+                raise EOFError("closed") from None
+
+        qmp = SimpleNamespace(qmp_open=lambda sock, timeout: (Sock(), None), recv=recv)
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "qmp_events.jsonl"
+            self.assertTrue(m.record_qmp_events("unused.sock", out, qmp=qmp))
+            lines = [json.loads(x) for x in out.read_text().splitlines()]
+        self.assertEqual(len(lines), m.QMP_MAX_EVENTS)
+        self.assertNotIn("RTC_CHANGE", {e["event"] for e in lines})
+
+    def test_qmp_recorder_gives_up_when_qemu_never_listens(self):
+        def refuse(sock, timeout):
+            raise OSError("no socket")
+
+        times = iter([0, 0, 200])
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "qmp_events.jsonl"
+            self.assertFalse(m.record_qmp_events("unused.sock", out, qmp=SimpleNamespace(qmp_open=refuse),
+                                                 clock=lambda: next(times), sleep=lambda _: None))
+            self.assertFalse(out.exists())
+
+    def test_pipeline_qemu_exit_in_hold_is_reported_with_its_cause(self):
+        rc, rows, apps = self.pipeline(qemu_dies_in_hold=True, clock_query_ok=False,
+                                       qmp_events=[self.PANIC, {"event": "SHUTDOWN", "data": {"guest": True, "reason": "guest-panic"}}])
+        self.assertEqual((rc, apps), (1, 0))
+        steps = {r["step"]: r for r in rows}
+        self.assertEqual(steps["hold"]["verdict"], "qemu-exited")
+        self.assertEqual(steps["qemu-exit"]["verdict"], "FAIL")
+        self.assertIn("0x116", steps["qemu-exit"]["detail"])
+        self.assertEqual(steps["qemu-exit"]["evidence"], "FILE")
+
+    def test_pipeline_argv_has_the_event_socket(self):
+        seen = []
+        self.pipeline(inspect=lambda out: seen.append((out.parent / "work/run/last_cmd.txt").read_text()))
+        self.assertIn("-qmp unix:", seen[0])
+        self.assertIn("qmp-ev.sock,server=on,wait=off", seen[0])
 
     def test_pipeline_wlms_postrun_never_app_fail(self):
         rc, rows, _ = self.pipeline([{"event_id": 1074, "process": "wlms.exe"}])

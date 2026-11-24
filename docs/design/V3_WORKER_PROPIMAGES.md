@@ -7,6 +7,9 @@ UPDATE 2026-11-17 (follow-ups, `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`, nothi
 
 ## What exists
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BG):** `strict: true` below (every listed item runs, any skip fails) is replaced where it conflicts by the skip rule: a row may end NOT_RUN or skipped when the cause is outside kayfabe (host RAM or VRAM too small for the test, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other NOT_RUN or skip fails its stage. NOT YET IN CODE: `NOT_STRICT` is still a configuration problem and the strict list is unchanged.
+
+
 - **`propimages.json`** (schema `kayfabe.worker-propimages/1`): `strict: true`; `swap` (release-level exchange of the two slots, default false); `unmeasured_note`; `objects` (id, role `image` or `gop`, the pin ref the box looks up in `scripts/ci/propimage_apps*_pins.json`, the private object name, size, sha256); `images` (label `imga`, `imgb`; the object; `slot` 1 or 2; `measured_families`, the families the image has run on; `apps`: id, `lane`, and the reason for the lane; `excluded`: applications that are deliberately not listed, with the reason). There is no per-family list of dies: the images apply to every family in `releaseDies`.
 - **`src/propimages.js`**, pure:
   - `propimagesConfigProblems(config, {registry})`: every problem of a configuration as a named token (`NOT_STRICT`, `UNPINNED:<id>`, `SIZE:<id>`, `SLOT:<l>`, `SWAP`, `DUPLICATE_LABEL:<l>`, `UNKNOWN_OBJECT:<l>`, `LANE:<l>:<app>`, `UNKNOWN_APP:<l>:<app>` when the runner's registry is given, `EXCLUDED:<l>`, `MEASURED_FAMILIES:<l>`, `GOP`, ...).

@@ -54,7 +54,7 @@ A few rows cannot run on one machine for a reason that is not a defect; the line
 - `apps_discovery`: the DCGM half of `nvml_dcgm` (the run's package installs hold nothing from NVIDIA). Run `scripts/apps/open_rows/run_standalone.sh` for it (`docs/howto/open-linux-rows.md`).
 - `windows_open_rows`: `dxsamples_multiadapter` (it needs two GPUs) and the two conformance rows `vkglcts_gl46` and `vkglcts_vk` (they pass only against a control run on native Windows with the same GPU; `docs/howto/windows-open-rows.md`).
 
-Everything else that does not run fails the run, with the stage and the reason in its name (for example `apps_discovery_not_run`, `windows_open_rows_not_run`, `STRICT_SKIP:<row>:<reason>`).
+Everything else that does not run fails the run, with the stage and the reason in its name (for example `apps_discovery_not_run`, `windows_open_rows_not_run`, `STRICT_SKIP:<row>:<reason>`). The project's rule is wider than the list above: a row may be skipped when the cause is outside kayfabe (too little host RAM or video memory for the test, a hardware feature the card lacks, a row that cannot surely run on bare metal) and the skip names its reason, while every other row that does not run fails. The run does not apply that rule yet; today it fails every row that does not run, except the rows above.
 
 ## Open rows: report, never gate
 

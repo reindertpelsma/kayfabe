@@ -85,6 +85,9 @@ is frozen (see *Layout*).
     enforces it and reports old LIVE documents with dead references (docs/CI_V3.md). A SUPERSEDED
     document links its successor. Fix a finding; never re-record the baseline to bypass it. The
     published manual (`docs/howto/`, `docs/FAQ.md`) is exempt.
+  - **Cleanliness tiers (owner, 2026-11-24, `docs/OWNER_RULINGS.md` §BJ):** everything user visible, the install
+    path and the Rust crates get a full tidy; CI scripts, bench scripts, debug tooling and agent docs may stay a
+    little messy; the core code, the architecture documents and the user guides must be clean.
 
 ## Branches and merging
 
