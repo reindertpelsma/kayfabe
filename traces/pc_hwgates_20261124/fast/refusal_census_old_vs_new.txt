@@ -1,0 +1,9 @@
+refusal ids over the 30 arms (RPC-REFUSED prints the first 24 per boot; a lower bound)
+id                                                              old    new
+HOST-ABI REFUSED 0x2080852a                                      30     30
+HOST-ABI REFUSED 0x2080852e                                      60     60
+HOST-ABI REFUSED 0x2080853a                                      30     30
+HOST-ABI REFUSED 0x2080a618                                      90     90
+RPC-REFUSED AllocClassNotPermitted 16428                         30     30
+RPC-REFUSED AllocClassNotPermitted 50031                         30     30
+SET_EQUAL=True

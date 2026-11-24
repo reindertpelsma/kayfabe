@@ -1,0 +1,54 @@
+24s rc=0 qemu_rc=None KF_UP 2026-11-24T18:42:23.5000000+00:00
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:34 1025 Microsoft-Windows-TPM-WMI The TPM was successfully provisioned and is now ready for use.
+18:42:34 1282 Microsoft-Windows-TPM-WMI The TBS device identifier has been generated.
+18:42:33 18 TPM This event triggers the Trusted Platform Module (TPM) provisioning/status check to run.
+18:42:32 7001 Microsoft-Windows-Winlogon User Logon Notification for Customer Experience Improvement Program
+18:42:31 7026 Service Control Manager The following boot-start or system-start driver(s) did not load: dam uiomap
+18:42:31 1038 Microsoft-Windows-TPM-WMI Pre-attestation health checks confirm that the device is expected to pass attestation. Please see C:\WINDOWS\L
+18:42:31 1041 Microsoft-Windows-TPM-WMI Pre-attestation health check detailed information: {"Version":1,"HealthStatus":"Attestable","Required":[{"Fiel
+18:42:31 112 Microsoft-Windows-HttpService Attempted to reserve URL http://+:10246/MDEServer/. Status 0x0. Process Id 0x4 Executable path , User S-1-5-18
+18:42:31 112 Microsoft-Windows-HttpService Attempted to reserve URL http://+:10243/WMPNSSv4/. Status 0x0. Process Id 0x4 Executable path , User S-1-5-18
+32s rc=0 qemu_rc=None KF_UP 2026-11-24T18:42:23.5000000+00:00
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:34 1025 Microsoft-Windows-TPM-WMI The TPM was successfully provisioned and is now ready for use.
+18:42:34 1282 Microsoft-Windows-TPM-WMI The TBS device identifier has been generated.
+18:42:33 18 TPM This event triggers the Trusted Platform Module (TPM) provisioning/status check to run.
+41s rc=0 qemu_rc=None KF_UP 2026-11-24T18:42:23.5000000+00:00
+18:42:56 153 nvlddmkm 
+18:42:56 153 nvlddmkm 
+18:42:56 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm 
+18:42:35 153 nvlddmkm
+50s rc=0 qemu_rc=None KF_UP 2026-11-24T18:42:23.5000000+00:00
+18:43:06 153 nvlddmkm 
+18:43:06 153 nvlddmkm 
+18:43:05 153 nvlddmkm 
+18:42:56 153 nvlddmkm 
+18:42:56 153 nvlddmkm 
+18:42:56 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:49 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm 
+18:42:46 153 nvlddmkm
+56s rc=255 qemu_rc=None 
+61s rc=255 qemu_rc=0 

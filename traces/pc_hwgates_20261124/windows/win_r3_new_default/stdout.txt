@@ -1,0 +1,6 @@
+[    18.6s] guest up=True after 18s
+[    18.6s] QEMU alive right after ssh answered: rc=None
+[    80.6s] GUEST_GPU ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088 ; NVSMI NVIDIA GeForce RTX 4070, 580.88 ; NVSMI_RC 0 ; 
+[   142.1s] EVENTS 0: []
+[   215.1s] STOP guest Stop-Computer rc=0; exited 0
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": null, "stop": "guest Stop-Computer rc=0; exited 0", "refusal_lines": 472}

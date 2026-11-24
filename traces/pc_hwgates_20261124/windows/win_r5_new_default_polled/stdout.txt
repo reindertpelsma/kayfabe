@@ -1,0 +1,1 @@
+(see ../chain2.out: its "r5" section holds this run's stdout)

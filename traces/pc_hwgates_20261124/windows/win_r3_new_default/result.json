@@ -1,0 +1,9 @@
+{
+ "up": true,
+ "gpu_text": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088\nNVSMI NVIDIA GeForce RTX 4070, 580.88\nNVSMI_RC 0\n",
+ "events": [],
+ "gpu_after_idle": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088\nNVSMI NVIDIA GeForce RTX 4070, 580.88\nNVSMI_RC 0\n",
+ "qemu_returncode_before_stop": null,
+ "stop": "guest Stop-Computer rc=0; exited 0",
+ "refusal_lines": 472
+}

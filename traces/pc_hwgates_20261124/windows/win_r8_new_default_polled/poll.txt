@@ -1,0 +1,29 @@
+27s rc=0 qemu_rc=None KF_UP 2026-11-24T18:43:47.5000000+00:00
+18:44:04 153 nvlddmkm 
+18:44:04 153 nvlddmkm 
+18:44:04 153 nvlddmkm 
+18:43:58 1025 Microsoft-Windows-TPM-WMI The TPM was successfully provisioned and is now ready for use.
+18:43:57 1282 Microsoft-Windows-TPM-WMI The TBS device identifier has been generated.
+18:43:57 18 TPM This event triggers the Trusted Platform Module (TPM) provisioning/status check to run.
+18:43:56 7026 Service Control Manager The following boot-start or system-start driver(s) did not load: dam uiomap
+18:43:55 1038 Microsoft-Windows-TPM-WMI Pre-attestation health checks confirm that the device is expected to pass attestation. Please see C:\WINDOWS\L
+18:43:55 1041 Microsoft-Windows-TPM-WMI Pre-attestation health check detailed information: {"Version":1,"HealthStatus":"Attestable","Required":[{"Fiel
+18:43:55 112 Microsoft-Windows-HttpService Attempted to reserve URL http://+:10246/MDEServer/. Status 0x0. Process Id 0x4 Executable path , User S-1-5-18
+18:43:55 112 Microsoft-Windows-HttpService Attempted to reserve URL http://+:10243/WMPNSSv4/. Status 0x0. Process Id 0x4 Executable path , User S-1-5-18
+18:43:55 112 Microsoft-Windows-HttpService Attempted to reserve URL https://+:10245/WMPNSSv4/. Status 0x0. Process Id 0x4 Executable path , User S-1-5-18
+48s rc=124 qemu_rc=None 
+63s rc=255 qemu_rc=None 
+79s rc=0 qemu_rc=None KF_UP 2026-11-24T18:43:47.5000000+00:00
+18:44:59 7001 Microsoft-Windows-Winlogon User Logon Notification for Customer Experience Improvement Program
+18:44:13 153 nvlddmkm 
+18:44:13 153 nvlddmkm 
+18:44:12 153 nvlddmkm 
+18:44:04 153 nvlddmkm 
+18:44:04 153 nvlddmkm 
+18:44:04 153 nvlddmkm 
+18:43:58 1025 Microsoft-Windows-TPM-WMI The TPM was successfully provisioned and is now ready for use.
+18:43:57 1282 Microsoft-Windows-TPM-WMI The TBS device identifier has been generated.
+18:43:57 18 TPM This event triggers the Trusted Platform Module (TPM) provisioning/status check to run.
+18:43:56 7026 Service Control Manager The following boot-start or system-start driver(s) did not load: dam uiomap
+18:43:55 1038 Microsoft-Windows-TPM-WMI Pre-attestation health checks confirm that the device is expected to pass attestation. Please see C:\WINDOWS\L
+86s rc=255 qemu_rc=0 
