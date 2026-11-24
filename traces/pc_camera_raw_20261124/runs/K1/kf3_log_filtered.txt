@@ -1,0 +1,72 @@
+# K1 kf3 log: 29019 lines; counts
+walk per-space CEILING: 0
+walk report CUT: 0
+CLEARED OVER ABSENCE: 29
+DEAD: 0
+refuse_mask=0x400: 143
+refuse_mask=0x1000: 0
+VA_SLOW: 0
+Xid: 0
+# lines matching CEILING|CUT|DEAD|ABSENCE|refuse_mask (first 60)
+kf3: mem invalidate seq 86 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 90 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 91 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=7
+kf3: mem invalidate seq 2993 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.609s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=1
+kf3: mem invalidate seq 2994 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.610s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=1
+kf3: mem invalidate seq 2995 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.610s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=1
+kf3: mem invalidate seq 2996 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.610s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=1
+kf3: mem invalidate seq 2997 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.611s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=7 refuse_mask=0x400 pdbs=[1efa01000] runs=0
+kf3: mem invalidate seq 2998 CLEARED OVER ABSENCE (Some(VasKey(13965662676387366992))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=22.611s REFUSED VasKey(13965662676387366992) root 0x1efa01000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=6
+kf3: mem t=557.982s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=3
+kf3: mem invalidate seq 8810 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=557.986s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=0
+kf3: mem t=557.997s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=0
+kf3: mem t=557.997s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=1
+kf3: mem invalidate seq 8812 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=558.005s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=2
+kf3: mem invalidate seq 8813 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=558.005s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=2
+kf3: mem invalidate seq 8814 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=558.006s REFUSED VasKey(13965664226870560848) root 0x1ecce0000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=2
+kf3: mem invalidate seq 8815 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=3
+kf3: mem invalidate seq 8816 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: mem invalidate seq 8817 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: mem invalidate seq 8818 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=5
+kf3: mem invalidate seq 8819 CLEARED OVER ABSENCE (Some(VasKey(13965664226870560848))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+kf3: walk report carried refusals=57 refuse_mask=0x400 pdbs=[1ecce0000] runs=4
+# last status line
+kf3: family=Ada phase=Running trapped=1898423 applied=16541 refused=0 serviced=15590 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=10230 walks=75584/75585 cleared=10230 superseded=0 named_missed=0 unreconciled=0 absent_cleared=29 mapped=252774 unmapped=238661 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=6963527 priv_withheld_bytes=0x46ad7c00c000 priv_mirrored=23 sked=65/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=32 root_moves=0 stmts=59/59 refused=16 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=92 (map 48 mm

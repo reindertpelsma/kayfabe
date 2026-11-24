@@ -1,0 +1,51 @@
+== probe before
+bind_active=no
+$ uptime (rc=0)
+ 03:51:34 up  2:16,  2 users,  load average: 0.01, 0.14, 0.67
+PC_ACTIVE.log tail:
+  2026-11-24T02:20:37Z vfio-s3 END VFIO S3 control: 17 cycle records; host GPU: NVIDIA GeForce RTX 4070, 595.91.07
+  2026-11-24T02:21:30Z vfio-s3 START restore completion (lock re-taken): waiting for the udev backlog to drain, then gdm restart and holder release
+  2026-11-24T02:25:03Z vfio-s3 RESTORE-FIX udev backlog (stale nvidia driver add/remove events queued during the bind, ~73/s processed, no new kernel events): restarting systemd-udevd to drop the stale queue
+  2026-11-24T02:26:25Z vfio-s3 RESTORE-FIX udev queue empty after the udevd restart, device events re-triggered, holders released; restarting gdm
+  2026-11-24T02:28:03Z vfio-s3 END restore completion: nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + gnome-shell on card1 (DP-3 connected), nvidia_uvm live, cuInit 0, vfio modules unloaded; lock released, pc idle
+  2026-11-24T02:35:06Z vfio-s3 NOTE correction: the nvidia module load at 01:01:49Z during the bind (start of the udev loop) came from a coordinator-side nvidia-smi probe (coordinator error, now removed from its routine), not an unknown source. Follow-up for pcsession.py: block nvidia loads during a bind (temporary modprobe.d install nvidia /bin/false, removed at restore) and check the udev queue is empty at restore
+  2026-11-24T02:39:12Z pc-camera-raw NOGPU-INFO START build_kf3 of 9d143630 (PR #565 head) and 647ba52f (next without #565) (CPU only, nice, dirs /workspace/bench/pc_camera_raw_20261124/src_*, shared qemu-build-kf3 under its lock), no GPU/VM
+  2026-11-24T02:51:34Z pc-camera-raw NOGPU-INFO dry run of the bind guards (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe
+== install block: /run/modprobe.d/kayfabe-vfio-bind-block.conf
+showconfig install lines: ['install nvidia /bin/false', 'install nvidia_modeset /bin/false', 'install nvidia_uvm /bin/false', 'install nvidia_drm /bin/false']
+modprobe -n -v --ignore-install? no; plain dry-run nvidia (1, "modprobe: ERROR: could not insert 'nvidia': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia-drm (1, "modprobe: ERROR: could not insert 'nvidia_drm': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia_uvm (1, "modprobe: ERROR: could not insert 'nvidia_uvm': Module already in kernel")
+modprobe -n -v --ignore-install? no; plain dry-run nvidia-modeset (1, "modprobe: ERROR: could not insert 'nvidia_modeset': Module already in kernel")
+== probe with block (expect active, --gpu refused):
+bind_active=yes
+  reason: modprobe block /run/modprobe.d/kayfabe-vfio-bind-block.conf present
+$ uptime (rc=0)
+ 03:51:34 up  2:16,  2 users,  load average: 0.01, 0.14, 0.67
+REFUSED: --gpu while a bind may be active (no nvidia tool is run)
+PC_ACTIVE.log tail:
+  2026-11-24T02:20:37Z vfio-s3 END VFIO S3 control: 17 cycle records; host GPU: NVIDIA GeForce RTX 4070, 595.91.07
+  2026-11-24T02:21:30Z vfio-s3 START restore completion (lock re-taken): waiting for the udev backlog to drain, then gdm restart and holder release
+  2026-11-24T02:25:03Z vfio-s3 RESTORE-FIX udev backlog (stale nvidia driver add/remove events queued during the bind, ~73/s processed, no new kernel events): restarting systemd-udevd to drop the stale queue
+  2026-11-24T02:26:25Z vfio-s3 RESTORE-FIX udev queue empty after the udevd restart, device events re-triggered, holders released; restarting gdm
+  2026-11-24T02:28:03Z vfio-s3 END restore completion: nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + gnome-shell on card1 (DP-3 connected), nvidia_uvm live, cuInit 0, vfio modules unloaded; lock released, pc idle
+  2026-11-24T02:35:06Z vfio-s3 NOTE correction: the nvidia module load at 01:01:49Z during the bind (start of the udev loop) came from a coordinator-side nvidia-smi probe (coordinator error, now removed from its routine), not an unknown source. Follow-up for pcsession.py: block nvidia loads during a bind (temporary modprobe.d install nvidia /bin/false, removed at restore) and check the udev queue is empty at restore
+  2026-11-24T02:39:12Z pc-camera-raw NOGPU-INFO START build_kf3 of 9d143630 (PR #565 head) and 647ba52f (next without #565) (CPU only, nice, dirs /workspace/bench/pc_camera_raw_20261124/src_*, shared qemu-build-kf3 under its lock), no GPU/VM
+  2026-11-24T02:51:34Z pc-camera-raw NOGPU-INFO dry run of the bind guards (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe
+rc 3
+== gate ok=True ladder=False 10s ['udev queue empty and no nvidia load pending for 10s']
+== remove block: True present: False
+install lines after: []
+== probe after
+bind_active=no
+$ uptime (rc=0)
+ 03:51:44 up  2:17,  2 users,  load average: 0.01, 0.13, 0.66
+PC_ACTIVE.log tail:
+  2026-11-24T02:20:37Z vfio-s3 END VFIO S3 control: 17 cycle records; host GPU: NVIDIA GeForce RTX 4070, 595.91.07
+  2026-11-24T02:21:30Z vfio-s3 START restore completion (lock re-taken): waiting for the udev backlog to drain, then gdm restart and holder release
+  2026-11-24T02:25:03Z vfio-s3 RESTORE-FIX udev backlog (stale nvidia driver add/remove events queued during the bind, ~73/s processed, no new kernel events): restarting systemd-udevd to drop the stale queue
+  2026-11-24T02:26:25Z vfio-s3 RESTORE-FIX udev queue empty after the udevd restart, device events re-triggered, holders released; restarting gdm
+  2026-11-24T02:28:03Z vfio-s3 END restore completion: nvidia 595.91.07 on 01:00.0, snd_hda_intel on 01:00.1, gdm + gnome-shell on card1 (DP-3 connected), nvidia_uvm live, cuInit 0, vfio modules unloaded; lock released, pc idle
+  2026-11-24T02:35:06Z vfio-s3 NOTE correction: the nvidia module load at 01:01:49Z during the bind (start of the udev loop) came from a coordinator-side nvidia-smi probe (coordinator error, now removed from its routine), not an unknown source. Follow-up for pcsession.py: block nvidia loads during a bind (temporary modprobe.d install nvidia /bin/false, removed at restore) and check the udev queue is empty at restore
+  2026-11-24T02:39:12Z pc-camera-raw NOGPU-INFO START build_kf3 of 9d143630 (PR #565 head) and 647ba52f (next without #565) (CPU only, nice, dirs /workspace/bench/pc_camera_raw_20261124/src_*, shared qemu-build-kf3 under its lock), no GPU/VM
+  2026-11-24T02:51:34Z pc-camera-raw NOGPU-INFO dry run of the bind guards (no bind, no module change): modprobe block install/read-back/remove, udev gate, safe probe
