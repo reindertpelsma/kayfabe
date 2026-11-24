@@ -1,4 +1,4 @@
-//! ★ 2026-11-18 — **Stage 1 of a Blackwell-capable private ring** (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md`
+//! **Stage 1 of a Blackwell-capable private ring** (`docs/design/V3_BLACKWELL_USER_RING_ROUTE.md`
 //! §2, option O1): the relay's progress from a SEMAPHORE-RELEASE marker on a family whose engine writes no
 //! `USERD` word back (`kf_chip::Family::engine_writes_userd_gp_get`).
 //!

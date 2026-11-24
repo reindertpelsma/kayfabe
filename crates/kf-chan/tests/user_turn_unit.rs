@@ -932,7 +932,7 @@ fn without_engine_written_userd_words_the_first_gate_never_opens() {
     assert!(io.calls.contains(&Call::ReadPb(gated.raw())));
     assert_eq!(r.cursor, 2);
 }
-/// ★ 2026-11-18 (stage 1 of `V3_BLACKWELL_USER_RING_ROUTE.md` §2, O1) — the twin of the characterization above:
+/// Stage 1 of `V3_BLACKWELL_USER_RING_ROUTE.md` §2 (O1), the twin of the characterization above:
 /// on the same family, with the SEMAPHORE progress source the same gate opens. The simulated engine releases the
 /// value the Blackwell marker cell carries (its `SEM_PAYLOAD_LO` word) into the private semaphore word, and the
 /// relay reads the words `SemaphoreProgress` derives from it: the tagged reference, and the private `GP_GET` just
