@@ -173,6 +173,18 @@ class ArgvTests(Base):
         self.assertNotIn("0.0.0.0", j)
         self.assertIn("virtio-balloon-pci,free-page-reporting=on", j)
 
+    def test_a_kf3_vm_never_gets_a_memory_balloon(self):
+        """2026-11-19 (the AD104 in-QEMU reboot hang): a balloon discards guest pages kf3's GPU keeps
+        using (kf3.c kf3_balloon_refusal). Setup or run, a kf3 VM has no balloon and no free-page reporting."""
+        for mode in ("setup", "run"):
+            j = " ".join(self.argv(mode, gpu="kf3", driver_version="595.91.07"))
+            self.assertIn("kf3-gpu", j, mode)
+            self.assertNotIn("virtio-balloon", j, mode)
+            self.assertNotIn("free-page-reporting", j, mode)
+
+    def test_the_gpu_less_setup_vm_keeps_its_balloon(self):
+        self.assertIn("virtio-balloon-pci,free-page-reporting=on", " ".join(self.argv("setup")))
+
     def test_no_vnc_means_display_none(self):
         a = self.argv("run")
         self.assertNotIn("-vnc", a)

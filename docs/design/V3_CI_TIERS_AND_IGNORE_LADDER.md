@@ -35,6 +35,8 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 
 **OWNER DECISION** unless marked.
 
+⊘ **Correction 2026-11-23 (against `OWNER_RULINGS.md` §AZ, 2026-11-18):** the owner took SPECviewperf and every proprietary image (propimage) out of the required release gate; they run as an invoked app lane, required only when a release touches a core path (§AZ items 2 to 5), and the release record lists their last run as information. The "Coverage" and "Excluded" cells of the table are the 2026-11-12 state. CODE READ on 2026-11-23 at `next` `92a7f2782`: the propimage stages are in `MANUAL_ONLY_STAGES` (`scripts/ci/vast_payload.py`), and the release profile in `ci/vast-broker/src/tier.js` still lists `specviewperf` in `additionalStages`; this note changes no code. Where the text below puts SPEC or a propimage into the release tier or the release criteria, §AZ governs.
+
 | | LARGEST (release) | MIDDLE (PR to master) | SMALL |
 |---|---|---|---|
 | Event | release tag | PR to master (the `next` -> master batch) | push, and manual |

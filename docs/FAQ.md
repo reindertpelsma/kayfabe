@@ -1,7 +1,7 @@
 # kayfabe FAQ
 
-**STATUS: LIVE, 2026-11-08 (rootless, containers, display broker, two-VM, anti-cheat, isolation, ordinary-process and project-comparison answers revised; the IOMMU and interrupt answers are from 2026-10-08).** Questions the VM community asks first, answered from the design and the
-evidence in this repository. A statement carries its evidence or says it is inferred. Where the repository has no
+Questions the VM community asks first, answered from the design and the
+evidence in this repository. Where something is not verified, the answer says so. Where there is no
 verified answer, the answer says **not documented yet**. Plans and goals are on [Goals and plans](howto/goals.md).
 <!-- src: README.md and docs/howto/*.md; each answer below names its sources -->
 
@@ -24,7 +24,7 @@ With VFIO one VM owns the whole GPU and the host does not keep it (README compar
 
 ### Why not virtio-gpu (Venus, virgl or a native context)?
 
-The repository has no benchmark or feature comparison with them. What it records is the owner's position in a public discussion (issue #1, 2026-09-28 and 2026-09-29), and the project's positioning note of 2026-10-01, which names generic multi-vendor Linux-guest graphics (the virtio-gpu native context case) as not what kayfabe is for. The position: parts of the native-context infrastructure can be useful for a paravirtual NVIDIA driver, but keeping NVIDIA's proprietary userspace still leaves an NVIDIA-specific interface between the guest's user-mode and kernel-mode drivers. Kayfabe already uses the stock NVIDIA PCI/GSP interface as its guest interface, so native contexts would add little at that boundary. Its compatibility target is NVIDIA's normal guest driver pair, including Windows. Because the guest runs the stock NVIDIA driver, `nvidia-smi` and CUDA are those of the stock driver [measured, README, 2026-10-21].
+The repository has no benchmark or feature comparison with them. What it records is the owner's position in a public discussion (issue #1, 2026-09-28 and 2026-09-29), and the project's positioning note of 2026-10-01, which names generic multi-vendor Linux-guest graphics (the virtio-gpu native context case) as not what kayfabe is for. The position: parts of the native-context infrastructure can be useful for a paravirtual NVIDIA driver, but keeping NVIDIA's proprietary userspace still leaves an NVIDIA-specific interface between the guest's user-mode and kernel-mode drivers. Kayfabe already uses the stock NVIDIA PCI/GSP interface as its guest interface, so native contexts would add little at that boundary. Its compatibility target is NVIDIA's normal guest driver pair, including Windows. Because the guest runs the stock NVIDIA driver, `nvidia-smi` and CUDA are those of the stock driver.
 <!-- src: https://github.com/reindertpelsma/kayfabe/issues/1#issuecomment-5871584797; https://github.com/reindertpelsma/kayfabe/issues/1#issuecomment-5881703647; docs/PRODUCT_POSITIONING.md (status update 2026-10-01); README.md "What runs today" -->
 
 ### Why keep NVIDIA's driver instead of using Mesa/NVK?
@@ -54,14 +54,14 @@ The project's history page (written 2026-09-06) describes it this way: nvkvm-pv 
 
 ### Is there an installer or a download?
 
-No. There is no installer, no stable interface and no public binary; you build it from source. A QEMU binary built from the tree is not yet distributable under the GPL. See [Building from source](howto/building.md) and [Credits and notices](howto/credits.md).
+No. There is no installer, no stable interface and no public binary; you build it from source. Whether and when a binary is published is the project owner's decision, not a licence limit of the source. See [Building from source](howto/building.md) and [Credits and notices](howto/credits.md).
 <!-- src: README.md "Trying it" and status line; docs/howto/credits.md (LICENSE exception 2) -->
 
 ## Hardware and drivers
 
 ### Which GPUs work?
 
-Turing and newer is the hard line. Below Turing there is no GSP firmware interface for kayfabe to stand in for, so older cards cannot work. Of the newer families, the repository records runs on Turing (TU116), Ampere (GA106, GA104), Ada (AD104, AD106, AD103, AD102) and Blackwell (GB205), mostly with Linux guests. MEASURED Windows gate PASS: TU106, TU116, GA104, GA106, AD102, AD104, GB205 and GB206 at `0c515b3b3` (2026-11-04), and GA102 at `006d845a` (2026-11-03). GB202 is intermittent: FAIL then two PASS on one box. <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md --> Hopper and datacentre Blackwell are derived from the open driver's source only and were never run on hardware. Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. The per-die table is on [Requirements](howto/requirements.md).
+Turing and newer is the hard line. Below Turing there is no GSP firmware interface for kayfabe to stand in for, so older cards cannot work. Of the newer families, the repository records runs on Turing (TU116), Ampere (GA106, GA104), Ada (AD104, AD106, AD103, AD102) and Blackwell (GB205), mostly with Linux guests. Windows gate PASS: TU106, TU116, GA104, GA106, AD102, AD104, GB205, GB206 and GA102. GB202 is intermittent: FAIL then two PASS on one box. <!-- src: revisions 0c515b3b3 (2026-11-04) and, for GA102, 006d845a (2026-11-03); traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md --> Hopper and datacentre Blackwell are derived from the open driver's source only and were never run on hardware. Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. The per-die table is on [Requirements](howto/requirements.md).
 <!-- src: docs/howto/requirements.md "GPU"; README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0 -->
 
 ### Which host driver versions work?
@@ -71,7 +71,7 @@ Every recorded run used the open NVIDIA kernel module. Host drivers that passed 
 
 ### Does the guest driver have to match the host driver?
 
-No, by design. The host driver version is read from the host and decides how kayfabe talks to the host driver, and the guest's declared version only decides how kayfabe decodes the guest's requests. In the recorded runs, guest drivers 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84 and 610.57.04 passed the CUDA ladder against a 580.159.04 host [measured, September 2026, one GA102 box]. A guest version outside the measured set is refused by name. Two limits: the 30-arm suite is graded for 580.x guests only, and the display layouts were derived for Linux guest 580.159.04 only. Windows has been run with NVIDIA's 580.88 driver.
+No, by design. The host driver version is read from the host and decides how kayfabe talks to the host driver, and the guest's declared version only decides how kayfabe decodes the guest's requests. In the recorded runs, guest drivers 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84 and 610.57.04 passed the CUDA ladder against a 580.159.04 host (September 2026, one GA102 box). A guest version outside the tested set is refused by name. Two limits: the 30-arm suite is graded for 580.x guests only, and the display layouts were derived for Linux guest 580.159.04 only. Windows has been run with NVIDIA's 580.88 driver.
 <!-- src: docs/howto/technical-faq.md "authored, never forwarded"; docs/howto/requirements.md "Guest"; docs/howto/display.md -->
 
 ### Does the guest need a special driver or kernel module?
@@ -88,7 +88,7 @@ Windows 11 Pro (build 26200) and Windows 11 Enterprise LTSC 2024 (build 26100), 
 
 No host patches are required: the stock path uses the host's stock driver. Optional enhancements (a helper module in the guest, patched guest or host drivers) are planned, never required, and none is built into the stock path today; an optional research patch to the host's `nvidia-uvm` exists, and UVM demand paging remains explicitly unsupported. Its per-fault GR hold is unmeasured in the cited app qualification; the owner requires hardware timing and an explicit bound before merge (see the CUDA-results answer below).
 
-Root is not required by the design, and one run without root is recorded, but the scripts in the repository still start as root. **Recorded:** an audit on one host ran kayfabe as a throwaway user whose only group was `kvm` (no capabilities, no sudo). The 30-arm Linux suite passed 30 of 30 and the GPU gates 9 of 9, and a Windows 11 guest ran Unigine Heaven (Direct3D 11) at 92.55 fps on average against 93.09 as root, with no VFIO rebind and no kernel module, driver or udev change [measured, kayfabe `0a746117`, RTX 4070, host driver 595.91.07, one host]. The record is on the branch `claude/rootless-audit-20261016` (commit `32d7319b2`, [report](https://github.com/reindertpelsma/kayfabe/blob/claude/rootless-audit-20261016/traces/rootless_audit_20261016/REPORT.txt)), not on master. **Not recorded:** the heavy lanes (the CUDA application matrix and similar) as that user, a desktop on the NVIDIA card itself, and a repeatable rootless test on master, which is still to be added. See [Security model](howto/security.md).
+Root is not required by the design, and one run without root is recorded, but the scripts in the repository still start as root. **Recorded:** an audit on one host ran kayfabe as a throwaway user whose only group was `kvm` (no capabilities, no sudo). The 30-arm Linux suite passed 30 of 30 and the GPU gates 9 of 9, and a Windows 11 guest ran Unigine Heaven (Direct3D 11) at 92.55 fps on average against 93.09 as root, with no VFIO rebind and no kernel module, driver or udev change (RTX 4070, host driver 595.91.07, one host). The full record is not yet part of the main tree. **Not recorded:** the heavy lanes (the CUDA application matrix and similar) as that user, a desktop on the NVIDIA card itself, and a repeatable rootless test on master, which is still to be added. See [Security model](howto/security.md).
 <!-- src: branch claude/rootless-audit-20261016, traces/rootless_audit_20261016/REPORT.txt; docs/howto/requirements.md "Privileges"; docs/design/V3_COOPERATIVE_TIERS.md section 1 and docs/design/V3_HOST_PATCH_LIST.md section 1 (optional tiers, stock tier needs no patch) -->
 
 ## Sharing and performance
@@ -100,14 +100,14 @@ Root is not required by the design, and one run without root is recorded, but th
 
 ### Can several VMs share one GPU?
 
-Two limited records exist. The September audit reports two overlapping Linux thin guests on one RTX 3060, both copy-engine clients reaching `ALL ARMS MET` [reported in the hardware report, binary revision `4e9aae9b`, host driver 580.159.04, one host, sections 4 and 5]. A later Linux-and-Windows run on one RTX 4070 lasted 3 min 20 s with no new host Xid; the Windows device had to be given a 1024 MiB video-memory store to fit beside the Linux one, and that run checked boot and display only [measured, kayfabe `a88764b3`, 2026-10-08]. These are functional observations. A newer record measured a host CUDA loop and two guests on one RTX 4090, with correct results, no GPU resets and per-workload ratios beside the suite's fault arms (two runs at `3aa2a75a6`, 2026-11-05). General fairness, hostile long kernels and host BAR1 accounting across VMM processes remain unverified; the security review still advises one guest per GPU. <!-- src: traces/trio_vast_20261105/README.md --> A design audit also lists several VMs on one GPU as "works as-is (measured, 2 VMs)"; that line is not a workload result.
+Two limited records exist. The September audit reports two overlapping Linux thin guests on one RTX 3060, both copy-engine clients reaching `ALL ARMS MET` (host driver 580.159.04, one host). A later Linux-and-Windows run on one RTX 4070 lasted 3 min 20 s with no new host Xid; the Windows device had to be given a 1024 MiB video-memory store to fit beside the Linux one, and that run checked boot and display only (RTX 4070, October 2026). These are functional observations. A newer record measured a host CUDA loop and two guests on one RTX 4090, with correct results, no GPU resets and per-workload ratios beside the suite's fault arms (two runs, November 2026). General fairness, hostile long kernels and host BAR1 accounting across VMM processes remain unverified; the security review still advises one guest per GPU. <!-- src: traces/trio_vast_20261105/README.md --> A design audit also lists several VMs on one GPU as "works as-is (measured, 2 VMs)"; that line is not a workload result.
 
 By design, each VM is a separate ordinary process on the host driver, so how they share the card is the host driver's multi-process behaviour; NVIDIA documents that by default several processes can use one GPU, with a time-sliced scheduler ([MPS documentation](https://docs.nvidia.com/deploy/mps/architecture.html)). NVIDIA's GPU Operator documentation says of time-sliced replicas that there is "no memory or fault-isolation between replicas" ([time-slicing](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html)), so time-slicing is sharing without a per-VM quota. Hardware partitions (NVIDIA MIG) would give each VM its own slice of memory and compute; that is a [goal](howto/goals.md) and has not been tested.
 <!-- src: docs/design/V3_MULTI_GPU_AUDIT.md sections 4-5; traces/windows_code43_walls_20261007/README.md "Run54"; docs/design/V3_FEATURE_GAPS.md H21; docs/design/V3_SECURITY_MODEL.md section 11; https://docs.nvidia.com/deploy/mps/when-to-use-mps.html ("multiple processes can use the GPU simultaneously") and https://docs.nvidia.com/deploy/mps/architecture.html ("time sliced scheduler"), retrieved 2026-10-28; https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html ("no memory or fault-isolation between replicas", retrieved 2026-10-28); docs/howto/goals.md "Kayfabe on NVIDIA MIG partitions" -->
 
 ### Can one guest use several GPUs?
 
-One kayfabe device is created per host GPU. The recorded two-GPU thin-guest checks ran copy-engine clients serially and concurrently on two distinct RTX 3060s [measured in the multi-GPU report, section 7, revision `74fced87`, lease 52664396, one eight-GPU host]. The separate single-device regression passed all 30 arms; the report does not claim a full 30-arm run on each GPU together. CUDA inside a two-GPU guest, unified memory across two GPUs and peer-to-peer access were not measured, and Windows and display coverage remain open. See [Goals and plans](howto/goals.md).
+One kayfabe device is created per host GPU. The recorded two-GPU thin-guest checks ran copy-engine clients serially and concurrently on two distinct RTX 3060s (one eight-GPU host). The separate single-device regression passed all 30 arms; the report does not claim a full 30-arm run on each GPU together. CUDA inside a two-GPU guest, unified memory across two GPUs and peer-to-peer access were not tested, and Windows and display coverage remain open. See [Goals and plans](howto/goals.md).
 <!-- src: docs/design/V3_MULTI_GPU_AUDIT.md section 7; docs/STATUS_DETAIL.md section 3; docs/design/V3_FEATURE_GAPS.md H20, L10 -->
 
 ### What is the performance cost?
@@ -117,7 +117,7 @@ It depends on the workload. Large batches run close to host speed; many small la
 
 ### Does CUDA give the same results as the host?
 
-MEASURED, RTX 4090, revision `144557e43`, 2026-11-07: 70/70 runnable apps passed on the host and 66/70 in the Linux guest. Passing means each app met its correctness predicate; this is not an all-app byte-equality claim. The three digest-producing apps had matching host/guest digests.
+On an RTX 4090: 70/70 runnable apps passed on the host and 66/70 in the Linux guest. Passing means each app met its correctness predicate; this is not an all-app byte-equality claim. The three digest-producing apps had matching host/guest digests.
 
 **Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged: the per-fault GR hold is unmeasured in this app qualification, and hardware timing plus an explicit bound are required before merge. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
 <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E; scripts/apps/known_unsupported.json; scripts/bench/windows/appmatrix/gate_profiles.json -->
@@ -125,7 +125,7 @@ MEASURED, RTX 4090, revision `144557e43`, 2026-11-07: 70/70 runnable apps passed
 
 ### Why are Windows YUV overlays manual?
 
-All eight `overlay_yuv_*` entries, including probe and soak, are `manual: needs real display` in reports and excluded from Vast profiles. MEASURED on the native Vast RTX 4090 simulated output (2026-10-10): the probe fails, with no DIRECT overlay support. No native run on a real monitor is recorded. A valid manual record needs the exact revision, GPU, drivers, physical monitor/connector, same-GPU native result, command, per-second overlay modes, screenshots, duration and reset/Xid counts. See [Windows guest](howto/windows-guest.md).
+All eight `overlay_yuv_*` entries, including probe and soak, are `manual: needs real display` in reports and excluded from Vast profiles. On the native Vast RTX 4090 simulated output the probe fails, with no DIRECT overlay support. No native run on a real monitor is recorded. A valid manual record needs the exact revision, GPU, drivers, physical monitor/connector, same-GPU native result, command, per-second overlay modes, screenshots, duration and reset/Xid counts. See [Windows guest](howto/windows-guest.md).
 <!-- src: scripts/bench/windows/appmatrix/gate_profiles.json manual.items evidence_template; traces/windows_overlay_native_20261010/README.md -->
 
 ### Do games with anti-cheat work?
@@ -147,14 +147,14 @@ The VM reaches the GPU through the host's NVIDIA driver as an ordinary client, a
 
 ### Why does it matter that kayfabe is an ordinary, unprivileged GPU process?
 
-To the host driver, kayfabe is an ordinary GPU client that also has `/dev/kvm` open. It opens the device files a CUDA program opens (`/dev/nvidiactl`, `/dev/nvidia0`, `/dev/nvidia-uvm`) and `/dev/kvm` [measured: strace of a Linux guest run in the rootless audit, kayfabe `0a746117`, 2026-10-16, one host]. No host kernel is patched and no custom host driver is loaded; the guest uses NVIDIA's own installer. That follows from the design, and what is recorded about running without root is in *Do I need root, or a patched host?* above. There is no installer yet, so "easy to install" is a goal, not a fact.
+To the host driver, kayfabe is an ordinary GPU client that also has `/dev/kvm` open. It opens the device files a CUDA program opens (`/dev/nvidiactl`, `/dev/nvidia0`, `/dev/nvidia-uvm`) and `/dev/kvm` (strace of a Linux guest run, one host). No host kernel is patched and no custom host driver is loaded; the guest uses NVIDIA's own installer. That follows from the design, and what is recorded about running without root is in *Do I need root, or a patched host?* above. There is no installer yet, so "easy to install" is a goal, not a fact.
 
 What this is meant to buy, by design and not audited:
 
 - **Several VMs rely on the host driver's own multi-process support.** Each VM is a separate ordinary process, so by design the sharing is the host driver's, not logic of kayfabe's own. Two VMs on one GPU are recorded only at boot level so far; a workload and fairness measurement is pending, and nothing here claims that one VM's VRAM use or timing cannot affect another. See *Can several VMs share one GPU?*.
 - **A crash or bug in kayfabe is meant to be a crash of that one process,** the VMM, and not of the host kernel. What it can do is bounded by what an unprivileged process with `/dev/kvm` and a GPU client can do, and the host kernel and driver enforce their own memory protection.
 - **A compromised kayfabe has the reach of an ordinary GPU-container tenant on the host driver, plus access to `/dev/kvm`.** A guest first has to break kayfabe to get there, and the path through kayfabe's own authored calls is a closed list of calls that an unprivileged process may issue. Most GPU container configuration is the choice of which host libraries to bind-mount, and a library grants no access that the device nodes do not already give ([the sister project's reading of the NVIDIA container toolkit](https://github.com/reindertpelsma/nvkvm-pv/blob/HEAD/docs/reference/container-capabilities.md)). The real addition is `/dev/kvm`, which the same project's FAQ calls designed for unprivileged use.
-- **It is the boundary a GPU container host already depends on.** On GPU container hosts each tenant's container gets its own GPU; Vast, for one, documents exclusive GPU access per container, never shared between users ([Vast instances](https://docs.vast.ai/instances)). Containers share the host kernel, so the host's NVIDIA driver is what separates those tenants' CUDA processes [inferred]. Kayfabe asks that driver only for things an unprivileged process may ask for, so it relies on the same boundary. That also means a deployer can run experimental software in a plain GPU container with `/dev/kvm` passed in, which is a goal that is not tested yet (see *Can kayfabe run inside a container?*).
+- **It is the boundary a GPU container host already depends on.** On GPU container hosts each tenant's container gets its own GPU; Vast, for one, documents exclusive GPU access per container, never shared between users ([Vast instances](https://docs.vast.ai/instances)). Containers share the host kernel, so the host's NVIDIA driver is expected to be what separates those tenants' CUDA processes (not verified). Kayfabe asks that driver only for things an unprivileged process may ask for, so it relies on the same boundary. That also means a deployer can run experimental software in a plain GPU container with `/dev/kvm` passed in, which is a goal that is not tested yet (see *Can kayfabe run inside a container?*).
 
 What this does not remove: bugs in NVIDIA's driver that an ordinary process can reach (NVIDIA publishes [security bulletins](https://www.nvidia.com/en-us/security/) for its drivers), bugs in KVM, and bugs in kayfabe's own code, which is reviewed and not audited. On a host that runs untrusted guests, enable the IOMMU: it limits what a wrong DMA address from a compromised or buggy device can reach to pages already mapped for it, and kayfabe's own argument does not depend on it (see the IOMMU answer below).
 <!-- src: docs/howto/security.md "What the isolation is made of" and "Deployment"; docs/design/V3_SECURITY_MODEL.md section 4, R3 and R6 (Property P: every effect a guest can produce on the host GPU is one a local unprivileged process could produce); traces/rootless_audit_20261016/REPORT.txt section 2 on branch claude/rootless-audit-20261016 (strace: only /dev/kvm, /dev/nvidiactl, /dev/nvidia0, /dev/nvidia-uvm); docs/FAQ.md "Can several VMs share one GPU?"; https://github.com/reindertpelsma/nvkvm-pv docs/reference/container-capabilities.md ("bind-mounting a library into a container grants no access the container did not already have") and docs/faq.md ("/dev/kvm is designed for unprivileged use"); https://docs.vast.ai/instances ("Provides exclusive GPU access (never shared between users)", retrieved 2026-10-28); https://www.nvidia.com/en-us/security/ (retrieved 2026-10-28); the IOMMU limit: this file, IOMMU answer, "What the host IOMMU still does" -->
@@ -176,8 +176,7 @@ one device per VM its domain is a per-VM domain.
   value never reaches the device as a raw bus address.
 - The VM's work runs on host channels that are unprivileged and live in a GPU virtual address space
   holding only that VM's mappings. The GPU's own memory management unit enforces the address space.
-  Physical addressing needs a privileged channel: [measured, physical-operand oracle at 8c084ab7
-  (RTX 4070, driver 595.91.07), 2026-10-08] on a USER-privilege channel the copy engine refuses a
+  Physical addressing needs a privileged channel: on an RTX 4070 with driver 595.91.07, on a USER-privilege channel the copy engine refuses a
   physical operand, source and destination, with a channel reset, while a virtual operand is
   delivered; the 3D, compute and video classes expose no physical-operand method in OGKM's class
   headers (a reading, not a measurement). Details: `traces/phys_operand_oracle_20261008/`.
@@ -200,23 +199,21 @@ that ask for DMA remapping. Windows 11 does not require one. Cost and design: `d
 **Is the IOMMU a strong boundary against a malicious device even on bare metal?** Only against DMA to
 pages the driver did not map. Drivers generally trust what the device writes into pages that are
 mapped for it (rings, message queues, notifiers) and parse it, and GPU drivers are not designed
-against a hostile device (inferred; Linux's own model treats internal PCI devices as trusted and has a
+against a hostile device (expected, not verified; Linux's own model treats internal PCI devices as trusted and has a
 separate bounce-buffer path for untrusted external ones). That is why our own hostile party is the
 guest and why kayfabe's input handling, bounds checks and authored host actions carry the weight.
 
 **What the boundary is made of.** Hardware: the GPU's memory management unit and the channel
 privilege. Software: kayfabe's checks and host RM. So a bug in kayfabe's address resolution matters
-more than it would under VFIO, which is why that code gets hostile-input tests and review
-(`docs/OWNER_RULINGS.md` §V and the review notes in `docs/STATUS_AND_HANDOFF.md`).
+more than it would under VFIO, which is why that code gets hostile-input tests and review.
 
-**Paravirtual projects in general.** Other paravirtual GPU projects (the owner reports virtio-nvgpu
-says the same of itself; not re-checked here) and nvkvm-pv have no IOMMU-based isolation, and for them
+**Paravirtual projects in general.** Other paravirtual GPU projects (virtio-nvgpu is reported to
+say the same of itself; not re-checked here) and nvkvm-pv have no IOMMU-based isolation, and for them
 it likewise does not decide the boundary: the guest does not own the device.
 
 ### Can one VM's GPU work wake another VM? Does a VM learn when other tenants use the GPU?
 
-**Short answer:** yes, a little, on purpose — the same as for processes on one bare-metal GPU. Decided by
-the owner on 2026-10-08 (`docs/OWNER_RULINGS.md` §X).
+**Short answer:** yes, a little, on purpose — the same as for processes on one bare-metal GPU. This is accepted by design.
 
 **What happens.** A "non-stall" interrupt (a completion signal a program asks for, for example after a
 copy) is raised by the physical GPU and serviced by the host driver. The host driver's notification is
@@ -236,11 +233,11 @@ vector is raised; it delays an interrupt, it never drops one.
 **What a guest learns (accepted).** A guest that registered for an engine's events can tell, from when its
 interrupts arrive, that some tenant used that kind of engine and roughly how often. It does not learn which
 tenant, what the work was, or any data. Any unprivileged process on the host can already observe this
-[measured 2026-10-08, RTX 4070, `traces/rawclient_ce_interrupt_20261008/bare_tenant_noise_*`]: with another
+(RTX 4070): with another
 VM on the GPU, an idle raw client saw these notifications in every observation window.
 
 **What is not shared.** Memory, address spaces, channels and results stay per VM; see the IOMMU answer
-above. Design: `design/the_three_channel_kinds.md` §1.2.
+above. <!-- src: design/the_three_channel_kinds.md section 1.2 -->
 
 ## Running it
 
@@ -248,7 +245,7 @@ above. Design: `design/the_three_channel_kinds.md` §1.2.
 
 That is a goal, and it is expected to work with `/dev/kvm` and the NVIDIA device nodes passed into the container, but it is **not tested or documented for kayfabe yet**: no recorded kayfabe run is in a container, and there is no container image or guide. Kayfabe is linked into the QEMU process and has no sandbox of its own, so a container is one way to add the extra layer described in the [Security model](howto/security.md).
 
-What can be said from the repository: in the rootless audit, a Linux guest run opened only `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia0` and `/dev/nvidia-uvm`, read `/proc/driver/nvidia` and the card's `/sys/bus/pci` entries, and needed `libcuda` loadable on the host; the display broker additionally uses `/dev/udmabuf` [measured, branch `claude/rootless-audit-20261016`]. The sister project nvkvm-pv documents the same idea for its CUDA container: `docker run --device /dev/kvm --gpus all` with no `--privileged` and no added capabilities, because `/dev/kvm` is designed for unprivileged use, and because a container boundary outside the VMM means a VMM breakout lands in the container instead of on the host. Those two reasons apply to kayfabe's single QEMU process as well. nvkvm-pv's other container advice (its guest image, its isolate processes, the `NVIDIA_DRIVER_CAPABILITIES` list it needs for graphics) is specific to nvkvm-pv and has not been checked for kayfabe. The only container advice written for kayfabe is for the display broker: [Display and the broker](howto/display.md).
+What can be said from the repository: in the rootless audit, a Linux guest run opened only `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia0` and `/dev/nvidia-uvm`, read `/proc/driver/nvidia` and the card's `/sys/bus/pci` entries, and needed `libcuda` loadable on the host; the display broker additionally uses `/dev/udmabuf` (one host). The sister project nvkvm-pv documents the same idea for its CUDA container: `docker run --device /dev/kvm --gpus all` with no `--privileged` and no added capabilities, because `/dev/kvm` is designed for unprivileged use, and because a container boundary outside the VMM means a VMM breakout lands in the container instead of on the host. Those two reasons apply to kayfabe's single QEMU process as well. nvkvm-pv's other container advice (its guest image, its isolate processes, the `NVIDIA_DRIVER_CAPABILITIES` list it needs for graphics) is specific to nvkvm-pv and has not been checked for kayfabe. The only container advice written for kayfabe is for the display broker: [Display and the broker](howto/display.md).
 <!-- src: https://github.com/reindertpelsma/nvkvm-pv docs/faq.md "Can nvkvm itself run inside a container?" and "Is --device /dev/kvm as dangerous as mounting the Docker socket?"; traces/rootless_audit_20261016/REPORT.txt section 2 (R0 strace) on branch claude/rootless-audit-20261016; docs/howto/requirements.md (libcuda); docs/howto/security.md "Deployment"; docs/howto/display.md "Containers" -->
 
 ### Does it only work with QEMU?
@@ -265,7 +262,7 @@ Kayfabe's QEMU is built without the GTK and SDL front ends on purpose, and the d
 - **One display path to maintain.** Pointer grab, absolute or relative input, buttons, the wheel and re-sync are decided in one place (`kf-broker`), and only a thin shim names the VMM, so a second hypervisor adds a shim rather than a second display path.
 - **The broker owns the cursor and the pacing.** It draws the guest's cursor, including true inverting cursors such as the Windows text caret, and kayfabe composes none; the design makes the broker the frame clock (not built yet), with kayfabe's own clock as the fallback after 50 ms without a tick. The display design notes record problems with QEMU's own front ends: SDL and GTK read a guest cursor with different conventions, GTK warps the host pointer under a broker grab, and GTK's window resizing re-modes the guest.
 - **Frames are copied on the GPU into a frame kayfabe owns.** For a compositor on the same NVIDIA GPU the frame is exported as a dma-buf and never crosses to the CPU; the guest cannot change it after the copy. Compositors on another GPU get a copy in host RAM, with shared memory as the last fallback.
-- **Native screen output without a trip through system memory (the performance reason).** By design, when the compositor runs on the same NVIDIA GPU, each finished frame is copied once inside video memory into a frame object kayfabe allocated itself, and the compositor imports it as a dma-buf. No byte of the frame crosses PCIe to the CPU, and the host's own display path puts it on the screen. A Looking Glass-style setup, which its documentation says transfers completed frames through shared memory to a client window and targets a GPU given to the guest by passthrough, so its frames pass through system memory and are shown in a client window. [Measured on the trusted test host, kayfabe `2a20e699`, 2026-10-08: with GNOME on Wayland running on the NVIDIA GPU, the GPU-copy rung was offered and the compositor imported it for 169 of the 170 frames sent.] Not measured yet: frame rate or latency against a Looking Glass-style path, and PCIe traffic itself; the no-copy claim rests on the design and on those rung counters. On a compositor on another GPU the frame goes through host RAM, so the benefit is specific to the same-GPU case.
+- **Native screen output without a trip through system memory (the performance reason).** By design, when the compositor runs on the same NVIDIA GPU, each finished frame is copied once inside video memory into a frame object kayfabe allocated itself, and the compositor imports it as a dma-buf. No byte of the frame crosses PCIe to the CPU, and the host's own display path puts it on the screen. A Looking Glass-style setup, which its documentation says transfers completed frames through shared memory to a client window and targets a GPU given to the guest by passthrough, so its frames pass through system memory and are shown in a client window. (On the test host, with GNOME on Wayland running on the NVIDIA GPU, the GPU-copy rung was offered and the compositor imported it for 169 of the 170 frames sent.) Not measured yet: frame rate or latency against a Looking Glass-style path, and PCIe traffic itself; the no-copy claim rests on the design and on those rung counters. On a compositor on another GPU the frame goes through host RAM, so the benefit is specific to the same-GPU case.
 
 <!-- src: docs/design/V3_DISPLAY.md sections 8.2 (rung 0, "no byte crosses PCIe") and 8.18 (gpucopy=169 of sent=170 at 2a20e699); https://looking-glass.io/docs/B7-822-54ea580e/overview/ and /docs/B7/install_libvirt/ (retrieved 2026-10-28); docs/OWNER_RULINGS.md section C item 6 (2026-10-01), section L (frames), section V "Display broker and input" (2026-10-08), sections AJ, AK, AL (cursor and pacing), section AO; docs/design/V3_DISPLAY.md section 8.0 (the piece table, kf3.c about 230 lines) and the cursor-format notes (SDL/GTK conventions, GTK pointer warp, ui_info resize); broker/README.md; docs/howto/security.md -->
 

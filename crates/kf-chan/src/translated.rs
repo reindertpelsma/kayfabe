@@ -164,7 +164,7 @@ pub struct CeState {
     /// entry other than `NOP` and a family's extended base. ⊘ `false` (the default path until box
     /// step 1 shows the counts at 0 on each measured family): each is COUNTED in [`CeState::inca`]
     /// and handled exactly as before inc A — forwarded, pushed raw, skipped. ★ 2026-10-10
-    /// (`OWNER_RULINGS.md` §AB): kf3 always sets it (`KF3_INCA_REFUSE` and `KF3_TSPACE` are
+    /// kf3 always sets it (`KF3_INCA_REFUSE` and `KF3_TSPACE` are
     /// deleted; T-mode refuses them in its own decoder regardless); `false` is reached only by
     /// tests.
     pub strict: bool,
@@ -617,7 +617,7 @@ pub enum Refusal {
         /// What was refused.
         what: &'static str,
     },
-    /// ★ GR tier (owner ruling 2026-10-07): a method on a graphics subchannel no row of
+    /// In the GR tier, a method on a graphics subchannel no row of
     /// [`crate::grtables`] admits — privileged state, an address, a trigger, or simply unobserved.
     GrMethod {
         /// The bound class.
@@ -650,7 +650,7 @@ pub enum Refusal {
         /// The class.
         class: u32,
     },
-    /// ★ Owner ruling 4 (2026-10-07): a method at or above `0x100` on a software subchannel the
+    /// A method at or above `0x100` on a software subchannel the
     /// guest bound to a value that is not an engine class.
     InertSubchannelMethod {
         /// The subchannel.

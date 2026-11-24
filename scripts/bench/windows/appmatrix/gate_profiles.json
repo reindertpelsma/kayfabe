@@ -399,6 +399,36 @@
     "vc_redist"
    ]
   },
+  "dxsamples_execute_indirect": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxsamples_hdr": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxsamples_multiadapter": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxsamples_nbody_async": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxsamples_reserved_resources": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxsamples_work_graphs": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
   "dxva2_h264": {
    "official_fetch": [
     "vc_redist"
@@ -803,6 +833,21 @@
     "vc_redist"
    ]
   },
+  "vkglcts_gl46": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vkglcts_gl_dual_soak": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vkglcts_vk": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
   "vkpeak": {
    "official_fetch": [
     "vc_redist"
@@ -840,5 +885,26 @@
  ],
  "known_unsupported": {
   "managed_t": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)"
+ },
+ "online_source": {
+  "status": "DESIGN-ONLY, 2026-11-17. Open rows built from pinned upstream sources inside a Windows guest (docs/design/V3_WINDOWS_OPEN_ROWS.md); nothing ran on hardware.",
+  "lane": "discovery",
+  "reason": "Needs an online guest to fetch the toolchain and the pinned sources (WINVM_NET=online, the from-spec LTSC lane of OWNER_RULINGS section AR) or a tree the user prepared (--prebuilt); the offline gate guest cannot build, so these rows are never in small, mid or full.",
+  "apps": [
+   "vkglcts_gl46",
+   "vkglcts_vk",
+   "vkglcts_gl_dual_soak",
+   "dxsamples_nbody_async",
+   "dxsamples_execute_indirect",
+   "dxsamples_reserved_resources",
+   "dxsamples_hdr",
+   "dxsamples_work_graphs",
+   "dxsamples_multiadapter"
+  ],
+  "budget_s": 21600,
+  "not_run": {
+   "dxsamples_multiadapter": "needs-two-gpus: D3D12HeterogeneousMultiadapter and D3D12LinkedGpus need two adapters, a kayfabe guest has one"
+  },
+  "control": "vkglcts_gl46 and vkglcts_vk pass only when their per-case results equal the same binary's results on native Windows on the same die (windows-on-vast); without a control they are NOT_RUN and keep their results."
  }
 }

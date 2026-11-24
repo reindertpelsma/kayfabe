@@ -235,6 +235,38 @@ def boot_clock(state, mode):
 
 
 # ---------------------------------------------------------------- argv
+# 2026-11-16 explicit per-run overrides of the machine description that are NOT identity facts (the sealed state.json is never edited):
+#   ram_mb  the guest RAM of one run (image B rows: 16384; the state's own value, 8192, stays the default for every other caller);
+#   audio   a virtual HDA sound card with the null backend (Premiere refuses newProject/importFiles behind a modal "No output device").
+RAM_OVERRIDE_MIN_MB, RAM_OVERRIDE_MAX_MB = 4096, 1048576
+RAM_HOST_SHARE_PCT = 75        # an override may take at most this share of the host's MemAvailable (named refusal otherwise)
+# Appended LAST in build_argv: QEMU assigns PCI slots in command-line order, so every device that exists without the card keeps its slot.
+# Stock QEMU null audio backend: it opens no host audio device. The codec is the guest-reachable surface (docs/design/V3_PROPIMAGE_B_APPS.md).
+AUDIO_ARGS = ("-audiodev", "none,id=kfaudio", "-device", "ich9-intel-hda,id=kfhda", "-device", "hda-duplex,bus=kfhda.0,audiodev=kfaudio")
+
+
+def validate_ram_override(ram_mb):
+    require(type(ram_mb) is int and RAM_OVERRIDE_MIN_MB <= ram_mb <= RAM_OVERRIDE_MAX_MB and ram_mb % 1024 == 0,
+            "RAM_OVERRIDE_INVALID: guest RAM must be a whole number of GiB in MiB, %d..%d" % (RAM_OVERRIDE_MIN_MB, RAM_OVERRIDE_MAX_MB))
+    return ram_mb
+
+
+def mem_available_mb(meminfo_text=None):
+    """MemAvailable of the host in MiB (the text of /proc/meminfo, read when not given)."""
+    text = Path("/proc/meminfo").read_text() if meminfo_text is None else meminfo_text
+    m = re.search(r"^MemAvailable:\s+(\d+) kB$", text, re.M)
+    require(m is not None, "MEMINFO_UNREADABLE: no MemAvailable line")
+    return int(m.group(1)) // 1024
+
+
+def check_ram_override(ram_mb, available_mb):
+    """The refusal: an override above RAM_HOST_SHARE_PCT of the host's MemAvailable is refused with a named error, before anything boots."""
+    validate_ram_override(ram_mb)
+    require(ram_mb * 100 <= RAM_HOST_SHARE_PCT * available_mb,
+            "RAM_OVERRIDE_EXCEEDS_HOST: %d MiB asked, host MemAvailable %d MiB (limit %d percent)" % (ram_mb, available_mb, RAM_HOST_SHARE_PCT))
+    return ram_mb
+
+
 def _comma(v):
     return str(v).replace(",", ",,")
 
@@ -244,15 +276,20 @@ def slirp_net(subnet):
 
 
 def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
-               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=(), net="off", now=None, data_iso=None):
+               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=(), net="off", now=None, data_iso=None,
+               ram_mb=None, audio=False):
     """The exact qemu argv. disk: the image path (install/offline) or the clone (ci, plain).
+    `ram_mb` (default None: the state's own qemu.ram_mb) overrides the guest RAM of this argv only; `audio` appends the null-backend HDA card.
+    Neither touches any seed-derived value (SMBIOS, serials, MAC, disk serial, GPU UUID, slirp subnet and port).
     `net` (off|on) only chooses for mode plain; every other mode's network is fixed by the mode. Every argv this returns has passed
     clocknet_assert (a faked clock needs the network off, internet needs the real clock): a violation raises PropError."""
     require(mode in ALL_MODES, "mode must be one of %s" % (ALL_MODES,))
     require(display in ("broker", "off"), "display must be broker or off")
     require(net in ("off", "on"), "net must be off or on")
     require(net == "off" or mode == PLAIN, "net=on is only for mode plain (the other modes' network is fixed by the mode)")
-    ids, q = state["ids"], state["qemu"]
+    ids, q = state["ids"], dict(state["qemu"])
+    if ram_mb is not None:
+        q["ram_mb"] = validate_ram_override(ram_mb)
     wd = str(workdir)
     qemu = qemu or ("/usr/bin/qemu-system-x86_64" if mode == "setup" else "qemu-system-x86_64")
     base = boot_clock(state, mode)
@@ -307,6 +344,8 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
                     "display-broker-uid=%d" % uid]
         a += ["-device", ",".join(kf3), "-display", "none",
               "-device", "qemu-xhci,id=xhci", "-device", "usb-tablet,bus=xhci.0", "-device", "usb-kbd,bus=xhci.0"]
+    if audio:
+        a += list(AUDIO_ARGS)
     try:
         cna.assert_argv(a, "propimage build_argv " + mode, now)     # the product, parsed: a faked clock needs the network off, internet the real clock
     except cna.ClockNetViolation as exc:

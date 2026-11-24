@@ -1,0 +1,20 @@
+START 21:03:23
+ROW_START jax 21:03:23
+MLROWS_SETUP row=jax status=ok reason=flavour_cu13,_177_s,_4.38_GB
+ROW_EXIT jax rc=0 21:06:20 disk=5.1G
+ROW_START tensorrt 21:06:20
+MLROWS_SETUP row=tensorrt status=ok reason=flavour_cu13,_335_s,_7.34_GB
+ROW_EXIT tensorrt rc=0 21:11:56 disk=12G
+ROW_START vllm 21:11:56
+MLROWS_SETUP row=vllm status=ok reason=flavour_cu13,_465_s,_9.63_GB
+ROW_EXIT vllm rc=0 21:20:18 disk=24G
+EXIT 21:20:18
+----
+START 21:18:29
+ROW_START jax 21:18:29
+MLROWS_SETUP row=jax status=ok reason=flavour_cu12,_233_s,_5.75_GB
+ROW_EXIT jax rc=0 21:22:22 disk=27G
+ROW_START tensorrt 21:22:22
+MLROWS_SETUP row=tensorrt status=ok reason=flavour_cu12,_294_s,_7.00_GB
+ROW_EXIT tensorrt rc=0 21:27:17 disk=34G
+EXIT 21:27:17

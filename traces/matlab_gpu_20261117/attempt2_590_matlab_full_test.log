@@ -1,0 +1,10 @@
+KFM_START 08:57:20
+KFM release=2026b
+KFM gpu_name=NVIDIA GeForce RTX 3080 cc=8.6 drv=13.10 toolkit=13.10 totalmem_gb=3.70
+KFM matmul4000_sum_positive=1
+KFM matmul2000_relerr=4.14e-16 cpu_s=0.262 gpu_s=0.078 PASS
+KFM fft2_relerr=1.57e-16 roundtrip_maxerr=1.28e-15 PASS
+KFM sin2_sum_relerr=0 PASS
+KFM dl_dlconv_relerr=1.94e-07 fullyconnect_relerr=9.2e-08 PASS
+KFM total_s=5.9
+KFM_FULL_TEST_RC=0 08:58:44

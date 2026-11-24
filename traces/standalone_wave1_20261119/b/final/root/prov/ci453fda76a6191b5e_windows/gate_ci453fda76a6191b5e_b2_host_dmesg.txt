@@ -1,0 +1,6 @@
+[ 4203.539367] NVRM:unknown NVRM ioctl command: 0xf0
+[ 4380.189720] x86/PAT: kf3-vamgr:95946 freeing invalid memtype [mem 0x380000610000-0x38000080ffff]
+[ 4380.190543] x86/PAT: kf3-vamgr:95946 freeing invalid memtype [mem 0x380000810000-0x380000a0ffff]
+[ 4380.191037] x86/PAT: kf3-vamgr:95946 freeing invalid memtype [mem 0x380000a10000-0x380000c0ffff]
+[ 4429.456217] x86/PAT: kf3-vamgr:95946 freeing invalid memtype [mem 0x380002ec0000-0x380002f2ffff]
+[ 4518.665151] x86/PAT: kf3-vamgr:95946 freeing invalid memtype [mem 0x3800031d0000-0x38000324ffff]

@@ -1,0 +1,27 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 74,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 2400,
+  "gr_methods": 0,
+  "retired": 10,
+  "serves": 7844,
+  "status_lines": 10,
+  "submissions": 6796,
+  "wakes": {
+   "CE2": 22483,
+   "CE3": 56,
+   "GR0": 2851
+  },
+  "xid": 0
+ },
+ "class": "a",
+ "reasons": [],
+ "row": "vkcts",
+ "smi": null,
+ "verdict": "NA"
+}

@@ -1,0 +1,19 @@
+smbios_uuid MATCH
+smbios_serial MATCH
+baseboard_serial MATCH
+chassis_serial MATCH
+mac MATCH
+disk_serial MATCH
+gpu_uuid MATCH
+machine_guid MATCH
+clock MATCH base=2026-11-22T02:43:26Z guest=2026-11-22T02:54:41Z window=1800s
+cpu_vendor MATCH
+cpu_family_model_stepping MATCH
+cpu_brand MATCH
+cpu_processor_id MATCH
+cpu_cores MATCH
+cpu_logical MATCH
+cpu_flags_sha256 MATCH
+cpu_no_forbidden_flags MATCH
+tpm_present MATCH
+tpm_ek_pub_hash MATCH 

@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 2080 Ti, 615.71.09, 7.5, 11264 MiB
+| NVIDIA-SMI 615.71.09              KMD Version: 615.71.09     CUDA UMD Version: 13.4     |
+Python 3.12.3
+Model name:                              AMD Ryzen Threadripper 2970WX 24-Core P

@@ -55,6 +55,6 @@ Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 c
 
 [Architecture](ARCHITECTURE.md) | [design](docs/design/THE_ARCHITECTURE_v3.md) | [owner rulings](docs/OWNER_RULINGS.md) | [documentation map](docs/README.md) | [contributor rules](AGENTS.md) | [release claims and manual evidence templates](docs/RELEASE_CLAIMS.md)
 
-Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists exceptions, including the restriction on distributing a QEMU binary from this tree under the GPL.
+Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists the exceptions. *Correction 2026-11-23 (the earlier text called the GPL exception a standing blocker of a QEMU binary):* the gVisor-derived Apache-2.0-only files are outside the device's link closure, and since task I7 (2026-11-20) the device's guest-ingress allowlist is generated from NVIDIA's open-gpu-kernel-modules ([ruling §BD](docs/OWNER_RULINGS.md), `scripts/ci/qemu_license_closure.py` in CI). A counsel check before the first public binary is recommended, not blocking. Whether and when a binary is published is still the owner's decision.
 
 [Provenance policy](docs/design/V3_PROVENANCE.md) | [Security and private reporting](docs/howto/security.md)

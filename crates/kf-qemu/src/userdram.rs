@@ -95,8 +95,89 @@ mod tests {
         assert_eq!(source.write(0, &[1]), Err(AccessError::Busy));
         drop(guard);
         ram.del(block.gpa);
-        ram.add(block.test_alias());
+        // the replacement maps the same address to other bytes of the file
+        ram.add(super::super::RamBlock {
+            fd_off: block.fd_off + 0x1000,
+            ..block.test_alias()
+        });
         assert_eq!(source.write(0, &[1]), Err(AccessError::Topology));
         assert_eq!(source.read(0, &mut [0]), Err(AccessError::Topology));
+        // and putting the old translation back never revives it
+        ram.del(block.gpa);
+        ram.add(block.test_alias());
+        assert_eq!(source.read(0, &mut [0]), Err(AccessError::Topology));
+    }
+
+    /// Another file at the USERD's address and file offset is another translation: revoked (the
+    /// generation moves) and refused, however equal the numbers look.
+    #[test]
+    fn another_file_at_the_same_address_and_offset_ends_a_userd() {
+        let (ram, block) = fixture();
+        let source = Userd::new(ram, block.gpa + 0x600, 0x200).unwrap();
+        let g = ram.try_generation().unwrap();
+        let (other, other_fd) = crate::raw_unsafe::test_owned_ram(0x1000);
+        ram.del(block.gpa);
+        ram.add(super::super::RamBlock {
+            gpa: block.gpa,
+            mem: other,
+            fd: Some(other_fd),
+            fd_off: block.fd_off,
+        });
+        assert_ne!(ram.try_generation(), Some(g));
+        assert_eq!(source.read(0x8c, &mut [0; 4]), Err(AccessError::Topology));
+    }
+
+    /// The S3 wake of a q35 guest (`traces/win11_s3_tdr_20261123/`): the machine reset toggles a
+    /// TSEG/PAM window, so QEMU's flat view removes the low-RAM section and adds a longer one that
+    /// shows the same file bytes at the same addresses. A sysmem USERD resolved before the wake
+    /// must still read its `GP_PUT` after it; before the fix every RAM add or removal revoked
+    /// every lease, the user-ring relay refused `USER_RING_PUT_READ: Topology` and the Windows
+    /// driver's channel never ran again (TDR, event 153).
+    #[test]
+    fn a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd() {
+        let (whole, fd) = crate::raw_unsafe::test_owned_ram(0x3000);
+        let ram = Box::leak(Box::new(RamMap::default()));
+        let gpa = 0x1_0000_0000u64;
+        let fd_off = 0xc000_0000u64;
+        // before the wake: [gpa+0x1000, gpa+0x3000) (a window covers [gpa, gpa+0x1000))
+        ram.add(super::super::RamBlock {
+            gpa: gpa + 0x1000,
+            mem: whole.test_sub(0x1000, 0x2000),
+            fd: Some(fd.clone()),
+            fd_off: fd_off + 0x1000,
+        });
+        let source = Userd::new(ram, gpa + 0x1600, 0x200).unwrap();
+        source.write(0x8c, &17u32.to_le_bytes()).unwrap();
+        // the wake's reset: the section is removed and the longer one, same linear map, added
+        ram.del(gpa + 0x1000);
+        ram.add(super::super::RamBlock {
+            gpa,
+            mem: whole.test_alias(),
+            fd: Some(fd.clone()),
+            fd_off,
+        });
+        let mut put = [0u8; 4];
+        assert_eq!(source.read(0x8c, &mut put), Ok(()));
+        assert_eq!(u32::from_le_bytes(put), 17);
+        // the firmware closes the window again: the same bytes, split back
+        ram.del(gpa);
+        ram.add(super::super::RamBlock {
+            gpa: gpa + 0x1000,
+            mem: whole.test_sub(0x1000, 0x2000),
+            fd: Some(fd.clone()),
+            fd_off: fd_off + 0x1000,
+        });
+        source.write(0x8c, &18u32.to_le_bytes()).unwrap();
+        whole.read_into(0x168c, &mut put);
+        assert_eq!(u32::from_le_bytes(put), 18);
+        // a block that shows OTHER file bytes at the USERD's address ends the lease for good
+        ram.del(gpa + 0x1000);
+        ram.add(super::super::RamBlock {
+            gpa,
+            mem: whole.test_alias(),
+            fd: Some(fd),
+            fd_off: fd_off + 0x10_0000,
+        });
+        assert_eq!(source.read(0x8c, &mut put), Err(AccessError::Topology));
     }
 }

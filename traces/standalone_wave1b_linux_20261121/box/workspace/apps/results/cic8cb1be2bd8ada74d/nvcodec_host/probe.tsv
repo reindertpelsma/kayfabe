@@ -1,0 +1,403 @@
+meta	device_name	NVIDIA GeForce RTX 4090
+meta	compute_capability	8.9
+meta	cuda_driver_version	13000
+meta	header_api	12.2
+meta	driver_api_max	13.0
+enc_codec	h264	1
+enc_cap	h264.cap0	4
+enc_cap	h264.NUM_MAX_BFRAMES	4
+enc_cap	h264.cap1	63
+enc_cap	h264.cap2	0
+enc_cap	h264.cap3	0
+enc_cap	h264.cap4	0
+enc_cap	h264.cap5	1
+enc_cap	h264.cap6	1
+enc_cap	h264.cap7	1
+enc_cap	h264.cap8	1
+enc_cap	h264.cap9	1
+enc_cap	h264.cap10	4
+enc_cap	h264.cap11	1
+enc_cap	h264.cap12	1
+enc_cap	h264.cap13	62
+enc_cap	h264.cap14	10
+enc_cap	h264.cap15	1
+enc_cap	h264.cap16	4096
+enc_cap	h264.WIDTH_MAX	4096
+enc_cap	h264.cap17	4096
+enc_cap	h264.HEIGHT_MAX	4096
+enc_cap	h264.cap18	1
+enc_cap	h264.cap19	1
+enc_cap	h264.cap20	1
+enc_cap	h264.cap21	1
+enc_cap	h264.cap22	0
+enc_cap	h264.cap23	1
+enc_cap	h264.cap24	1
+enc_cap	h264.cap25	1
+enc_cap	h264.cap26	1
+enc_cap	h264.cap27	1
+enc_cap	h264.cap28	1
+enc_cap	h264.cap29	0
+enc_cap	h264.PREPROC_SUPPORT	0
+enc_cap	h264.cap30	0
+enc_cap	h264.cap31	65536
+enc_cap	h264.MB_NUM_MAX	65536
+enc_cap	h264.cap32	983040
+enc_cap	h264.MB_PER_SEC_MAX	983040
+enc_cap	h264.cap33	1
+enc_cap	h264.SUPPORT_YUV444_ENCODE	1
+enc_cap	h264.cap34	1
+enc_cap	h264.SUPPORT_LOSSLESS_ENCODE	1
+enc_cap	h264.cap35	0
+enc_cap	h264.cap36	1
+enc_cap	h264.cap37	1
+enc_cap	h264.SUPPORT_LOOKAHEAD	1
+enc_cap	h264.cap38	1
+enc_cap	h264.SUPPORT_TEMPORAL_AQ	1
+enc_cap	h264.cap39	0
+enc_cap	h264.SUPPORT_10BIT_ENCODE	0
+enc_cap	h264.cap40	8
+enc_cap	h264.cap41	1
+enc_cap	h264.cap42	100
+enc_cap	h264.cap43	3
+enc_cap	h264.SUPPORT_BFRAME_REF_MODE	3
+enc_cap	h264.cap44	1
+enc_cap	h264.cap45	145
+enc_cap	h264.WIDTH_MIN	145
+enc_cap	h264.cap46	49
+enc_cap	h264.HEIGHT_MIN	49
+enc_cap	h264.cap47	1
+enc_cap	h264.SUPPORT_MULTIPLE_REF_FRAMES	1
+enc_cap	h264.cap48	0
+enc_cap	h264.cap49	2
+enc_cap	h264.NUM_ENCODER_ENGINES	2
+enc_cap	h264.cap50	1
+enc_cap	h264.cap51	1
+enc_cap	h264.cap52	1
+enc_cap	h264.cap53	1
+enc_cap	h264.cap54	0
+enc_cap	h264.cap55	1
+enc_cap	h264.SUPPORT_TEMPORAL_FILTER	1
+enc_cap	h264.cap56	3
+enc_cap	h264.SUPPORT_LOOKAHEAD_LEVEL	3
+enc_cap	h264.cap57	0
+enc_cap	h264.SUPPORT_UNIDIRECTIONAL_B	0
+enc_profile	h264	BASELINE
+enc_profile	h264	MAIN
+enc_profile	h264	HIGH
+enc_profile	h264	STEREO
+enc_profile	h264	HIGH_444
+enc_profile	h264	UNKNOWN
+enc_input	h264	0x1
+enc_input	h264	0x10
+enc_input	h264	0x100
+enc_input	h264	0x1000
+enc_input	h264	0x1000000
+enc_input	h264	0x10000000
+enc_input	h264	0x4000000
+enc_input	h264	0x2000000
+enc_input	h264	0x20000000
+enc_codec	hevc	1
+enc_cap	hevc.cap0	5
+enc_cap	hevc.NUM_MAX_BFRAMES	5
+enc_cap	hevc.cap1	63
+enc_cap	hevc.cap2	0
+enc_cap	hevc.cap3	0
+enc_cap	hevc.cap4	0
+enc_cap	hevc.cap5	1
+enc_cap	hevc.cap6	0
+enc_cap	hevc.cap7	1
+enc_cap	hevc.cap8	0
+enc_cap	hevc.cap9	0
+enc_cap	hevc.cap10	4
+enc_cap	hevc.cap11	0
+enc_cap	hevc.cap12	0
+enc_cap	hevc.cap13	186
+enc_cap	hevc.cap14	30
+enc_cap	hevc.cap15	0
+enc_cap	hevc.cap16	8192
+enc_cap	hevc.WIDTH_MAX	8192
+enc_cap	hevc.cap17	8192
+enc_cap	hevc.HEIGHT_MAX	8192
+enc_cap	hevc.cap18	1
+enc_cap	hevc.cap19	1
+enc_cap	hevc.cap20	1
+enc_cap	hevc.cap21	1
+enc_cap	hevc.cap22	0
+enc_cap	hevc.cap23	1
+enc_cap	hevc.cap24	1
+enc_cap	hevc.cap25	1
+enc_cap	hevc.cap26	1
+enc_cap	hevc.cap27	1
+enc_cap	hevc.cap28	1
+enc_cap	hevc.cap29	0
+enc_cap	hevc.PREPROC_SUPPORT	0
+enc_cap	hevc.cap30	0
+enc_cap	hevc.cap31	262144
+enc_cap	hevc.MB_NUM_MAX	262144
+enc_cap	hevc.cap32	983040
+enc_cap	hevc.MB_PER_SEC_MAX	983040
+enc_cap	hevc.cap33	1
+enc_cap	hevc.SUPPORT_YUV444_ENCODE	1
+enc_cap	hevc.cap34	1
+enc_cap	hevc.SUPPORT_LOSSLESS_ENCODE	1
+enc_cap	hevc.cap35	1
+enc_cap	hevc.cap36	1
+enc_cap	hevc.cap37	1
+enc_cap	hevc.SUPPORT_LOOKAHEAD	1
+enc_cap	hevc.cap38	1
+enc_cap	hevc.SUPPORT_TEMPORAL_AQ	1
+enc_cap	hevc.cap39	1
+enc_cap	hevc.SUPPORT_10BIT_ENCODE	1
+enc_cap	hevc.cap40	7
+enc_cap	hevc.cap41	1
+enc_cap	hevc.cap42	100
+enc_cap	hevc.cap43	3
+enc_cap	hevc.SUPPORT_BFRAME_REF_MODE	3
+enc_cap	hevc.cap44	0
+enc_cap	hevc.cap45	129
+enc_cap	hevc.WIDTH_MIN	129
+enc_cap	hevc.cap46	33
+enc_cap	hevc.HEIGHT_MIN	33
+enc_cap	hevc.cap47	1
+enc_cap	hevc.SUPPORT_MULTIPLE_REF_FRAMES	1
+enc_cap	hevc.cap48	1
+enc_cap	hevc.cap49	2
+enc_cap	hevc.NUM_ENCODER_ENGINES	2
+enc_cap	hevc.cap50	1
+enc_cap	hevc.cap51	1
+enc_cap	hevc.cap52	1
+enc_cap	hevc.cap53	1
+enc_cap	hevc.cap54	0
+enc_cap	hevc.cap55	1
+enc_cap	hevc.SUPPORT_TEMPORAL_FILTER	1
+enc_cap	hevc.cap56	3
+enc_cap	hevc.SUPPORT_LOOKAHEAD_LEVEL	3
+enc_cap	hevc.cap57	1
+enc_cap	hevc.SUPPORT_UNIDIRECTIONAL_B	1
+enc_profile	hevc	UNKNOWN
+enc_profile	hevc	MAIN
+enc_profile	hevc	MAIN10
+enc_profile	hevc	FREXT
+enc_input	hevc	0x1
+enc_input	hevc	0x10
+enc_input	hevc	0x100
+enc_input	hevc	0x1000
+enc_input	hevc	0x10000
+enc_input	hevc	0x100000
+enc_input	hevc	0x1000000
+enc_input	hevc	0x10000000
+enc_input	hevc	0x4000000
+enc_input	hevc	0x2000000
+enc_input	hevc	0x20000000
+enc_codec	av1	1
+enc_cap	av1.cap0	7
+enc_cap	av1.NUM_MAX_BFRAMES	7
+enc_cap	av1.cap1	3
+enc_cap	av1.cap2	0
+enc_cap	av1.cap3	0
+enc_cap	av1.cap4	0
+enc_cap	av1.cap5	1
+enc_cap	av1.cap6	0
+enc_cap	av1.cap7	0
+enc_cap	av1.cap8	0
+enc_cap	av1.cap9	0
+enc_cap	av1.cap10	3
+enc_cap	av1.cap11	0
+enc_cap	av1.cap12	0
+enc_cap	av1.cap13	23
+enc_cap	av1.cap14	0
+enc_cap	av1.cap15	0
+enc_cap	av1.cap16	8192
+enc_cap	av1.WIDTH_MAX	8192
+enc_cap	av1.cap17	8192
+enc_cap	av1.HEIGHT_MAX	8192
+enc_cap	av1.cap18	1
+enc_cap	av1.cap19	1
+enc_cap	av1.cap20	1
+enc_cap	av1.cap21	1
+enc_cap	av1.cap22	0
+enc_cap	av1.cap23	1
+enc_cap	av1.cap24	0
+enc_cap	av1.cap25	1
+enc_cap	av1.cap26	1
+enc_cap	av1.cap27	0
+enc_cap	av1.cap28	1
+enc_cap	av1.cap29	0
+enc_cap	av1.PREPROC_SUPPORT	0
+enc_cap	av1.cap30	0
+enc_cap	av1.cap31	262144
+enc_cap	av1.MB_NUM_MAX	262144
+enc_cap	av1.cap32	983040
+enc_cap	av1.MB_PER_SEC_MAX	983040
+enc_cap	av1.cap33	0
+enc_cap	av1.SUPPORT_YUV444_ENCODE	0
+enc_cap	av1.cap34	0
+enc_cap	av1.SUPPORT_LOSSLESS_ENCODE	0
+enc_cap	av1.cap35	0
+enc_cap	av1.cap36	0
+enc_cap	av1.cap37	1
+enc_cap	av1.SUPPORT_LOOKAHEAD	1
+enc_cap	av1.cap38	1
+enc_cap	av1.SUPPORT_TEMPORAL_AQ	1
+enc_cap	av1.cap39	1
+enc_cap	av1.SUPPORT_10BIT_ENCODE	1
+enc_cap	av1.cap40	6
+enc_cap	av1.cap41	0
+enc_cap	av1.cap42	100
+enc_cap	av1.cap43	3
+enc_cap	av1.SUPPORT_BFRAME_REF_MODE	3
+enc_cap	av1.cap44	0
+enc_cap	av1.cap45	192
+enc_cap	av1.WIDTH_MIN	192
+enc_cap	av1.cap46	128
+enc_cap	av1.HEIGHT_MIN	128
+enc_cap	av1.cap47	1
+enc_cap	av1.SUPPORT_MULTIPLE_REF_FRAMES	1
+enc_cap	av1.cap48	0
+enc_cap	av1.cap49	2
+enc_cap	av1.NUM_ENCODER_ENGINES	2
+enc_cap	av1.cap50	0
+enc_cap	av1.cap51	1
+enc_cap	av1.cap52	1
+enc_cap	av1.cap53	1
+enc_cap	av1.cap54	0
+enc_cap	av1.cap55	1
+enc_cap	av1.SUPPORT_TEMPORAL_FILTER	1
+enc_cap	av1.cap56	3
+enc_cap	av1.SUPPORT_LOOKAHEAD_LEVEL	3
+enc_cap	av1.cap57	0
+enc_cap	av1.SUPPORT_UNIDIRECTIONAL_B	0
+enc_profile	av1	UNKNOWN
+enc_profile	av1	MAIN
+enc_input	av1	0x1
+enc_input	av1	0x10
+enc_input	av1	0x100
+enc_input	av1	0x10000
+enc_input	av1	0x1000000
+enc_input	av1	0x10000000
+enc_input	av1	0x4000000
+enc_input	av1	0x2000000
+enc_input	av1	0x20000000
+sessions	opened	8
+sessions	limit_hit	1
+sessions	stopped_by	NV_ENC_ERR_INCOMPATIBLE_CLIENT_KEY
+dec_cap	mpeg1.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.420.8	supported=1 max=4080x4080 min=48x16 mbmax=65280 nvdecs=1 fmtmask=0x1
+dec_cap	mpeg1.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg1.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.420.8	supported=1 max=4080x4080 min=48x16 mbmax=65280 nvdecs=1 fmtmask=0x1
+dec_cap	mpeg2.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg2.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.420.8	supported=1 max=2048x2048 min=48x16 mbmax=8192 nvdecs=1 fmtmask=0x1
+dec_cap	mpeg4.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	mpeg4.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.420.8	supported=1 max=2048x2048 min=48x16 mbmax=8192 nvdecs=1 fmtmask=0x1
+dec_cap	vc1.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vc1.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.420.8	supported=1 max=4096x4096 min=48x16 mbmax=65536 nvdecs=1 fmtmask=0x1
+dec_cap	h264.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	h264.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.400.8	supported=1 max=32768x16384 min=64x64 mbmax=67108864 nvdecs=1 fmtmask=0x1
+dec_cap	jpeg.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.420.8	supported=1 max=32768x16384 min=64x64 mbmax=67108864 nvdecs=1 fmtmask=0x1
+dec_cap	jpeg.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.422.8	supported=1 max=32768x16384 min=64x64 mbmax=67108864 nvdecs=1 fmtmask=0x1
+dec_cap	jpeg.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.444.8	supported=1 max=32768x16384 min=64x64 mbmax=67108864 nvdecs=1 fmtmask=0x1
+dec_cap	jpeg.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	jpeg.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.420.8	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x1
+dec_cap	hevc.420.10	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x3
+dec_cap	hevc.420.12	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x3
+dec_cap	hevc.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	hevc.444.8	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x4
+dec_cap	hevc.444.10	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x8
+dec_cap	hevc.444.12	supported=1 max=8192x8192 min=144x144 mbmax=262144 nvdecs=1 fmtmask=0x8
+dec_cap	vp8.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.420.8	supported=1 max=4096x4096 min=48x16 mbmax=65536 nvdecs=1 fmtmask=0x1
+dec_cap	vp8.420.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp8.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.400.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.400.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.420.8	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x1
+dec_cap	vp9.420.10	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x3
+dec_cap	vp9.420.12	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x3
+dec_cap	vp9.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	vp9.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.400.8	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x1
+dec_cap	av1.400.10	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x2
+dec_cap	av1.400.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.420.8	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x1
+dec_cap	av1.420.10	supported=1 max=8192x8192 min=128x128 mbmax=262144 nvdecs=1 fmtmask=0x2
+dec_cap	av1.420.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.422.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.422.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.422.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.444.8	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.444.10	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0
+dec_cap	av1.444.12	supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0

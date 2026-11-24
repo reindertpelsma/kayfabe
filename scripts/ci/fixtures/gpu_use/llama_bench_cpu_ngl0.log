@@ -1,0 +1,9 @@
+=== llama_bench side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 7871 MiB):
+  Device 0: NVIDIA GeForce RTX 4090, compute capability 8.9, VMM: yes, VRAM: 7871 MiB
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |   0 |           pp512 |  24902.09 ± 10846.91 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |   0 |            tg64 |       417.12 ± 11.69 |
+
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

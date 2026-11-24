@@ -53,6 +53,12 @@ def apps_module(root):
 # Guest-visible framebuffer in MiB. MEASURED 2026-11-16 (RTX 4090 box): at the image default of 4096 the GPU step failed on 2 of 2 stage boots (no matching UUID
 # after the device restart) and the applications see only 4 GB; at 8192 it passed on 5 of 5 boots.
 FB_MB = "8192"
+# Guest RAM and a virtual sound card of every image B boot (2026-11-16, per-run overrides: the sealed state.json keeps 8192 MiB and no audio; scripts/bench/windows/propimage.py
+# build_argv(ram_mb=, audio=)). RAM: After Effects' own report says the guest is below the vendor minimum, four concurrent aerender killed ssh (MEASURED), and Windows
+# logged RADAR_PRE_LEAK_64 for three applications (memory pressure: INFERRED). Audio: Premiere's newProject/importFiles hang behind "No output device is available" (MEASURED).
+# 0 means no RAM override. `run --guest-ram-mb N` / `--no-audio` change them for one run; the stage refuses (RAM_OVERRIDE_*) when the box cannot give the RAM.
+GUEST_RAM_MB = 16384
+AUDIO = True
 
 
 def plan_boots(timeouts, order, budget=BOOT_BUDGET_S, lanes=None):
@@ -81,7 +87,28 @@ def boot_command(check_py, a):
     cmd = [sys.executable, "-B", "-I", str(check_py), "--dir", a["dir"], "--work", a["work"], "--out", a["out"], "--qemu", a["qemu"],
            "--flags", a["flags"], "--broker", a["broker"], "--gop-efi", a["gop"], "--display", "broker", "--app-set", "b",
            "--data-iso", a["data"], "--apps", ",".join(a["apps"]), "--fb-mb", FB_MB]
+    ram = a.get("ram_mb", GUEST_RAM_MB)
+    if ram:
+        cmd += ["--ram-mb", str(ram)]
+    if a.get("audio", AUDIO):
+        cmd.append("--audio")
     return cmd
+
+
+def host_mem_available_mb(pi_check):
+    """MemAvailable of this box in MiB (a function of its own so the tests can name the box)."""
+    return pi_check.PI.mem_available_mb()
+
+
+def check_guest_ram(pi_check, guest_ram_mb):
+    """The named refusal of an override the box cannot give: RAM_OVERRIDE_INVALID, RAM_OVERRIDE_EXCEEDS_HOST or MEMINFO_UNREADABLE."""
+    if not guest_ram_mb:
+        return
+    try:
+        pi_check.PI.check_ram_override(guest_ram_mb, host_mem_available_mb(pi_check))
+    except (ValueError, OSError) as exc:
+        named = re.match(r"([A-Z][A-Z0-9_]*):", str(exc))
+        raise pa.Refused(named.group(1) if named else "RAM_OVERRIDE_INVALID", pa.clean(exc, 160))
 
 
 def collect_app(out, app, rows, xids, expected_gpu, lane="gate"):
@@ -233,7 +260,7 @@ def census_module(root):
     return pa.load_module(Path(root) / "scripts/bench/windows/kf3_census.py", "kf_census_for_stage")
 
 
-def run(ctx, evidence_dir=None, apps=None):
+def run(ctx, evidence_dir=None, apps=None, guest_ram_mb=GUEST_RAM_MB, audio=AUDIO):
     rec = new_record(ctx)
     klog, started, out_of_time = None, False, False
     try:
@@ -250,6 +277,7 @@ def run(ctx, evidence_dir=None, apps=None):
             rec["verdict"], rec["reason"] = refusal
             return rec
         pi_check = pa.harness(ctx.checkout)
+        check_guest_ram(pi_check, guest_ram_mb)
         mod = apps_module(ctx.checkout)
         order = tuple(a for a in mod.CHECKS if (a in apps if apps else not mod.CHECKS[a].get("disabled")))
         rec["not_run"] = {a: pa.clean(c["disabled"], 160) for a, c in mod.CHECKS.items() if c.get("disabled") and a not in order}
@@ -295,7 +323,8 @@ def run(ctx, evidence_dir=None, apps=None):
                 continue
             out, wk = ctx.prefix / "out" / label, work / label
             a = {"dir": str(imgdir), "work": str(wk), "out": str(out), "qemu": str(ctx.qemu), "flags": str(flags), "broker": str(broker),
-                 "gop": str(dl / "image/kf-gop.signed.efi"), "data": str(dl / data_item["dest"]), "apps": boot["apps"]}
+                 "gop": str(dl / "image/kf-gop.signed.efi"), "data": str(dl / data_item["dest"]), "apps": boot["apps"],
+                 "ram_mb": guest_ram_mb, "audio": audio}
             klog.mark(label, "start")
             t0 = time.monotonic()
             mark = QMark(klog, label, boot["apps"], wk / "run/qemu.log", census_module(ctx.checkout))
@@ -304,6 +333,7 @@ def run(ctx, evidence_dir=None, apps=None):
             boot["secs"] = int(time.monotonic() - t0)
             klog.mark(label, "end")
             boot["offline"] = pa.offline_proof(wk)
+            keep_qemu_log(pi_check, wk / "run/qemu.log", logs / (label + "_qemu_kf3.txt"))
             try:
                 rows_json = pa.read_json(out / "result.json")
                 rows_json = rows_json if type(rows_json) is list else []
@@ -311,6 +341,7 @@ def run(ctx, evidence_dir=None, apps=None):
                 rows_json = []
             boot["harness"] = [{"step": pa.clean(r.get("step"), 24), "verdict": pa.clean(r.get("verdict"), 12), "detail": pa.clean(r.get("detail"), 120)}
                                for r in rows_json if type(r) is dict and r.get("class") == "harness" and r.get("verdict") not in ("PASS", "OK")][:6]
+            report_gpu_step(rows_json, label, out, logs / (label + "_qemu_kf3.txt"), evidence_dir)
             per, unattributed = pa.xid_by_window(klog, boot["apps"], label)
             censuses = mark.census() if hasattr(mark, "census") else {}
             for app in boot["apps"]:
@@ -348,6 +379,42 @@ def run(ctx, evidence_dir=None, apps=None):
             pa.cleanup(ctx)
     return rec
 
+
+def keep_qemu_log(pi_check, src, dst):
+    """The kf3 QEMU log of the boot, tail only and redacted, BEFORE the cleanup deletes the work directory (2026-11-17: it was lost on every failed `gpu` step)."""
+    try:
+        Path(dst).write_text(pi_check.qemu_log_tail(src, limit=400))
+    except (OSError, AttributeError):
+        pass
+
+
+GPU_TAIL_LINES = 30
+
+
+def report_gpu_step(rows, label, out, kept_log, evidence_dir):
+    """A failed `gpu` step: say WHICH case on the stage's own output, with the case's text (counts, no UUID) and the kf3 log tail, and keep the diagnostic files."""
+    step = next((r for r in rows if type(r) is dict and r.get("step") == "gpu"), None)
+    if step is None or step.get("verdict") == "PASS":
+        return
+    print("KF_PROPIMAGE_APPS_B_GPU_FAIL boot=%s detail=%s" % (label, pa.clean(step.get("detail"), 400)), flush=True)
+    try:
+        tail = Path(kept_log).read_text().splitlines()[-GPU_TAIL_LINES:]
+    except OSError:
+        tail = []
+    for line in tail:
+        print("KF_PROPIMAGE_APPS_B_GPU_QEMU_TAIL boot=%s %s" % (label, pa.clean(line, 300)), flush=True)
+    if evidence_dir:
+        dst = Path(evidence_dir) / label
+        dst.mkdir(parents=True, exist_ok=True)
+        for name in GPU_EVIDENCE:
+            src = Path(out) / name
+            if src.is_file() and not src.is_symlink() and src.stat().st_size <= 1 << 20:
+                shutil.copyfile(src, dst / name)
+        if Path(kept_log).is_file():
+            shutil.copyfile(kept_log, dst / "qemu_kf3_tail.txt")
+
+
+GPU_EVIDENCE = ("gpu_fix.txt", "gpu_diag.json", "gpu_events.txt")
 
 # text evidence only: the verdicts, the sampled GPU numbers and the diagnostic output; never a PNG, PDF, PSD or video
 EVIDENCE_COPY = ("verdict.json", "result.json", "steps.log")
@@ -387,6 +454,8 @@ def main(argv=None):
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
     r.add_argument("--apps", help="comma list: run only these rows (default: all)")
+    r.add_argument("--guest-ram-mb", type=int, default=GUEST_RAM_MB, help="guest RAM of every boot in MiB; 0 keeps the image's own 8192 (default %d)" % GUEST_RAM_MB)
+    r.add_argument("--no-audio", action="store_true", help="boot without the virtual sound card")
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     a = p.parse_args(argv)
@@ -400,7 +469,7 @@ def main(argv=None):
             return 2
         ctx = pa.Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=pa.hardware_now())
         ctx.pins_path = PINS_PATH
-        return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None), a.out)
+        return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None, a.guest_ram_mb, AUDIO and not a.no_audio), a.out)
     except pa.Refused as exc:
         print("KF_PROPIMAGE_APPS_B_REFUSED " + pa.clean(exc.reason, 80), flush=True)
         return 2

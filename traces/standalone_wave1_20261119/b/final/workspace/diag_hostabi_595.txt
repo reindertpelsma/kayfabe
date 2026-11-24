@@ -1,0 +1,7 @@
+kf-host: HOST-ABI REFUSED control 0x2080852e: : body is 528 bytes, its layout is 596 [#1, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080853a: : body is 1456 bytes, its layout is 15352 [#2, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080a618: : body is 8620 bytes, its layout is 8632 [#3, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784 [#4, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080a618: : body is 8236 bytes, its layout is 8632 [#5, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080a618: : body is 20000 bytes, its layout is 8632 [#6, rate-limited]
+kf-host: HOST-ABI REFUSED control 0x2080852e: : body is 1432 bytes, its layout is 596 [#7, rate-limited]

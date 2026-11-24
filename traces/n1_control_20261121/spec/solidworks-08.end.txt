@@ -1,0 +1,1 @@
+SPECRUN_END workload=solidworks-08 rc=0 start=2026-11-21T20:37:22Z end=2026-11-21T21:07:46Z secs=1823

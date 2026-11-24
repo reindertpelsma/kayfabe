@@ -3306,6 +3306,83 @@ static int nb_adopt_fd(int fd)
     return fd;
 }
 
+/*
+ * The socket's directory.  Missing: created here, one level, 0700 (plus search
+ * for a group or others only when --socket-mode lets them reach the socket at
+ * all), so `--socket /run/user/$UID/kayfabe/gpu0.sock` needs no third command.
+ * Present: accepted only when its owner is trusted (nb_sockdir_verdict), since
+ * whoever can rename entries in it can put their own socket in front of the
+ * broker's.  Both refusals are named, and fail closed.
+ */
+static int nb_prepare_socket_dir(const char *path, const struct nb_config *cfg)
+{
+    char dir[sizeof(((struct sockaddr_un *)0)->sun_path)];
+    const char *slash = strrchr(path, '/');
+    struct stat st;
+    int v;
+
+    if (!slash) {
+        snprintf(dir, sizeof(dir), ".");
+    } else if (slash == path) {
+        snprintf(dir, sizeof(dir), "/");
+    } else {
+        snprintf(dir, sizeof(dir), "%.*s", (int)(slash - path), path);
+    }
+    if (stat(dir, &st) < 0) {
+        unsigned mode;
+
+        if (errno != ENOENT) {
+            nb_err("socket directory %s: %s", dir, strerror(errno));
+            return -errno;
+        }
+        mode = nb_sockdir_create_mode(cfg->socket_mode);
+        if (mkdir(dir, 0700) < 0) {
+            int e = errno;
+
+            nb_err("cannot create the socket directory %s: %s%s", dir,
+                   strerror(e), e == ENOENT
+                   ? " (only one level is created: its parent must exist)"
+                   : "");
+            return -e;
+        }
+        /* mkdir is subject to the umask; chmod is the mode we mean. */
+        if (chmod(dir, (mode_t)mode) < 0) {
+            nb_err("chmod %04o %s: %s", mode, dir, strerror(errno));
+            return -errno;
+        }
+        nb_log("created the socket directory %s (mode %04o)", dir, mode);
+        if (stat(dir, &st) < 0) {
+            nb_err("socket directory %s: %s", dir, strerror(errno));
+            return -errno;
+        }
+    }
+    v = nb_sockdir_verdict(st.st_mode, st.st_uid, geteuid(), cfg->allow_uid,
+                           cfg->n_allow_uid);
+    if (v == NB_DIR_OK) {
+        return 0;
+    }
+    switch (v) {
+    case NB_DIR_NOT_DIR:
+        nb_err("socket directory %s is not a directory. Refusing.", dir);
+        break;
+    case NB_DIR_FOREIGN_OWNER:
+        nb_err("socket directory %s is owned by uid %u (mode %04o), who is "
+               "neither this broker's user, root nor an --allow-uid/--allow-"
+               "user: they could replace the socket. Refusing. Use a "
+               "directory you own, or let the broker create it.",
+               dir, (unsigned)st.st_uid, (unsigned)(st.st_mode & 07777));
+        break;
+    default:
+        nb_err("socket directory %s is owned by uid %u but is writable by "
+               "group or others (mode %04o): anyone with write access could "
+               "replace the socket. Refusing. Use mode 0755 or tighter, "
+               "sticky, or a directory you own.",
+               dir, (unsigned)st.st_uid, (unsigned)(st.st_mode & 07777));
+        break;
+    }
+    return -EACCES;
+}
+
 static int nb_listen(const char *path, const struct nb_config *cfg)
 {
     struct sockaddr_un sa;
@@ -3316,6 +3393,13 @@ static int nb_listen(const char *path, const struct nb_config *cfg)
     if (strlen(path) >= sizeof(sa.sun_path)) {
         nb_err("socket path too long (max %zu)", sizeof(sa.sun_path) - 1);
         return -ENAMETOOLONG;
+    }
+    {
+        int rc = nb_prepare_socket_dir(path, cfg);
+
+        if (rc < 0) {
+            return rc;
+        }
     }
     /* Remove a stale socket, but ONLY if it really is a socket: a broker that
      * unlinks whatever it finds at its path is a foot-gun with root. */
@@ -3638,7 +3722,9 @@ static void usage(void)
     fputs(
 "usage: nvkvm-display-broker --socket PATH [options]\n"
 "\n"
-"  --socket PATH        unix socket to listen on (mode from --socket-mode)\n"
+"  --socket PATH        unix socket to listen on (mode from --socket-mode).  Its\n"
+"                       directory is created 0700 when missing, and refused when\n"
+"                       it belongs to someone this broker does not trust\n"
 "  --socket-mode OCTAL  socket permissions (default 0600).  0660 with\n"
 "                       --socket-group is what lets another user connect\n"
 "  --socket-group NAME  group to own the socket; without it a group-\n"
@@ -3650,9 +3736,24 @@ static void usage(void)
 "                       creating one.  LISTEN_FDS socket activation is also\n"
 "                       honoured, and takes precedence over --socket\n"
 "  --backend NAME       auto (default) | wayland | x11 | test\n"
+"  --wayland-display N  the Wayland socket: a name (looked up in --runtime-dir),\n"
+"                       or an absolute path.  Instead of WAYLAND_DISPLAY\n"
+"  --runtime-dir DIR    where a relative Wayland name lives.  Instead of\n"
+"                       XDG_RUNTIME_DIR (the broker joins the path itself and\n"
+"                       connects to it; nothing is put in the environment)\n"
+"  --x11-display :N     the X11 display.  Instead of DISPLAY\n"
+"  --xauthority FILE    the X11 cookie file.  Instead of XAUTHORITY (libxcb has\n"
+"                       no other way in, so this sets XAUTHORITY in this\n"
+"                       process before it connects; nothing else is touched)\n"
+"                       With none of these flags the environment is read as\n"
+"                       before.  Any of the two display flags restricts --backend\n"
+"                       auto to the backend it names.\n"
 "  --size WxH           initial window size (default 1920x1080)\n"
 "  --title TEXT         window title\n"
 "  --allow-user NAME    additional user allowed to connect (repeatable)\n"
+"  --allow-uid UID      additional numeric uid allowed to connect (repeatable).\n"
+"                       The QEMU side of the same pair is the device property\n"
+"                       display-broker-uid=UID.  When given, SUDO_UID is not read\n"
 "  --allow-group NAME   additional PRIMARY gid allowed to connect; SO_PEERCRED\n"
 "                       does not report a peer's supplementary groups\n"
 "  --drop-user WHO      become this user after the window is up: a name, a\n"
@@ -3926,10 +4027,8 @@ int main(int argc, char **argv)
     cfg.allow_uid[cfg.n_allow_uid++] = 0;
     if (getuid() != 0) {
         cfg.allow_uid[cfg.n_allow_uid++] = getuid();
-    } else if (getenv("SUDO_UID")) {
-        cfg.allow_uid[cfg.n_allow_uid++] =
-            (uid_t)strtoul(getenv("SUDO_UID"), NULL, 10);
     }
+    /* SUDO_UID is added after the flags are read: --allow-uid replaces it. */
 
     for (i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -3950,6 +4049,28 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--drop-user"))  { NEEDVAL(); cfg.drop_user = v; }
         else if (!strcmp(a, "--allow-user")) { NEEDVAL();
             if (add_user(&cfg, v)) { return 2; } }
+        else if (!strcmp(a, "--allow-uid")) { NEEDVAL();
+            uid_t u;
+
+            if (nb_parse_uid(v, &u) != 0) {
+                nb_err("--allow-uid must be a numeric uid, 0..4294967294 "
+                       "(got '%s'); use --allow-user for a name", v);
+                return 2;
+            }
+            if (cfg.n_allow_uid >= NB_MAX_ALLOW_IDS) {
+                nb_err("too many --allow-uid");
+                return 2;
+            }
+            cfg.allow_uid[cfg.n_allow_uid++] = u;
+            cfg.allow_uid_flag = true; }
+        else if (!strcmp(a, "--wayland-display")) { NEEDVAL();
+            cfg.wayland_display = v; }
+        else if (!strcmp(a, "--runtime-dir")) { NEEDVAL();
+            cfg.runtime_dir = v; }
+        else if (!strcmp(a, "--x11-display")) { NEEDVAL();
+            cfg.x11_display = v; }
+        else if (!strcmp(a, "--xauthority")) { NEEDVAL();
+            cfg.xauthority = v; }
         else if (!strcmp(a, "--allow-group")) { NEEDVAL();
             if (add_group(&cfg, v)) { return 2; } }
         else if (!strcmp(a, "--verbose"))    { nb_verbose = 1; }
@@ -4067,6 +4188,33 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "-h") || !strcmp(a, "--help")) { usage(); return 0; }
         else { nb_err("unknown argument: %s", a); usage(); return 2; }
 #undef NEEDVAL
+    }
+    {
+        uid_t sudo_uid;
+
+        if (nb_sudo_uid_fallback(getuid(), getenv("SUDO_UID"),
+                                 cfg.allow_uid_flag, &sudo_uid) &&
+            cfg.n_allow_uid < NB_MAX_ALLOW_IDS) {
+            cfg.allow_uid[cfg.n_allow_uid++] = sudo_uid;
+        }
+    }
+    if (cfg.x11_display && !strchr(cfg.x11_display, ':')) {
+        nb_err("--x11-display '%s' is not an X display (expected :N, or "
+               "host:N)", cfg.x11_display);
+        return 2;
+    }
+    if (cfg.wayland_display && !*cfg.wayland_display) {
+        nb_err("--wayland-display is empty");
+        return 2;
+    }
+    {
+        const char *bad = nb_display_flag_conflict(&cfg);
+
+        if (bad) {
+            nb_err("%s has no effect with --backend %s; refusing instead of "
+                   "ignoring it.", bad, cfg.backend);
+            return 2;
+        }
     }
     /* --socket is no longer the only way to get a listening socket; the check
      * that matters happens once activation has had its say, below. */

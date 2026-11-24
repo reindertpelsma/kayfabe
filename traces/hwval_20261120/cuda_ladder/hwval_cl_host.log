@@ -1,0 +1,34 @@
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1765 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=2 verdict=PASS rc=0 wall_ms=1750 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1798 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=2 verdict=PASS rc=0 wall_ms=1757 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1885 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=2 verdict=PASS rc=0 wall_ms=1862 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.589 med_ms=3.569 p90_ms=3.586 min_ms=3.566 max_ms=3.591 gflops=4813.128 batch_per_launch_ms=3.476 batch_gflops=4942.813 h2d_ms=3.112 d2h_med_ms=1.710 submit_med_ms=0.004 sync_med_ms=3.566 sync_cpu_med_ms=3.566 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.006 bad=0 maxerr=0
+CL_BENCH mode=host rep=2 BSUM N=2048 iters=20 first_ms=3.608 med_ms=3.573 p90_ms=3.594 min_ms=3.568 max_ms=3.600 gflops=4807.902 batch_per_launch_ms=3.567 batch_gflops=4816.980 h2d_ms=3.079 d2h_med_ms=1.728 submit_med_ms=0.005 sync_med_ms=3.568 sync_cpu_med_ms=3.568 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-11-20T21:48:49+00:00 mode=host reps=2 rungs=cup2,cup3,cup8,cup8bench rev=32409d29
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1765 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=2 verdict=PASS rc=0 wall_ms=1750 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1798 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=2 verdict=PASS rc=0 wall_ms=1757 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1885 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=2 verdict=PASS rc=0 wall_ms=1862 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2135 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1395.82
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=112.01
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=18.60
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.026 med_ms=0.007 p90_ms=0.007 min_ms=0.007 max_ms=0.008 gflops=1.189 batch_per_launch_ms=0.003 batch_gflops=2.496 h2d_ms=0.030 d2h_med_ms=0.007 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.589 med_ms=3.569 p90_ms=3.586 min_ms=3.566 max_ms=3.591 gflops=4813.128 batch_per_launch_ms=3.476 batch_gflops=4942.813 h2d_ms=3.112 d2h_med_ms=1.710 submit_med_ms=0.004 sync_med_ms=3.566 sync_cpu_med_ms=3.566 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.006 bad=0 maxerr=0
+CL_ROW mode=host rung=cup8bench rep=2 verdict=PASS rc=0 wall_ms=2061 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=2 BENCH_INIT_MS=1384.62
+CL_BENCH mode=host rep=2 BENCH_CTX_MS=115.70
+CL_BENCH mode=host rep=2 BENCH_MODULE_MS=0.11
+CL_BENCH mode=host rep=2 BSUM N=16 iters=20 first_ms=0.025 med_ms=0.007 p90_ms=0.007 min_ms=0.007 max_ms=0.024 gflops=1.203 batch_per_launch_ms=0.003 batch_gflops=2.538 h2d_ms=0.028 d2h_med_ms=0.007 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+CL_BENCH mode=host rep=2 BSUM N=2048 iters=20 first_ms=3.608 med_ms=3.573 p90_ms=3.594 min_ms=3.568 max_ms=3.600 gflops=4807.902 batch_per_launch_ms=3.567 batch_gflops=4816.980 h2d_ms=3.079 d2h_med_ms=1.728 submit_med_ms=0.005 sync_med_ms=3.568 sync_cpu_med_ms=3.568 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-11-20T21:49:05+00:00

@@ -1972,10 +1972,22 @@ static int x11_open(struct nb_session *s, const struct nb_config *cfg)
     x->win_w = (int)cfg->win_w;
     x->win_h = (int)cfg->win_h;
 
-    x->c = xcb_connect(NULL, &screen_n);
+    /*
+     * --xauthority: libxcb reads the cookie file's name from XAUTHORITY and has
+     * no argument for it, so the flag is applied by setting the variable in
+     * this process, here, before the one connect.  Nothing else reads it.
+     */
+    if (cfg->xauthority && setenv("XAUTHORITY", cfg->xauthority, 1) != 0) {
+        nb_err("--xauthority: setenv: %s", strerror(errno));
+        return -ENOMEM;
+    }
+    /* --x11-display is xcb_connect's own argument; NULL reads DISPLAY. */
+    x->c = xcb_connect(cfg->x11_display, &screen_n);
     if (!x->c || xcb_connection_has_error(x->c)) {
-        nb_err("xcb_connect failed (DISPLAY=%s)",
-               getenv("DISPLAY") ? getenv("DISPLAY") : "");
+        nb_err("xcb_connect failed (%s=%s)",
+               cfg->x11_display ? "--x11-display" : "DISPLAY",
+               cfg->x11_display ? cfg->x11_display
+                                : getenv("DISPLAY") ? getenv("DISPLAY") : "");
         return -ENOENT;
     }
     {

@@ -1,0 +1,47 @@
+[xid-watch] tag=ci50cc0f2d21a57148_specviewperf  host=ubuntu  utc=2026-11-21T12:14:03Z
+[xid-watch] command: env -u KF_SPEC_TABLE KF_SPEC_LANE=both KF_SPEC_DEADLINE_EPOCH=1795288064 KF_SPEC_NET=online bash /workspace/kf-ci-src/scripts/ci/vast_stage_specviewperf.sh ci50cc0f2d21a57148 /root/prov
+[xid-watch] host_dmesg_lines=811  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+SPEC_STAGE_START lane=both
+SPEC_STAGE_LIST lane=both n=9
+SPEC_COPY_DELETED removed=archive
+SPEC_LICENCE_STATE at=boot1_start up_min=1 status=Licensed remaining=129563_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_energy_04 up_min=14 status=Licensed remaining=129549_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:25_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up29m up_min=30 status=Licensed remaining=129534_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up44m up_min=45 status=Licensed remaining=129518_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:15_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_LICENCE_STATE at=after_creo_04 up_min=53 status=Licensed remaining=129511_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:58_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up67m up_min=68 status=Licensed remaining=129495_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up83m up_min=84 status=Licensed remaining=129480_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:40_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up98m up_min=99 status=Licensed remaining=129464_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up114m up_min=115 status=Licensed remaining=129449_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:30_PM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_ROW name=blender-01 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_blender_01 up_min=130 status=Licensed remaining=129433_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:20_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up145m up_min=146 status=Licensed remaining=129418_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:48_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up160m up_min=161 status=Licensed remaining=129402_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up176m up_min=177 status=Licensed remaining=129387_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:28_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up191m up_min=192 status=Licensed remaining=129371_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up207m up_min=208 status=Licensed remaining=129356_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:34_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up222m up_min=223 status=Licensed remaining=129341_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:52_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
+enscape_01 --- FAILED
+SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129325_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:16:03_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up41m up_min=42 status=Licensed remaining=129284_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:45_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_catia_07 up_min=53 status=Licensed remaining=129272_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:27_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up68m up_min=69 status=Licensed remaining=129256_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up84m up_min=85 status=Licensed remaining=129241_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up99m up_min=100 status=Licensed remaining=129225_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=solidworks-08 result=FAIL subtests=7/8 reason=TIMEOUT failed=08_NASACrawlerShadedEdges
+solidworks_08 --- FAILED
+SPEC_LICENCE_STATE at=after_solidworks_08 up_min=105 status=Licensed remaining=129221_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:46_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=TIME failed=-
+SPEC_LICENCE_STATE at=end up_min=105 status=Licensed remaining=129220_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:08_PM wlms=absent sppsvc=Running w32time=Stopped net=online

@@ -43,8 +43,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <sys/sysmacros.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "nvkvm_broker.h"
@@ -5475,11 +5477,64 @@ static int wl_open(struct nb_session *s, const struct nb_config *cfg)
     w->bd_hot = -1;
     w->scale_mode = cfg->scale_mode;
 
-    w->dpy = wl_display_connect(NULL);
-    if (!w->dpy) {
-        nb_err("wl_display_connect failed (WAYLAND_DISPLAY=%s)",
-               getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "");
-        return -ENOENT;
+    {
+        /*
+         * --wayland-display / --runtime-dir: the broker joins the path itself
+         * and hands libwayland a connected fd, so neither WAYLAND_DISPLAY,
+         * XDG_RUNTIME_DIR nor an inherited WAYLAND_SOCKET is consulted.  With
+         * no such flag this is wl_display_connect(NULL), as it always was.
+         */
+        char path[256];
+        int rc = nb_wl_socket_path(cfg->wayland_display, cfg->runtime_dir,
+                                   getenv("WAYLAND_DISPLAY"),
+                                   getenv("XDG_RUNTIME_DIR"),
+                                   path, sizeof(path));
+
+        if (rc == NB_WL_NO_RUNTIME_DIR) {
+            nb_err("the Wayland name '%s' is relative and there is no "
+                   "directory to look it up in: pass --runtime-dir DIR, or an "
+                   "absolute path to --wayland-display (XDG_RUNTIME_DIR is "
+                   "not set)", cfg->wayland_display ? cfg->wayland_display
+                                                    : "wayland-0");
+            return -EINVAL;
+        }
+        if (rc != 0) {
+            nb_err("--wayland-display: %s",
+                   rc == NB_WL_TOO_LONG ? "the socket path is too long"
+                                        : "empty name");
+            return -EINVAL;
+        }
+        if (path[0]) {
+            struct sockaddr_un sa;
+            int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+
+            memset(&sa, 0, sizeof(sa));
+            sa.sun_family = AF_UNIX;
+            snprintf(sa.sun_path, sizeof(sa.sun_path), "%s", path);
+            if (fd < 0 || connect(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+                int e = errno;
+
+                if (fd >= 0) {
+                    close(fd);
+                }
+                nb_err("cannot connect to the Wayland socket %s: %s", path,
+                       strerror(e));
+                return -ENOENT;
+            }
+            w->dpy = wl_display_connect_to_fd(fd);    /* owns fd from here */
+            if (!w->dpy) {
+                close(fd);
+            }
+        } else {
+            w->dpy = wl_display_connect(NULL);
+        }
+        if (!w->dpy) {
+            nb_err("wl_display_connect failed (%s=%s)",
+                   path[0] ? "socket" : "WAYLAND_DISPLAY",
+                   path[0] ? path : getenv("WAYLAND_DISPLAY")
+                                  ? getenv("WAYLAND_DISPLAY") : "");
+            return -ENOENT;
+        }
     }
     w->reg = wl_display_get_registry(w->dpy);
     wl_registry_add_listener(w->reg, &reg_listener, w);

@@ -1,0 +1,86 @@
+=== POST_CAPTURE_HOOK /root/reboot_hook.sh at 2026-11-19T02:01:06+00:00 ===
+RB_START 2026-11-19T02:01:06+00:00 tag=rb_pr_595_g595b_r8a4bd4b0 repo_rev=8a4bd4b0 qemu_pid=243358
+GCC_RC=0
+RB_DRIVER_LOADED 595.84
+RB_SMOKE phase=cold verdict=PASS ssh_rc=0 secs=4 out=[CUP3_RC=0 CTX OK|MODULE OK|LAUNCH OK|SYNC OK|KERNEL rv=43 want=43 -> PASS|DONE|]
+RB_REBOOT_ISSUED 2026-11-19T02:01:13+00:00
+RB_GUEST_BACK up=1 secs=25 qemu_alive=yes
+RB_AFTER_NVSMI GPU 0: NVIDIA GeForce RTX 3090  
+CUP3_BIN_PRESENT
+RB_SMOKE phase=after_reboot verdict=PASS ssh_rc=0 secs=4 out=[CUP3_RC=0 CTX OK|MODULE OK|LAUNCH OK|SYNC OK|KERNEL rv=43 want=43 -> PASS|DONE|]
+--- guest dmesg NVRM/Xid (filtered) ---
+[   17.611206] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   17.613588] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 4052336168 heartbeat 0 heartbeatWithOffsetMs 0 diff 4052336168 timeout 5200
+[   17.613599] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   17.613609] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 4052336168 heartbeat 0 heartbeatWithOffsetMs 0 diff 4052336168 timeout 5200
+[   17.613615] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   17.614826] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 4052336170 heartbeat 0 heartbeatWithOffsetMs 0 diff 4052336170 timeout 5200
+[   17.614836] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   17.614846] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 4052336170 heartbeat 0 heartbeatWithOffsetMs 0 diff 4052336170 timeout 5200
+[   17.614852] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   17.620480] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_obje
+[   17.620941] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, KGRAPHICS_CHANNEL_HANDLE_CHANNELID, KGRAP
+[   17.622850] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   17.622860] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   17.622866] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   17.622872] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   17.626299] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:510
+[   17.626312] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3110
+[   17.633999] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00009; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   17.634006] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2744
+[   17.634013] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGro
+[   17.636542] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e0000a; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   24.666028] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_
+[   28.189759] NVRM: GPU0 kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   28.190277] NVRM: GPU0 kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   28.190803] NVRM: GPU0 uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- qemu.log lines around device reset (filtered) ---
+2:kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also t
+4:kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14; kf-ctl-probe KF_PROBE_GSS_ROWS=1 unprivileged, the kf_abi::gssreplay::ROWS requests, traces/constants_night_20261014/gss_rows_pro
+6:kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14; kf-ctl-probe KF_PROBE_GSS_ROWS=1 unprivileged, the kf_abi::gssreplay::ROWS requests, traces/constants_night_20261014/gss_rows_pro
+8:kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also t
+10:kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also 
+12:kf-host: HOST-ABI REFUSED control 0x20809009: host control 0x20809009 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also 
+14:kf-host: HOST-ABI REFUSED control 0x20809001: host control 0x20809001 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also 
+16:kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also 
+25:kf-host: HOST-ABI REFUSED control 0x2080853a: : body is 1456 bytes, its layout is 15352 [#16, rate-limited]
+45:kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+56:kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+57:kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+191:kf3: GSP phase Cold -> ProtectedRegionUp
+590:kf3: GSP phase ProtectedRegionUp -> Booted
+594:kf3: GSP phase Booted -> Running
+1016:kf3: GSP phase Running -> Suspending
+1017:kf3: GSP phase Suspending -> Halted
+1019:kf3: GSP phase Halted -> ProtectedRegionUp
+1022:kf3: GSP phase ProtectedRegionUp -> Booted
+1026:kf3: GSP phase Booted -> Running
+1454:kf3: GSP phase Running -> Suspending
+1455:kf3: GSP phase Suspending -> Halted
+1457:kf3: GSP phase Halted -> ProtectedRegionUp
+1460:kf3: GSP phase ProtectedRegionUp -> Booted
+1464:kf3: GSP phase Booted -> Running
+1698:kf3: GSP phase Running -> Suspending
+1699:kf3: GSP phase Suspending -> Halted
+1701:kf3: GSP phase Halted -> ProtectedRegionUp
+1704:kf3: GSP phase ProtectedRegionUp -> Booted
+1708:kf3: GSP phase Booted -> Running
+2545:kf3: GSP phase Running -> Suspending
+2546:kf3: GSP phase Suspending -> Halted
+2548:kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 0 Translated pump(s) stopped; GSP Halted -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree clear
+2549:kf3: act device reset: barrier: device reset epoch 2: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=22 db_regs=0 (80807 us, off the GSP lock)
+2550:kf3: mem t=41.376s device reset #2: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 0 VA space(s) retired, 0 KEPT, mirrors left 0; views sunk [BAR1: 0 placement(s) sunk, 0 kept, 0 door
+2551:kf3: device reset #2: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+2552:kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+2553:kf3: device reset #2 complete before the vCPUs resume (the main loop waited 16168 us)
+2554:kf3: device reset #3: vCPUs out (gate closed); 0 queued register write(s) dropped; 0 Translated pump(s) stopped; GSP Cold -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+2555:kf3: act device reset: barrier: device reset epoch 3: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=0 db_regs=0 (940 us, off the GSP lock)
+2556:kf3: mem t=41.416s device reset #3: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 0 VA space(s) retired, 0 KEPT, mirrors left 0; views sunk [BAR1: 0 placement(s) sunk, 0 kept, 0 door
+2557:kf3: device reset #3: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+2558:kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+2559:kf3: device reset #3 complete before the vCPUs resume (the main loop waited 28203 us)
+2687:kf3: GSP phase Cold -> ProtectedRegionUp
+3086:kf3: GSP phase ProtectedRegionUp -> Booted
+3090:kf3: GSP phase Booted -> Running
+RB_END 2026-11-19T02:01:49+00:00
+HOOK_RC=0

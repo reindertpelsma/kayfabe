@@ -1,0 +1,39 @@
+{
+ "compute_cap": "8.6",
+ "cuda": "12.6",
+ "data": {
+  "acc": 0.7365
+ },
+ "driver": "535.154.05",
+ "gpu_name": "NVIDIA GeForce RTX 3060",
+ "measured_on": {
+  "compute_cap": "8.6",
+  "cuda": "12.6",
+  "driver": "535.154.05",
+  "driver_cuda": "12.2",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 3060",
+  "run_id": "kfml_run_20261117_ampere_prefetch_mid",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "acc_amp": 0.7365,
+  "acc_fp32": 0.736,
+  "amp_dtype": "torch.bfloat16",
+  "cuda_ipc": true,
+  "epoch_loss": [
+   1.6955051911182892,
+   1.2643928527832031,
+   1.0349578857421875,
+   0.8811507591834435,
+   0.7348003876514924
+  ],
+  "grad_scaler": false,
+  "pred_agreement": 0.997,
+  "reference_diff": null,
+  "train_s": 10.11084771156311
+ },
+ "test": "amp_convnet_cifar",
+ "torch": "2.7.1+cu126",
+ "wall_s": 15.037
+}

@@ -1,0 +1,331 @@
+{
+ "schema": 1,
+ "status": "STATUS: DESIGN-ONLY, 2026-11-17. Pins and definitions of the open Windows rows (VK-GL-CTS, DirectX-Graphics-Samples extras). Facts marked CHECKED in docs/design/V3_WINDOWS_OPEN_ROWS.md were read from the public upstream trees today; nothing here ran on hardware.",
+ "trust": {
+  "default": "git-only",
+  "explanation": "A standalone run trusts git only: every third-party SOURCE is a clone of a pinned upstream commit, every prebuilt TOOL needs one of the accepted anchors below. Lifting is explicit (--accept-unanchored-downloads REASON, --source-commit-override NAME=SHA) and is written into the receipt. A path or URL the user passes explicitly (--tool NAME=PATH, --prebuilt DIR) is always trusted: its sha256 is recorded, nothing is verified.",
+  "anchors": [
+   "upstream-sha256: an official https checksum file or release-notes table fetched at run time from the upstream origin",
+   "authenticode: the vendor's code signature on the file (Get-AuthenticodeSignature Status Valid, expected signer)",
+   "pypi-sha256: the file digest in the PyPI JSON of the pinned version, enforced by pip --require-hashes",
+   "nuget-signature: nuget.org repository signature, signatureValidationMode=require with the nuget.org certificate fingerprints of the NuGet docs",
+   "ci-attestation: gh attestation verify of a CI-built artifact (pinned repo, workflow and source commit); NOT used by this PR, the plug-in point of a future cache",
+   "git-commit: a pinned upstream commit, checked with git rev-parse HEAD after the clone (sources only)"
+  ]
+ },
+ "sources": {
+  "cts": {
+   "repository": "https://github.com/KhronosGroup/VK-GL-CTS.git",
+   "tag": "vulkan-cts-1.4.7.1",
+   "commit": "0d18b347943e5e843529a05c95220e27fe30c538",
+   "licence": "Apache-2.0",
+   "anchor": "git-commit",
+   "fetch_sources": "external/fetch_sources.py",
+   "fetch_sources_note": "upstream's own script; its git revisions and archive sha256 values live in the pinned commit and are reviewed against upstream, not copied here"
+  },
+  "dxs": {
+   "repository": "https://github.com/microsoft/DirectX-Graphics-Samples.git",
+   "commit": "68a2b1e97f71642924e74c7757ca21756ad221b5",
+   "licence": "MIT",
+   "anchor": "git-commit",
+   "same_pin_as": "release_software.json directx.commit",
+   "filter": "blob:none",
+   "sparse_from": "dxs_samples[*].checkout"
+  }
+ },
+ "tools": {
+  "git": {
+   "purpose": "clone the pinned sources; CTS external/fetch_sources.py runs git",
+   "kind": "mingit-zip",
+   "anchor": "upstream-sha256",
+   "release_tag": "v2.56.1.windows.1",
+   "asset": "MinGit-2.56.1-64-bit.zip",
+   "release_api": "https://api.github.com/repos/git-for-windows/git/releases/tags/v2.56.1.windows.1",
+   "download_prefix": "https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/"
+  },
+  "python": {
+   "purpose": "CTS external/fetch_sources.py and gen_framework.py (needs pip and lxml, so the embeddable zip is not enough)",
+   "kind": "installer-exe",
+   "anchor": "authenticode",
+   "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe",
+   "signer": "Python Software Foundation",
+   "install_args": [
+    "/quiet",
+    "InstallAllUsers=0",
+    "Include_launcher=0",
+    "Include_test=0",
+    "Include_doc=0",
+    "PrependPath=0",
+    "Shortcuts=0",
+    "TargetDir={dest}"
+   ]
+  },
+  "lxml": {
+   "purpose": "Vulkan CTS gen_framework.py (imports lxml)",
+   "kind": "pip-wheel",
+   "anchor": "pypi-sha256",
+   "version": "6.1.3",
+   "pypi_json": "https://pypi.org/pypi/lxml/6.1.3/json"
+  },
+  "msvc": {
+   "purpose": "MSVC v143, MSBuild, Windows SDK and the CMake that ships with Visual Studio",
+   "kind": "installer-exe",
+   "anchor": "authenticode",
+   "url": "https://aka.ms/vs/17/release/vs_BuildTools.exe",
+   "signer": "Microsoft Corporation",
+   "components": [
+    "Microsoft.VisualStudio.Workload.VCTools",
+    "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+    "Microsoft.VisualStudio.Component.VC.CMake.Project",
+    "Microsoft.VisualStudio.Component.Windows11SDK.26100"
+   ],
+   "install_args": [
+    "--quiet",
+    "--wait",
+    "--norestart",
+    "--nocache",
+    "--noUpdateInstaller",
+    "--installPath",
+    "{dest}"
+   ],
+   "ok_exit_codes": [
+    0,
+    3010
+   ]
+  },
+  "nuget": {
+   "purpose": "restore the packages.config of the DirectX samples (Agility SDK, DXC, PIX runtime)",
+   "kind": "exe",
+   "anchor": "authenticode",
+   "url": "https://dist.nuget.org/win-x86-commandline/v7.9.0/nuget.exe",
+   "signer": "Microsoft Corporation"
+  }
+ },
+ "nuget_trust": {
+  "source": "https://api.nuget.org/v3/index.json",
+  "signature_validation_mode": "require",
+  "repository_name": "nuget.org",
+  "fingerprints_sha256": [
+   "0E5F38F57DC1BCC806D8494F4F90FBCEDD988B46760709CBEEC6F4219AA6157D",
+   "5A2901D6ADA3D18260B9C6DFE2133C95D74B9EEF6AE0E5DC334C8454D1477DF4",
+   "1F4B311D9ACC115C8DC8018B5A49E00FCE6DA8E2855F9F014CA6F34570BC482D"
+  ],
+  "reference": "https://learn.microsoft.com/en-us/nuget/reference/nuget-config-file#trustedsigners-section"
+ },
+ "cts_build": {
+  "generator": "Visual Studio 17 2022",
+  "arch": "x64",
+  "config": "Release",
+  "cmake_args": [
+   "-DDEQP_TARGET=default",
+   "-DDEQP_DISABLE_VK_VIDEO_TESTS=ON"
+  ],
+  "targets": {
+   "glcts": {
+    "exe": "external/openglcts/modules/Release/glcts.exe",
+    "cwd": "external/openglcts/modules"
+   },
+   "deqp-vk": {
+    "exe": "external/vulkancts/modules/vulkan/Release/deqp-vk.exe",
+    "cwd": "external/vulkancts/modules/vulkan"
+   }
+  },
+  "build_dir_rule": "outside the source tree (upstream README: a build directory under the sources breaks the data copy on Windows)"
+ },
+ "dxs_samples": {
+  "nbody": {
+   "project": "Samples/Desktop/D3D12nBodyGravity/src/D3D12nBodyGravity.vcxproj",
+   "packages_dir": "packages",
+   "exe": "bin/x64/Release/D3D12nBodyGravity.exe",
+   "checkout": "Samples/Desktop/D3D12nBodyGravity"
+  },
+  "execute_indirect": {
+   "project": "Samples/Desktop/D3D12ExecuteIndirect/src/D3D12ExecuteIndirect.vcxproj",
+   "packages_dir": "packages",
+   "exe": "bin/x64/Release/D3D12ExecuteIndirect.exe",
+   "checkout": "Samples/Desktop/D3D12ExecuteIndirect"
+  },
+  "reserved_resources": {
+   "project": "Samples/Desktop/D3D12ReservedResources/src/D3D12ReservedResources.vcxproj",
+   "packages_dir": "packages",
+   "exe": "bin/x64/Release/D3D12ReservedResources.exe",
+   "checkout": "Samples/Desktop/D3D12ReservedResources"
+  },
+  "hdr": {
+   "project": "Samples/Desktop/D3D12HDR/src/D3D12HDR.vcxproj",
+   "packages_dir": "packages",
+   "exe": "bin/x64/Release/D3D12HDR.exe",
+   "checkout": "Samples/Desktop/D3D12HDR"
+  },
+  "work_graphs": {
+   "project": "Samples/Desktop/D3D12HelloWorld/src/HelloWorkGraphs/D3D12HelloWorkGraphs.vcxproj",
+   "packages_dir": "../packages",
+   "exe": "bin/x64/Release/D3D12HelloWorkGraphs.exe",
+   "checkout": "Samples/Desktop/D3D12HelloWorld/src/HelloWorkGraphs"
+  }
+ },
+ "rows": {
+  "vkglcts_gl46": {
+   "group": "cts",
+   "kind": "cts-gl",
+   "binary": "glcts",
+   "caselist": "caselists/gl46_core.txt",
+   "args": [
+    "--deqp-gl-context-type=wgl",
+    "--deqp-gl-config-name=rgba8888d24s8",
+    "--deqp-surface-width=64",
+    "--deqp-surface-height=64",
+    "--deqp-visibility=windowed",
+    "--deqp-log-images=disable",
+    "--deqp-log-shader-sources=disable",
+    "--deqp-crashhandler=enable",
+    "--deqp-watchdog=enable",
+    "--deqp-watchdog-total-time-limit=600"
+   ],
+   "chunk": 25,
+   "case_timeout_s": 600,
+   "interactive": true,
+   "chunk_timeout_s": 1800
+  },
+  "vkglcts_vk": {
+   "group": "cts",
+   "kind": "cts-vk",
+   "binary": "deqp-vk",
+   "caselist": "caselists/vk_breadth.txt",
+   "args": [
+    "--deqp-log-images=disable",
+    "--deqp-log-shader-sources=disable",
+    "--deqp-crashhandler=enable",
+    "--deqp-terminate-on-device-lost=enable",
+    "--deqp-watchdog=enable",
+    "--deqp-watchdog-total-time-limit=600"
+   ],
+   "chunk": 20,
+   "case_timeout_s": 600,
+   "interactive": false,
+   "chunk_timeout_s": 1800
+  },
+  "vkglcts_gl_dual_soak": {
+   "group": "cts",
+   "kind": "gl-soak",
+   "seconds": 600,
+   "seconds_smoke": 60,
+   "interactive": true,
+   "crash_signatures": [
+    "nvoglv64.dll",
+    "nvlddmkm:153"
+   ]
+  },
+  "dxsamples_nbody_async": {
+   "group": "dxs",
+   "kind": "dx-window",
+   "sample": "nbody",
+   "seconds": 40,
+   "frames_advance": true,
+   "keys": [],
+   "engines_all": [
+    "3D",
+    "Compute"
+   ]
+  },
+  "dxsamples_execute_indirect": {
+   "group": "dxs",
+   "kind": "dx-window",
+   "sample": "execute_indirect",
+   "seconds": 40,
+   "frames_advance": true,
+   "keys": [
+    {
+     "vk": "SPACE"
+    },
+    {
+     "vk": "SPACE"
+    }
+   ],
+   "engines_all": [
+    "3D",
+    "Compute"
+   ]
+  },
+  "dxsamples_reserved_resources": {
+   "group": "dxs",
+   "kind": "dx-window",
+   "sample": "reserved_resources",
+   "seconds": 40,
+   "frames_advance": false,
+   "title_regex": "Mip Level: (\\d+)",
+   "keys": [
+    {
+     "vk": "UP",
+     "repeat": 8
+    },
+    {
+     "vk": "DOWN",
+     "repeat": 8
+    },
+    {
+     "vk": "UP",
+     "repeat": 4
+    },
+    {
+     "vk": "DOWN",
+     "repeat": 4
+    }
+   ],
+   "engines_any": [
+    "3D"
+   ]
+  },
+  "dxsamples_hdr": {
+   "group": "dxs",
+   "kind": "dx-window",
+   "sample": "hdr",
+   "seconds": 40,
+   "frames_advance": false,
+   "optional": true,
+   "keys": [
+    {
+     "vk": "PRIOR"
+    },
+    {
+     "vk": "PRIOR"
+    },
+    {
+     "vk": "NEXT"
+    },
+    {
+     "vk": "NEXT"
+    },
+    {
+     "vk": "H"
+    },
+    {
+     "vk": "H"
+    }
+   ],
+   "engines_any": [
+    "3D"
+   ]
+  },
+  "dxsamples_work_graphs": {
+   "group": "dxs",
+   "kind": "dx-console",
+   "sample": "work_graphs",
+   "timeout_s": 300,
+   "ok_regex": "Execution complete",
+   "uav_regex": "UAV\\[(\\d+)\\] = 0x([0-9a-fA-F]+)",
+   "uav_lines": 8,
+   "not_supported_regex": "does not report support for work graphs",
+   "engines_any": [
+    "3D",
+    "Compute"
+   ]
+  },
+  "dxsamples_multiadapter": {
+   "group": "dxs",
+   "kind": "not-run",
+   "reason": "needs-two-gpus",
+   "detail": "D3D12HeterogeneousMultiadapter and D3D12LinkedGpus (both in the pinned tree) need two GPUs or two adapters; a kayfabe guest has one"
+  }
+ }
+}

@@ -63,12 +63,14 @@ grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null \
   || { say "⊘ host driver is not the OPEN module -- run provision_host_driver.sh first"; exit 2; }
 # The fat guest's pinned package is independent of the installed host driver.
 # A fresh host installed directly at595 will not already have the580 package.
-if [ ! -s "$RUN" ]; then
+# [2026-11-17] anchored by scripts/ci/kf_trust.py (NVIDIA's own .sha256sum and the vendor-published pin in trust_manifest.json), never TLS alone.
+# A copy already at $RUN is held to the same anchors; a refusal is named on stderr (TRUST_...).
+if [ -s "$RUN" ]; then
+  python3 -I "$REPO/scripts/ci/kf_trust.py" verify nvidia-linux-run-580.159.04 "$RUN" \
+    || { say "⊘ the guest package at $RUN is not the anchored 580.159.04 installer"; exit 2; }
+else
   say "fetching the pinned guest580.159.04 package"
-  curl --fail --location --retry 3 --connect-timeout 20 \
-    -o "$RUN.part" \
-    https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run \
-    && mv "$RUN.part" "$RUN" \
+  python3 -I "$REPO/scripts/ci/kf_trust.py" fetch nvidia-linux-run-580.159.04 --out "$RUN" \
     || { say "⊘ pinned guest package download failed"; exit 2; }
 fi
 mkdir -p "$BENCH"

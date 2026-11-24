@@ -1,0 +1,5 @@
+GPU: NVIDIA GeForce RTX 3060, 12288 MiB, driver 580.159.03 (Vast container, image nvidia/cuda:12.6.3-devel-ubuntu22.04, Ubuntu 22.04.5)
+CPU: Intel Xeon E5-2680 v4 (cgroup quota 13.44 cores, 62 GB memory limit)
+Toolchain: g++ 11.4.0, cmake 3.22.1, ninja 1.10.1, python 3.10.12
+Packages installed before the build (apt): cmake ninja-build libvulkan1 vulkan-tools libxext6 libx11-6 libegl1 pkg-config ca-certificates
+Vulkan loader 1.3.204 (distribution); vulkaninfo: RTX 3060, PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, API 1.4.312

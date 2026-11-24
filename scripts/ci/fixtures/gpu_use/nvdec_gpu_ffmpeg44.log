@@ -1,0 +1,6 @@
+=== nvdec_h264 side=host start=2026-11-17T23:00:33+00:00 host=box cmd: ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 -pix_fmt yuv420p /opt/apps/out/host/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -v verbose ${KF_DEC_ARGS:--hwaccel cuda -hwaccel_output_format cuda} -i /opt/apps/out/host/x264.mp4 -f null - > /opt/apps/out/host/nvdec.txt 2>&1; rc=$?; tr "\r" "\n" < /opt/apps/out/host/nvdec.txt | grep -E "frame=|rror|hwaccel|cuvid" | tail -4; grep -a "Reinit context" /opt/apps/out/host/nvdec.txt | tail -3; grep -q "Failed setup for format cuda" /opt/apps/out/host/nvdec.txt && { echo "NVDEC_NOT_USED (software fallback)"; exit 3; }; exit $rc
+frame=    1 fps=0.0 q=-0.0 size=N/A time=00:00:00.03 bitrate=N/A speed=0.505x    
+frame=  600 fps=0.0 q=-0.0 Lsize=N/A time=00:00:20.00 bitrate=N/A speed=42.3x    
+[h264 @ 0x5a088c5d0280] Reinit context to 1280x720, pix_fmt: yuv420p
+[h264 @ 0x5a088d3a1400] Reinit context to 1280x720, pix_fmt: cuda
+=== end rc=0 secs=4 2026-11-17T23:00:37+00:00

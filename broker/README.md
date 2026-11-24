@@ -6,31 +6,25 @@ unix socket and holds no connection to your display server at all.
 
 ## Do you need this?
 
-**Use the broker when the VMM is sandboxed** — in a container, `systemd-nspawn`
-or `bubblewrap` — and must not be able to reach your display server. That is
-the only thing it buys you: the sandbox stays sealed, and the display
-connection lives outside it. This is how `nvkvm-steamos` and the compose
-deployments run.
-
-**Do not use it for a plain QEMU on your own desktop.** If the VMM is not
-sandboxed, render directly:
-
-```bash
-qemu-system-x86_64 ... -display sdl        # or -display gtk
-```
-
-The broker's security property is *"the VMM never touches the display
-server"*. If the VMM is already running unconfined as your user, that property
-is vacuous — it can reach your display server, your clipboard and your input
-devices regardless of how frames get to the screen. All the broker adds in
-that case is a socket hop and one more process to run. SDL is simpler, faster
-to set up, and no less safe.
+**Only for a VM with a window on your desktop.** The broker is the display piece
+of kayfabe: it owns the window, the input grab and the clipboard, and QEMU hands
+it finished frames over a unix socket. You tell QEMU where that socket is with
+the device property `display-broker=<absolute path>` (unset means no broker).
 
 | your setup | use |
 |---|---|
-| QEMU in a container / nspawn / bwrap | the broker |
-| QEMU as your normal user, unconfined | `-display sdl` |
-| headless, no display at all | neither |
+| a VM you look at on a desktop (Wayland or X11) | the broker |
+| headless: no window, remote use, compute only | no broker; leave `display-broker` unset |
+
+The kayfabe QEMU is built without SDL and GTK (`--disable-sdl --disable-gtk`),
+so there is no `-display sdl` or `-display gtk` alternative, and no
+`-display nvkvm-broker` option either: the device property is the whole
+interface.
+
+A side effect worth knowing: because the frames go through a socket, QEMU can
+run in a container, `systemd-nspawn` or `bubblewrap` with no access to your
+display server at all (see *Putting the socket into a container*). That is a
+property of the design, not a requirement.
 
 Design rationale, threat model and the hardware verification log:
 [`docs/internal/broker-design.md`](../../docs/internal/broker-design.md).
@@ -81,7 +75,7 @@ away.
 ### Build
 
 ```bash
-cd src/broker && make          # prints which backends it kept
+cd broker && make              # prints which backends it kept
 make check                     # build + selftest.sh
 bash headless_present_test.sh  # real import + present, headless, no monitor
 ```
@@ -119,18 +113,26 @@ X11 rel. motion    libxcb-xinput-dev     (optional; without it, no relative
 
 ### Run
 
-```bash
-# in your desktop session, as your normal user
-nvkvm-display-broker --socket /run/nvkvm/display.sock --size 1920x1080
+Two commands, in a terminal of your desktop session, as your normal user:
 
-# then, in the sandbox
-qemu-system-x86_64 ... -display nvkvm-broker,socket=/run/nvkvm/display.sock
+```bash
+nvkvm-display-broker --socket /run/user/$UID/kayfabe/gpu0.sock
+
+qemu-system-x86_64 ... -device kf3-gpu,...,display=on,display-broker=/run/user/$UID/kayfabe/gpu0.sock
 ```
+
+The broker creates the socket's directory (`/run/user/$UID/kayfabe`, mode 0700)
+when it does not exist: one level only, so the parent must exist. It refuses a
+directory that already exists and belongs to somebody it does not trust, or that
+another user can write to (see *The socket's directory*). When broker and QEMU
+run as the same user that is all there is to it. Only if the two users differ
+does the QEMU side need `display-broker-uid=<the broker's uid>` (QEMU always
+accepts uid 0 and its own), and the broker side `--allow-uid <QEMU's uid>`.
 
 Before involving QEMU, prove the broker alone works:
 
 ```bash
-nvkvm-broker-testclient /run/nvkvm/display.sock --present 640x480
+nvkvm-broker-testclient /run/user/$UID/kayfabe/gpu0.sock --present 640x480
 ```
 
 That prints the handshake and every input event, and sends one buffer. It
@@ -139,10 +141,69 @@ variables at once. Its `--bad-*` options are the ways a hostile VMM can lie;
 each one must be rejected.
 
 Options: `--backend auto|wayland|x11|test`, `--size WxH`, `--title`,
-`--allow-user`, `--allow-group`, `--drop-user`, `--verbose`.
+`--allow-user`, `--allow-uid`, `--allow-group`, `--drop-user`, `--verbose`, and
+the four that say where the display is, below.
 `--allow-group` compares the primary gid reported by `SO_PEERCRED`; Linux does
 not expose the peer's supplementary groups through that interface.
 By default root and the invoking user may connect.
+
+#### Where the display is: flags first, the environment as the fallback
+
+A broker started from outside the desktop session (a service, `sudo`, ssh) has
+none of the session's variables. Every one it reads has a flag, and **a flag
+always wins over the variable it replaces**:
+
+| flag | replaces | notes |
+|---|---|---|
+| `--wayland-display NAME` | `WAYLAND_DISPLAY` | a name (looked up in the runtime directory) or an absolute path to the socket |
+| `--runtime-dir DIR` | `XDG_RUNTIME_DIR` | where a relative Wayland name lives; ignored for an absolute name |
+| `--x11-display :N` | `DISPLAY` | `:N`, or `host:N` |
+| `--xauthority FILE` | `XAUTHORITY` | the X11 cookie file |
+| `--allow-uid UID` | `SUDO_UID` | one more numeric uid allowed to connect; repeatable; when given, `SUDO_UID` is not read at all |
+
+How each is applied, because "no hidden environment" has to be literally true:
+
+- **Wayland.** With `--wayland-display` or `--runtime-dir` the broker joins the
+  path itself, connects to it and hands libwayland the connected descriptor
+  (`wl_display_connect_to_fd`). libwayland's own lookup of `WAYLAND_DISPLAY`,
+  `XDG_RUNTIME_DIR` and `WAYLAND_SOCKET` is bypassed, and nothing is put into the
+  environment. A relative name with no directory (no `--runtime-dir`, no
+  `XDG_RUNTIME_DIR`) is refused by name rather than guessed. `--runtime-dir`
+  alone takes the name from `WAYLAND_DISPLAY`, else `wayland-0`, as libwayland does.
+- **X11.** `--x11-display` is `xcb_connect`'s own argument. libxcb has no
+  argument for the cookie file, so `--xauthority` sets `XAUTHORITY` inside this
+  process, once, immediately before that connect, and nothing else reads it.
+  Without it libxcb uses `XAUTHORITY`, then `~/.Xauthority`.
+- **`auto`.** A display flag names its backend: with `--x11-display` the broker
+  tries X11 only and a `WAYLAND_DISPLAY` in the environment is not a reason to
+  open a Wayland window (and the reverse). With no display flag it behaves as it
+  always has: Wayland if `WAYLAND_DISPLAY` is set, then X11 if `DISPLAY` is set.
+- A flag that the chosen `--backend` would silently ignore (`--wayland-display`
+  with `--backend x11`, any display flag with `--backend test`) is refused.
+- Socket activation (`LISTEN_FDS`) is unchanged: it is how a service manager
+  hands over a socket, and has no flag but `--socket-fd`.
+
+With none of these flags the broker behaves exactly as before.
+
+#### The socket's directory
+
+`--socket PATH`: the directory of `PATH` is
+
+- **created** when it does not exist, one level, mode `0700` (even under a
+  permissive umask). The one exception: when `--socket-mode` lets the group or
+  others reach the socket (`0660`, `0666`), the new directory also gets search
+  (`x`) for them, since `0700` would make that request silently useless; it
+  never grants read or write. The creation is logged.
+- **accepted** when it exists and is owned by the broker's effective uid, by
+  root, or by a uid on the `--allow-uid`/`--allow-user` list (the `sudo` case:
+  root broker, the user's own `/run/user/<uid>/...`), provided that for an owner
+  other than the broker's own uid, group and others cannot write there (the
+  sticky bit, as on `/tmp`, excuses it).
+- **refused**, named and fail-closed, otherwise: anyone who can rename entries
+  in the directory can put their own socket in front of the broker's.
+
+An existing directory of the broker's own user is never changed. `--socket-fd`
+and socket activation skip all of this: that socket is somebody else's.
 
 Clipboard modes are `off` (default), `guest-to-host`, and `consent`. `consent`
 adds host-to-guest transfer only after an explicit paste chord. Text is UTF-8

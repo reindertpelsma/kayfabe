@@ -1,0 +1,15 @@
+# STATUS: LIVE, 2026-11-17. The ONLY values a kayfabe guest may answer with N/A / NOT_SUPPORTED while the host answers a number, each with
+# its reason (scripts/apps/open_rows/nvml_lib.py: compare_row). Anything else the host answers with a number and the guest does not is a
+# FINDING of the row. An entry is a statement about the design, not about what was measured: a line whose value the guest turns out to serve
+# is reported OK_SERVED_THOUGH_LISTED and should be deleted. glob over `kind:key`; group; reason (names the document that decides it).
+glob	group	reason
+# docs/OWNER_RULINGS.md section H (2026-10-02): ECC, NVLink, profiler and debugger are stubbed as "capability absent"
+query:ecc.*	owner_ruling_H	ECC is stubbed as capability absent (OWNER_RULINGS section H)
+query:nvlink.*	owner_ruling_H	NVLink is stubbed as capability absent (OWNER_RULINGS section H)
+dcgm:DCGM_FI_PROF_*	owner_ruling_H	the profiler is stubbed: a non-root host user gets the same (OWNER_RULINGS section H, RestrictProfilingToAdminUsers=1)
+dcgm:*nvlink*	owner_ruling_H	NVLink is stubbed as capability absent (OWNER_RULINGS section H)
+dcgm:*NVLINK*	owner_ruling_H	NVLink is stubbed as capability absent (OWNER_RULINGS section H)
+# docs/design/V3_UTILIZATION_FLAG.md section 10 (as built 2026-11-17, PR #459): per-process figures are never served (no pids by design).
+# Power, clocks, P-state and thermals are deliberately NOT listed: that document says the utilisation flag leaves them N/A as RUSD records,
+# but whether the guest's NVML gets them through another path is unmeasured, so the row must report them as findings until it is.
+query:processes.*	utilization_flag_s10	per-process figures are not served: no pids, by design (V3_UTILIZATION_FLAG section 10)

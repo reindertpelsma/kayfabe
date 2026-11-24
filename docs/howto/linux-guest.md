@@ -1,26 +1,44 @@
-# Linux guest
+# Run a Linux guest
 
 A Linux guest uses NVIDIA's stock driver, unmodified, and nothing has to be set in the guest: no registry-style settings, no guest patches, no custom kernel module. <!-- src: README.md "Linux guest", docs/WINDOWS_GUEST_SETUP.md "Linux guests" -->
 
+## The steps
+
+1. **Install a Linux guest** the way you always do, on QEMU/KVM or libvirt. Any distribution that NVIDIA's driver supports is expected to work; the project has run Ubuntu, Rocky and Linux Mint guests, and does not document a supported distribution list.
+2. **Install NVIDIA's driver in the guest**: the `.run` installer with `-m=kernel-open`, or your distribution's package of the open kernel module. The guest needs a C compiler and the kernel headers for the running kernel if the installer builds the module.
+3. **Start the VM with the kayfabe device** instead of the VFIO device ([Install](installing.md), [Command-line reference](cli-reference.md)). If you already have a VM, [Attach to a VM you already have](attach-to-existing-vm.md) lists what changes.
+4. **Check it**: `nvidia-smi` in the guest names the GPU, and the host keeps using the card.
+
+Not verified yet: that an image prepared for VFIO boots unchanged with only the device swapped. That is the aim; an equivalence test that boots the same image both ways is not in the tree yet.
+
+Which driver version: a guest driver close to the host's is recommended. A guest on another driver branch needs `guest-driver=<version>` on the device; see [Troubleshooting](troubleshooting.md#the-guest-driver-and-the-host-driver-do-not-match). The versions that have been run are listed in [Requirements](requirements.md).
+
 ## What has been run
 
-All of these are the repository's claims, with the revision or box where it states one. <!-- src: README.md, docs/STATUS_DETAIL.md -->
+All of these are the project's claims about its own test runs; per-card detail is on [Requirements](requirements.md). <!-- src: README.md, docs/STATUS_DETAIL.md -->
 
-- **The 30-arm suite passes** in the thin guest (also with the relay forced on), with the GPU gates at 9/9. [measured: kayfabe `afb552ea`, RTX 3060, 2026-09-30; GA104 at `714ec29d3`, 2026-10-24] <!-- src: docs/STATUS_DETAIL.md section 0, traces/sw3_die_sweep_20261024/README.md -->
+- **The 30-arm test suite passes** in the thin guest (also with the relay forced on), with the GPU gates at 9 of 9. It passed on an RTX 3060 and on a GA104 card. <!-- src: docs/STATUS_DETAIL.md section 0, traces/sw3_die_sweep_20261024/README.md -->
 - **CUDA is correct:** `cup3` returns 43, `cup8` (a 2048 x 2048 matrix multiply) returns `BAD=0 MAXERR=0`. <!-- src: docs/STATUS_DETAIL.md section 2 -->
-- **Application matrix:** 70/70 runnable apps passed on the RTX 4090 host and 66/70 in the Linux guest at `144557e43`, 2026-11-07. Passing apps met their own predicates; three digest-producing apps matched the host. **Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged until the per-fault GR hold is measured and bounded. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check. <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
-- **NVENC and NVDEC output is byte-identical to bare metal** in the graded lane [measured, RTX 3060]. <!-- src: docs/STATUS_DETAIL.md section 3 -->
-- **Headless graphics:** Vulkan, EGL, and GLX through Xvfb and VirtualGL; 38 of 38 items of the test set, 31 byte-identical to bare metal [measured, GA104]. <!-- src: docs/STATUS_DETAIL.md section 0 -->
-- **A desktop** with display planes (overlay, YUV) and 3 of 3 suspend/resume cycles. See [Display and the broker](display.md). <!-- src: README.md -->
-- **Driver versions:** see [Requirements](requirements.md).
+- **Application matrix:** 70 of 70 runnable applications passed on the host (RTX 4090) and 66 of 70 in the Linux guest. Passing applications met their own correctness checks; three digest-producing applications matched the host. **Unsupported for now (unified memory demand paging):** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM` and `attach_verify`. Reports list them as `unsupported (UVM)`. `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check. <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
+- **NVENC and NVDEC output is byte-identical to bare metal** in the graded lane (RTX 3060). <!-- src: docs/STATUS_DETAIL.md section 3 -->
+- **Headless graphics:** Vulkan, EGL and GLX through Xvfb and VirtualGL: 38 of 38 items of the test set passed, 31 of them byte-identical to bare metal (GA104). <!-- src: docs/STATUS_DETAIL.md section 0 -->
+- **A desktop** with display planes (overlay, YUV) and 3 of 3 suspend and resume cycles. See [Display and the broker](display.md). <!-- src: README.md -->
 
-Not done: demand-paged managed memory (4 applications), a rootless boot record on master (one exists on the branch `claude/rootless-audit-20261016`, see [Security model](security.md)), and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](../FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
+Not done: demand-paged managed memory (four applications) and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](../FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
 
-*(2026-10-31: if you already have a Linux VM, skip the image preparation below and read [Attach your GPU to a VM you already have](attach-to-existing-vm.md). This section is how the bench builds its own throwaway image, not an install guide.)*
+## More than one GPU
 
-## Prepare a guest image
+One kayfabe device is created per host GPU: add one `-device kf3-gpu,id=...,gpu-minor=<m>` per host GPU. A thin guest with two distinct host GPUs passed copy-engine checks serially and concurrently (two RTX 3060s on one host). CUDA inside a two-GPU guest, unified memory across two GPUs and peer access were not measured. <!-- src: scripts/fastguest/run_fast_guest.sh, docs/STATUS_DETAIL.md section 3, docs/design/V3_MULTI_GPU_AUDIT.md section 7 -->
 
-The bench builds its guest image once, from an Ubuntu 24.04 (noble) cloud image, on **stock QEMU** (no kayfabe), then reuses it. These are the steps `scripts/bench/provision_bench_tree.sh` performs. The bench scripts assume the host-mode driver: the same `.run` as the host. <!-- src: scripts/bench/provision_bench_tree.sh -->
+## Not documented yet
+
+- A supported way to build a guest image on other distributions, and a supported guest-kernel range. Guests on kernels 6.8.0-59 and 6.8.0-139 have run, which is a record and not a promise.
+- The proprietary (closed) guest kernel module.
+- A guest-side guide for container runtimes.
+
+## Appendix. How the project's own test guest is prepared
+
+The project's tests use a throwaway guest built from an Ubuntu 24.04 (noble) cloud image on stock QEMU, then reused. You do not need these steps for your own guest. They are what `scripts/bench/provision_bench_tree.sh` performs, written out so that you can follow them with another distribution. <!-- src: scripts/bench/provision_bench_tree.sh -->
 
 ```sh
 qemu-img convert -O qcow2 noble-server-cloudimg-amd64.img guest.qcow2
@@ -47,9 +65,10 @@ Notes from the script:
 
 For other guest driver versions the driver-matrix scripts build one guest image per version (`scripts/drivermatrix/stage_fat_guest.sh`); the launcher takes the image from `KF_GUEST_IMG`. <!-- src: scripts/bench/boot_nvkvm.sh -->
 
-## Boot it on kayfabe
 
-Use a QEMU built by `build_kf3.sh`, and start it with the device as shown in [Running the QEMU device](installing.md). The bench's launcher for a full guest is `scripts/bench/boot_nvkvm.sh <tag> [extra qemu args...]`, run in the foreground; `scripts/bench/boot_capture.sh <tag>` boots and also stores the guest driver's own `dmesg` and the host driver's log for the boot in files. <!-- src: scripts/bench/boot_nvkvm.sh, scripts/bench/boot_capture.sh -->
+### Booting it with the helper scripts
+
+Use a QEMU built by `build_kf3.sh` ([Install](installing.md)). The test launcher for a full guest is `scripts/bench/boot_nvkvm.sh <tag> [extra qemu args...]`, run in the foreground; `scripts/bench/boot_capture.sh <tag>` boots and also stores the guest driver's own `dmesg` and the host driver's log for the boot in files. <!-- src: scripts/bench/boot_nvkvm.sh, scripts/bench/boot_capture.sh -->
 
 What the launcher sets, from its source:
 
@@ -64,19 +83,7 @@ Then, inside the guest, the driver loads as it would on hardware. `nvidia-smi` s
 
 The guest driver's `dmesg` is not in the serial log unless the harness captures it, and a serial console is slow: verbose tracing over the 16550 UART once consumed most of a run's time budget, so the harness uses a virtio console. <!-- src: AGENTS.md "Bench traps", scripts/fastguest/run_fast_guest.sh -->
 
-## The thin guest (a test environment, not a desktop)
+### The thin guest (a test environment, not a desktop)
 
-For testing, a guest with no disk and no services exists: a kernel and initrd that load the driver, run the raw client and power off. Results come over the serial console. Build it with `scripts/fastguest/build_fast_guest.sh` and run it with `scripts/fastguest/run_fast_guest.sh`. See [Running the QEMU device](installing.md) for the checks. <!-- src: scripts/fastguest/build_fast_guest.sh, scripts/fastguest/run_fast_guest.sh -->
+For testing, a guest with no disk and no services exists: a kernel and initrd that load the driver, run the raw client and power off. Results come over the serial console. Build it with `scripts/fastguest/build_fast_guest.sh` and run it with `scripts/fastguest/run_fast_guest.sh`. See [What you can test](test-yourself.md) for the checks. <!-- src: scripts/fastguest/build_fast_guest.sh, scripts/fastguest/run_fast_guest.sh -->
 
-## More than one GPU
-
-One kayfabe device is created per host GPU. `KF3_GPUS=0,1` makes the thin-guest harness add one `kf3-gpu,gpu-minor=<m>` per listed host minor. A thin guest with two distinct host GPUs passed copy-engine checks serially and concurrently [measured in `docs/design/V3_MULTI_GPU_AUDIT.md` section 7, revision `74fced87`, lease 52664396, two RTX 3060s on one host]. The full 30-arm regression was a separate single-device run. CUDA inside a two-GPU guest, UVM across two GPUs and peer access were not measured. <!-- src: scripts/fastguest/run_fast_guest.sh, docs/STATUS_DETAIL.md section 3 -->
-
-## Not documented yet
-
-- A supported way to build a guest image on other distributions.
-- A supported guest-kernel range. Recorded examples include the thin guest on 6.8.0-59 and the full guest on 6.8.0-139. The branch `codex/sweep-integrate-20261018`, not merged, also records 6.8.0-147-generic in a GB202 desktop attempt whose presentation failed [measured at revision `24906bf33`, lease 56788212; `traces/sweep_integrate_20261018/phase2_blackwell_56788212/B2_RESULT.md` on that branch]. That extends the record; it is not a support promise.
-- The proprietary (closed) guest module.
-- A guest-side guide for container runtimes.
-
-Verified on: Linux guest results are recorded for kayfabe `afb552ea` (RTX 3060 GA106, 2026-09-30) and `714ec29d3` (GA104, host and guest 595.91.07, 2026-10-24); the application matrix is from `144557e43` on an RTX 4090, 2026-11-07. Not verified end to end: the image-preparation steps above were read from the script, not run for this page.

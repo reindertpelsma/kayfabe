@@ -1,0 +1,49 @@
+{
+  "linux_apps": "middle",
+  "matlab": {
+    "driver": {
+      "version": "580.173.02"
+    },
+    "image": {
+      "from": "pin",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "sha256": "81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc"
+    },
+    "isolation": "row",
+    "label": "matlab",
+    "rows": {
+      "cuda_kernel": {
+        "lane": "discovery"
+      },
+      "dl_train": {
+        "lane": "discovery"
+      },
+      "gpu_fft": {
+        "lane": "discovery"
+      },
+      "gpu_info": {
+        "lane": "discovery"
+      },
+      "gpu_matmul": {
+        "lane": "discovery"
+      },
+      "gpu_solve": {
+        "lane": "discovery"
+      },
+      "mem_oversub": {
+        "lane": "discovery"
+      },
+      "parpool_gpu": {
+        "lane": "discovery"
+      }
+    }
+  },
+  "rehearsal": false,
+  "schema": "kayfabe.payload-instruction/1",
+  "spec": null,
+  "stages": [],
+  "tier": "large",
+  "winapps": "mid",
+  "windows": true,
+  "windows_runs": 2
+}

@@ -1,0 +1,24 @@
+START 21:40:38
+REV 5d9c6dbaf
+21:41:16
+MLROWS_FACTS {"cc": [7, 5], "disk_free_gb": 84.84171776, "driver": "615.71.09", "driver_cuda": [13, 0], "gcc": true, "gpus": 1, "name": "NVIDIA GeForce RTX 2080 Ti", "python": [3, 12, 3], "python_h": true, "total_mib": 11264}
+MLROWS_CHECK_ROW row=vllm status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_CHECK_ROW row=tensorrt status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_CHECK_ROW row=jax status=ok flavour=cu13 reason=driver_CUDA_13.0_>=_13.0 set_up=0
+MLROWS_SETUP row=vllm status=ok reason=flavour_cu13,_182_s,_9.63_GB
+MLROWS_SETUP row=tensorrt status=ok reason=flavour_cu13,_103_s,_7.34_GB
+MLROWS_SETUP row=jax status=ok reason=flavour_cu13,_55_s,_4.38_GB
+GPU_USE_PROOF jax device=cuda:0 name=NVIDIA GeForce RTX 2080 Ti peak_mib=8309
+JAX_SUMMARY status=PASS flavour=cu13 reason=ok secs=2.9 mem_growth_mib=8309 token_sha256=-
+GPU_USE_PROOF tensorrt device=cuda:0 name=NVIDIA GeForce RTX 2080 Ti peak_mib=465
+TENSORRT_SUMMARY status=PASS flavour=cu13 reason=ok secs=80.1 mem_growth_mib=465 token_sha256=-
+GPU_USE_PROOF vllm device=cuda:0 name=NVIDIA GeForce RTX 2080 Ti peak_mib=9667
+VLLM_SUMMARY status=PASS flavour=cu13 reason=ok secs=73.5 mem_growth_mib=9667 token_sha256=98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a
+STANDALONE_EXIT rc=0 21:49:54
+NEGCTL_START jax 21:49:54
+NEGCTL_EXIT jax rc=1 21:49:58
+NEGCTL_START tensorrt 21:49:58
+NEGCTL_EXIT tensorrt rc=1 21:50:00
+NEGCTL_START vllm 21:50:00
+NEGCTL_EXIT vllm rc=1 21:50:25
+EXIT 21:50:25

@@ -1,0 +1,24 @@
+KF_PAYLOAD_ROOTLESS mode=require user=ci memlock=0 root_stages=none stages=kfml
+KF_PAYLOAD_TIER windows=0 source=instruction tier=large rehearsal=1 windows_runs=1 stages=none spec=none winapps=none linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       243G   85G  158G  35% /
+KF_PREFLIGHT_FREE_BYTES=169649635328
+KF_PAYLOAD_STAGE_START name=kfml
+[xid-watch] tag=ci6786588a728a3170_kfml  host=ubuntu  utc=2026-11-21T13:35:56Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/kfml_stage.py run --sha 9b3d165192e03b5cd27a7eca1a0f7f494cbc058a --checkout /workspace/kf-ci-src --prefix /workspace/kf-kfml --out /workspace/kf-ci-evidence/kfml.json --tier large --run-id ci6786588a728a3170
+[xid-watch] host_dmesg_lines=799  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=2
+[xid-watch] --- command output begins ---
+KF_KFML_RESULT {"facts":{"compute_cap":"8.9","cuda":"12.8","driver":"580.159.04","driver_cuda":"13.0","flavor":"cu128","gpu_name":"NVIDIA GeForce RTX 4090","torch":"2.7.1+cu128","vram_gb":23.52},"rows":[{"metrics":{"amp_vs_fp32_max_window_diff":0.002144,"compiled_vs_eager_max_window_diff":0.000177,"forward_rel_err":0.003497,"grad_scaler":false,"params":812288,"reference_compared":false,"reference_config_mismatch":false},"name":"nanogpt_compile","reason":"","status":"PASS","wall_s":35.349},{"metrics":{"cases_checked":29,"layernorm_max_abs_err":0.003901,"matmul_worst_rel_err":5e-06,"softmax_max_abs_err":0.0},"name":"triton_kernels","reason":"","status":"PASS","wall_s":15.877},{"metrics":{"build_s":33.813169,"spin_clock_cycles":51064},"name":"cuda_ext_inline","reason":"","status":"PASS","wall_s":38.553},{"metrics":{"acc_amp":0.7375,"acc_fp32":0.7375,"cuda_ipc":true,"grad_scaler":false,"pred_agreement":0.998,"train_s":18.445448},"name":"amp_convnet_cifar","reason":"","status":"PASS","wall_s":29.464},{"metrics":{"allocated_gb":16.192072,"async_copy_mb":64.0,"buffers":311,"free_end_gb":23.035828,"free_start_gb":23.131531,"graph_replays":40,"streams":16,"target_gb":16.192072},"name":"stress_alloc","reason":"","status":"PASS","wall_s":6.794},{"metrics":{"chunks":118,"oversub_gb":29.5,"vram_gb":23.516479},"name":"managed_oversub","reason":"","status":"PASS","wall_s":66.358}],"run_id":"ci6786588a728a3170","schema":1,"sha":"9b3d165192e03b5cd27a7eca1a0f7f494cbc058a","steps":[{"rc":0,"s":3.5,"step":"plan"},{"rc":0,"s":193.0,"step":"setup"},{"rc":0,"s":134.9,"step":"fetch-data"},{"rc":0,"s":201.2,"step":"run"}],"tier":"large","verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=2
+[xid-watch] ★ HOST Xid CLEAN across the command — 2 before, 2 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (799 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci6786588a728a3170_kfml.log
+KF_PAYLOAD_STAGE_END name=kfml rc=0 duration_ms=409341
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=1
+stage name=kfml rc=0 duration_ms=409341 result=PASS
+suite name=kfml pass=1 fail=0 skip=0
+KF_FINAL_SUMMARY_END

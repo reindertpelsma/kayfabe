@@ -1,0 +1,2 @@
+[13167.074752] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[13260.671246] workqueue: psi_avgs_work hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND

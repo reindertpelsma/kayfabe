@@ -1,0 +1,212 @@
+{
+	"DCGM Diagnostic" : 
+	{
+		"test_categories" : 
+		[
+			{
+				"category" : "Deployment",
+				"tests" : 
+				[
+					{
+						"name" : "software",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Pass"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.033 seconds"
+							],
+							"status" : "Pass"
+						}
+					}
+				]
+			},
+			{
+				"category" : "Hardware",
+				"tests" : 
+				[
+					{
+						"name" : "memory",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.051 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "diagnostic",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.039 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "nvbandwidth",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.037 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			},
+			{
+				"category" : "Integration",
+				"tests" : 
+				[
+					{
+						"name" : "pcie",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.216 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			},
+			{
+				"category" : "Stress",
+				"tests" : 
+				[
+					{
+						"name" : "memory_bandwidth",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.051 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "targeted_stress",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.048 seconds"
+							],
+							"status" : "Skip"
+						}
+					},
+					{
+						"name" : "targeted_power",
+						"results" : 
+						[
+							{
+								"entity_group" : "GPU",
+								"entity_group_id" : 1,
+								"entity_id" : 0,
+								"status" : "Skip"
+							}
+						],
+						"test_summary" : 
+						{
+							"info" : 
+							[
+								"Test runtime: 0.051 seconds"
+							],
+							"status" : "Skip"
+						}
+					}
+				]
+			}
+		]
+	},
+	"entity_groups" : 
+	[
+		{
+			"entities" : 
+			[
+				{
+					"device_id" : "2503",
+					"entity_id" : 0,
+					"serial_num" : "<<<NOT_SUPPORTED>>>"
+				}
+			],
+			"entity_group" : "GPU",
+			"entity_group_id" : 1
+		}
+	],
+	"metadata" : 
+	{
+		"Driver Version Detected" : "580.126.20",
+		"version" : "4.8.0"
+	}
+}

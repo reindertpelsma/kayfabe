@@ -1,0 +1,8 @@
+uptime_s=13681.32 now_epoch=1795301243 now=2026-11-21T22:47:23Z
+[10095.864962] NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x90000 RangeLo: 0xb0000, RangeHi: 0x13ffff, pageSzLockMask: 0x11000
+[11867.623693] NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x110000 RangeLo: 0x20000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[11936.479584] NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[12605.118785] NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+SPEC_COPY_DELETED removed=nothing
+SPEC_STAGE_COUNTS pass=1 fail=1 not_run=1 of=3
+SPECVIEWPERF_STAGE_FAIL NARROWED

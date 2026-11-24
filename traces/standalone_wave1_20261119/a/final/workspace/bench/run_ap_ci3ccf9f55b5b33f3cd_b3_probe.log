@@ -1,0 +1,63 @@
+=== boot_capture tag=ap_ci3ccf9f55b5b33f3cd_b3 at 2026-11-20T01:33:07+00:00 ===
+=== source revision: 7fb1c98a0 ===
+=== qemu binary: -rwxr-xr-x 1 root root 96838360 Nov 19 22:35 /workspace/bench/kf3-bins/7fb1c98a/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kf-ci-src/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /workspace/kf-ci-src/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Nov 20 01:33:26 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Nov 20 01:33 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Nov 20 01:33 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 20 01:33 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 20 01:33 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Nov 20 01:33 .
+drwxr-xr-x 18 root root   4000 Nov 20 01:33 ..
+cr--------  1 root root 240, 1 Nov 20 01:33 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Nov 20 01:33 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kf-ci-src/scripts/apps/apps_hook.sh at 2026-11-20T01:33:28+00:00 ===
+APPS_HOOK tag=ap_ci3ccf9f55b5b33f3cd_b3 apps=[vkcts] guest=NVIDIA GeForce RTX 4090, 580.159.04, Disabled
+APPS_GUEST_DRM rc=0 4 
+APPRES side=guest app=vkcts verdict=PASS rc=0 secs=1170 quiet=0 note=ok cases=291 pass=200 warn=0 ns=89 fail=0 crash=0 timeout=2 notrun=0 gpu=EXTERNAL gpu_use=NA gpu_auth=none gpu_subs=6805 gpu_births=74 boot=ap_ci3ccf9f55b5b33f3cd_b3 guest_xid=0 kf3_lines=3000 kf3_refusals=20
+APPDIG side=guest app=vkcts DIGEST vkcts_cases f42559e293444d54
+APPS_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 24 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=416
+GUEST_DMESG_AFTER_NVRM=409
+GUEST_DMESG_WORKLOAD_DELTA=392
+=== HOST dmesg delta for this boot (watermark 1300 → 1315) ===
+HOST_DMESG_LINES=15
+HOST_DMESG_NVRM=4
+HOST_DMESG_XID=2

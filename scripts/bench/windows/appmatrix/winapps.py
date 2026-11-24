@@ -47,6 +47,22 @@ WEB = ["webgl", "webgpu", "video", "webgl_conformance", "webgpu_conformance"]
 PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py", "hf_generate.py", "cdp_quicksort.py", "stream_perthread.py",
           "release_oracles.py", "llama_release.py", "blender_release.py", "release_cuda_smoke.py"]
 PY_LINUX = ["torch_correct.py", "ai_bench.py", "cupy_check.py", "blender_render.py"]     # the unmodified Linux-row scripts
+OPEN_ROWS_DIR = os.path.join(REPO, "scripts", "bench", "windows", "open_rows")
+
+
+def open_rows_files():
+    """The files of scripts/bench/windows/open_rows the guest needs for the `vkglcts_*` / `dxsamples_*` rows (not the tests or the mutants), as
+    forward-slash paths relative to that directory. They go to C:\\kf\\open_rows\\ (2026-11-17, docs/design/V3_WINDOWS_OPEN_ROWS.md)."""
+    out = []
+    for dp, dirs, files in os.walk(OPEN_ROWS_DIR):
+        dirs[:] = sorted(d for d in dirs if d not in ("tests", "__pycache__"))
+        for f in sorted(files):
+            if f.endswith("_mutants.py") or f.endswith(".pyc") or f == "CMakeLists.txt" and os.path.basename(dp) != "soak":
+                continue
+            out.append(os.path.relpath(os.path.join(dp, f), OPEN_ROWS_DIR).replace(os.sep, "/"))
+    return sorted(out)
+
+
 PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 
@@ -555,7 +571,7 @@ class GuestSession:
 
     def _push(self):
         q = self.q
-        q.exec(PS, ["-NoProfile", "-Command", "New-Item -ItemType Directory -Force -Path C:\\kf\\py,C:\\kf\\web,C:\\kf\\apps,C:\\kf\\results,C:\\kf\\logs | Out-Null"], timeout=60)
+        q.exec(PS, ["-NoProfile", "-Command", "New-Item -ItemType Directory -Force -Path C:\\kf\\py,C:\\kf\\web,C:\\kf\\apps,C:\\kf\\results,C:\\kf\\logs,C:\\kf\\open_rows\\caselists,C:\\kf\\open_rows\\soak | Out-Null"], timeout=60)
         n = 0
         for g, rel in PS_PUSH.items():
             q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
@@ -565,6 +581,8 @@ class GuestSession:
             q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
         for p in PY_LINUX:
             q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+        for rel in open_rows_files():
+            q.file_write("C:\\kf\\open_rows\\" + rel.replace("/", "\\"), open(os.path.join(OPEN_ROWS_DIR, *rel.split("/")), "rb").read()); n += 1
         q.file_write(r"C:\kf\stage.json", json.dumps(self.stage_json).encode()); n += 1
         self.log(f"[{self.tag}] pushed {n} guest files")
 

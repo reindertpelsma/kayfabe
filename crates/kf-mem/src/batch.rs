@@ -1100,7 +1100,7 @@ type Seg = (Option<u32>, u64, u64);
 ///    `virt_mem_allocator_gm107.c:1578-1633`): a guest reservation, or a MICRO reservation made
 ///    over exactly the batch's VA ([`BatchedVas::low_reserve`], default ON).
 /// 3. **No remap, ever.** A VA whose guest mapping did not change is never transiently unmapped
-///    (owner, 2026-10-09): partial unmaps are made exact instead.
+///    because partial unmaps are made exact instead.
 ///
 /// ★ D2 — **the locks.** `book`, `own` and `micro` are taken by the VA thread AND by the act thread
 /// ([`BatchedVas::hand_to_host`]). The act thread taking them is accepted (a steer request answered
@@ -4442,7 +4442,7 @@ mod tests {
     }
 
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a
-    /// debug build on a loaded SHARED box (a 30 ms bound failed once under another agent's load; 6-12 ms
+    /// debug build on a loaded shared box (a 30 ms bound failed under concurrent load; 6-12 ms
     /// is the unloaded figure; the unfixed code waited 670 ms, so 60 ms still discriminates).
     const ACT_WAIT_BOUND_US: u64 = 60_000;
 

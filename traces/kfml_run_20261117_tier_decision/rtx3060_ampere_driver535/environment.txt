@@ -1,0 +1,24 @@
+--- os
+PRETTY_NAME="Ubuntu 22.04.3 LTS"
+NAME="Ubuntu"
+--- kernel
+5.15.0-94-generic
+--- cpu
+Model name:                         AMD Ryzen 5 5600X 6-Core Processor
+--- gcc
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
+--- nvcc (system)
+Cuda compilation tools, release 12.2, V12.2.140
+Build cuda_12.2.r12.2/compiler.33191640_0
+--- python
+Python 3.10.12
+--- nvidia-smi query
+name, driver_version, memory.total [MiB], compute_cap
+NVIDIA GeForce RTX 3060, 535.154.05, 12288 MiB, 8.6
+--- nvidia-smi header
+Tue Nov 17 09:37:52 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.154.05             Driver Version: 535.154.05   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+--- disk
+overlay         100G   36G   65G  36% /

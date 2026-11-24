@@ -1,0 +1,6 @@
+=== llama_cpp_gen side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 7871 MiB):
+  Device 0: NVIDIA GeForce RTX 4090, compute capability 8.9, VMM: yes, VRAM: 7871 MiB
+llama_prepare_model_devices: using device CUDA0 (NVIDIA GeForce RTX 4090) (0000:00:03.0) - 7477 MiB free
+load_tensors: offloaded 0/29 layers to GPU
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

@@ -1,0 +1,4 @@
+prefetch rc=0 wall=521s
+stage mid (prefetched, cold venv) rc=2 wall=0s
+stage mid warm rc=2 wall=0s
+done

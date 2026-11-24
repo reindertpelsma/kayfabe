@@ -1,8 +1,8 @@
 # Building from source
 
-There is no installer and no public binary. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps the repository's build scripts perform, in their order. <!-- src: README.md, scripts/bench/build_kf3.sh -->
+There is no public binary yet, so you build it. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps of the build, in their order. Once you have the binary, continue with [Install](installing.md), step 3. <!-- src: README.md, scripts/bench/build_kf3.sh -->
 
-Read [Requirements](requirements.md) first. A QEMU binary built from this tree is not yet distributable under the GPL: see [Credits and notices](credits.md). <!-- src: LICENSE exception 2 -->
+Read [Requirements](requirements.md) first. No public binary is published yet; whether and when one is published is the project owner's decision, not a licence limit of the source (see [Credits and notices](credits.md)). <!-- src: docs/OWNER_RULINGS.md section BC item 1, LICENSE exception 2 -->
 
 ## 1. Get the source
 
@@ -48,6 +48,8 @@ rustup target add --toolchain 1.99.0 x86_64-unknown-linux-musl x86_64-unknown-ue
 ```
 <!-- src: scripts/bench/provision_box.sh (rustup steps; the script reads the channel from rust-toolchain.toml and adds each target in a loop) -->
 
+The first line is rustup's own official installer, which you run yourself. The repository's provisioning scripts instead fetch a pinned `rustup-init` and check it against the `.sha256` that `static.rust-lang.org` publishes next to it and a pin in `scripts/ci/trust_manifest.json`. <!-- src: scripts/ci/vast_box_main.sh, scripts/ci/trust_manifest.json -->
+
 (`rustup` normally adds the listed targets itself when it installs the pinned toolchain; the commands above make it explicit, as the provisioning script does.) Without the musl standard library the whole workspace fails with `error[E0463]: can't find crate for std` on a crate that has nothing to do with musl. The UEFI target is needed because the build compiles kayfabe's boot-display driver (`firmware/kf-gop`) from source; a missing target is a named build error. No compiled binary is committed to the repository. <!-- src: scripts/bench/provision_box.sh header, crates/kf-gop-image/build.rs -->
 
 ## 4. Build and test the workspace
@@ -85,6 +87,7 @@ To use a tarball you already have, add `--from-file <path>`; it is checked again
 1. Runs `cargo build --release -p kf-qemu` and requires the resulting `target/release/libkf_qemu.a`. A failed cargo step stops the script, so a stale archive is never used.
 2. Copies every `qemu/hw/misc/kf3/*.c`, `*.h` and `meson.build` into `<qemu>/hw/misc/kf3/`, and the archive beside them.
 3. Appends `subdir('kf3')` to `hw/misc/meson.build` and a `config KF3` stanza (`bool`, `default y if TEST_DEVICES`, `depends on PCI`) to `hw/misc/Kconfig`, unless they are already there.
+   It also replaces QEMU's `pc_machine_wakeup` in `hw/i386/pc.c` so that waking a guest from sleep (ACPI S3) keeps each vCPU's Hyper-V enlightenment state; without it a Windows guest started with `hv-time` can hang right after waking on a host with a stable TSC. The replacement is applied once and refused on a QEMU whose `pc_machine_wakeup` differs from 10.2.4's. <!-- src: scripts/release/build_qemu.py (WAKE_OLD, WAKE_NEW, apply_wake_hunk); scripts/bench/build_kf3.sh -->
 4. Takes a lock on the build directory, then configures QEMU, only if the directory is new or was configured with different flags (a stale configuration is removed whole and rebuilt):
    ```
    --target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent
@@ -97,6 +100,57 @@ To use a tarball you already have, add `--from-file <path>`; it is checked again
 6. Installs the binary privately **per revision** at `<build-dir's parent>/kf3-bins/<git rev>[-dirty]/qemu-system-x86_64` (atomic rename), with `pc-bios` and `qemu-bundle` linked beside it, and prints a `KF3_BUILT <path> rev=<rev> ...` line.
 
 The per-revision directory exists because a shared binary was once replaced under a running test. The launch scripts run the binary for their own checkout's revision. <!-- src: scripts/bench/build_kf3.sh header -->
+
+## 5a. Build with the build kit
+
+`scripts/release/build_qemu.py` is the kit the project's release is built with. It builds the Rust archive, lays the `kf3-gpu` device into a QEMU source tree, configures and builds QEMU, and packs the result. It installs nothing, takes no lock and needs no root. It needs the packages of step 2, `gnupg`, and the toolchain of step 3. <!-- src: scripts/release/build_qemu.py (module docstring), .github/workflows/release-qemu.yml (package list) -->
+
+```sh
+python3 -I scripts/release/build_qemu.py plan                  # the inputs, the patch list and the exact configure line; builds nothing
+```
+
+```sh
+python3 -I scripts/release/build_qemu.py build --out dist      # a few minutes on 6 cores
+```
+<!-- src: scripts/release/build_qemu.py (plan, build); a full build of QEMU 10.2.4 took about 3 minutes on a 6-core machine (reproduce run) -->
+
+`dist/` then holds `kayfabe-qemu-<QEMU version>-<kayfabe revision>-linux-x86_64.tar.xz` and a `...-manifest.json`. Unpack the tarball anywhere: `bin/qemu-system-x86_64` finds its firmware in `share/qemu` beside it. The manifest lists the QEMU version and how its source was checked, the kayfabe revision, every file the kit adds to the QEMU tree with its sha256, the exact configure line, the versions of the compiler and libraries, and the sha256 of each output. The configure line has no GTK and no SDL (the display is the broker, see [Display and the broker](display.md)), one target (`x86_64-softmmu`) and no network access. <!-- src: scripts/release/build_qemu.py (build, CONFIGURE_FLAGS) -->
+
+**Which QEMU.** With no option the kit downloads the pinned official release (10.2.4) from `download.qemu.org` and accepts it only if its detached signature verifies against the release signer's key listed in `scripts/release/qemu-release.pin` (checked with a private `gpg` keyring that holds only that key; the fingerprint is the one `https://www.qemu.org/download/` publishes). To use your own QEMU source instead: <!-- src: scripts/release/qemu-release.pin, scripts/release/build_qemu.py (verify_signature) -->
+
+```sh
+python3 -I scripts/release/build_qemu.py build --qemu-tarball ~/src/qemu-10.2.4.tar.xz --out dist   # a release tarball (checked against its .sig when that file is beside it)
+python3 -I scripts/release/build_qemu.py build --qemu-tree ~/src/qemu-10.2.4 --out dist             # a source tree, for example the one a distribution builds from
+```
+
+A tarball or tree you supply is yours: the manifest says so and records its hash. The kit copies a tree and never changes it, and ignores its `.git`. It accepts QEMU 10.2.4 only and refuses any other version by name, listing the versions it knows. A tree that already has a `hw/misc/kf3` directory with other files in it is refused. A tree that already contains the two one-line hunks (`subdir('kf3')` in `hw/misc/meson.build` and a `config KF3` stanza in `hw/misc/Kconfig`) gets them once. The kit also replaces `pc_machine_wakeup` in `hw/i386/pc.c` (the sleep/wake change described above, recorded in the manifest as `replace-function`); a tree whose `pc_machine_wakeup` is not QEMU 10.2.4's is refused. <!-- src: scripts/release/build_qemu.py (QemuInput, apply_overlay, check_supported) -->
+
+**Check that a build is reproducible.** `reproduce` builds twice, in two different directories, and fails unless the binary tarball and the manifest are byte-identical:
+
+```sh
+python3 -I scripts/release/build_qemu.py reproduce --out repro   # builds twice, compares
+```
+<!-- src: scripts/release/build_qemu.py (reproduce); run for this page on one machine: KIT_REPRODUCIBLE for QEMU 10.2.4, for two builds from the checkout and for a build from the source tarball against one from the checkout -->
+
+The kit fixes the clock (to the commit time of the checkout), the locale and every build path, and sorts and normalises the archive. Identical bytes are expected for the same compiler, linker and libraries, which is why the manifest records them; a different toolchain can give a different binary. <!-- src: scripts/release/build_qemu.py (build_env, pack_tree, configure_args) -->
+
+**Verify a release you downloaded.** A release of this project carries the binary tarball, the corresponding source tarball, the manifest and a `SHA256SUMS` file, and each of them has a GitHub artifact attestation made by the workflow run that built it:
+
+```sh
+gh attestation verify kayfabe-qemu-10.2.4-<revision>-linux-x86_64.tar.xz \
+  --repo reindertpelsma/kayfabe --signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml --source-ref refs/heads/master --deny-self-hosted-runners
+sha256sum -c SHA256SUMS
+```
+
+The three pins matter: `--repo` alone accepts an attestation made by any workflow on any branch of the repository, while `--signer-workflow`, `--source-ref` and `--deny-self-hosted-runners` accept only the release workflow, run from `master`, on a GitHub-hosted runner. Use all of them, for every file. <!-- src: .github/workflows/release-qemu.yml (draft job) -->
+
+To rebuild the binary from the source tarball, unpack it and point the kit inside at the tarball:
+
+```sh
+tar -xf kayfabe-qemu-10.2.4-<revision>-source.tar.xz
+python3 -I kayfabe-qemu-10.2.4-<revision>-source/kayfabe/scripts/release/build_qemu.py build --source-tarball kayfabe-qemu-10.2.4-<revision>-source.tar.xz --out dist
+```
+<!-- src: .github/workflows/release-qemu.yml, scripts/release/build_qemu.py (make_source_tarball, open_source_tarball) -->
 
 ## 6. Optional builds
 
@@ -122,23 +176,23 @@ make check               # build + selftest
 
 Build dependencies named in `broker/Makefile`: `libwayland-dev wayland-protocols` (Wayland backend), `libxcb1-dev libxcb-dri3-dev libxcb-present-dev` (X11 backend), optionally `libxcb-render0-dev` and `libxcb-xinput-dev`. A backend is built only when its libraries are present, and the build prints which ones it kept. <!-- src: broker/Makefile -->
 
-## How the commands on this page are tested (2026-11-15)
+## How the commands on this page are tested
 
-The commands in the blocks above that carry a `<!-- kf-run: ... -->` line are run, as written, by the CI GPU boxes (payload stage `install_flow`, `scripts/ci/install_flow.py`, large tier only, selected with `--only install_flow`). There is no second copy of them: `scripts/ci/doc_steps.py` reads the blocks from this file and refuses a marker it does not know. The marker convention is in that script's header. Blocks without a marker (the broker build, the GPU gates, the thin guest) are not run by it.
+The commands in the blocks above that carry a `<!-- kf-run: ... -->` line are run, as written, by the project's CI GPU machines (payload stage `install_flow`, `scripts/ci/install_flow.py`, large tier only, selected with `--only install_flow`). There is no second copy of them: `scripts/ci/doc_steps.py` reads the blocks from this file and refuses a marker it does not know. The marker convention is in that script's header. Blocks without a marker (the broker build, the GPU gates, the thin guest) are not run by it.
 
 What the test changes, and nothing else:
 
 - **The clone URL.** `git clone https://github.com/reindertpelsma/kayfabe.git` is replaced by a clone of a local mirror that holds exactly the commit under test, because the stage must test that commit and not whatever the public repository says. The stage then checks that the clone's `HEAD` is that commit.
 - **Who runs it.** Every block runs in a fresh bash with `set -euo pipefail`, as a new unprivileged user in group `kvm` with no capabilities and a home directory under a temporary prefix. The one block marked `user=root` (`packages_install`) runs as root, where `sudo` is a no-op; the result lists which steps needed root.
-- **The QEMU tarball** is downloaded from `download.qemu.org` as the block says. [Not pinned by this page's block yet: the pin of `scripts/bench/qemu.pin` is a separate change.]
+- **The QEMU tarball** is downloaded as the block says and checked against the pin of `scripts/bench/qemu.pin`.
 
-*(Design, not implemented: when a CI-built attested binary exists for the exact commit, the stage will use it instead of the `qemu_build` step, as `docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md` section 2 describes. The hook is `install_flow.py`'s `--attested-binary`.)*
+<!-- src: docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md section 2 (a CI-built attested binary is designed, not built; the hook is install_flow.py --attested-binary) -->
 
 ## Not documented yet
 
-- A one-command install, distribution packages, containers or a prebuilt binary.
+- A one-command install, distribution packages, containers or a prebuilt binary. The page for a downloadable release is created at the first release.
 - Building against a QEMU other than 10.2.4, or against a distribution's QEMU packages.
 - Cross-building for arm64.
 - Windows-host builds.
 
-Verified on: `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -->
+<!-- src (basis of this page): `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -- -->

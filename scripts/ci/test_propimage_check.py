@@ -306,25 +306,24 @@ class T(unittest.TestCase):
             m.require_swtpm("unknown")
 
     def test_gpu_fix_every_instance(self):
-        script = m.render_gpu_fix("GPU-test")
+        script = m.render_gpu_fix()
         self.assertIn("Get-ChildItem $base", script)
         self.assertIn("EnableGpuFirmware", script)
         self.assertNotIn("0001", script)
         self.assertNotIn("0002", script)
-        self.assertIn("nvidia-smi", script)
+        self.assertIn("nvidia-smi", m.RENDER_GPU_QUERY)
 
     def test_gpu_fix_restarts_changed_devices(self):
-        script = m.render_gpu_fix("GPU-test")
+        script = m.render_gpu_fix()
         self.assertIn("pnputil /restart-device", script)
         # a phantom device of another die (CM_PROB_PHANTOM) must never be restarted: only present devices with the NVIDIA vendor id
         self.assertIn("$_.Present -and $_.InstanceId -match 'VEN_10DE'", script)
         self.assertNotIn("FriendlyName -match 'NVIDIA'", script)
         # a device left in Code 43 by a plain restart is retried with Disable/Enable (MEASURED); the exact seed UUID is still required
-        self.assertIn("Disable-PnpDevice", script)
-        self.assertIn("Enable-PnpDevice", script)
-        self.assertIn("-cne $expected", script)
+        self.assertIn("Disable-PnpDevice", m.RENDER_GPU_REENABLE)
+        self.assertIn("Enable-PnpDevice", m.RENDER_GPU_REENABLE)
+        self.assertNotIn("nvidia-smi", script)  # the poll is the host's loop (test_gpu_diag.py), not a call inside the 120 s ssh limit
         self.assertIn("$LASTEXITCODE", script)
-        self.assertIn("$expected", script)
 
     def test_gpu_uuid_wrong_rejected(self):
         self.assertFalse(m.gpu_uuid_matches("GPU-other", "GPU-test"))
@@ -372,8 +371,8 @@ class T(unittest.TestCase):
         )
 
     def test_gpu_fix_second_instance_loop(self):
-        self.assertIn("Get-ChildItem $base", m.render_gpu_fix("GPU-test"))
-        self.assertNotIn("Status -ne 'OK'", m.render_gpu_fix("GPU-test"))
+        self.assertIn("Get-ChildItem $base", m.render_gpu_fix())
+        self.assertNotIn("Status -ne 'OK'", m.render_gpu_fix())
 
     def test_wlms_non1074_again(self):
         self.assertIsNone(m.classify_shutdown([{"event_id": 41, "process": "wlms.exe"}]))
@@ -1246,15 +1245,16 @@ class T(unittest.TestCase):
 
     def test_gpu_fix_failure(self):
         g = SimpleNamespace(
-            ps=lambda s: SimpleNamespace(returncode=1, stdout="GPU-test", stderr="failure")
+            ps=lambda s, timeout=120: SimpleNamespace(returncode=1, stdout="GPU-test", stderr="failure")
         )
-        self.assertFalse(m.gpu_fix(g, "GPU-test")[0])
+        self.assertFalse(m.gpu_fix(g, "GPU-test", sleep=lambda s: None, clock=iter(range(0, 10**6, 20)).__next__)[0])
 
     def test_gpu_fix_wrong_uuid_even_rc_zero(self):
+        reply = json.dumps({"smi_rc": 0, "smi_out": ["GPU-other"], "devices": []})
         g = SimpleNamespace(
-            ps=lambda s: SimpleNamespace(returncode=0, stdout="GPU-other", stderr="")
+            ps=lambda s, timeout=120: SimpleNamespace(returncode=0, stdout=reply, stderr="")
         )
-        self.assertFalse(m.gpu_fix(g, "GPU-test")[0])
+        self.assertFalse(m.gpu_fix(g, "GPU-test", sleep=lambda s: None, clock=iter(range(0, 10**6, 20)).__next__, host_fn=lambda: None)[0])
 
     def test_interactive_task_cleanup_uses_registered_prefix(self):
         self.assertIn("$n='kf_app_", m.task_wrapper("app_abc"))
@@ -1357,8 +1357,15 @@ class T(unittest.TestCase):
         resume=False,
         clock_query_ok=True,
         resume_last="2026-11-12T00:10:00Z",
+        extra=(),
+        mem_mb=65536,
+        gpu_smi=("GPU-test",),
+        inspect=None,
+        patch_gpu_fix=None,
+        stdout=None,
     ):
-        """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps."""
+        """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps. `gpu_smi` is what the guest's nvidia-smi printed; `inspect(out)` runs on the output directory."""
+        self.argv_kw = []
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             work = root / "work"
@@ -1421,6 +1428,12 @@ class T(unittest.TestCase):
             def ps(script, **kw):
                 if script == "Stop-Computer -Force":
                     processes[-1].rc = 0
+                if script == m.RENDER_GPU_QUERY:
+                    reply = {"smi_rc": 0, "smi_out": list(gpu_smi), "devices": [
+                        {"class": "Display", "present": True, "status": "OK", "problem": 0, "service": "nvlddmkm"}]}
+                    return SimpleNamespace(returncode=0, stdout=json.dumps(reply), stderr="")
+                if script == m.render_gpu_fix():
+                    return SimpleNamespace(returncode=0, stdout=json.dumps({"changed": True, "restarted": 1}), stderr="")
                 stamp = (
                     (
                         m.PI.fmt(m.PI.utc(resume_last) + m.timedelta(seconds=120))
@@ -1448,8 +1461,10 @@ class T(unittest.TestCase):
                 compare=lambda s, f: (
                     used_bases.append(m.PI.boot_clock(s, "ci")) or [("ids", "MATCH", "")]
                 ),
-                build_argv=lambda *a, **k: ["qemu", str(work / "run/clone.qcow2")]
-                + (["restrict=on"] if offline else []),
+                build_argv=lambda *a, **k: self.argv_kw.append(k)
+                or ["qemu", str(work / "run/clone.qcow2")] + (["restrict=on"] if offline else []),
+                check_ram_override=m.PI.check_ram_override,
+                mem_available_mb=lambda: mem_mb,
             )
             with (
                 patch.object(m, "PI", pi),
@@ -1458,6 +1473,9 @@ class T(unittest.TestCase):
                 patch.object(m.subprocess, "Popen", Process),
                 patch.object(m, "Guest", return_value=g),
                 patch.object(m.time, "sleep"),
+                patch.object(m, "gpu_fix", new=patch_gpu_fix or m.gpu_fix),
+                patch.object(m, "GPU_WAIT_SETTLED_S", 0),
+                patch.object(m, "GPU_POLL_S", 0),
                 patch.object(
                     m.time,
                     "monotonic",
@@ -1477,7 +1495,7 @@ class T(unittest.TestCase):
                 patch.object(
                     m, "run_check", return_value={"ok": True, "evidence": "FILE", "signal": "work"}
                 ) as app,
-                patch("sys.stdout", new=io.StringIO()),
+                patch("sys.stdout", new=stdout or io.StringIO()),
             ):
                 rc = m.main(
                     [
@@ -1497,8 +1515,11 @@ class T(unittest.TestCase):
                         "resolve",
                     ]
                     + (["--resume"] if resume else [])
+                    + list(extra)
                 )
             rows = json.loads((out / "result.json").read_text())
+            if inspect:
+                inspect(out)
             if used_bases:
                 self.assertEqual(
                     m.PI.fmt(used_bases[0]),
@@ -1534,6 +1555,46 @@ class T(unittest.TestCase):
         app = next(r for r in rows if r["step"] == "app:resolve")
         self.assertNotEqual(app["verdict"], "PASS")
         self.assertEqual(app["class"], "harness")
+
+    def test_pipeline_passes_no_overrides_by_default(self):
+        rc, rows, apps = self.pipeline()
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual(self.argv_kw[-1].get("ram_mb"), None)
+        self.assertEqual(self.argv_kw[-1].get("audio"), False)
+        self.assertNotIn("ram-mb", [r["step"] for r in rows])
+        self.assertNotIn("audio", [r["step"] for r in rows])
+
+    def test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "16384", "--audio"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (16384, True))
+        by = {r["step"]: r for r in rows}
+        self.assertEqual((by["ram-mb"]["verdict"], by["audio"]["verdict"]), ("PASS", "PASS"))
+        self.assertIn("16384 MiB", by["ram-mb"]["detail"])
+
+    def test_pipeline_audio_alone_sets_no_ram_override(self):
+        rc, rows, apps = self.pipeline(extra=["--audio"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (None, True))
+        self.assertNotIn("ram-mb", [r["step"] for r in rows])
+
+    def test_pipeline_ram_alone_sets_no_sound_card(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "12288"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (12288, False))
+        self.assertNotIn("audio", [r["step"] for r in rows])
+
+    def test_pipeline_refuses_a_ram_override_above_75_percent_of_memavailable_before_any_boot(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "16384"], mem_mb=20000, clock_query_ok=False)
+        self.assertEqual((rc, apps), (1, 0))
+        self.assertEqual(self.argv_kw, [])
+        self.assertIn("RAM_OVERRIDE_EXCEEDS_HOST", rows[-1]["detail"])
+        self.assertEqual(rows[-1]["class"], "harness")
+
+    def test_pipeline_refuses_an_invalid_ram_override(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "5000"], clock_query_ok=False)
+        self.assertEqual((rc, self.argv_kw), (1, []))
+        self.assertIn("RAM_OVERRIDE_INVALID", rows[-1]["detail"])
 
     def test_pipeline_rejects_online_argv_and_cleans_helpers(self):
         rc, rows, apps = self.pipeline(offline=False)
@@ -1771,7 +1832,7 @@ class T(unittest.TestCase):
     def test_gpu_fix_lists_class_keys_by_name(self):
         # Real guest: Get-ChildItem on the display class key opens the protected Properties subkey and throws
         # "Requested registry access is not allowed"; listing names only avoids it.
-        script = m.render_gpu_fix("GPU-abc")
+        script = m.render_gpu_fix()
         self.assertIn("Get-ChildItem $base -Name", script)
         self.assertNotIn("$_.PSPath", script)
 
@@ -1970,7 +2031,7 @@ def mutants():
         ),
         ("power-native", 'errors.extend(str(error) for error in data["errors"])', "pass"),
         ("power-integration", 'if not power["ok"]:', "if False:"),
-        ("power-aggregate", 'r["verdict"] in ("PASS", "OK")', 'r["verdict"] == "PASS"'),
+        ("power-aggregate", 'r["verdict"] in ("PASS", "OK", "PASS_LIMITED")', 'r["verdict"] == "PASS"'),
         ("harness-class", 'return "HARNESS", "harness"', 'return "FAIL", "app"'),
         (
             "wlms-postrun",

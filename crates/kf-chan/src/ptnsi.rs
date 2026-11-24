@@ -1,5 +1,4 @@
-//! ★★★ **Host non-stall edges → guest vectors: wake every subscriber, never drop** (2026-10-08,
-//! owner ruling §X in `docs/OWNER_RULINGS.md`).
+//! ★★★ **Host non-stall edges → guest vectors: wake every subscriber, never drop.**
 //!
 //! A Passthrough twin's pushbuffer runs on the real engine unparsed, so the completion interrupt
 //! it asks for (`NON_STALL_INTERRUPT`, a copy's `LAUNCH_DMA` with `INTERRUPT_TYPE_NON_BLOCKING`)
@@ -25,7 +24,7 @@
 //! copy's interrupt arrives on `FIFO_EVENT_MTHD` ONLY (CE0's own notifier stays silent); a COPY2
 //! copy's on both CE2 and `FIFO_EVENT_MTHD`.
 //!
-//! ## The rule (owner, 2026-10-08): follow NVIDIA — an interrupt wakes everyone subscribed
+//! ## Interrupt delivery to all subscribers
 //!
 //! RM wakes EVERY client registered on an engine's non-stall list
 //! (`_gpuEngineEventNotificationListNotify`, `ogkm-595.84: event_notification.c:330-452`), whoever's work it
@@ -283,7 +282,7 @@ impl Pacer {
 /// `ogkm-595.84: intr.c:1210-1214`) with the LEAST collateral — the first vector, in `engines`
 /// order, that no engine the guest ARMED is announced on, so the guest fires `FIFO_EVENT_MTHD` and
 /// no engine notification anyone waits on. If every vector carries an armed engine, `fallback`
-/// (GR0's): a spurious engine wake, accepted (owner ruling §X). `engines` yields `(vector, armed)`.
+/// (GR0's). The relay permits this spurious engine wake. `engines` yields `(vector, armed)`.
 ///
 /// `[measured 2026-10-08, kf3 f589ab23, guest --ce-interrupt]` raising GR0's vector for every
 /// `FIFO_EVENT_MTHD` edge made the guest fire GR0's notifier on 50/50 COPY2 iterations, which bare

@@ -1169,6 +1169,118 @@ class PropTests(unittest.TestCase):
             self.assertIn("memory-backend-memfd,id=ram0,size=8192M,share=on", j)
             self.assertIn("memory-backend=ram0", j)
 
+    # --- 2026-11-16 per-run overrides: guest RAM and the null-backend HDA card (image B rows)
+    def identity_args(self, a):
+        """Every argv word that carries a seed-derived identity: SMBIOS (UUID, serials), MAC, disk serial, GPU UUID, slirp subnet and ssh port."""
+        return [w for i, w in enumerate(a) if w in ("-uuid", "-smbios", "-netdev") or w.startswith(("virtio-blk-pci", "virtio-net-pci", "kf3-gpu"))
+                or (i and a[i - 1] in ("-uuid", "-smbios", "-netdev"))]
+
+    def test_ram_and_audio_defaults_keep_8192_and_no_sound_card(self):
+        for mode in self.p.MODES:
+            a = self.argv(mode)
+            self.assertEqual(a[a.index("-m") + 1], "8192")
+            self.assertIn("size=8192M", a[a.index("-object") + 1])
+            self.assertNotIn("-audiodev", a)
+            self.assertFalse([w for w in a if "hda" in w])
+        self.assertEqual(self.p.init_state(SEED)["qemu"]["ram_mb"], 8192)
+
+    def test_ram_override_sets_the_backend_and_m_and_leaves_the_state_alone(self):
+        before = copy.deepcopy(self.state)
+        a = self.argv("ci", ram_mb=16384)
+        self.assertEqual(a[a.index("-m") + 1], "16384")
+        self.assertIn("memory-backend-memfd,id=ram0,size=16384M,share=on", a)
+        self.assertEqual(self.state, before)
+        self.assertEqual(self.state["qemu"]["ram_mb"], 8192)
+
+    def test_ram_override_is_validated(self):
+        for bad in (0, 1024, 4097, 8191, -8192, 2 ** 21, "16384", 16384.0, True):
+            with self.assertRaises(self.p.PropError, msg=repr(bad)) as c:
+                self.argv("ci", ram_mb=bad)
+            self.assertIn("RAM_OVERRIDE_INVALID", str(c.exception))
+        self.assertEqual(self.p.validate_ram_override(4096), 4096)
+
+    def test_ram_override_over_75_percent_of_memavailable_is_refused_by_name(self):
+        self.assertEqual(self.p.check_ram_override(16384, 21846), 16384)          # 75 percent of 21846 is 16384.5
+        with self.assertRaises(self.p.PropError) as c:
+            self.p.check_ram_override(16384, 21845)
+        self.assertTrue(str(c.exception).startswith("RAM_OVERRIDE_EXCEEDS_HOST:"))
+        with self.assertRaises(self.p.PropError):
+            self.p.check_ram_override(16384, 0)
+        self.assertEqual(self.p.check_ram_override(16384, 32768), 16384)
+
+    def test_ram_override_at_80_percent_of_the_host_is_refused_and_the_limit_is_75(self):
+        self.assertEqual(self.p.RAM_HOST_SHARE_PCT, 75)
+        with self.assertRaises(self.p.PropError) as c:
+            self.p.check_ram_override(16384, 20480)
+        self.assertIn("RAM_OVERRIDE_EXCEEDS_HOST", str(c.exception))
+        self.assertIn("limit 75 percent", str(c.exception))
+
+    def test_check_ram_override_validates_the_size_before_the_host_share(self):
+        for bad in (5000, 2048, 4097):
+            with self.assertRaises(self.p.PropError) as c:
+                self.p.check_ram_override(bad, 10 ** 9)
+            self.assertIn("RAM_OVERRIDE_INVALID", str(c.exception))
+
+    def test_ram_override_applies_in_every_mode_and_never_edits_the_state(self):
+        for mode in self.p.MODES:
+            before = copy.deepcopy(self.state)
+            a = self.argv(mode, ram_mb=12288)
+            self.assertEqual(a[a.index("-m") + 1], "12288", mode)
+            self.assertIn("size=12288M", a[a.index("-object") + 1], mode)
+            self.assertEqual(self.state, before, mode)
+
+    def test_mem_available_ignores_the_other_meminfo_lines(self):
+        text = "MemTotal: 99999999 kB\nMemFree: 99999999 kB\nMemAvailable:   20480000 kB\nSwapFree: 99999999 kB\n"
+        avail = self.p.mem_available_mb(text)
+        self.assertEqual(avail, 20000)
+        with self.assertRaises(self.p.PropError):
+            self.p.check_ram_override(16384, avail)
+
+    def test_the_audio_card_never_names_a_host_backend(self):
+        a = self.argv("ci", audio=True)
+        backends = [v for f, v in zip(a, a[1:]) if f == "-audiodev"]
+        self.assertEqual(len(backends), 1)
+        self.assertEqual(backends[0].split(",")[0], "none")
+        self.assertFalse({"alsa", "pa", "pipewire", "sdl", "oss", "jack", "dbus", "spice"} & set(w.split(",")[0] for w in a))
+
+    def test_memavailable_is_read_from_meminfo_text(self):
+        text = "MemTotal:       65536000 kB\nMemFree:         1000 kB\nMemAvailable:   33554432 kB\nBuffers: 1 kB\n"
+        self.assertEqual(self.p.mem_available_mb(text), 32768)
+        with self.assertRaises(self.p.PropError) as c:
+            self.p.mem_available_mb("MemTotal: 1 kB\n")
+        self.assertIn("MEMINFO_UNREADABLE", str(c.exception))
+        self.assertGreater(self.p.mem_available_mb(), 0)                            # this host's own /proc/meminfo
+
+    def test_audio_adds_the_null_backend_hda_card_last(self):
+        for mode in self.p.MODES:
+            off, on = self.argv(mode), self.argv(mode, audio=True)
+            self.assertEqual(on[:len(off)], off)                                    # appended last: no device before it moves a PCI slot
+            self.assertEqual(on[len(off):], ["-audiodev", "none,id=kfaudio", "-device", "ich9-intel-hda,id=kfhda",
+                                             "-device", "hda-duplex,bus=kfhda.0,audiodev=kfaudio"])
+            self.assertEqual(on[on.index("-audiodev") + 1].split(",")[0], "none")   # the null backend: no host audio device is opened
+            self.assertNotIn("alsa", " ".join(on))
+
+    def test_identity_args_are_byte_identical_with_and_without_the_overrides(self):
+        for mode in self.p.MODES:
+            base = self.identity_args(self.argv(mode))
+            self.assertTrue(any(w.startswith("type=1,") for w in base) and any(w.startswith("virtio-blk-pci") for w in base)
+                            and any(w.startswith("kf3-gpu") or mode == "setup" for w in base), mode)
+            for kw in ({"audio": True}, {"ram_mb": 16384}, {"audio": True, "ram_mb": 16384}):
+                other = self.argv(mode, **kw)
+                self.assertEqual(self.identity_args(other), base, (mode, kw))
+                self.assertEqual([w for w in other if w.startswith("gpu-uuid=") or "gpu-uuid=" in w], [w for w in self.argv(mode) if "gpu-uuid=" in w])
+        ids = self.state["ids"]
+        a = " ".join(self.argv("ci", audio=True, ram_mb=16384))
+        for want in (ids["smbios"]["uuid"], ids["smbios"]["serial"], ids["nics"][0]["mac"], "serial=" + ids["disks"][0]["serial"], ids["gpu_uuid"], ids["net"]["subnet"]):
+            self.assertIn(want, a)
+
+    def test_the_device_order_without_the_card_is_unchanged(self):
+        a = self.argv("ci", audio=True)
+        devs = [v for f, v in zip(a, a[1:]) if f == "-device"]
+        self.assertEqual(devs[-1].split(",")[0], "hda-duplex")
+        self.assertEqual(devs[-2].split(",")[0], "ich9-intel-hda")
+        self.assertEqual(devs[:-2], [v for f, v in zip(self.argv("ci"), self.argv("ci")[1:]) if f == "-device"])
+
     def test_machine_option_binds_the_ram_backend(self):
         a = self.argv("ci", display="off")
         self.assertIn("memory-backend=ram0", a[a.index("-machine") + 1])

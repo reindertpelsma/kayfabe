@@ -1,0 +1,6 @@
+xbranch_nopin.log / hwval_x595nopin_*: NOT the #546 control. The harness (scripts/bench/guest_profile.sh, kf_guest_driver_arg) derives
+guest-driver= from the guest's driver.STAGED receipt, so that run was PINNED (PASS, guest-driver=595.84 in its qemu log).
+The real control (no guest-driver= property at all) was run by hand with a temporary, reverted edit of the box's checkout:
+kf_guest_driver_arg echoed an unrelated default property (bar2-size=33554432) when HWVAL_NOPIN=1, QEMU_BIN pinned to
+the 32409d29 binary, run_fast_guest.sh, arm --timer, guest 595.84 on the 580.159.04 host: FAST_VERDICT=FAIL (raw client rc=1)
+and the message in nopin_refusal_message.txt (qemu/fast_hwval_x595np3_qemu.log.gz). The checkout was restored (git checkout).

@@ -1,0 +1,6 @@
+tensorrt-cu12-libs==10.16.1.11
+tensorrt-cu12-bindings==10.16.1.11
+onnx==1.23.2
+onnxruntime==1.32.0
+nvidia-cuda-runtime-cu12==12.9.79
+nvidia-cuda-nvrtc-cu12==12.9.86

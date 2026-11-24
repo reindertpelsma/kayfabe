@@ -289,12 +289,12 @@ pub enum Ir {
         /// The named root.
         pdb: Option<u64>,
     },
-    /// ★ OWNER_RULINGS §U: a method on a software subchannel bound to one of the channel's own
+    /// A method on a software subchannel bound to one of the channel's own
     /// software objects (a split: the runner resolves it, nothing is bound or emitted for it).
     SwMethod(SwCall),
 }
 
-/// ★ OWNER_RULINGS §U — one software method, as the guest wrote it: on bare metal a PBDMA
+/// One software method, as the guest wrote it. On bare metal a PBDMA
 /// software-method interrupt that the GSP serves for the object `SET_OBJECT` bound by number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwCall {
@@ -336,7 +336,7 @@ pub struct TState {
     mem_op_a: u32,
     mem_op_b: u32,
     mem_op_c: u32,
-    /// ★ The kernel-GR tier and the software-subchannel rule (owner rulings 2026-10-07): which
+    /// The kernel-GR and software-subchannel configuration selects which
     /// extensions this channel's decoder applies. Both off by default ([`GrConfig::default`]).
     pub gr: GrConfig,
     /// ★ GR tier: the graphics class each hardware subchannel 0-3 is bound to (0 = none; such a
@@ -351,7 +351,7 @@ pub struct TState {
     pub inert_binds: u64,
     /// GR-tier methods re-authored over the channel's life (for the log).
     pub gr_methods: u64,
-    /// ★ OWNER_RULINGS §U: software subchannels bound to a value that names one of the channel's
+    /// Software subchannels bound to a value that names one of the channel's
     /// own software objects (resolved by the runner at the method; the value is in
     /// [`TState::inert_value`]). Only with [`GrConfig::deferred_api`].
     pub swobj_subch: u8,
@@ -387,7 +387,7 @@ impl TState {
     }
 }
 
-/// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
+/// What a Translated channel's
 /// T-mode decoder may do beyond copy-engine work. Default: nothing.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct GrConfig {
@@ -398,7 +398,7 @@ pub struct GrConfig {
     /// A `SET_OBJECT` on a software subchannel (5-7) of a value no family lists as a class is
     /// accepted silently (inferred hardware behaviour: stored, later methods trap to RM).
     pub inert_sw_subch: bool,
-    /// ★ OWNER_RULINGS §U (`KF3_DEFERRED_API`): such a value is the channel's software classID of
+    /// With `KF3_DEFERRED_API`, such a value is the channel's software classID of
     /// one of its own software objects (`kchannelGetClassEngineID_GM107`, `kernel_channel_gm107.c:
     /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
     /// refuses by name. Takes precedence over `inert_sw_subch`.

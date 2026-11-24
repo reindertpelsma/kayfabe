@@ -1,0 +1,3 @@
+# tool=nvcodec_matrix device=NVIDIA GeForce RTX 3060 cc=8.6 driver_api=13.0 header_api=12.2 sessions_opened=8 ffmpeg=/usr/bin/ffmpeg ffmpeg_sha256=36d94a605d612e40
+# gpu_use_why=encoder session counter reached 8
+NVCODEC_MATRIX_SUMMARY pass=35 not_supported=7 fail=0 mismatch=0 not_run=5 cases=47 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_3060 driver_api=13.0 sessions_opened=8

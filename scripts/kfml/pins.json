@@ -2,18 +2,63 @@
  "_comment": "Pins for everything kfml fetches. sha256 values were measured by the author on 2026-11-11 from the official URLs; null means PIN ME (the runner fails with the measured hash).",
  "datasets": {
   "tinyshakespeare": {
-   "url": "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
+   "url": "https://raw.githubusercontent.com/karpathy/char-rnn/6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e/data/tinyshakespeare/input.txt",
    "filename": "tinyshakespeare-input.txt",
    "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
    "license": "LicenseRef-public-domain-text-unverified-file-provenance",
-   "redistribution_ok": false
+   "redistribution_ok": false,
+   "anchor_note": "the URL names upstream commit 6f9487a6 (karpathy/char-rnn master on 2026-11-19; the file last changed in 370cbcd4, 2015-05-21): the same bytes for anyone, re-checkable on GitHub; sha256 MEASURED equal 2026-11-19",
+   "trust_artifact": "kfml-dataset-tinyshakespeare"
   },
   "cifar10_binary": {
    "url": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
    "filename": "cifar-10-binary.tar.gz",
    "sha256": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
    "license": "LicenseRef-no-licence-stated",
-   "redistribution_ok": false
+   "redistribution_ok": false,
+   "parallel": 6,
+   "parallel_note": "the server gives about 45 KB/s per connection and resets 8 or more at once (kfml_run_20261117_second_die); kf_trust.py downloads it with 6 streams through kf_fetch.py, sha256 and md5 still verified",
+   "md5": "c32a1d4ab5d03f1284b67883e8d87530",
+   "md5_source": "https://www.cs.toronto.edu/~kriz/cifar.html",
+   "trust_artifact": "kfml-dataset-cifar10-binary"
+  }
+ },
+ "flavors": {
+  "cu128": {
+   "cuda": "12.8",
+   "cc_min": [
+    7,
+    5
+   ],
+   "cc_max": [
+    12,
+    0
+   ],
+   "lock": "requirements.lock.txt",
+   "lock_sha256": "41eda0847699c9e91ef1a3c27b550be332a415e64ee2e54c968a6b16e5a5118a",
+   "compat_min_driver_cuda": "12.0",
+   "compat_cc_max": [
+    9,
+    0
+   ]
+  },
+  "cu126": {
+   "cuda": "12.6",
+   "cc_min": [
+    7,
+    5
+   ],
+   "cc_max": [
+    9,
+    0
+   ],
+   "lock": "requirements.cu126.lock.txt",
+   "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+   "compat_min_driver_cuda": "12.0",
+   "compat_cc_max": [
+    9,
+    0
+   ]
   }
  },
  "cuda_redist": {

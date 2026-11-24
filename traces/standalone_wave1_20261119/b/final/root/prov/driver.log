@@ -1,0 +1,32 @@
+DRIVER_SWAP_START 2026-11-19T22:47:27+00:00
+before: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+obtaining the installer of 580.159.04
+KF_TRUST name=nvidia-linux-run-580.159.04 anchor=official-checksum-url sha256=c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e size=397162548 mode=trust-git-only gating=yes
+-rw-r--r-- 1 root root 397162548 Nov 19 22:47 /root/NVIDIA-Linux-x86_64-580.159.04.run
+dpkg lock free after 0s
+nouveau_guard: blacklisted, udev told to reload; nouveau loaded now: 0
+held packages: <none>
+holds remaining after unhold: 0  ⇒ MUST be 0
+modules still loaded: 0
+driver packages to purge: <none>
+purge_rc=0  nvidia driver packages remaining: 0  ⇒ MUST be 0
+KERNEL_CC=x86_64-linux-gnu-gcc-12 (/usr/bin/x86_64-linux-gnu-gcc-12) for kernel 6.8.0-59-generic
+Verifying archive integrity... OK
+Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 580.159.04......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+
+WARNING: Unable to determine the path to install the libglvnd EGL vendor library config files. Check that you have pkg-config and the libglvnd development libraries installed, or specify a path with --glvnd-egl-config-path.
+
+installer_rc_IGNORED_ON_PURPOSE=0
+after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+modinfo: version:        580.159.04 license:        Dual MIT/GPL 
+OPEN_MODULE=yes
+VERSION_MATCH=yes (580.159.04)
+open /dev/nvidiactl: OK
+open /dev/nvidia0: OK
+open /dev/nvidia-uvm: OK
+NVIDIA GeForce RTX 4090, 580.159.04
+GPU_SETTLE ok recoveries=0: NVIDIA GeForce RTX 4090, 580.159.04
+DRIVER_SWAP_DONE rc=0 2026-11-19T22:49:54+00:00

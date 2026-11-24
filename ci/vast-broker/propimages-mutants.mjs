@@ -8,7 +8,11 @@ import { spawnSync } from 'node:child_process';
 import { tempCopy } from './mutant-copy.mjs';
 
 const here = tempCopy();
-const TESTS = [here + 'test/propimages.test.js', here + 'test/bandwidth.test.js'];
+const TESTS = [
+  here + 'test/propimages.test.js',
+  here + 'test/bandwidth.test.js',
+  here + 'test/matlab-instruction.test.js',
+];
 const S = 'src/propimages.js',
   C = 'propimages.json',
   B = 'src/benchdata.js';
@@ -16,6 +20,44 @@ const S = 'src/propimages.js',
 const BW = 'src/bandwidth.js',
   BJ = 'bandwidth.json';
 const MUTANTS = [
+  // ---- the MATLAB Linux image (matlabPlan, linux_images)
+  [
+    'matlab: sha256 left out of the image pin',
+    [
+      [
+        S,
+        "image: { from: 'pin', ref: object.ref, sha256: object.sha256 },",
+        "image: { from: 'pin', ref: object.ref },",
+      ],
+    ],
+  ],
+  [
+    'matlab: an unmeasured family keeps the configured lanes',
+    [[S, '{ lane: measured ? row.lane : LANE_UNMEASURED },', '{ lane: row.lane },']],
+  ],
+  [
+    'matlab: the die driver is not looked up (any pinned driver)',
+    [
+      [
+        S,
+        "p.os === 'linux' && p.version === version && p.status === 'PINNED',",
+        "p.os === 'linux' && p.status === 'PINNED',",
+      ],
+    ],
+  ],
+  [
+    'matlab: the tier check is dropped',
+    [[S, "if (tierName !== 'large') throw Error('matlab tier');", '']],
+  ],
+  [
+    'matlab: the Linux object role is not checked',
+    [[S, "objects.get(li.object)?.role === 'linux_image'", 'true']],
+  ],
+  ['matlab: row ids are not checked', [[S, 'MATLAB_ROWS.includes(id)', 'true']]],
+  [
+    'matlab: the stage is not planned from the instruction (bandwidth)',
+    [[BW, "(i.matlab ?? null) !== null || only.includes('matlab')", "only.includes('matlab')"]],
+  ],
   [
     'strict flag dropped from the part',
     [[S, '    propimages_strict: true,', '    propimages_strict: false,']],
@@ -181,7 +223,7 @@ const MUTANTS = [
   ],
   [
     'a gate row moved to discovery in the config',
-    [C, { change: (d) => (d.images[0].apps.edge.lane = 'discovery') }],
+    [C, { change: (d) => (d.images[0].apps.solidworks.lane = 'discovery') }],
   ],
   [
     'image B marked measured on blackwell in the config',
@@ -220,13 +262,7 @@ const MUTANTS = [
   ['conditions of an entry ignored', [[BW, 'if (!matches(entry.when, ctx)) return;', '']]],
   [
     'skipped stage still counted',
-    [
-      [
-        BW,
-        'const chosen = plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));',
-        'const chosen = plan;',
-      ],
-    ],
+    [[BW, 'const chosen = selectStages(plan, { only, skip });', 'const chosen = plan;']],
   ],
   [
     'pinned size not read from the pin',

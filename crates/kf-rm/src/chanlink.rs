@@ -215,7 +215,7 @@ pub struct ChannelAlloc {
     /// None means unavailable layout/short params, Some((0, _)) an explicit zero.
     pub userd_source: Option<(u32, u64)>,
     /// ★★★ A guest-KERNEL channel (§7's policy, and the Translated route) — **PROPOSED Q7 rule**
-    /// (`V3_P5_PORT_MAP.md` Q7, pending the owner): the guest's CPU-RM stamped
+    /// (Proposed in `V3_P5_PORT_MAP.md` Q7): the guest's CPU-RM stamped
     /// `internalFlags.PRIVILEGE = KERNEL` on the alloc ([`kf_abi::notifier::ChannelPrivilege`]:
     /// RM zeroes the caller's `internalFlags` and recomputes the level from the call's security
     /// context, which no userspace ioctl can make `KERNEL`), OR the client is one of the guest
@@ -444,7 +444,7 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
     // (`KernelInUserSpace`), the guest's RmAlloc failed (0x40), and every such refusal was followed by a
     // TDR (4 of 4). A guest USER video channel is a passthrough twin exactly like a GR/CE twin
     // (`docs/design/V3_VIDEO_ENGINES.md` §2), and video methods have no physical-aperture operand
-    // (OWNER_RULINGS, 2026-10-08 evidence), so the VA space contains it. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
+    // so the VA space contains it. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
     // creates a graphics channel WITH a context share and a copy channel (engine 0xc) WITHOUT one, both
     // under the process's own `ProcessID` (0x14c0) in the same per-process VA space; the copy channel,
     // kept Translated, was refused there by the twin-state rule and the device creation failed.
@@ -673,7 +673,7 @@ pub enum ChanStatement {
         object: u32,
     },
     /// ★★★ `GPU_PROMOTE_CTX` (`0x2080012b`) — the guest's CPU-RM declaring a GR channel's context
-    /// buffers to "physical RM" (us). Owner ruling 2026-09-25: **satisfied by the twin**. The
+    /// buffers to "physical RM" (us). The twin satisfies the promote request. The
     /// guest channel runs as a host twin whose OWN context buffers host RM allocated and promoted
     /// when we created its engine object; nothing here is forwarded (the promote is a privileged
     /// GSP-internal control), the guest's buffers are never read or written, and the statement is
@@ -792,7 +792,7 @@ pub enum ChanStatement {
         /// The class.
         class: u32,
     },
-    /// ★ OWNER_RULINGS §U.1 (2026-10-07): an `NV50_DEFERRED_API_CLASS` object allocated under a
+    /// An `NV50_DEFERRED_API_CLASS` object allocated under a
     /// channel. The class is TRANSLATED-ONLY: the plane admits it under a Translated channel (and
     /// records the software classID the guest gave it, so a later `SET_OBJECT` names it), refuses
     /// it `NV_ERR_NOT_SUPPORTED` under a Passthrough twin, and declines a channel it does not run
@@ -1026,7 +1026,7 @@ impl ChannelPolicy {
         // ★ x11-dispsw (review 2026-10-03, MEDIUM): ASKED BEFORE the boundary below, which refuses
         // three of these classes — the guest numbered the object before it asked us, refused or
         // not. Observed only: the answer is ignored and the alloc goes on exactly as before.
-        // ★ OWNER_RULINGS §U (2026-10-07): observed with the switch OFF too — a Translated channel's
+        // Observed with the switch off too: a Translated channel's
         // software numbering must follow every `ENG_SW` child (the 5080 that a later `SET_OBJECT`
         // names by number comes after them); `GF100_DISP_SW` is one of them when it is not carried
         // by its own statement. The 5080 itself is numbered by its own statement below.
@@ -1051,7 +1051,7 @@ impl ChannelPolicy {
         {
             return None;
         }
-        // ★ OWNER_RULINGS §U.1: class 5080 is Translated-only. The plane admits it (Done → the object
+        // Class 5080 is Translated-only. The plane admits it (Done → the object
         // seat makes the node) or it is refused here, before any node exists.
         if h.class == kf_abi::generated::classes::NV50_DEFERRED_API_CLASS {
             // Reuse the object seat's validated public constructor decode.
@@ -2369,8 +2369,8 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
     //    channel and never methods it. ⊘ NOT twinned: host RM's dispsw acts on HOST display heads,
     //    so a guest's methods must never reach it. A guest that does method it faults its own
     //    twin (contained, `gpu_fault_is_contained`).
-    //    ★ EXPERIMENT `x11-dispsw` (2026-10-03, default off, PENDING THE OWNER'S RULING — owner
-    //    question 2026-10-03 item 2, option A): with it on, `ChannelPolicy::on_alloc` carries the
+    //    Experiment `x11-dispsw` (default off, option A): when enabled,
+    //    `ChannelPolicy::on_alloc` carries the
     //    alloc to the plane BEFORE this shape is asked, and the plane twins it under the channel's
     //    host twin with AUTHORED params (head 0, displayMask 0, caps 0) or refuses it by name. The
     //    rule then reads "twinned with an authored head; host RM validates every release it makes
@@ -2429,8 +2429,8 @@ pub const fn is_rm_internal_client(h_client: u32) -> bool {
     h_client & RS_CLIENT_INTERNAL_HANDLE_BASE == RS_CLIENT_INTERNAL_HANDLE_BASE
 }
 
-/// ★★★ **The Q7 identity rule (PROPOSED, pending the owner's approval)** — a channel is the guest
-/// KERNEL's iff a fact guest userspace cannot produce says so:
+/// ★★★ **The proposed Q7 identity rule**: a channel belongs to the guest
+/// kernel only if a fact guest userspace cannot produce says so:
 ///
 /// 1. the guest's CPU-RM stamped `internalFlags.PRIVILEGE = KERNEL` on its alloc
 ///    ([`kf_abi::notifier::ChannelPrivilege`] carries the ogkm proof), or

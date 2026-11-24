@@ -1,0 +1,39 @@
+{
+ "compute_cap": "7.5",
+ "cuda": "12.8",
+ "data": {
+  "acc": 0.7275
+ },
+ "driver": "595.91.07",
+ "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+ "measured_on": {
+  "compute_cap": "7.5",
+  "cuda": "12.8",
+  "driver": "595.91.07",
+  "driver_cuda": "13.2",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+  "run_id": "kfml_run_20261117_second_die",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "acc_amp": 0.7275,
+  "acc_fp32": 0.7275,
+  "amp_dtype": "torch.float16",
+  "cuda_ipc": true,
+  "epoch_loss": [
+   1.687436030461238,
+   1.2674602606357672,
+   1.041423601981921,
+   0.8928028987004206,
+   0.755966284336188
+  ],
+  "grad_scaler": true,
+  "pred_agreement": 1.0,
+  "reference_diff": null,
+  "train_s": 12.794687986373901
+ },
+ "test": "amp_convnet_cifar",
+ "torch": "2.7.1+cu128",
+ "wall_s": 19.198
+}

@@ -1,0 +1,22 @@
+[xid-watch] tag=g1  host=ubuntu  utc=2026-11-22T15:50:50Z
+[xid-watch] command: python3 -B -I /workspace/p2/adobe_part2/hold_run.py --dir /workspace/img/unpacked --work /workspace/img/work/g1 --out /workspace/img/out/g1 --qemu /workspace/bench/kf3-bins/b36040c6/qemu-system-x86_64 --flags scripts/bench/windows/kf3_flags.sample.env --broker /root/kayfabe/broker/nvkvm-display-broker --gop-efi /workspace/p2/kf-gop.signed.efi --display broker --app-set b --dat
+[xid-watch] host_dmesg_lines=651  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+DEVIATION: image.qcow2 sha256 taken from the unpack stamp (verified 2026-11-22T15:38:59Z)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+audio PASS NONE virtual HDA sound card, QEMU null backend (no host audio opened)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power NOT OK FILE NOT OK values={} errors=Command '['ssh', '-i', '/workspace/img/work/g1/id_kf', '-p <port>', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'LogLevel=ERROR', '-o', 'Con
+clock-save WARN NONE Guest clock not saved: Guest UTC unavailable before shutdown
+NVIDIA GeForce RTX 4090, 49140 MiB, 580.159.04
+power NOT OK FILE NOT OK values={} errors=Command '['ssh', '-i', '/workspace/img/work/g1/id_kf', '-p <port>', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKno
+clock-save WARN NONE Guest clock not saved: Guest UTC unavailable before shutdown

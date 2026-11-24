@@ -61,12 +61,11 @@
 //!
 //! # ⊘ A refutation of this port's own earlier reasoning, recorded so it is not repeated
 //!
-//! An earlier rung retired this hypothesis by arguing *"`nvproxy` answers unknown controls
-//! with `NV_ERR_NOT_SUPPORTED` and CUDA works under gVisor, so refusing these is
-//! survivable."* Checked **by value** against `gvisor/pkg/abi/nvgpu/*.go`, with a live
-//! positive control to prove the grep was sighted: of these six, nvproxy's tables contain
-//! **only** `0x20802209`. The other five are **absent from nvproxy entirely**, so gVisor
-//! never demonstrated that refusing them is survivable, and the premise did not hold.
+//! An earlier rung retired this hypothesis by arguing that another userspace GPU sandbox
+//! answers unknown controls with `NV_ERR_NOT_SUPPORTED` and CUDA still works there, so
+//! refusing these is survivable. Checked by value, that sandbox's tables held only
+//! `0x20802209` of these six, so it never demonstrated that refusing the other five is
+//! survivable, and the premise did not hold.
 //!
 //! # Why a measured table rather than a host forward
 //!
@@ -84,9 +83,8 @@
 //! rows carry their provenance so a future reader can re-measure rather than re-derive, and
 //! `serve_len` refuses any request whose declared size is not the measured one.
 
-/// `NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO` — the one id of the four that nvproxy also knows
-/// (`gvisor/pkg/abi/nvgpu/ctrl.go:753`), and the only one of the four **without** the
-/// GSS-legacy bit.
+/// `NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO` — the one id of the four that ogkm's headers name,
+/// and the only one of the four **without** the GSS-legacy bit.
 pub const RC_GET_WATCHDOG_INFO: u32 = 0x2080_2209;
 
 /// GSS-legacy, unnamed in every open header. Hardware answers `{0, 0xd}`.
@@ -486,7 +484,7 @@ mod tests {
 
     #[test]
     fn three_of_the_four_carry_the_gss_legacy_bit_and_one_does_not() {
-        // The watchdog id is a normal, nvproxy-known control; the other three are opaque.
+        // The watchdog id is a normal, ogkm-named control; the other three are opaque.
         let m = crate::capability::RM_GSS_LEGACY_MASK;
         assert_eq!(RC_GET_WATCHDOG_INFO & m, 0);
         for c in [

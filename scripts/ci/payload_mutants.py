@@ -412,6 +412,7 @@ CASES += [
     ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
     ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
     ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-command-lets-the-lane-guest-go-offline", replace('                    "KF_SPEC_NET=online",\n', "")),
     ("spec-command-keeps-the-narrowed-table", replace('                    "KF_SPEC_TABLE",\n', '                    "KF_SPEC_LANE_X",\n')),
     (
         "spec-narrowed-verdict-accepted",
@@ -724,6 +725,14 @@ CASES += [
 ]
 
 CASES += [
+    ("winapps-pin-refusal-is-a-retry-row", scoped("winapps_rows", 'raise EvidenceError("windows_apps_pin")', 'raise EvidenceError("windows_apps_retry_refused")')),
+    ("winapps-pin-refusal-never-recognised", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if False and re.fullmatch(')),
+    ("winapps-pin-refusal-any-reason", scoped("winapps_rows", '(RECIPE_INPUT_DRIFT|PIN_MISMATCH)', '[A-Z_]+')),
+    ("winapps-pin-refusal-any-class", scoped("winapps_rows", ' class=PIN reason=', ' class=[A-Z]+ reason=')),
+    ("winapps-pin-refusal-prefix-match", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if len(verdicts) == 1 and re.match(')),
+]
+
+CASES += [
     ("xd1-blackwell-host-names-refused", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('GR_HOST')"
     ), "native_xid_guard.py"),
@@ -868,6 +877,7 @@ def main():
             "payload_instruction.py",
             "box_downloader.py",
             "propimage_apps.py",
+            "kfml_stage.py",  # test_vast_payload_apps and the v7 fixture build the kfml stage log with it (default stage since 2026-11-17)
             "kf_fetch.py",
             "vast_payload.sh",
             "vast_payload_hooks.sh",

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.8) — **THE T-SPACE ADDRESS PERIMETER.**
 //!
-//! `OWNER_RULINGS.md` §R(b): code that produces an address hardware will dereference is perimeter
+//! Code that produces an address hardware will dereference is perimeter
 //! material even though it compiles as safe Rust. This file holds ALL of it for the Translated
 //! plane, and nothing else:
 //!
@@ -609,7 +609,7 @@ pub fn fence_words(fence_va: u64, payload: u32) -> Option<Vec<u32>> {
 /// waiting acquire yields the runlist instead of holding the engine's timeslice.
 const SEM_EXECUTE_ACQUIRE_SWITCH_TSG_EN: u32 = 1 << 12;
 
-/// ★ OWNER_RULINGS §U.2 — **the host GATE of a deferred `DMA_INVALIDATE_TLB`**: a 32-bit
+/// **The host gate of a deferred `DMA_INVALIDATE_TLB`**: a 32-bit
 /// EQUALITY acquire of `payload` at our own ring's gate word `gate_va` (inside the ring's fence
 /// region: kayfabe's memory, never a window address and never guest-reachable), with
 /// `ACQUIRE_SWITCH_TSG` so a waiting gate yields the runlist. The channel stops here, IN the
