@@ -1097,6 +1097,24 @@ for (const run_id of ['123-1', '456-2'])
       assert.equal((await hbOf(h)).run_id, run_id);
     },
   );
+test('F5 an alarm inside the interval keeps the held change, the one after it stores it once', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  const first = await hbOf(h);
+  c.send({ type: 'heartbeat', state: 'busy', run_id: '789-3' });
+  await new Promise((r) => setTimeout(r, 100));
+  await h.call('rack-1', 'POST', '/__t/alarm', 1, '');
+  assert.deepEqual(await hbOf(h), first, 'the interval has not elapsed: nothing is written');
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '5001');
+  await h.call('rack-1', 'POST', '/__t/alarm', 1, '');
+  const stored = await hbOf(h);
+  assert.equal(stored.state, 'busy');
+  assert.equal(stored.run_id, '789-3');
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '5002');
+  await h.call('rack-1', 'POST', '/__t/alarm', 1, '');
+  assert.deepEqual(await hbOf(h), stored, 'a flushed change is not written twice');
+});
 for (const code of [1000, 1001])
   test('F5 a held change is flushed when the socket closes ' + code, async (t) => {
     const h = await runtime(t);

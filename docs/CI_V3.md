@@ -75,7 +75,7 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | --- | --- | --- | --- |
 | `stable` | the gates above | 210.5 for the whole old job | about 8 |
 | `worker-tests` | prettier, black, `node --test` of the Worker and the admin (dev dependencies installed), Worker bundle pin check and its mutants, tier mutants | about 6.5 | about 7 |
-| `worker-mutants-a` | evidence-upload, provider-tolerance, denied-countries mutants | about 14.7 | about 15 |
+| `worker-mutants-a` | evidence-upload, provider-tolerance, denied-countries mutants; worker-hardening mutants (`worker-hardening-mutants.mjs`, second step with the dev dependencies, run time not yet measured in CI) | about 14.7 before the hardening step | about 15 plus the hardening step (not measured) |
 | `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
 | `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
 | `mutants-a` | OIDC retry, propimage, clock rule, bandwidth, image size, kfci, instruction, and the mutants of the sharder and of the slicing | about 9 | about 10 |

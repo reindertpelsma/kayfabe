@@ -11,8 +11,9 @@ REAPER_MARGIN_MINUTES = "15"
 [observability]
 enabled = true
 head_sampling_rate = 1
-# F4 (2026-11-13): optional memory of the instance ids seen under a kf-ci label. Create a KV namespace,
-# then uncomment (DEPLOY.md, "Worker hardening"). Without it the label alone decides.
+# NOT APPLIED: optional memory of the instance ids seen under a kf-ci label. Without it the label alone
+# decides. To apply: create the namespace, put its id below, uncomment, deploy
+# (vast-broker/DEPLOY.md, "Worker hardening", owner checklist steps 1 and 2).
 # [[kv_namespaces]]
 # binding = "REAPER_SEEN"
 # id = "<namespace id>"
