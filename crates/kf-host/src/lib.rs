@@ -1235,9 +1235,9 @@ impl HostRm {
     /// host (`kf-harness` probes); they must never come from a guest. Not validated here because an
     /// opaque control has no layout to validate against; a guest-sourced payload is a
     /// guest-authored host RM action (owner principle A.2), which is exactly what the removed
-    /// `KF3_GSS_NATIVE` experiment did (security review 1, F-06, 2026-11-13). The only VMM caller
-    /// left is that experiment's dead `kf-qemu` glue, whose `kf_rm::gssnative::execute` no longer
-    /// calls it.
+    /// `KF3_GSS_NATIVE` experiment did (security review 1, F-06). No product crate calls it:
+    /// `kf-abi/tests/control_partition.rs` `harness_only_methods_have_no_product_caller` fails if one
+    /// does.
     ///
     /// # Errors
     /// [`RmError`] when the ioctl itself failed.

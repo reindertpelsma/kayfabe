@@ -93,8 +93,7 @@ const NV_ERR_INVALID_CLASS: u32 = 0x22;
 const NV2080_NOTIFIERS_GR0: u32 = 12;
 
 /// The channel plane's act thread (a service thread: its death stops the VM,
-/// [`crate::failclosed::is_service_thread`]). ★ 2026-11-14: owned here; it was
-/// `kf_rm::gssnative::ACT_THREAD` (same name) until the `KF3_GSS_NATIVE` experiment was removed.
+/// [`crate::failclosed::is_service_thread`]).
 pub const ACT_THREAD: &str = "kf3-chan-act";
 
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.

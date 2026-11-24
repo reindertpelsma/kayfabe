@@ -110,6 +110,24 @@ class RustReads(Tree):
         self.rs('fn f() { let _ = std::env::var_os(support::NESTED); }', "crates/kf-x/src/lib.rs")
         self.assertEqual(self.names(), ["KF3_O"])
 
+    def test_a_const_imported_by_name_from_another_file_is_resolved(self):
+        self.rs('pub const IMPORTED: &str = "KF3_R";', "crates/kf-x/src/names.rs")
+        self.rs('use crate::names::IMPORTED;\nfn f() { let _ = std::env::var(IMPORTED); }', "crates/kf-x/src/lib.rs")
+        self.assertEqual(self.names(), ["KF3_R"])
+
+    def test_a_files_own_const_wins_over_a_later_file_of_the_same_name(self):
+        self.rs('const FLAG: &str = "KF3_S";\nfn f() { let _ = std::env::var(FLAG); }', "crates/kf-x/src/a.rs")
+        self.rs('pub const FLAG: &str = "KF3_T";', "crates/kf-x/src/z.rs")
+        self.assertEqual(self.names(), ["KF3_S"])
+
+    def test_a_const_name_defined_in_two_files_resolves_to_each_files_own_value(self):
+        # Two modules each with `pub const FLAG` read their own: before, the last file scanned won and one
+        # read was attributed to the other module's name (a KF3_CMC_LOG_BUFFER_PROBE read hid behind the
+        # deleted kf_rm::gssnative::FLAG).
+        self.rs('pub const FLAG: &str = "KF3_P";\nfn f() { let _ = std::env::var(FLAG); }', "crates/kf-x/src/a.rs")
+        self.rs('pub const FLAG: &str = "KF3_Q";\nfn g() { let _ = std::env::var(FLAG); }', "crates/kf-x/src/b.rs")
+        self.assertEqual(self.names(), ["KF3_P", "KF3_Q"])
+
     def test_a_list_of_names_in_the_function_names_each(self):
         self.rs('fn f() -> bool { ["KF3_P", "KF3_Q"].iter().any(|k| std::env::var_os(k).is_some()) }')
         self.assertEqual(self.names(), ["KF3_P", "KF3_Q"])
