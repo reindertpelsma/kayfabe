@@ -17,6 +17,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 import warnings
@@ -899,20 +900,100 @@ def host_log_excerpt(path, limit=300, pattern=HOST_LOG_PATTERN):
     return [ln[:400] for ln in lines if _host_line_interesting(ln, pattern)][-limit:]
 
 
-def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic):
+def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic, alive=lambda: True):
     """Manual iteration aid: keep the booted guest up until the release file exists (or max_s passes).
 
-    Returns "released" or "timeout". The release file must not exist beforehand (a stale file would
-    release at once, so refuse it)."""
+    Returns "released", "timeout" or "qemu-exited" (alive() turned false: the VM ended during the hold).
+    The release file must not exist beforehand (a stale file would release at once, so refuse it)."""
     path = Path(path)
     if path.exists():
         raise ValueError("Release file already exists; refusing a stale release")
     t0 = clock()
     while clock() - t0 < max_s:
+        if not alive():
+            return "qemu-exited"
         if path.exists():
             return "released"
         sleep(5)
     return "timeout"
+
+
+# QMP events that say how the VM ended. The guest can raise some events at will, so only these are kept, and at most
+# QMP_MAX_EVENTS of them.
+QMP_KEEP = {"SHUTDOWN", "GUEST_PANICKED", "GUEST_CRASHLOADED", "RESET", "POWERDOWN", "STOP"}
+QMP_MAX_EVENTS = 200
+
+
+def _load_qmp():
+    spec = importlib.util.spec_from_file_location("kf_qmp", HERE / "qmp.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def record_qmp_events(sock, out, qmp=None, attach_s=120.0, clock=time.monotonic, sleep=time.sleep):
+    """Append the QMP_KEEP events of QEMU's event socket to out until QEMU closes it. False if it never attached."""
+    qmp = qmp or _load_qmp()
+    deadline = clock() + attach_s
+    while True:
+        try:
+            s, f = qmp.qmp_open(str(sock), timeout=30.0)
+            break
+        except (OSError, EOFError, ValueError, RuntimeError):
+            if clock() >= deadline:
+                return False
+            sleep(0.5)
+    kept = 0
+    with s, open(out, "a", encoding="utf-8") as o:
+        s.settimeout(None)
+        while True:
+            try:
+                r = qmp.recv(f)
+            except (EOFError, OSError, ValueError):
+                break
+            if r.get("event") in QMP_KEEP and kept < QMP_MAX_EVENTS:
+                o.write(json.dumps(r) + "\n")
+                o.flush()
+                kept += 1
+    return True
+
+
+def start_qmp_events(sock, out):
+    t = threading.Thread(target=record_qmp_events, args=(sock, out), daemon=True)
+    t.start()
+    return t
+
+
+def read_qmp_events(path):
+    events = []
+    try:
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if type(e) is dict:
+                events.append(e)
+    except OSError:
+        pass
+    return events
+
+
+def qemu_exit_cause(events):
+    """(verdict, text) for a QEMU that exited before the harness stopped it, from its recorded QMP events.
+
+    With hv-crash in the CPU flags and no -action panic=..., a Windows bugcheck reaches QEMU as GUEST_PANICKED and QEMU's
+    default panic action ends the process with status 0 and no log line, which looks like a guest power-off."""
+    for e in events:
+        if e.get("event") == "GUEST_PANICKED":
+            info = (e.get("data") or {}).get("info") or {}
+            args = " ".join("%#x" % info[k] for k in ("arg1", "arg2", "arg3", "arg4", "arg5") if type(info.get(k)) is int)
+            return "FAIL", "guest bugcheck: GUEST_PANICKED type=%s%s (arg1 is the bugcheck code); QEMU's panic action ended the VM" % (
+                info.get("type", "?"), (" args=" + args) if args else "")
+    reasons = [str((e.get("data") or {}).get("reason")) for e in events if e.get("event") == "SHUTDOWN"]
+    if reasons:
+        return "FAIL", "QEMU exited before the harness stopped it: SHUTDOWN reason=%s" % reasons[-1]
+    return "FAIL", "QEMU exited before the harness stopped it; no QMP SHUTDOWN or GUEST_PANICKED event recorded"
 
 
 def stop_process(proc):
@@ -2309,12 +2390,17 @@ def main(argv=None):
             )
             if "restrict=on" not in " ".join(command) or str(clone) not in " ".join(command):
                 raise ValueError("Offline overlay invariant violated")
+            ev_sock = r / "qmp-ev.sock"
+            ev_sock.unlink(missing_ok=True)
+            command = command + ["-qmp", "unix:%s,server=on,wait=off" % ev_sock]   # read only by the event recorder
             (r / "last_cmd.txt").write_text(shlex.join(command) + "\n")
             log = stack.enter_context(open(r / "qemu.log", "w"))
             q = subprocess.Popen(
                 command, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL
             )
             stack.callback(stop_process, q)
+            events_file = out / "qmp_events.jsonl"
+            recorder = start_qmp_events(ev_sock, events_file)
             booted = time.monotonic()
             record("boot", "PASS", "ci mode, restrict=on, disposable overlay")
             key = work / "id_kf"
@@ -2373,11 +2459,10 @@ def main(argv=None):
                     raise ValueError("Blocking identity mismatch; app checks not run")
                 record("verify", "PASS", "identity, clock, TPM and seed GPU checked")
                 if a.hold_until_file:
-                    record(
-                        "hold",
-                        hold_for_release(a.hold_until_file, 3 * 3600),
-                        "guest held for manual iteration; ssh port %s" % g.port,
-                    )
+                    held = hold_for_release(a.hold_until_file, 3 * 3600, alive=lambda: q.poll() is None)
+                    record("hold", held, "guest held for manual iteration; ssh port %s" % g.port)
+                    if held == "qemu-exited":
+                        raise ValueError("QEMU exited while the guest was held (cause: the qemu-exit row)")
                 for name in names:
                     if boot_age_guard(time.monotonic() - booted, checks[name]["timeout"]):
                         record(
@@ -2445,17 +2530,22 @@ def main(argv=None):
                         classification,
                     )
             finally:
-                try:
-                    utc = g.ps("(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')")
-                    if utc.returncode:
-                        raise ValueError("Guest UTC unavailable before shutdown")
-                    overlay_clock(clone, frozen, guest_utc=utc.stdout.strip())
-                except (PI.PropError, ValueError, OSError, subprocess.SubprocessError) as exc:
-                    record("clock-save", "WARN", "Guest clock not saved: " + str(exc))
-                try:
-                    g.ps("Stop-Computer -Force", timeout=30)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
+                if q.poll() is not None:
+                    recorder.join(timeout=10)
+                    record("qemu-exit", *qemu_exit_cause(read_qmp_events(events_file)), "FILE")
+                    record("clock-save", "WARN", "Guest clock not saved: QEMU had already exited")
+                else:
+                    try:
+                        utc = g.ps("(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')")
+                        if utc.returncode:
+                            raise ValueError("Guest UTC unavailable before shutdown")
+                        overlay_clock(clone, frozen, guest_utc=utc.stdout.strip())
+                    except (PI.PropError, ValueError, OSError, subprocess.SubprocessError) as exc:
+                        record("clock-save", "WARN", "Guest clock not saved: " + str(exc))
+                    try:
+                        g.ps("Stop-Computer -Force", timeout=30)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
                 try:
                     q.wait(timeout=180)
                 except subprocess.TimeoutExpired:

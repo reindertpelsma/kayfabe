@@ -5,6 +5,8 @@ every blocker in `release-matrix.json` (driver choices, minima, the sub-run exec
 
 ## Release shape v2 (owner CONFIRMED 2026-11-12)
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BE; supersedes the "required only when a release touches a core path" part of the 2026-11-23 correction below):** a PR runs the Rust, CUDA and repo tests, the Windows boot, the small app probes and exactly one middle run; propimages run only in the release run, not per PR. §AZ item 5 is waived for the batch and PR flow; the first release still runs every propimage on every family (§AZ). CODE READ on 2026-11-24 at `next` `4f376f3db`: `ci/vast-broker/src/tier.js` (`additionalStages` of the release profile: `specviewperf`, `llm_parity`) and the release-matrix data (`ci/vast-broker/release-matrix.json`) still encode the earlier tiers; changing them is a separate code change that alters the Worker bundle pin, and this note changes no code.
+
 ⊘ **Correction 2026-11-23 (against `OWNER_RULINGS.md` §AZ, 2026-11-18):** the owner took SPECviewperf and every proprietary image (propimage) out of the required release gate; they run as an invoked app lane, required only when a release touches a core path (§AZ items 2 to 5), and the release record lists their last run as information. The rental counts below (12 with SPEC, 8 without) are the 2026-11-12 plan; the "8 without SPEC" case is the one §AZ points at. CODE READ on 2026-11-23 at `next` `92a7f2782`: the propimage stages are in `MANUAL_ONLY_STAGES` (`scripts/ci/vast_payload.py`), and the release profile in `ci/vast-broker/src/tier.js` still lists `specviewperf` in `additionalStages`; this note changes no code. Where the text below puts SPEC or a propimage into the release tier or the release criteria, §AZ governs.
 
 

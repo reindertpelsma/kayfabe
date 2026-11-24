@@ -28,7 +28,7 @@ pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — 
 # model and benched on another.
 qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none \
   -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
-  -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
+  -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/llmprov_serial.log" -daemonize -pidfile "$BENCH/llmprov.pid"
 GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 ubuntu@127.0.0.1"
 for i in $(seq 1 40); do $GS true >/dev/null 2>&1 && break; sleep 5; done

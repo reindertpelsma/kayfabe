@@ -206,7 +206,7 @@ UD
   qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none \
     -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
     -drive if=virtio,file="$BENCH/seed.iso",format=raw \
-    -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
+    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=n0 \
     -serial file:"$BENCH/provision_serial.log" -daemonize -pidfile "$BENCH/prov.pid"
   say "B2: qemu pid=$(cat $BENCH/prov.pid 2>/dev/null)"
 

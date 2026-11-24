@@ -13,6 +13,12 @@ kernel. For every file of every workspace crate in that closure, and for the C/P
 Every third-party crate in the closure must declare a licence expression with a GPL-2.0-compatible option
 (MIT, BSD-2/3-Clause, ISC, Zlib, Unicode-*, or Apache-2.0 only together with one of those).
 
+Supply chain (stage-2 security audit S2-04, docs/audits/2026-11-23-v3-stage2.md; stage 1 S1-14, S1-28): the closure
+also follows build-dependency edges (a build script runs on the build machine, and kf-gop-image's output is embedded),
+and it includes the nested firmware workspace that kf-gop-image's build script builds and embeds
+(firmware/kf-gop, its own Cargo.lock) and the display PTX kf-cuda embeds (cuda/display). Every third-party crate
+in that closure must be named in EXTERNAL_PINNED; a new one fails until a reviewer adds it there.
+
 usage: qemu_license_closure.py [--metadata FILE]     (default: runs `cargo metadata --format-version 1`)
 exit 0 = clean, 1 = a finding (each printed as QEMU_CLOSURE_FAIL ...), 2 = cannot run.
 """
@@ -24,8 +30,14 @@ import subprocess
 import sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-EXTRA_DIRS = ["qemu/hw/misc/kf3", "cuda/walk"]
+EXTRA_DIRS = ["qemu/hw/misc/kf3", "cuda/walk", "cuda/display", "firmware/kf-gop"]
 ROOT_CRATE = "kf-qemu"
+# Workspaces outside the root Cargo.toml whose build output is embedded in the kf3 binary.
+NESTED_LOCKS = ["firmware/kf-gop/Cargo.lock"]
+# The third-party crates the kf3 binary may contain or run at build time. Adding one is a reviewed supply-chain change.
+EXTERNAL_PINNED = {"libc"}
+# Edges followed: normal and build (a build script runs at build time); dev edges reach only tests.
+FOLLOWED_KINDS = {None, "build"}
 GPL_OK_SPDX = re.compile(r"GPL-2\.0|MIT|BSD-[23]-Clause|ISC|Zlib")
 GPL_OK_CRATE = {"MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0", "Unicode-DFS-2016",
                 "0BSD", "Unlicense", "CC0-1.0", "BSL-1.0"}
@@ -66,9 +78,26 @@ def closure(meta):
             continue
         seen.add(i)
         for d in nodes[i]["deps"]:
-            if any(k["kind"] is None for k in d["dep_kinds"]):
+            if any(k["kind"] in FOLLOWED_KINDS for k in d["dep_kinds"]):
                 stack.append(d["pkg"])
     return [pk[i] for i in sorted(seen)]
+
+
+def nested_lock_externals(text):
+    """(name, version) of every package in a Cargo.lock that comes from a registry or git (has a `source`)."""
+    out = []
+    for block in re.split(r"^\[\[package\]\]\s*$", text, flags=re.M)[1:]:
+        name = re.search(r'^name = "([^"]+)"', block, re.M)
+        version = re.search(r'^version = "([^"]+)"', block, re.M)
+        if name and re.search(r"^source = ", block, re.M):
+            out.append((name.group(1), version.group(1) if version else "?"))
+    return out
+
+
+def unpinned(external):
+    """Findings for third-party crates, given as (name, version, where), that EXTERNAL_PINNED does not name."""
+    return ["crate %s %s (%s) is not in EXTERNAL_PINNED: a new third-party crate in the kf3 binary is a reviewed "
+            "supply-chain change" % (n, v, where) for n, v, where in external if n not in EXTERNAL_PINNED]
 
 
 def check_file(rel, banned, findings):
@@ -126,6 +155,12 @@ def main(argv=None):
         for rel in tracked(d):
             files += 1
             check_file(rel, banned, findings)
+    pinned_input = [(n, v, "cargo metadata") for n, v, _ in external]
+    for lock in NESTED_LOCKS:
+        nested = nested_lock_externals(open(os.path.join(ROOT, lock), encoding="utf-8").read())
+        pinned_input += [(n, v, lock) for n, v in nested]
+        external += [(n, v, "from " + lock) for n, v in nested]
+    findings += unpinned(pinned_input)
     for f in findings:
         print("QEMU_CLOSURE_FAIL " + f)
     print("QEMU_CLOSURE %s: %d workspace crates (%s), %d files, %d external crates (%s); findings=%d"

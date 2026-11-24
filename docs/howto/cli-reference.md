@@ -63,6 +63,8 @@ This table is generated from the device's source (`qemu/hw/misc/kf3/kf3.c`) and 
 
 <!-- kf-generated: device-properties end -->
 
+The `unmapped-reads-zero` default in the table above is `off`, as the device source has it today. The project has decided that it will default to `on` for every guest, Linux included; this page follows the source and changes when that change lands.
+
 A property that is refused at start is refused by name; see [Troubleshooting](troubleshooting.md#the-device-refuses-to-start).
 
 ## The display broker

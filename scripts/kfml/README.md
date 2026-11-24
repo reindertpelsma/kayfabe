@@ -37,7 +37,9 @@ runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
 
-**2026-11-24 note on the 2026-11-17 note below (owner ruling 2026-11-24; the text is in `docs/OWNER_RULINGS.md`, added by a separate docs change):** under a strict payload instruction a NOT_RUN row is acceptable only when its reason is outside kayfabe, and the row says so with a `skip_code` (`skip_code` in the row JSON,
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BG):** the strict failure of a NOT_RUN row (`kfml_not_run`) in the note below is replaced where it conflicts by the skip rule (the `managed_oversub` row, host RAM too small to oversubscribe VRAM by 25%, is a cause outside kayfabe): a row may end NOT_RUN or skipped when the cause is outside kayfabe (host RAM or VRAM too small for the test, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other NOT_RUN or skip fails its stage. Implemented for this stage by the code change of 2026-11-24 (PR #579), described in the next paragraph.
+
+**2026-11-24 implementation of that ruling, a note on the 2026-11-17 note below (PR #579):** under a strict payload instruction a NOT_RUN row is acceptable only when its reason is outside kayfabe, and the row says so with a `skip_code` (`skip_code` in the row JSON,
 written only on a NOT_RUN row): `HOST_RAM_TOO_SMALL`, `VRAM_TOO_SMALL`, `DIE_LACKS_FEATURE`, `NOT_RUNNABLE_ON_BARE_METAL`. The list is `SKIP_CODES` in `kfml/errors.py` and nowhere else; a workload raises `NotRun(reason, code=...)`, `gating.py` sets the code for the compute-capability and VRAM
 floors, `managed_oversub` sets `HOST_RAM_TOO_SMALL`. Every other NOT_RUN (a driver too old for the wheel, no pinned flavour, the guest's unsupported managed memory) has no code and fails a strict run by name `kfml_not_run`; so does a whole-stage NOT_RUN. The runner's exit code and the default
 (non-strict) grading are unchanged. Grading: `scripts/ci/VAST_PAYLOAD.md`, "The kfml stage".

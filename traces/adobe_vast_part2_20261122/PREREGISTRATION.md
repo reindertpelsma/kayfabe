@@ -18,7 +18,7 @@ Falsifier of the gate: any of 1 to 5 fails. Then STOP, no part 2, report.
 (c) After Effects Advanced 3D: the existing row `aeadv3d` (Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit, 10 frames by aerender). PASS if the comp reports the renderer ADBE Advanced 3d and 10 frames are written.
 (d) Lightroom DNG Denoise / Super Resolution: ONLY with a real raw photo. The data volume has two real raws (`raw/dji_fc7303_0765.dng`, `raw/sony_dsc_rx1_0812.arw`, from the open-asset list), so the row is attempted, through Camera Raw in Photoshop first (same engine; Lightroom Classic needs a catalog and an import, which is tried only if time is left).
 (e) Camera Raw Select Background, as a control, only if time remains.
-Boots are limited to about 50 minutes each by the image's Windows evaluation timer (the harness' 55-minute boot-age guard), so the items are spread over at most three boots.
+(CORRECTION, 2026-11-23, `traces/imgb_shutdown_20261123/README.md`: image B is not an evaluation edition and has no such timer; the sentence that follows was the plan's assumption.) Boots are limited to about 50 minutes each by the image's Windows evaluation timer (the harness' 55-minute boot-age guard), so the items are spread over at most three boots.
 
 # What is NOT claimed
 No pass is claimed from a window alone; a row that only shows an open window says so. A single run on one box and one die (AD102) cannot show a defect-free product; it can falsify.
