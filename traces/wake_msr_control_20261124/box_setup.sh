@@ -8,7 +8,8 @@ mkdir -p "$W" && cd "$W"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q ninja-build pkg-config python3-venv libglib2.0-dev libpixman-1-dev \
   libslirp-dev libzstd-dev flex bison qemu-utils cloud-image-utils >/dev/null
 TARBALL=$(python3 -I "$K/scripts/ci/qemu_source.py" fetch "$W")
-FLAGS=$(cd "$K/scripts/release" && python3 -I -c 'import build_qemu; print(" ".join(build_qemu.CONFIGURE_FLAGS))')
+FLAGS=$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import build_qemu; print(" ".join(build_qemu.CONFIGURE_FLAGS))' \
+  "$K/scripts/release")
 for v in stock patched; do
   rm -rf "src-$v" && mkdir "src-$v" && tar xJf "$TARBALL" -C "src-$v" --strip-components=1
 done
