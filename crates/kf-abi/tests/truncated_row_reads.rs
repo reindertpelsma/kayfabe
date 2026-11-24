@@ -95,7 +95,7 @@ fn rust_sources() -> Vec<(String, String)> {
 fn is_self_referential(path: &str) -> bool {
     path.ends_with("crates/kayfabe-abi/src/oracle.rs")
         || path.ends_with("crates/kayfabe-abi/tests/truncated_row_reads.rs")
-        // v3 (w826): `kf-abi` is a copy of `kayfabe-abi`; its oracle and this test are the
+        // v3 (w826): `kf-abi` is a copy of `kf-abi`; its oracle and this test are the
         // same self-references, not new consumers.
         || path.ends_with("crates/kf-abi/src/oracle.rs")
         || path.ends_with("crates/kf-abi/tests/truncated_row_reads.rs")

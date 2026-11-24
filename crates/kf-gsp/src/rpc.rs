@@ -6,7 +6,7 @@
 //! (`ogkm-580:`/`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`, an X-macro
 //! table where every id is explicit — *"Deprecated RPC's numbers cannot be reused in
 //! order to not break compatibility"*, `:4` at **both** tags, same path, same line). Per
-//! the quarantine rule they belong in `kayfabe-abi`, whose established shape for exactly
+//! the quarantine rule they belong in `kf-abi`, whose established shape for exactly
 //! this is `client_kind_from_process_id`: the constant in
 //! the ABI crate, the abstract type everywhere above it. This module is the "everywhere
 //! above it" half — [`FunctionCodes`] is the table it consumes, and this crate declares
@@ -38,7 +38,7 @@
 //! ## What this stage deliberately does not decode
 //!
 //! The *bodies*. `GSP_RM_CONTROL`/`GSP_RM_ALLOC` payload structs are 213 `#[repr(C)]`
-//! layouts that live in `kayfabe-abi` and are mostly not generated yet (that crate's own
+//! layouts that live in `kf-abi` and are mostly not generated yet (that crate's own
 //! docs say why: "each needs a consumer first; a broad table with one wrong entry is
 //! invisible until a guest trips it"). So an [`RpcCommand`] carries the payload as bytes,
 //! and turning those bytes into declared object-model facts is **`kayfabe-rmrpc`**'s job.

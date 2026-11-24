@@ -363,7 +363,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     //
     // ⚠ **They are not uncovered, they are covered by a DIFFERENT artifact.** All three are
     // byte-compared against the C's captured GA106 init-control table in
-    // `kayfabe-abi/tests/gr_static_info.rs`, which is a different recording of the same
+    // `kf-abi/tests/gr_static_info.rs`, which is a different recording of the same
     // real hardware. What they lack is *reply-plane* coverage — nothing checks that this
     // port's answer reaches the guest's queue in the right envelope — and that is a real
     // gap, stated rather than closed.
@@ -421,7 +421,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `BusGetPcieSupportedGpuAtomics` are exercised through `InitTablePolicy::respond` in
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_pcie_supported_gpu_atomics}.rs`,
     // envelope and inner status included. `BusGetInfoV2` had **none** — §14.30 landed it with
-    // `kayfabe-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
+    // `kf-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
     // boundary — so `kayfabe-device/tests/bus_get_info_v2.rs` was written here to make this
     // admission true rather than merely quiet.
     // ⚠⚠⚠ §14.32 adds a TENTH, `GpuInfoV2`'s kind again — **a different demander**.

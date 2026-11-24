@@ -1,9 +1,9 @@
-//! `kayfabe-abi-gen` — generate `kayfabe-abi`'s wire layouts from a vendored
+//! `kayfabe-abi-gen` — generate `kf-abi`'s wire layouts from a vendored
 //! open-gpu-kernel-modules checkout.
 //!
 //! ```text
-//! cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
-//!     <ogkm-root> crates/kayfabe-abi/src/generated
+//! cargo run --manifest-path crates/kf-abi/gen/Cargo.toml -- \
+//!     <ogkm-root> crates/kf-abi/src/generated
 //! ```
 //!
 //! # The slice, and why it is this one
@@ -127,7 +127,7 @@ const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
 const CLC574_H: &str = "src/common/sdk/nvidia/inc/class/clc574.h";
 const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
 /// Ada's compute object. ⊘ Added w568 — `host_classes.rs` refused Ada's `compute_object` as
-/// *"a NAME in this tree's capability tables and `kayfabe-abi` carries no value for it"*. That
+/// *"a NAME in this tree's capability tables and `kf-abi` carries no value for it"*. That
 /// was true of the GENERATED table and never true of the vendored headers, which have carried
 /// the value all along. Generating it is the fix; hand-writing the number would have been the
 /// per-model rot the owner's maintainability contract forbids.

@@ -180,7 +180,7 @@
 //! `Disposition` is computed in `kf_gsp::GspFsm::answer` from the arriving function
 //! alone, `CommandPolicy::respond` returns `Option<Reply>` with no "post nothing" value,
 //! and making a fragment inherit its head's disposition would put a second copy of the
-//! reassembly state inside the FSM. **Recorded as a `kayfabe-gsp` question, not silently
+//! reassembly state inside the FSM. **Recorded as a `kf-gsp` question, not silently
 //! absorbed.**
 //!
 //! ★ **B3 is the class table** ([`kf_abi::versions::DriverAbiTable::alloc_params`]):
@@ -1738,7 +1738,7 @@ fn translate_published_pdes(
 /// both vendored trees (`ogkm-610: g_sdk-structures.h:368-377`, `ogkm-580: :366-375`). So the
 /// existing ioctl-side decoder applies **verbatim**, which is what
 /// `gsp_core_bridge.md` §1.4 claims and what
-/// `crates/kayfabe-abi/tests/mean_wire.rs` pins.
+/// `crates/kf-abi/tests/mean_wire.rs` pins.
 ///
 /// ## ★★ The one place a params field legitimately names a namespace
 ///

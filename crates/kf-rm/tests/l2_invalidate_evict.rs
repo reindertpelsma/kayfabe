@@ -294,7 +294,7 @@ fn a_finn_serialized_payload_is_refused_because_this_encoder_produces_a_flat_str
         FLAGS_CLEAN_VERIFY_BAR2,
         L2_INVALIDATE_EVICT_PARAMS_SIZE as u32,
     );
-    // `RMAPI_RPC_FLAGS_SERIALIZED` is private to `kayfabe-abi`; bit 1 is the value its own
+    // `RMAPI_RPC_FLAGS_SERIALIZED` is private to `kf-abi`; bit 1 is the value its own
     // `rpc_params_are_serialized` tests, and this asserts that rather than assuming it.
     cmd.payload[20..24].copy_from_slice(&(1u32 << 1).to_le_bytes());
     assert!(kf_abi::rpc_params_are_serialized(1 << 1));

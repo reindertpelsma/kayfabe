@@ -6,7 +6,7 @@
 //!
 //! 1. That `InitTablePolicy` hands `answer_fb_get_info_v2` the **right slice** of the
 //!    payload and puts the answer back at the right offset, inside the right envelope, with
-//!    the right inner status. `kayfabe-abi` sees a bare params buffer and could not tell.
+//!    the right inner status. `kf-abi` sees a bare params buffer and could not tell.
 //! 2. ★★ That the four served words really are the **same values** the port already serves
 //!    to `NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG` (`0x20800a1c`). This is the
 //!    whole design claim of the rung — *"this control states no new number"* — and it is a

@@ -3211,7 +3211,7 @@ impl Inbox {
     ) -> Result<u64, UserSplitError> {
         let t = self
             .next_ticket
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_SEQUENCE"))?;
         {
             let mut q = self.splits.try_lock().map_err(|e| match e {

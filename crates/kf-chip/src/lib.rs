@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-chip` — the chip model on the compatibility AXES.**
+//! **v3 `kf-chip` — the chip model on the compatibility AXES.**
 //!
 //! Owner, 2026-09-13: *"stop maintaining per exact GPU die constants … derive them from the host
 //! using unprivileged userspace or automatically from ogkm source or fabricated that satisfy ogkm

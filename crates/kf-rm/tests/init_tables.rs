@@ -292,7 +292,7 @@ fn a_size_this_port_does_not_encode_is_refused_loudly_not_answered() {
 
 #[test]
 fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id() {
-    // ★★ [`WantedTable::ALL`] exists so a *consumer* — `kayfabe-crec`'s reply-plane
+    // ★★ [`WantedTable::ALL`] exists so a *consumer* — `kf-crec`'s reply-plane
     // differential — can quantify over "every control this port serves" without writing
     // the list a second time. A list that could silently shrink would weaken that gate
     // with zero red tests, which is this repository's most-repeated defect shape.
@@ -302,7 +302,7 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `ALL`, so a variant absent from `ALL` is precisely the one it never visits. The claim
     // was false in the direction that flattered it — the same shape as PC-D6 — and it was
     // guarding the two gates that quantify over `ALL` (the sticky-answer property, and
-    // `kayfabe-crec`'s reply-plane differential).
+    // `kf-crec`'s reply-plane differential).
     //
     // ★★ What is true now is stronger than a test: `WantedTable::from_cmd` is a lookup
     // THROUGH `ALL`, so "in `ALL`" and "served" are one fact. A variant left out of the

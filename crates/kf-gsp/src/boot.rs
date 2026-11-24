@@ -134,7 +134,7 @@ pub struct GspAbi {
     pub init_args: InitArgsLayout,
     /// The wire-layout table for the detected driver version. Keyed on the **full**
     /// `major.minor.patch`, with `NoTableForVersion` below the floor — never a
-    /// nearest-neighbour fallback (`rs: crates/kayfabe-abi/src/versions.rs`).
+    /// nearest-neighbour fallback (`rs: crates/kf-abi/src/versions.rs`).
     pub driver: DriverAbiTable,
 }
 
@@ -692,7 +692,7 @@ impl core::fmt::Debug for Observing {
 ///
 /// ★★ **CORRECTED 2026-07-29 by the trace differential — this is NOT a faithful model of
 /// the C, and the doc used to claim it was.** Replaying `cap1` against this policy
-/// (`kayfabe-crec`) produced two replies that agree with the C on every field a guest
+/// (`kf-crec`) produced two replies that agree with the C on every field a guest
 /// matches on — slot, `seqNum`, `function`, `sequence`, `rpc_result` **and `rpc.length`** —
 /// and differ in the **body**. The C special-cases at least `GET_GSP_STATIC_INFO` (fn 65),
 /// splicing a captured GA106 `GspStaticConfigInfo` blob into the reply
@@ -1563,7 +1563,7 @@ impl GspFsm {
                 //
                 // ⊘ **The oracle covers this line NOT AT ALL**, and that is stated rather
                 // than discovered: `cap1` contains **zero** `IRQSCLR` writes across 359 062
-                // records (`crates/kayfabe-crec/tests/cap1_differential.rs` F-3), because
+                // records (`crates/kf-crec/tests/cap1_differential.rs` F-3), because
                 // the guest never received an interrupt to clear. A green `cap1` diff says
                 // nothing here; only a live boot exercises it. If it never fires, the gate
                 // latches shut after one batch — which is the SAFE direction (no ring

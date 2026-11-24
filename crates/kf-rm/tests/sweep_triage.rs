@@ -12,7 +12,7 @@
 //! naming the control. That is the boot this port does not have to spend.
 //!
 //! ⚠ The *universe* this file quantifies over is pinned here, but it is **derived** in
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs`, which reads the controls the C oracle
+//! `crates/kf-crec/tests/cap1b_differential.rs`, which reads the controls the C oracle
 //! is observed to ask out of the capture and demands each be served or triaged. Shortening
 //! `SWEEP_TRIAGE` therefore fails twice: here on the pin, and there on the derivation.
 

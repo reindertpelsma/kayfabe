@@ -1,4 +1,4 @@
-//! ★★★ **v3 `kf-disp` — the display plane: a virtual NVDisplay the stock guest driver drives.**
+//! **v3 `kf-disp` — the display plane: a virtual NVDisplay the stock guest driver drives.**
 //!
 //! `docs/design/V3_DISPLAY.md` is the design. The guest's own `nvidia.ko` (KernelDisplay),
 //! `nvidia-modeset.ko` (NVKMS) and `nvidia-drm.ko` bring up a real KMS device against a display

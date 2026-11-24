@@ -28,7 +28,7 @@
 //!
 //! `trybuild` compares full compiler stderr, so a rustc diagnostic reword can turn a row
 //! red without anything being wrong. The fix is `TRYBUILD=overwrite cargo test -p
-//! kayfabe-linux-raw --test compile_fail` **after** confirming the errors are still the
+//! kf-linux-raw --test compile_fail` **after** confirming the errors are still the
 //! same errors. Never delete a row to make it green.
 
 /// ★★★ The rows this matrix must contain, **by name**.

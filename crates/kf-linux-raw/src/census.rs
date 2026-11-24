@@ -15,7 +15,7 @@
 //! `l1_os_shell.md` §4.7 — **no business logic in this crate.** So the record carries only
 //! `ioctl(2)`-ABI facts: the request's `_IOC_NR`, its `_IOC_SIZE`, and the outcome. It does
 //! **not** decode `hClass` out of an `NVOS21` buffer or `cmd` out of an `NVOS54` one; that
-//! vocabulary belongs to `kayfabe-abi`, and a decoder here would be this crate growing an
+//! vocabulary belongs to `kf-abi`, and a decoder here would be this crate growing an
 //! opinion about NVIDIA's structs.
 //! ⇒ Callers that want NV-level names decode `nr` themselves against their own `NV_ESC_*`
 //! constants. The **phase label** ([`phase`]) is the seam for anything finer.

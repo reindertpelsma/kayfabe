@@ -1,7 +1,7 @@
 //! Axis B, for real: the **falcon-regime** register model — GA10x/AD10x, and (2026-09-26) the
 //! TU102-style RISC-V block Turing and GA100 carry ([`RiscvLayout`]).
 //!
-//! `kayfabe-gsp` contains no offset, no bit position and no generation name — that is
+//! `kf-gsp` contains no offset, no bit position and no generation name — that is
 //! CLAUDE.md rule 1 and the reason `GspModel` exists. This module is where those numbers
 //! are *allowed* to live, and it is the first non-fake implementation of that seam: the
 //! conformance suite drives the FSM through two deliberately-fake models, and this one

@@ -1448,7 +1448,7 @@ impl Device {
             _ => (u32::MAX, val as u32),
         };
         if let Some(w) = h.word(aligned) {
-            let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+            let _ = w.try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
                 Some((old & !mask) | v)
             });
         }
@@ -4512,7 +4512,7 @@ fn inject_fwsec_fail_take() -> bool {
                 .unwrap_or(0),
         )
     });
-    left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+    left.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
         .is_ok()
 }
 

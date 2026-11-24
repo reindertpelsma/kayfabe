@@ -50,7 +50,7 @@
 //! `commands decoded` block names each `fn 76` command's control id and sequence.
 //!
 //! ★★ And that is a gate rather than a convention:
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs::every_control_the_oracle_asks_is_either_served_or_triaged`
+//! `crates/kf-crec/tests/cap1b_differential.rs::every_control_the_oracle_asks_is_either_served_or_triaged`
 //! derives the universe from the capture and demands that each control be in
 //! [`crate::inittables::WantedTable::ALL`] or in [`SWEEP_TRIAGE`]. ⊘ An untriaged control
 //! reached from the sweep is exactly `t134a`'s defect, and it is now a red test rather than
@@ -164,7 +164,7 @@ pub struct SweepControl {
 /// ⊘ Quantified over by `tests/sweep_triage.rs`, so shortening it weakens the gate — the
 /// failure mode `docs/design/…` calls *"a smaller universe is a smaller true statement"*.
 /// The test pins the length as well as the contents, and
-/// `crates/kayfabe-crec/tests/cap1b_differential.rs` demands that every control the oracle
+/// `crates/kf-crec/tests/cap1b_differential.rs` demands that every control the oracle
 /// is *observed* to ask be either here or served.
 ///
 /// ★ In `rpc.sequence` order as the oracle asks them, so the table reads as the boot does.

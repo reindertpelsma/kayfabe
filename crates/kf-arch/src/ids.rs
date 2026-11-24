@@ -85,7 +85,7 @@ id_newtype!(
 
 id_newtype!(
     /// An RM class ID. The *values* are per-generation/per-version (Axis A, codegen'd
-    /// in `kayfabe-abi`); the core only ever passes them to `Arch::classify`.
+    /// in `kf-abi`); the core only ever passes them to `Arch::classify`.
     ClassId(u32)
 );
 
@@ -122,7 +122,7 @@ impl GpuId {
 
 id_newtype!(
     /// An RM control-command identifier (`GSP_RM_CONTROL` cmd). Values are per-version
-    /// (Axis A, codegen'd in `kayfabe-abi`); the core only ever passes them to
+    /// (Axis A, codegen'd in `kf-abi`); the core only ever passes them to
     /// [`crate::Arch::is_case2_control`] and the host backend. Lives here (not in
     /// `kayfabe-isolate`) so the `Arch` seam can name it without a dependency cycle.
     ControlCmd(u32)

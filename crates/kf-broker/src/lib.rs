@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★★★ **`kf-broker` — the display-broker relay, VMM-agnostic** (`docs/design/V3_DISPLAY.md` §8).
+//! **`kf-broker` — the display-broker relay, VMM-agnostic** (`docs/design/V3_DISPLAY.md` §8).
 //!
 //! The display broker (`broker/` in this repository, imported from nvkvm-pv `badf2d7`, 2026-10-15, and
 //! maintained here from then on; nvkvm-pv's copy is no longer the one to change) is a separate process

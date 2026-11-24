@@ -3875,7 +3875,7 @@ impl ChanPlane {
             } else {
                 let _ = e
                     .live
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
             }
         }
     }

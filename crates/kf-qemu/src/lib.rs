@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-qemu` — the Rust half of the `kf3-gpu` QEMU device.**
+//! **v3 `kf-qemu` — the Rust half of the `kf3-gpu` QEMU device.**
 //!
 //! A small C QOM device (`qemu/hw/misc/kf3/kf3.c`) presents the PCI function and routes BAR0 writes
 //! and guest-RAM registration here; everything else is [`device::Device`]: the host RM session, the

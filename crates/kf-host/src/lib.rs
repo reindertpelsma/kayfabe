@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-host` — the host RM verbs, in ONE process.**
+//! **v3 `kf-host` — the host RM verbs, in ONE process.**
 //!
 //! One RM session (`/dev/nvidiactl` + `/dev/nvidia<N>`, our own root client, device, subdevice)
 //! owned by the VMM. No isolates, no worker pool, no IPC plane (THE_ARCHITECTURE_v3.md §1, §8).
@@ -456,9 +456,6 @@ impl ViewAccess {
 
 #[derive(Debug)]
 struct UsermodeWindow {
-    /// The usermode object's handle — freed with the session, read by nothing else.
-    #[allow(dead_code)]
-    object: u32,
     _node: CharDevice,
     region: VolatileRegion,
 }
@@ -888,7 +885,6 @@ impl HostRm {
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
         Ok(UsermodeWindow {
-            object,
             _node: node,
             region,
         })
@@ -1115,7 +1111,7 @@ impl HostRm {
     /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` is the population: it is reached through
     /// `pAllocParms` and carries `NvP64 pageNumberList`, which RM `copy_from_user`s the page
     /// array out of. Both addresses must be live for the same syscall and neither may be
-    /// produced outside `kayfabe-linux-raw`, which is exactly what
+    /// produced outside `kf-linux-raw`, which is exactly what
     /// [`Indirect::nested`](kf_linux_raw::Indirect::nested) is for.
     ///
     /// ⊘ Separate from [`Self::raw_alloc`] rather than a parameter on it: every other
@@ -2054,7 +2050,7 @@ impl HostRm {
     /// row below — it says the four together are sufficient, never that each is necessary.
     ///
     /// 1. **The address never crosses a crate boundary.** `pMemory` is filled in by
-    ///    [`Indirect::describing`] inside `kayfabe-linux-raw` and scrubbed back to zero
+    ///    [`Indirect::describing`] inside `kf-linux-raw` and scrubbed back to zero
     ///    before this function can observe it — §4.2.1's rule, and the reason
     ///    [`Nvos02ParametersWithFd::p_memory`]'s own docs forbid this crate from writing it.
     /// 2. **The node.** `NV_ESC_RM_ALLOC_MEMORY` is `NV_ACTUAL_DEVICE_ONLY`, so it goes on

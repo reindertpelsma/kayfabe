@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-rm` — the emulated GSP's RM: RPC answers, object graph, controls.**
+//! **v3 `kf-rm` — the emulated GSP's RM: RPC answers, object graph, controls.**
 //!
 //! The guest's stock driver talks to "GSP" through the message queue `kf-gsp` frames; this crate is
 //! what answers. Copied from the old tree's `kayfabe-device` / `kayfabe-doorbell` / `kayfabe-rmrpc`

@@ -464,7 +464,7 @@ pub enum StickyDisposition {
     NotAControl,
     /// Pure delegation — it returns some inner policy's reply unchanged and authors none.
     Delegates,
-    /// Not installed in the port. Reachable only from tests and the `kayfabe-crec` replay,
+    /// Not installed in the port. Reachable only from tests and the `kf-crec` replay,
     /// and it carries its argument about the **accepted** path in its own rustdoc.
     FixtureOnly,
 }

@@ -65,7 +65,7 @@ fn take(budget: &AtomicU32, cap: u32, want: usize) -> usize {
     let mut took = 0;
     for _ in 0..want {
         if budget
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
                 (n < cap).then_some(n + 1)
             })
             .is_err()

@@ -185,7 +185,7 @@
 //! ⚠ `[measured]` in `cap1b` the guest asks this control at `rpc.sequence` **11**, txn 987,
 //! `paylen 80` = 40 (`RpcControlReq::HEADER`) + 40 (params), one queue element — so it is
 //! inside the replay's closure limit of 1028 and
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs` exercises this reply.
+//! `crates/kf-crec/tests/cap1b_differential.rs` exercises this reply.
 
 /// `NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:143`).

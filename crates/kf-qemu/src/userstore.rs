@@ -83,7 +83,7 @@ struct ArmError<V> {
     retained: Option<V>,
 }
 
-trait Host {
+pub(crate) trait Host {
     type View;
     fn arm(&self, off: u64, len: u64) -> Result<Self::View, ArmError<Self::View>>;
     fn release(&self, view: &mut Self::View) -> Result<(), Refusal>;

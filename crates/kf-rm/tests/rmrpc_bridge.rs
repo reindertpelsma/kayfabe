@@ -5288,7 +5288,7 @@ fn two_process_plus_kernel_script() -> RpcScript {
 /// every client root REFUSES, and the graph is left with NOTHING.**
 ///
 /// This is the mean form of the fix, not the unit form. The unit question ("does the
-/// function return `Err`?") is answered in `kayfabe-abi`; the question here is what a
+/// function return `Err`?") is answered in `kf-abi`; the question here is what a
 /// refusal does to a *run*: nine messages, three namespaces, two page directories and two
 /// dups, and the assertion is that not one byte of it reached the object model. A refusal
 /// that stopped the client root but let the Device, VASpace and `SET_PAGE_DIRECTORY`

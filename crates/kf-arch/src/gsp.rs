@@ -4,7 +4,7 @@
 //! exposed `mmu()`, `userd()` and `pushbuffer()` but **nothing that can express a
 //! register offset, a WPR2 encoding or a falcon-boot convention** — so a faked-GSP boot
 //! FSM had nowhere to put them except inside itself, which CLAUDE.md rule 1 forbids
-//! (`kayfabe-gsp` is a logic crate: no generation name, no offset, no `#[repr(C)]`).
+//! (`kf-gsp` is a logic crate: no generation name, no offset, no `#[repr(C)]`).
 //!
 //! The split this seam draws is the plan's §3.2 table, stated as a rule: **a register
 //! whose served value is a function of the GSP boot FSM's state belongs here; every
@@ -50,7 +50,7 @@
 //!   but `IrqSpec` lives in `kayfabe-vmm` and this crate does not depend on it. The FSM
 //!   emits an abstract "announce the status queue" action instead and the device shell,
 //!   which already owns the VMM vocabulary, chooses the delivery. Promoting `IrqSpec`
-//!   (or `BarId`) into a crate both `kayfabe-arch` and `kayfabe-vmm` can see is an owner
+//!   (or `BarId`) into a crate both `kf-arch` and `kayfabe-vmm` can see is an owner
 //!   decision about the lattice, not a side effect of building the GSP port.
 //! - **Every non-GSP register** (PTIMER, fuses, the PCI-config mirror, PRAMIN). Plan
 //!   §11-O1, still open. The boundary proposed there is exactly the rule above.
@@ -897,7 +897,7 @@ pub trait GspModel: Send + Sync {
     ///
     /// `bar` is the raw PCI BAR index. It is a `u8` rather than one of the repo's two
     /// existing BAR newtypes (`kayfabe_vmm::BarId`, `kayfabe_trace::Bar`) because
-    /// unifying them means giving `kayfabe-arch` a dependency it does not have today;
+    /// unifying them means giving `kf-arch` a dependency it does not have today;
     /// see this module's docs.
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg>;
 

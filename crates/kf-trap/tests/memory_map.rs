@@ -104,7 +104,7 @@ fn the_current_product_target_has_no_read_exits_at_all() {
 }
 
 #[test]
-fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
+fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_named() {
     // ⊘ The exception §52 was forced to concede. It is bounded, and the bound is what matters:
     // the boot handshake page (two for Blackwell, which is split by die group), plus — w828 — the
     // two memop token pages, whose READ starts an L2 flush / invalidate / sysmembar
@@ -366,7 +366,7 @@ fn the_seam_is_complete_enough_to_install_the_whole_map() {
 }
 
 #[test]
-fn a_hole_is_installed_by_NOT_installing_it() {
+fn a_hole_is_installed_by_not_installing_it() {
     // ★★★ The design in one assertion. kayfabe's only read traps are produced by a `continue`.
     // ⚠ KNOWN-POSITIVE built in: Ampere must install its 0x8F2000 span (it is ordinary B there),
     // and Hopper must NOT — so a bug that installed holes anyway would fail on Hopper, and a bug

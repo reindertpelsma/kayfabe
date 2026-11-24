@@ -391,7 +391,7 @@ pub struct OutgoingRpc {
 /// ★ That file is **byte-identical at both tags, at the same lines**: the envelope did not
 /// move when the element around it did, so nothing keyed on a driver version belongs here.
 ///
-/// ★ **OWED TO `kayfabe-abi`**, like [`encode_envelope`]: that crate owns the layout and
+/// ★ **OWED TO `kf-abi`**, like [`encode_envelope`]: that crate owns the layout and
 /// exposes a whole-envelope decoder, but a *two-phase* receive needs this one field out of
 /// a buffer that is deliberately too short for the whole message. Both drivers do exactly
 /// that off element 0 — 610 through `gspMsgQueueGetRpcMessageLength`, to *derive the
@@ -405,12 +405,12 @@ const ENVELOPE_LENGTH_WORD: usize = 2;
 
 /// Encode the RPC envelope into `out[..32]`.
 ///
-/// ★ **OWED TO `kayfabe-abi`.** That crate owns `rpc_message_header_v03_00` and decodes
+/// ★ **OWED TO `kf-abi`.** That crate owns `rpc_message_header_v03_00` and decodes
 /// it (`DriverAbiTable::decode_rpc_envelope`); it has no *encoder*, and this crate may
 /// not add one to it. So the write is here, expressed as eight little-endian words in the
 /// generated struct's field order rather than as transcribed offsets, and it is pinned by
 /// a round-trip through that decoder — the generated layout is the oracle, not a comment.
-/// The proper home is `kayfabe-abi`.
+/// The proper home is `kf-abi`.
 ///
 /// `length` is `32 + payload.len()`, i.e. **32** for a bare header. The C writes 36
 /// (`C:1586`) with a comment claiming it is the header's size; the same file uses 32 in

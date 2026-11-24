@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-core` — the plane, composed.** (`THE_ARCHITECTURE_v3.md` §1-§3, §5, §7, §8)
+//! **v3 `kf-core` — the plane, composed.** (`THE_ARCHITECTURE_v3.md` §1-§3, §5, §7, §8)
 //!
 //! The vCPU trap (`kf_trap::TrapPath`) on one side, the host behind [`plane::HostOps`] on the
 //! other: workers (`Plane::worker_pass`) serve rung Translated/Emulated tokens, ONE register drainer

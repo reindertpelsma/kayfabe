@@ -2,7 +2,7 @@
 //!
 //! ## Why a port and not `Vmm`
 //!
-//! `kayfabe-gsp` is one of the crates the CI GPA-accessor gate covers: guest-physical
+//! `kf-gsp` is one of the crates the CI GPA-accessor gate covers: guest-physical
 //! access must funnel through the one core-side classification site
 //! (`kayfabe_fwd::guest_read`), so this crate may not call `Vmm::gpa_read` itself.
 //! [`GuestRam`] is therefore a narrow port — two methods, no hypervisor vocabulary — that

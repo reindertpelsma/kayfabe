@@ -2,7 +2,7 @@
 //! (`l1_concurrency.md` §3.3, decision #37).
 //!
 //! The design promotes the lock discipline from prose to mechanism: every L1 lock
-//! ⊘ **This module lives in `kayfabe-util`, at the BOTTOM of the crate graph, and that is
+//! ⊘ **This module lives in `kf-util`, at the BOTTOM of the crate graph, and that is
 //! forced rather than tidy.** `kayfabe-device` owns the rank-0 plane mutex and `kayfabe-rt`
 //! owns ranks 1-3; rt depends on device, so the vocabulary cannot live in rt without a
 //! cycle. ★ Exactly the argument this file already made for the held-mask counter — *"those
@@ -1561,7 +1561,7 @@ mod blocking_severity_is_per_thread_class {
     }
 
     #[test]
-    fn a_coordinator_is_judged_on_DURATION_not_on_blocking_at_all() {
+    fn a_coordinator_is_judged_on_duration_not_on_blocking_at_all() {
         std::thread::spawn(|| {
             declare_thread_class(ThreadClass::Coordinator);
             // Short: parking to coordinate is explicitly allowed.
