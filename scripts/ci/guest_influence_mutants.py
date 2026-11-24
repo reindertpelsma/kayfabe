@@ -48,6 +48,19 @@ CASES = [
     ("debugger-vm-cap-unbounded", changed(CHAN, "    usize::try_from(channel_budget).unwrap_or(usize::MAX)", "    let _ = channel_budget;\n    usize::MAX")),
     ("debugger-act-publishes-cancelled", changed(CHAN, "                let kept = pending.get(&key).is_some_and(|s| !s.cancelled);", "                let kept = pending.len() < usize::MAX;")),
     ("debugger-free-ignores-pending", changed(CHAN, "            s.cancelled = true;", "            let _ = s;")),
+    # Re-review of PR #594: the live call sites (X1-X4), pinned by debugger_wiring_tests (source scans).
+    ("x1-free-cancels-an-empty-pending-map", changed(CHAN, "            &self.dbg_pending,\n            client,\n            object,\n            &doomed_twin_objs,", "            &DbgPending::default(),\n            client,\n            object,\n            &doomed_twin_objs,")),
+    ("x2-vm-cap-unbounded-at-new", changed(CHAN, "            dbg_vm_cap: debugger_vm_cap(channel_budget),", "            dbg_vm_cap: usize::MAX,")),
+    ("x3-act-skips-settle", changed(CHAN, """                let h = seat
+                    .settle(&me.dbg, |o| me.rm.alloc_debugger(o), |h| {
+                        let _ = me.rm.free(h);
+                    })
+                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over {obj3d:#x}: {e}")))?;""", """                drop(seat);
+                let h = me.rm.alloc_debugger(host_obj).map_err(|e| (NV_ERR_INVALID_STATE, format!("{e:?}")))?;
+                if let Ok(mut m) = me.dbg.lock() {
+                    m.insert((client, handle), (parent, h, host_obj));
+                }""")),
+    ("x4-admission-with-unbounded-cap", changed(CHAN, "            host_obj,\n            self.dbg_vm_cap,\n        ) {", "            host_obj,\n            usize::MAX,\n        ) {")),
     ("engine-twin-cap-removed", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if false {")),
     ("engine-twin-cap-off-by-one", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if v.objects.len().saturating_add(v.pending_objects.len()) > ENGINE_OBJECTS_PER_TWIN {")),
     ("engine-twin-cap-ignores-pending", changed(CHAN, "    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {", "    if v.objects.len() >= ENGINE_OBJECTS_PER_TWIN {")),
@@ -58,7 +71,7 @@ CASES = [
 ]
 
 TESTS = [
-    ["-p", "kf-qemu", "--lib", "--", "debugger_tests", "engine_object"],
+    ["-p", "kf-qemu", "--lib", "--", "debugger_tests", "debugger_wiring_tests", "engine_object"],
     ["-p", "kf-host", "--lib", "--", "mint_tests"],
     ["-p", "kf-host", "--test", "channel_birth_bound"],
 ]

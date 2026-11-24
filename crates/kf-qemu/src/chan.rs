@@ -11343,3 +11343,149 @@ mod debugger_tests {
         );
     }
 }
+
+/// ★ Re-review of PR #594 (wiring mutants X1-X4): the live call sites of the debugger seat, act and
+/// cancel. `ChanPlane` holds a concrete `HostRm`, so these pin the source, in the style of kf-host's
+/// `the_four_minted_alloc_paths_admit_their_handle`; the helpers themselves are `debugger_tests`.
+#[cfg(test)]
+mod debugger_wiring_tests {
+    const SRC: &str = include_str!("chan.rs");
+
+    /// `code` with comments and string-literal contents blanked (braces in format strings never
+    /// count), test modules cut off at the first `#[cfg(test)]` module after `from`.
+    fn blank(code: &str) -> String {
+        let b = code.as_bytes();
+        let mut out = b.to_vec();
+        let mut i = 0;
+        while i < b.len() {
+            if b[i..].starts_with(b"//") {
+                while i < b.len() && b[i] != b'\n' {
+                    out[i] = b' ';
+                    i += 1;
+                }
+            } else if b[i] == b'"' {
+                i += 1;
+                while i < b.len() && b[i] != b'"' {
+                    let step = if b[i] == b'\\' { 2 } else { 1 };
+                    for c in out.iter_mut().take((i + step).min(b.len())).skip(i) {
+                        if *c != b'\n' {
+                            *c = b' ';
+                        }
+                    }
+                    i += step;
+                }
+                i += 1;
+            } else if b[i] == b'\'' && b.get(i + 2) == Some(&b'\'') {
+                out[i + 1] = b' ';
+                i += 3;
+            } else {
+                i += 1;
+            }
+        }
+        String::from_utf8(out).expect("ascii blanks")
+    }
+
+    /// The whitespace-free body of the first fn whose signature starts with `sig`.
+    fn body(code: &str, sig: &str) -> String {
+        let at = code.find(sig).unwrap_or_else(|| panic!("{sig} is gone"));
+        let open = at + code[at..].find('{').expect("a body");
+        let mut depth = 0usize;
+        for (i, c) in code[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return code[open..=open + i].split_whitespace().collect();
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("unbalanced {sig}");
+    }
+
+    fn product() -> String {
+        let code = blank(SRC);
+        let mut s = code.clone();
+        // Drop every `#[cfg(test)]` item (each test module is one braced block).
+        while let Some(at) = s.find("#[cfg(test)]") {
+            let open = at + s[at..].find('{').expect("test item body");
+            let mut depth = 0usize;
+            let mut end = s.len();
+            for (i, c) in s[open..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = open + i + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            s.replace_range(at..end, "");
+        }
+        s
+    }
+
+    /// Each call site, by its function: `debugger` admits with the VM cap and its act settles;
+    /// `free` cancels through the live pending map; `new` sets the cap from the channel budget.
+    #[test]
+    fn the_debugger_call_sites_use_seat_settle_and_cancel() {
+        let code = product();
+        let dbg = body(&code, "fn debugger(");
+        assert!(
+            dbg.contains("seat_debugger(&self.dbg,&self.dbg_pending,(client,handle),parent,host_obj,self.dbg_vm_cap,)"),
+            "fn debugger no longer admits through seat_debugger with self.dbg_vm_cap (X4)"
+        );
+        assert!(
+            dbg.contains(".settle(&me.dbg,|o|me.rm.alloc_debugger(o),"),
+            "the debugger act no longer makes its session through settle (X3)"
+        );
+        let free = body(&code, "fn free(&self, client: u32, object: u32)");
+        assert!(
+            free.contains("doom_debuggers(&self.dbg,&self.dbg_pending,client,object,"),
+            "fn free no longer cancels the plane's own pending seats (X1)"
+        );
+        let new = body(&code, "pub fn new(\n        rm: &'static HostRm,");
+        assert!(
+            new.contains("dbg_vm_cap:debugger_vm_cap(channel_budget),"),
+            "ChanPlane::new no longer takes the per-VM cap from the channel budget (X2)"
+        );
+    }
+
+    /// Across all product code of this file: the host session is made in exactly one place, inside
+    /// `settle`'s arguments; the cap is set once and passed once; the cancel is called once.
+    #[test]
+    fn the_host_debugger_session_is_made_only_through_settle() {
+        let flat: String = product().split_whitespace().collect();
+        for (needle, n, what) in [
+            ("alloc_debugger(", 1, "host debugger session allocs (X3)"),
+            (
+                ".settle(&me.dbg,|o|me.rm.alloc_debugger(o),",
+                1,
+                "settled acts (X3)",
+            ),
+            (
+                "dbg_vm_cap:debugger_vm_cap(channel_budget),",
+                1,
+                "cap initialisations (X2)",
+            ),
+            (
+                "host_obj,self.dbg_vm_cap,)",
+                1,
+                "admissions with the VM cap (X4)",
+            ),
+            (
+                "doom_debuggers(&self.dbg,&self.dbg_pending,",
+                1,
+                "cancels over the plane's maps (X1)",
+            ),
+        ] {
+            assert_eq!(flat.matches(needle).count(), n, "{what}: `{needle}`");
+        }
+    }
+}

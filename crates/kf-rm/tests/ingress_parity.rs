@@ -287,9 +287,8 @@ fn last_segment_idents(text: &str) -> BTreeSet<String> {
 #[test]
 fn the_channel_link_asks_the_gate_before_any_arm() {
     let body: String = on_control_body().split_whitespace().collect();
-    let gate = "if!self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted(){returnNone;}";
     let g = body
-        .find(gate)
+        .find(GATE_CHECK)
         .expect("on_control asks the gate about h.cmd and returns None when refused");
     for arm in ["self.default_vas", "self.chan_props", "matchh.cmd{"] {
         let a = body
@@ -297,6 +296,53 @@ fn the_channel_link_asks_the_gate_before_any_arm() {
             .unwrap_or_else(|| panic!("{arm} is in on_control"));
         assert!(g < a, "the gate check comes after {arm}");
     }
+}
+
+const GATE_CHECK: &str = "if!self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted(){returnNone;}";
+
+/// `on_control` up to its gate check, whitespace removed.
+fn before_the_gate() -> String {
+    let body: String = on_control_body().split_whitespace().collect();
+    let g = body
+        .find(GATE_CHECK)
+        .expect("on_control asks the gate about h.cmd");
+    body[..g].to_string()
+}
+
+/// ★ Re-review of PR #594 (mutant X6: an `if h.cmd == X { return Some(..) }` before the gate):
+/// nothing before the gate may answer the guest, build a statement or reach the plane.
+#[test]
+fn nothing_before_the_channel_link_gate_answers_or_builds_a_statement() {
+    let prefix = before_the_gate();
+    for (bad, what) in [
+        ("Some(", "answers the guest"),
+        ("ChanStatement::", "builds a statement"),
+        ("carry_control_statement(", "carries a statement"),
+        ("refusal(", "builds a refusal"),
+        ("(self.sink)(", "calls the plane"),
+    ] {
+        assert!(
+            !prefix.contains(bad),
+            "on_control {what} before asking the gate (`{bad}` precedes the gate check)"
+        );
+    }
+}
+
+/// ★ X6, second view: the only exit before the gate is the page-directory observation's
+/// `return None` (the decode's `?` is the other way out, with no answer).
+#[test]
+fn the_only_exit_before_the_channel_link_gate_is_the_observation() {
+    let prefix = before_the_gate();
+    assert_eq!(
+        prefix.matches("return").count(),
+        1,
+        "on_control has a new exit before its gate check"
+    );
+    assert_eq!(prefix.matches("returnNone;").count(), 1);
+    assert!(
+        prefix.contains("Translation::PageDir"),
+        "the one pre-gate block is the observation"
+    );
 }
 
 /// ★ F1: `CLAIMED_CONTROLS` is exactly the arms of `on_control`'s `match h.cmd`, so a new arm cannot
