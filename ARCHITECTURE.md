@@ -1,13 +1,11 @@
 # kayfabe architecture — v3 on one page
 
-**STATUS: LIVE, 2026-11-20, refs re-checked 2026-11-20; originally 2026-09-26 at `master` `74dc3113`; crate table refreshed 2026-10-15 (integration of `claude/win11-userring-20261014`).** ⊘ *2026-11-20:* every `kf-*` crate named below was checked against `crates/` and every `crates/kf-*` directory is in the table; the dead names the freshness gate flagged were repointed (archived `kayfabe-*` crates to `archive/crates/`, the `kf-gate` names to their `kf-harness` source files). The page's other statements (thread model, numbers, test inventory) were not re-verified on 2026-11-20.
-⊘ *Correction 2026-10-15:* the crate table below lacked `kf-disp`, `kf-broker`, `kf-oprom` and `kf-gop-image` (added), and the guest is no longer only
-Linux 580.159.04: the stock Windows 11 driver 580.88 runs too (see `README.md`). Guest USER channels on Windows may take a relayed USER ring
-(`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. This page is a map. The design authority is
+**STATUS: LIVE, 2026-11-24.** Written 2026-09-26 at `master` `74dc3113`; the crate table, the thread model (one register drainer and the workers), the unsafe rule and the gate list were checked against the tree on 2026-11-24: every `crates/kf-*` directory is in the table, every crate named here exists, and the gate files `kf-gate1.rs` to `kf-gate9.rs` match the list. The channel and memory sections restate the design documents they cite and were not re-derived from code. This page is a map. The design authority is
 [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md) (its argued-from-scratch
 statement is [`docs/design/THE_DESIGN.md`](docs/design/THE_DESIGN.md)), and the build
 decisions are in [`docs/design/V3_BUILD.md`](docs/design/V3_BUILD.md). Where this page and those
-documents disagree, they win. ⊘ The pre-v3 map (the hexagonal core, `archive/crates/kayfabe-core`/`-fwd`/`-rt`,
+documents disagree, they win. Guest USER channels on Windows may take a relayed USER ring
+(`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. **Superseded:** the pre-v3 map (the hexagonal core, `archive/crates/kayfabe-core`/`-fwd`/`-rt`,
 and the invariant catalog that old source comments cite as *"`ARCHITECTURE.md` invariant N"*) is
 archived at [`docs/archive/ARCHITECTURE_pre_v3.md`](docs/archive/ARCHITECTURE_pre_v3.md).
 
@@ -15,7 +13,7 @@ archived at [`docs/archive/ARCHITECTURE_pre_v3.md`](docs/archive/ARCHITECTURE_pr
 
 ```
  guest (untrusted: userspace AND guest root)
-   stock NVIDIA driver 580.159.04 ── GSP RPCs, page tables, doorbells ──┐
+   stock NVIDIA driver (Linux or Windows) ── GSP RPCs, page tables, doorbells ──┐
                                                                         │ BAR0 writes only
  ┌─────────────── one host process: QEMU + the kayfabe core ────────────▼───────────────┐
  │ kf3-gpu device (qemu/hw/misc/kf3 + kf-qemu)                                           │
@@ -101,17 +99,9 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 
-⊘ Correction, 2026-10-31 (folded above the text it corrects): the frozen tree is now ten crates, not
-sixteen. `kayfabe-chips` was cut to its `host_classes` module (the only part the grader uses) and its
-`ga10x`/`ad10x`/`gb20x`/`gh100` modules went to `archive/crates/kayfabe-chips-modules/`; with them went
-the crates only they reached (`archive/crates/kayfabe-mmu`, `-gsp`, `-mocks`, `-trace`, `-completion`), and
-`archive/crates/kayfabe-vmm`, whose one live item (the two-variant `Prot`) now lives in `kayfabe-isolate`. All are in
-`archive/crates/` and do not build (`archive/README.md`).
-
-`crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
+`crates/kayfabe-*` is the **frozen pre-v3 tree**, ten crates. It is kept because `kayfabe-rm-ladder`, the
 30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
-No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (including
-`archive/crates/kayfabe-device`, since 2026-10-31) are in `archive/crates/` and do not build (`archive/README.md`).
+No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (`kayfabe-core`, `-fwd`, `-rt`, `-device`, `-mmu`, `-gsp`, `-vmm` and the others) are in `archive/crates/` and do not build (`archive/README.md`). `kayfabe-chips` is cut to its `host_classes` module, the only part the grader uses.
 
 ## Rules that shape the code
 
@@ -129,7 +119,7 @@ No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader doe
   tables and joins, isolates and the IPC plane, publication epochs and dirty gates, per-page BAR
   traps, and snapshots of the guest's tables (`V3_BUILD.md`, *Rules*).
 - **Unsafe code** is allowed only in `kf-linux-raw`, `kf-qemu` and `kf-cuda`, and only in files
-  named `*_unsafe.rs`.
+  named `*_unsafe.rs`. The workspace sets `unsafe_code = "forbid"`; those three crates opt out in their `Cargo.toml`, and a CI step fails any `.rs` file that contains the word outside a `*_unsafe.rs` file. `kf-chan/src/tspace_unsafe.rs` also carries the suffix, as the address-authoring perimeter of the Translated plane, but contains no `unsafe` block.
 
 ## Verification
 

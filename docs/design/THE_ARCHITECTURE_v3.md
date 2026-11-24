@@ -1,6 +1,6 @@
 # kayfabe v3 — the architecture after the owner's review
 
-**STATUS: LIVE, 2026-10-28 (owner corrections to §2.4 and §4.2; original w820). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
+**STATUS: LIVE, 2026-10-28 (owner corrections to §2.4 and §4.2; original w820; status notes on §9 and §10 added 2026-11-24). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
 keeps only as the record of what was proposed before the review corrected it.
 
 ⊘ **w820 rewrote §2 entirely** around a second privilege boundary the owner named: the one
@@ -1209,6 +1209,8 @@ measurement will not.
 
 ## 9. Rewrite, not refactor
 
+⊘ **Done:** the rewrite was carried out as the `kf-*` crates, and the pre-v3 crates were frozen or archived (`THE_V3_PLAN.md`, `ARCHITECTURE.md`). The text below is the decision as it was taken.
+
 `[owner asked for an honest view]` **Rewrite, in a fresh crate set, with the old tree as a
 read-only reference.**
 
@@ -1231,6 +1233,8 @@ deleted.
 ---
 
 ## 10. Still open — and what the owner ruled at w821
+
+⊘ **Where the open items stand on 2026-11-24** (read from the tree; the list below is the w821 text). Item 1 (the interrupt race): host non-stall edges wake every subscriber and are never dropped (`crates/kf-chan/src/ptnsi.rs`). Items 2 and 14 (the privileged ring): capacity 4096 entries and an alarm above 25 % occupancy are in `crates/kf-trap/src/ring.rs`; whether the high-water mark stayed below the alarm in the constraint suite was not re-measured for this note. Item 9 (the Windows guest): the stock Windows 11 driver 580.88 runs on kayfabe (`docs/howto/windows-guest.md`), so "nothing claimed yet" is out of date. The other items were not re-checked.
 
 ⊘ **Numbering was out of order and one item appeared on both the resolved and open lists.**
 Rebuilt.
