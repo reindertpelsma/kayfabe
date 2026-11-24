@@ -9,7 +9,7 @@
 //! (`MapBacking::SharedSlice`, FIXED), with optional map/unmap churn before the alias map.
 //!
 //! ```text
-//! kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low]
+//! kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low] [--leave-free-mib=N]
 //! ```
 //!
 //! - `churn_regions` 4 KiB maps per round, each in its own 2 MiB region, mapped and unmapped at once:
@@ -18,7 +18,7 @@
 //! - `low` layout: every churn region in the first static range `[0x120000000, 960 GiB)` instead.
 //! - `extra_spaces` more spaces of the same shape are allocated first (Windows has one per process).
 //!
-//! - `KF_FILL_PROBE_LEAVE_FREE_MIB=N` (environment): VRAM fillers leave about N MiB free after the store.
+//! - `--leave-free-mib=N` (anywhere on the command line): VRAM fillers leave about N MiB free after the store.
 //!
 //! Output: `MEASURE` lines (host FB used from `nvidia-smi` at each step, the map's answer) and one
 //! `FILL_PROBE_RESULT` line. A failed alias map is a result, not a probe failure: the exit code is 0
@@ -61,13 +61,10 @@ fn fb_free_mib() -> Option<u64> {
     String::from_utf8_lossy(&o.stdout).trim().parse().ok()
 }
 
-/// `KF_FILL_PROBE_LEAVE_FREE_MIB=N`: allocate 256 MiB VRAM fillers until at most N MiB stay free,
-/// so a 24 GB die has the headroom of a smaller one.
-fn fill_vram(rm: &HostRm, l: &mut Ledger) -> Result<Vec<u32>, String> {
-    let Some(target) = std::env::var("KF_FILL_PROBE_LEAVE_FREE_MIB")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-    else {
+/// `--leave-free-mib=N`: allocate 256 MiB VRAM fillers until at most N MiB stay free, so a 24 GB
+/// die has the headroom of a smaller one.
+fn fill_vram(rm: &HostRm, l: &mut Ledger, leave_free_mib: Option<u64>) -> Result<Vec<u32>, String> {
+    let Some(target) = leave_free_mib else {
         return Ok(Vec::new());
     };
     const CHUNK: u64 = 256 << 20;
@@ -125,6 +122,7 @@ fn churn_va_low(round: u64, i: u64, per_round: u64) -> Option<u64> {
 }
 
 struct Args {
+    leave_free_mib: Option<u64>,
     low_layout: bool,
     fill: GuestVaFill,
     start: MirrorVaStart,
@@ -135,9 +133,23 @@ struct Args {
 }
 
 fn parse() -> Result<Args, String> {
-    let a: Vec<String> = std::env::args().skip(1).collect();
+    let all: Vec<String> = std::env::args().skip(1).collect();
+    parse_from(&all)
+}
+
+fn parse_from(all: &[String]) -> Result<Args, String> {
+    const LEAVE: &str = "--leave-free-mib=";
+    let mut leave_free_mib = None;
+    let mut a: Vec<String> = Vec::new();
+    for s in all {
+        if let Some(v) = s.strip_prefix(LEAVE) {
+            leave_free_mib = Some(v.parse::<u64>().map_err(|e| format!("{LEAVE}{v}: {e}"))?);
+        } else {
+            a.push(s.clone());
+        }
+    }
     if a.len() < 5 {
-        return Err("usage: kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low]".into());
+        return Err("usage: kf-fill-probe <zero|fault> <floor|default> <alias_len_hex> <churn_regions> <rounds> [extra_spaces] [split|low] [--leave-free-mib=N]".into());
     }
     let fill = match a[0].as_str() {
         "zero" => GuestVaFill::Zero,
@@ -164,6 +176,7 @@ fn parse() -> Result<Args, String> {
         rounds: num(&a[4])?,
         extra_spaces: a.get(5).map_or(Ok(0), |s| num(s))?,
         low_layout: a.get(6).is_some_and(|s| s == "low"),
+        leave_free_mib,
     })
 }
 
@@ -209,7 +222,7 @@ fn run(l: &mut Ledger, a: &Args) -> Result<String, String> {
         ),
     );
     snap(l, "after_store");
-    let fillers = fill_vram(&rm, l)?;
+    let fillers = fill_vram(&rm, l, a.leave_free_mib)?;
 
     let mut extra: Vec<VaSpace> = Vec::new();
     for i in 0..a.extra_spaces {
@@ -312,6 +325,35 @@ mod tests {
                 assert!(seen.insert(va / LEAF), "region reused: {va:#x}");
             }
         }
+    }
+
+    #[test]
+    fn leave_free_mib_is_a_command_line_option() {
+        let argv = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let a = parse_from(&argv(&[
+            "zero",
+            "--leave-free-mib=3072",
+            "floor",
+            "efa00000",
+            "0",
+            "0",
+        ]))
+        .expect("parses");
+        assert_eq!(a.leave_free_mib, Some(3072));
+        assert_eq!(a.alias_len, 0xefa0_0000);
+        let b = parse_from(&argv(&["fault", "floor", "efa00000", "0", "0"])).expect("parses");
+        assert_eq!(b.leave_free_mib, None);
+        assert!(
+            parse_from(&argv(&[
+                "zero",
+                "floor",
+                "efa00000",
+                "0",
+                "0",
+                "--leave-free-mib=x"
+            ]))
+            .is_err()
+        );
     }
 
     #[test]

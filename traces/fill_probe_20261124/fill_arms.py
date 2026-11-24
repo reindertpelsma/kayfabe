@@ -3,13 +3,12 @@
 """fill_arms.py -- runs the kf-fill-probe arms of PREREGISTRATION.md (Experiment 1) in order, on a rented box, as root.
 Evidence tool of traces/fill_probe_20261124/, not a gate.
 
-  fill_arms.py <kf-fill-probe binary> <out dir> [arm ...]
+  fill_arms.py <kf-fill-probe binary> <out dir> [arm ...] [--leave-free-mib=N]
 
 Each arm is one process. After each arm the new host dmesg lines are kept (NVRM, mmuWalk, Xid), and the run stops at the
 first Xid. Box output is data, only parsed.
 """
 import json
-import os
 import re
 import subprocess
 import sys
@@ -47,24 +46,31 @@ def dmesg_lines():
     return r.stdout.splitlines()
 
 
+LEAVE_FREE = None
+
+
 def main():
-    probe, out = sys.argv[1], Path(sys.argv[2])
-    order = sys.argv[3:] or ["A1", "A2", "A3", "A4", "A5", "A6"]
+    global LEAVE_FREE
+    args = [a for a in sys.argv[1:] if not a.startswith("--leave-free-mib=")]
+    for a in sys.argv[1:]:
+        if a.startswith("--leave-free-mib="):
+            LEAVE_FREE = int(a.split("=", 1)[1])
+    probe, out = args[0], Path(args[1])
+    order = args[2:] or ["A1", "A2", "A3", "A4", "A5", "A6"]
     out.mkdir(parents=True, exist_ok=True)
     summary = []
     for arm in order:
-        argv = [probe] + ARMS[arm]
+        argv = [probe] + ARMS[arm] + ([f"--leave-free-mib={LEAVE_FREE}"] if LEAVE_FREE else [])
         d0 = len(dmesg_lines())
         t = time.time()
         print(f"ARM_START {arm} {' '.join(ARMS[arm])}", flush=True)
         r = subprocess.run(argv, capture_output=True, text=True, timeout=3600)
-        env_note = os.environ.get("KF_FILL_PROBE_LEAVE_FREE_MIB")
         secs = round(time.time() - t, 1)
         (out / f"{arm}.out").write_text(r.stdout + ("\n--- stderr ---\n" + r.stderr if r.stderr else ""))
         new = [ln for ln in dmesg_lines()[d0:] if KEEP.search(ln)]
         (out / f"{arm}_dmesg.txt").write_text("\n".join(new) + "\n")
         res = next((ln for ln in r.stdout.splitlines() if ln.startswith(("FILL_PROBE_RESULT", "FILL_PROBE_ERROR"))), "none")
-        row = {"arm": arm, "args": ARMS[arm], "leave_free_mib": env_note, "rc": r.returncode, "secs": secs, "result": res,
+        row = {"arm": arm, "args": ARMS[arm], "leave_free_mib": LEAVE_FREE, "rc": r.returncode, "secs": secs, "result": res,
                "fb_used_mib": [ln.split(" ", 2)[2] for ln in r.stdout.splitlines() if ln.startswith("MEASURE fb_used_mib")],
                "dmesg_mmuwalk": sum("mmuWalk" in ln for ln in new), "dmesg_xid": sum("Xid" in ln for ln in new),
                "dmesg_kept": len(new)}

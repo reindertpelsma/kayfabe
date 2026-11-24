@@ -159,7 +159,9 @@ too) and keeps 4 KiB of host VRAM per 2 MiB region the guest ever mapped in the 
 
 ## Files
 
-- `PREREGISTRATION.md` (hypotheses, falsifiers, addenda 1-4), `fill_arms.py`, `winboot.py`.
+- `PREREGISTRATION.md` (hypotheses, falsifiers, addenda 1-5), `fill_arms.py`, `winboot.py`. The P arms ran with the filler
+  target in the environment (`KF_FILL_PROBE_LEAVE_FREE_MIB`, as Addendum 3 says); after the run it became the command-line
+  option `--leave-free-mib=N` of the probe and of `fill_arms.py` (kayfabe takes no environment configuration). Same behaviour.
 - `exp1/`: arms A1-A8, S1-S7 (`<arm>.out`, `<arm>_dmesg.txt`, `summary.json`, `fp_arms.log`); `exp1/headroom3072/`,
   `exp1/headroom2200/`: P1-P3.
 - `exp2/`: `don/`, `doff/`, `donF/` (per boot, as above), `alias_lines_per_boot.txt` (kf3 lines for the alias, the fill and
