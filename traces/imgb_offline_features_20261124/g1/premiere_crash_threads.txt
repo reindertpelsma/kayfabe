@@ -1,0 +1,12 @@
+# Premiere Pro 27.0 crashes in boot g1 (guest clock = recorded clock). Source: Premiere's own crash reports in the guest
+# (%LOCALAPPDATA%\Temp\Adobe\Premiere Pro\27.0\SentryIO-db: report time, size, `gpu-renderer` tag, breadcrumb "Unhandled exception!" with its thread).
+# The reports themselves (minidumps) were not copied out. Columns: report write time, report bytes, renderer tag, crash time and thread.
+2026-11-22 03:30:51Z 39872881 renderer=CUDA :: 2026-11-22T03:30:51.050532Z ORT_AudioClipAudioFP16-20250912
+2026-11-22 04:06:38Z 9413306 renderer=CUDA :: 2026-11-22T04:06:14.868066Z Display Thread
+2026-11-22 04:19:05Z 8683146 renderer=CUDA :: 2026-11-22T04:18:44.126230Z Display Thread
+2026-11-22 04:22:01Z 2201 renderer= :: 
+# The fourth crash (no Scene Edit Detection, sequence held open) had only written its small event file when this was read; its time comes from
+# SentryIO-db\last_crash = 2026-11-22T04:22:01.759Z, 1.85 s after the script logged "holding the sequence open 45 s" (pp_progress 1795321319908 ms).
+# Script steps per crash (pp_progress.txt): 04:06 run "begin, imported sintel_trailer_1080p.mp4, selected; running scene edit detection" -> crash 2.7 s later;
+# 04:18 run (RENDERER=software; the switch did not take, tag still CUDA) -> crash 3.0 s after the same step; 04:22 run (RENDERER=nosed) -> crash 1.9 s after.
+# The 03:30 crash followed a double click on the recent "Preview-Your-Clips" Learn project in the home screen.
