@@ -23,7 +23,7 @@
   problem, security), **Part 2, Test it yourself** (what runs out of the box, bring-your-own images) and
   **Part 3, Run your own CI (operators)**, whose pages live under `docs/howto/ops/`. A new page is listed in
   `SUMMARY.md` and, in Parts 1 and 2, in the "Pages" tables of `docs/howto/index.md` (the site takes each page's
-  one-line description from those tables).
+  one-line description from those tables). The eleven operator pages moved from `docs/howto/` to `docs/howto/ops/`; the old flat URLs are not redirected, which the owner accepted on 2026-11-24 because nothing links to them yet (`OWNER_RULINGS.md` §BK).
 - **The command-line reference** `docs/howto/cli-reference.md` has a device-property table that is
   generated from `qemu/hw/misc/kf3/kf3.c` (`python3 scripts/ci/doc_cli_reference.py write`; the check is
   in `docs/CI_V3.md`). Do not edit that table by hand.

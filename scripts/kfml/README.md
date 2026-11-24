@@ -37,6 +37,8 @@ runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BG):** the strict failure of a NOT_RUN row (`kfml_not_run`) in the note below is replaced where it conflicts by the skip rule (the `managed_oversub` row, host RAM too small to oversubscribe VRAM by 25%, is a cause outside kayfabe): a row may end NOT_RUN or skipped when the cause is outside kayfabe (host RAM or VRAM too small for the test, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other NOT_RUN or skip fails its stage. NOT YET IN CODE: the payload's strict grading still fails it.
+
 **2026-11-17 note on the bullet below (payload stage, not the runner):** the runner's exit code is unchanged (NOT_RUN does not fail `kfml run`), and the payload's default grading still counts a record with a NOT_RUN row as a pass and a
 whole-stage NOT_RUN as a skipped row. Under a STRICT payload instruction a row that did not run fails the stage by name `kfml_not_run`: MEASURED in the 2026-11-17 acceptance run, `managed_oversub` was NOT_RUN (`host RAM too small to
 oversubscribe VRAM by 25%`) and the stage still graded PASS. "Strict" means `propimages_strict`, the payload instruction's only strict switch; whether kfml deserves its own field is an OWNER decision (open). Grading: `scripts/ci/VAST_PAYLOAD.md`,
