@@ -11,7 +11,7 @@ Box: ONE Vast KVM box (`vms_enabled=true`, the KVM image), a real 24 GB RTX 4090
 not 49140), host driver 595.91.07 (the #595 driver; `windows_lane.sh` default). Caps for both experiments together:
 3 USD and 3 box-hours; `vast_guard.py --enforce` before and after; teardown by the box's own id, absence verified.
 
-Labels in the results: MEASURED (a file in this directory) and INFERRED (reasoning, said so).
+Labels in the results of the 2026-11-24 runs (one Vast box, kf3 of `origin/next` `4a6a2108e`): MEASURED (a file in this directory) and INFERRED (reasoning, said so).
 
 ## Experiment 1: F1, host-only raw-client probe (no VM)
 

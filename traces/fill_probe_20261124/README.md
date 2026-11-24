@@ -34,7 +34,7 @@ of fb-mb 4096 (`reserve_gpga`, contiguous here) and the #595 alias map: a FIXED 
 | P1 / P2 / P3 | ON / OFF / ON | floor | A7 / A8 / none, with VRAM fillers leaving 3090 MiB free | no / yes / no | 23031 / 20993 / 23031 | 22022 / 21001 / 23031 | 22022 / 20994 / 23031 | 20993 | OK |
 | P1 / P3 | ON | floor | A7 / none, fillers leaving 2322 MiB free | no | 23799 | 22790 / 23799 | 22790 / 23799 | 21761 | OK |
 
-MEASURED:
+MEASURED on 2026-11-24 (box 62397827, kf3 `4a6a2108e`, arms A1-A10, S1-S7, P1-P3):
 - **The alias map never failed**: 0 of 22 arms, no `mmuWalkMap` line and no Xid in any arm's dmesg. Fill ON or OFF, floor
   or default start, fresh or after churn, 1 or 33 spaces, 64 MiB to 7.9 GiB, and with 3090 or 2322 MiB of headroom.
 - **With the fill ON, the second static range `[1 TiB, 128 TiB)` is never reserved**: every fill-ON space logs `guest VA
@@ -144,7 +144,7 @@ OFF, none does. Independently of Windows, every fill-ON space leaves `[1 TiB, 12
 too) and keeps 4 KiB of host VRAM per 2 MiB region the guest ever mapped in the first range (up to about 1.9 GB per space).
 
 1. **Now: (a), the fill OFF for the Windows profile** (PR #507's `auto` shape: ON for Linux, OFF for a declared Windows guest).
-   It removes the measured Windows failure at once and costs nothing measured: D-onF was clean.
+   It removes the Windows failure at once: boot D-onF (2026-11-24, box 62397827, kf3 `4a6a2108e`, fill OFF) had no `0x51`, no TDR and stayed up 300 s.
 2. **Also (b), in any case, as a correctness guard:** a `0x51` on a FIXED map inside one of kf3's own static reservations must
    not be booked `HELD BY HOST`. The 0x51 here is a host page-table capacity failure, and the HELD ack hides it from the guest.
    It is NOT a one-line change, so this branch does not make it: inside a reservation `0x51` can also be a real occupancy by
