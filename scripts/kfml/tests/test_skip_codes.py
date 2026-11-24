@@ -143,12 +143,12 @@ class ManagedOversub(unittest.TestCase):
         self.assertIn("host RAM too small", str(caught.exception))
 
     def test_enough_host_ram_does_not_refuse(self):
-        mo.require_host_ram(24 * self.GIB, 64.0)
+        self.assertEqual(mo.require_host_ram(24 * self.GIB, 64.0), 30 * self.GIB)
         mo.require_host_ram(24 * self.GIB, 50.0)       # 30 GiB wanted, 30.0 allowed: the boundary fits
 
     def test_run_uses_the_checked_helper_after_the_memory_is_known(self):
         import inspect
-        self.assertIn("require_host_ram(total,", inspect.getsource(mo.run))
+        self.assertIn("want = require_host_ram(total)", inspect.getsource(mo.run))
 
     def test_the_guest_precheck_reason_has_no_code(self):
         self.assertEqual(mo._precheck(None, {"KF_ML_GUEST": "1"}), mo.REASON)
