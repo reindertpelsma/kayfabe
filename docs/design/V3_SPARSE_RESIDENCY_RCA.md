@@ -1,6 +1,8 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
 **STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BH):** "Option B ships as an opt-in property" is superseded as a default: `unmapped-reads-zero` will default to ON for every guest, Linux included (the owner's statement: real host sparse residency proves the ioctl exists on Linux, and Linux Vulkan sparse-residency cases hang with the fill off). The implementing change is separate and not in this tree yet.
+
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
 
