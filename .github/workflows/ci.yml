@@ -2032,7 +2032,7 @@ jobs:
           node --test ci/vast-admin/test/*.test.mjs
 
   worker-mutants-a:
-    name: worker mutants A — evidence upload, provider tolerance, denied countries
+    name: worker mutants A — evidence upload, provider tolerance, denied countries, hardening
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -2048,6 +2048,12 @@ jobs:
           # gpu-vast hardening: commit-gap release, replacement deadline, kvm device signature, gate reuse stages.
           node ci/vast-broker/sha-gap-mutants.mjs
           node ci/vast-broker/denied-countries-mutants.mjs
+      - name: Worker hardening mutants (each must fail at least two tests)
+        run: |
+          # The Durable Object killers run in a real workerd (esbuild, miniflare), so this step installs the dev dependencies too.
+          npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
+          # Teardown by proven id, heartbeat coalescing, public-log headers, deploy-helper refusals, PASS decay and limiter keys: two named killers per mutant.
+          node ci/vast-broker/worker-hardening-mutants.mjs
 
   worker-mutants-b:
     name: worker mutants B — report, release, simulation, profile, proprietary images

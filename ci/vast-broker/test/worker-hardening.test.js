@@ -198,6 +198,26 @@ for (const [key, type] of [
     await putPublic({ LOGS_BUCKET: { put: async (...a) => calls.push(a) } }, key, 'x', type);
     assert.deepEqual(calls[0][2], { httpMetadata: publicHeaders(key, type) });
   });
+// A second, independent guard: the literal strings R2 receives, not publicHeaders() compared with
+// itself (a change that drops the disposition from publicHeaders keeps the test above green).
+for (const [key, type, filename] of [
+  ['1-1/log.txt', 'text/plain; charset=utf-8', 'log.txt'],
+  ['1-1/report.json', 'application/json; charset=utf-8', 'report.json'],
+])
+  test('F6 the object put to R2 names its own fixed inline file ' + filename, async () => {
+    const calls = [];
+    await putPublic({ LOGS_BUCKET: { put: async (...a) => calls.push(a) } }, key, 'x', type);
+    const meta = calls[0][2].httpMetadata;
+    assert.equal(meta.contentDisposition, 'inline; filename="' + filename + '"');
+    assert.equal(meta.contentType, type);
+    assert.equal(meta.cacheControl, 'no-transform');
+  });
+test('F6 a box-chosen key suffix cannot choose the disposition filename', async () => {
+  const calls = [];
+  const key = '1-1/evil";filename="x.html';
+  await putPublic({ LOGS_BUCKET: { put: async (...a) => calls.push(a) } }, key, 'x', 'text/plain');
+  assert.equal(calls[0][2].httpMetadata.contentDisposition, 'inline; filename="log.txt"');
+});
 for (const [name, response] of [
   ['text', () => new Response('box text <script>', { headers: { 'Content-Type': 'text/plain' } })],
   ['html', () => new Response('<h1>', { headers: { 'Content-Type': 'text/html' } })],

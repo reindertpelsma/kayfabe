@@ -1,18 +1,16 @@
-import {
-  cpSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  rmSync,
-  symlinkSync,
-} from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 const broker = fileURLToPath(new URL('.', import.meta.url)),
   repo = fileURLToPath(new URL('../..', import.meta.url));
+// The mutant copy is a throwaway tree: the test files read sibling trees by relative path
+// (ci/vast-reaper, ci/platform-api, scripts/, .github/workflows, site/book-theme), so those are
+// copied whole, and node_modules is copied as a real directory (never a symlink: a symlinked one
+// changes the bundle hash, scripts/check-bundle-pin.mjs).
+const TREES = ['ci', 'scripts', '.github', 'site/book-theme'];
+const keep = (p) => !p.includes('/node_modules') && !p.includes('/.wrangler');
 const scratch = mkdtempSync(join(tmpdir(), 'kf-hardening-'));
 const edit = (name, file, before, after, tests = NODE) => ({ name, file, before, after, tests });
 // Review of 2026-11-13 (F4, F5, F6, F8, F10): each mutant undoes one fix and must fail at least two
@@ -113,7 +111,12 @@ const cases = [
     'hostUpgrades.delete(hostUpgrades.keys().next().value);',
     "return new Response('Too many requests', { status: 429 });",
   ),
-  edit('deploy accepts extra modules', D, 'if (extra.length) fail(', 'if (false) fail('),
+  edit(
+    'deploy accepts extra modules',
+    D,
+    'const extra = readdirSync(out).filter((n) => !EMITTED.has(n));',
+    'const extra = [];',
+  ),
   edit(
     'deploy self-report from toml',
     D,
@@ -138,7 +141,7 @@ const cases = [
     'alarm does not flush',
     H,
     'flushIn = Math.min(flushIn, (await this.flushHeartbeat(w, now)) ?? Infinity);',
-    '',
+    'void w;',
     WORKERD,
   ),
   edit(
@@ -177,30 +180,24 @@ function run(tests) {
   return {
     status: r.status,
     tests: Number(r.stdout.match(/^# tests (\d+)$/m)?.[1]),
-    failures: [...new Set(failures)],
+    // The 'mutant copy' test checks the copy tree, not the Worker: a mutant that breaks it is not a killer.
+    failures: [...new Set(failures)].filter((n) => !n.startsWith('mutant copy:')),
   };
 }
 try {
-  cpSync(broker, join(scratch, 'ci/vast-broker'), {
-    recursive: true,
-    filter: (p) => !p.includes('/node_modules') && !p.includes('/.wrangler'),
-  });
-  symlinkSync(join(broker, 'node_modules'), join(scratch, 'ci/vast-broker/node_modules'), 'dir');
-  for (const path of [
-    'scripts/ci/vast_report.py',
-    'scripts/ci/vast_payload.py',
-    'scripts/ci/release_driver_pins.py',
-    'ci/vast-reaper',
-    'ci/platform-api/migrations',
-    'ci/requirements.toml',
-  ]) {
+  for (const path of TREES) {
     mkdirSync(dirname(join(scratch, path)), { recursive: true });
-    cpSync(join(repo, path), join(scratch, path), { recursive: true });
+    cpSync(join(repo, path), join(scratch, path), { recursive: true, filter: keep });
   }
+  cpSync(join(broker, 'node_modules'), join(scratch, 'ci/vast-broker/node_modules'), {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
   const baselines = { node: run(NODE), workerd: run(WORKERD) };
   for (const [k, b] of Object.entries(baselines))
     if (b.status !== 0) throw Error('baseline failed: ' + k + JSON.stringify(b));
-  const rows = [];
+  const rows = [],
+    weak = [];
   for (const c of cases) {
     const path = join(scratch, 'ci/vast-broker', c.file),
       original = readFileSync(path, 'utf8');
@@ -211,17 +208,18 @@ try {
         original.replace(c.before, () => c.after),
       );
       const r = run(c.tests);
-      if (r.status !== 1 || r.failures.length < 2)
-        throw Error('fewer than two killers: ' + c.name + ' ' + JSON.stringify(r));
       rows.push({ mutant: c.name, kills: r.failures.length, killers: r.failures });
+      if (r.status !== 1 || r.failures.length < 2) weak.push(c.name);
     } finally {
       writeFileSync(path, original);
     }
   }
+  const status = weak.length ? 'FAIL' : 'PASS';
   process.stdout.write(
     JSON.stringify(
       {
-        status: 'PASS',
+        status,
+        fewer_than_two_killers: weak,
         baseline_tests: { node: baselines.node.tests, workerd: baselines.workerd.tests },
         cases: rows,
       },
@@ -229,6 +227,7 @@ try {
       2,
     ) + '\n',
   );
+  if (weak.length) process.exitCode = 1;
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

@@ -195,7 +195,9 @@ real R2, D1, Worker or box has run any of it. Contract: `/root/night/REPORT_CONT
   with secrets replaced by `[redacted]` and nothing else changed (one exception: a box line that starts like the Worker's own, `[Worker] ` or `[kayfabe-log] `, gets the prefix `[box] ` so that box text cannot forge the Worker's voice; no character allow-list, no display budget;
   a log that holds a secret is redacted, never refused), at most 16 MiB with a visible cut marker. What it can and
   cannot contain, exactly: [DEPLOY.md](DEPLOY.md), "What the full log can and cannot contain". The runner's
-  display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged.
+  display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged. **NOT APPLIED, 2026-11-24:**
+  the `nosniff` / CSP Transform Rule on `logs.kayfabe.dev` does not exist; the objects carry only a fixed inline
+  filename and `no-transform` ([DEPLOY.md](DEPLOY.md), "Worker hardening", owner checklist step 3).
 - **Off the teardown path.** `publishRuns` runs from the cron AFTER the serialized sweep, outside its queue,
   with a bounded wait per R2 call (20 s) and at most four entries and 40 s per tick; a failure is one log line with
   a fixed word, the entry backs off (1, 2, 4 minutes, then 5) and is retried up to 60 times, then dropped. The verdict, the teardown and the budget
