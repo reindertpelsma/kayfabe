@@ -6,6 +6,7 @@
 Falsifiers, stated before the guards were written (each fails on the unguarded bind of pcsession.py, see the PR):
 - Guard (a): a bind that unloads nvidia before a modprobe block for all four nvidia modules is in place, or that goes on
   after the hand-over while the nvidia module is loaded, or that leaves the block behind on an abort before any unload.
+- Restore: a restore that leaves vfio_iommu_type1 or vfio loaded (the first guarded restore on the pc did).
 - Guard (b): a restore that runs `modprobe nvidia` while the udev queue is not empty or an nvidia modprobe runs; a restore
   that times out without restarting systemd-udevd; a restore that loads the driver after the ladder failed; a settle that
   calls a timed-out `udevadm settle` settled (the restore of 2026-11-24 logged exactly that).
@@ -276,6 +277,12 @@ class GuardB(unittest.TestCase):
         self.assertIn("--subsystem-match=drm", t)
         self.assertIn("systemctl restart gdm", t)
         self.assertLess(t.index("modprobe nvidia_uvm"), t.index("udevadm trigger"))
+
+    def test_restore_unloads_every_vfio_module(self):
+        out, order, f, block = self.restore((True, False, []))
+        rm = [c[1] for c in f.cmds if c[0] == "rmmod"]
+        self.assertEqual(rm, ["vfio_pci", "vfio_pci_core", "vfio_iommu_type1", "vfio"])
+        self.assertLess(order.index("rmmod vfio"), order.index("modprobe nvidia"))
 
     def test_restore_reports_nvidia_loaded_during_the_bind(self):
         out, order, f, block = self.restore((True, False, []), mods=Mods(loaded=("nvidia",)))

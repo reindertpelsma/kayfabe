@@ -36,6 +36,8 @@ import pc_guard as G
 GPU_FN = ("0000:01:00.0", "0000:01:00.1")
 AUDIO_FN = "0000:01:00.1"
 NV_MODS = ("nvidia_uvm", "nvidia_drm", "nvidia_modeset", "nvidia")
+# All of vfio, in unload order: vfio_iommu_type1 and vfio stay loaded after vfio_pci goes unless they are removed too.
+VFIO_MODS = ("vfio_pci", "vfio_pci_core", "vfio_iommu_type1", "vfio")
 LAST_RESTORE = Path("/workspace/bench/pc_vfio_20261116/last_restore_epoch.txt")
 OWN_MARKERS = ("pc_vfio_20261116", "pcvfio_work")
 SETTLE_S = 60
@@ -220,7 +222,7 @@ def restore_vfio(sh=None, sleep=None, driver_of=None, settle=True, gate=None, bl
     early = [m for m in NV_MODS if refcnt(m) is not None]
     if early:
         log.append("UNEXPECTED: %s loaded while the GPU was on vfio-pci (something loaded nvidia during the bind)" % early)
-    for m in ("vfio_pci", "vfio_pci_core"):
+    for m in VFIO_MODS:
         rc, o = sh(["rmmod", m], 90)
         log.append("rmmod %s rc=%s %s" % (m, rc, o.strip()[:120]))
         if rc == "TIMEOUT":
