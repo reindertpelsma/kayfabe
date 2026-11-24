@@ -26,6 +26,8 @@ ARMS = {
     "A6": ["zero", "floor", ALIAS, "0", "0", "32"],
     "A7": ["zero", "floor", ALIAS, "131072", "2", "0", "low"],
     "A8": ["fault", "floor", ALIAS, "131072", "2", "0", "low"],
+    "A9": ["zero", "floor", ALIAS, "131072", "4", "0", "low"],
+    "A10": ["fault", "floor", ALIAS, "131072", "4", "0", "low"],
     "P1": ["zero", "floor", ALIAS, "131072", "2", "0", "low"],
     "P2": ["fault", "floor", ALIAS, "131072", "2", "0", "low"],
     "P3": ["zero", "floor", ALIAS, "0", "0"],
