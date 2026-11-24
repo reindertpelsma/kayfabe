@@ -76,8 +76,10 @@ Post-wake Hyper-V timer deadlines (`storm_deadlines.py run`, first ~0.75-1.8 s o
 
 ## Finding outside the question: a udev load/unload loop of the host NVIDIA modules during a VFIO bind (measured)
 
-At 01:01:49Z, 7 minutes after the bind, a root ssh session (source not identified; this run's tools never load the nvidia
-module while bound) loaded `nvidia`; with the GPU on vfio-pci it probed no device (`NVRM: GPU 0000:01:00.0 is already
+At 01:01:49Z, 7 minutes after the bind, a root ssh session loaded `nvidia`. Source: a coordinator-side `nvidia-smi` probe
+during the bind (coordinator error, now removed from its routine; stated by the coordinator 2026-11-24: its night tick ran
+`nvidia-smi --query-gpu=driver_version ...` on the pc, which printed "NVIDIA-SMI has failed" and loaded the module through
+`nvidia-modprobe`). This run's tools never load the nvidia module while bound; with the GPU on vfio-pci it probed no device (`NVRM: GPU 0000:01:00.0 is already
 bound to vfio-pci`) and unloaded. The stock rules `/usr/lib/udev/rules.d/71-nvidia.rules` (lines 10-19: on `add` of
 `/bus/pci/drivers/nvidia` run `modprobe nvidia-modeset`/`nvidia-drm`/`nvidia-uvm`, on `remove` run `modprobe -r` of
 each) then fed themselves: every `modprobe nvidia-drm` loaded `nvidia` again (a new `add`), failed, and unloaded it (a new
@@ -92,9 +94,10 @@ unloading the now-working driver (`nvidia-drm` "Unloading driver" 263 times in d
 `drm` and the two GPU functions; release the holders (they made the card busy for logind); restart gdm. After it: nvidia
 595.91.07 on 01:00.0, `snd_hda_intel` on 01:00.1, gnome-shell on card1, `card1-DP-3 connected enabled`, `nvidia_uvm`
 live, host `cuInit` 0, `vfio`/`vfio_iommu_type1` unloaded (`run/host_final.txt`; `run/host_before.txt` for the original).
-Lessons for `pcsession.py` [not implemented here]: nothing may load the nvidia module on the pc while a VFIO bind holds
-the GPU (other agents' `nvidia-smi` included); the restore should check that the udev queue is empty before reloading,
-and treat a non-empty queue with nvidia add/remove events as this loop, not as a wedge. The 2026-11-18 "late
+Follow-up for `pcsession.py` [not implemented here; to be assigned by the coordinator]: (1) nothing loads nvidia during a
+bind: a guard that makes `nvidia-smi`/`nvidia-modprobe` fail fast or is refused by the session wrapper, e.g. a temporary
+modprobe.d `install nvidia /bin/false` for the bind's duration, removed at the restore; (2) the restore checks that the udev
+queue is empty before reloading, and treats a non-empty queue with nvidia add/remove events as this loop, not as a wedge. The 2026-11-18 "late
 `modprobe -r nvidia-uvm`" finding is plausibly the same rule set with a shorter backlog [inferred].
 
 ## Files

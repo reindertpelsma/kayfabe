@@ -179,6 +179,11 @@ owner's falsifier committed before the run).**
   deadline was ~122 s in the past and KVM expired each at once (an expiry storm, all delivered); in §7b's R1t it was
   negative and the deadline wrapped and never fired. Same cause, the sign decides the form [inferred].
 - [measured] 0 `nvlddmkm` 153 in 10 clean VFIO wakes: the real driver does not TDR after a QEMU wake on this die.
+- [measured] Side finding: a coordinator-side `nvidia-smi` probe during the bind (coordinator error, now removed from its
+  routine) loaded the nvidia module while the GPU was on vfio-pci and started a udev add/remove loop through Ubuntu's stock
+  `71-nvidia.rules`, which flapped the driver at the restore (repaired by hand; README of the trace). Follow-up for
+  `pcsession.py`: block nvidia module loads for the bind's duration (e.g. a temporary modprobe.d `install nvidia /bin/false`,
+  removed at the restore) and check that the udev queue is empty before the reload.
 
 ## 7d. UPDATE 2026-11-23: the display window-channel stop, root cause and fix (corrects §7c's "Still open" below)
 
