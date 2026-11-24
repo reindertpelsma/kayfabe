@@ -2838,8 +2838,26 @@ pub(crate) const DEBUGGERS_PER_GR_OBJECT: usize = 4;
 
 /// Guest debugger session `(hClient, hDebugger)` → `(guest device, host session, host GR object)`.
 pub(crate) type DbgMap = HashMap<(u32, u32), (u32, u32, u32)>;
-/// Debugger sessions admitted and not yet answered by their act: key → host GR object.
-pub(crate) type DbgPending = Arc<Mutex<HashMap<(u32, u32), u32>>>;
+
+/// One admitted, unanswered debugger session's seat in [`DbgPending`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DbgSeat {
+    /// The host GR object the session will be bound to.
+    pub(crate) gr: u32,
+    /// The guest device the session is allocated under.
+    pub(crate) device: u32,
+    /// A guest free reached the session (its handle, device or client) or its GR object before
+    /// the act ran: the act must not publish a row ([`PendingDebugger::settle`]).
+    pub(crate) cancelled: bool,
+}
+
+/// Debugger sessions admitted and not yet answered by their act.
+pub(crate) type DbgPending = Arc<Mutex<HashMap<(u32, u32), DbgSeat>>>;
+
+/// The per-VM debugger-session cap: the `channel-budget` the guest was told.
+pub(crate) fn debugger_vm_cap(channel_budget: u32) -> usize {
+    usize::try_from(channel_budget).unwrap_or(usize::MAX)
+}
 
 /// ★ G-1: the admission of one guest `GT200_DEBUGGER` alloc, BEFORE any host call: a handle live or
 /// pending is refused (`DEBUGGER_HANDLE_BUSY`; before this the map silently replaced the entry and
@@ -2849,7 +2867,7 @@ pub(crate) type DbgPending = Arc<Mutex<HashMap<(u32, u32), u32>>>;
 /// channel of its own, and holds one session). Pending sessions count against both caps.
 pub(crate) fn admit_debugger(
     live: &DbgMap,
-    pending: &HashMap<(u32, u32), u32>,
+    pending: &HashMap<(u32, u32), DbgSeat>,
     key: (u32, u32),
     host_obj: u32,
     per_vm: usize,
@@ -2861,7 +2879,7 @@ pub(crate) fn admit_debugger(
         .values()
         .filter(|v| v.2 == host_obj)
         .count()
-        .saturating_add(pending.values().filter(|g| **g == host_obj).count());
+        .saturating_add(pending.values().filter(|s| s.gr == host_obj).count());
     if on_obj >= DEBUGGERS_PER_GR_OBJECT {
         return Err("DEBUGGER_GR_OBJECT_BUDGET");
     }
@@ -2876,17 +2894,134 @@ pub(crate) fn admit_debugger(
 pub(crate) struct PendingDebugger {
     pending: DbgPending,
     key: (u32, u32),
+    seat: DbgSeat,
 }
 
 impl PendingDebugger {
-    /// Take the seat for `key` (bound to `host_obj`). `None`: the map is poisoned.
-    pub(crate) fn take(pending: &DbgPending, key: (u32, u32), host_obj: u32) -> Option<Self> {
-        pending.lock().ok()?.insert(key, host_obj);
+    /// Take the seat for `key` (bound to `host_obj`, under `device`) with no admission (tests of
+    /// the seat's own lifetime). `None`: the map is poisoned.
+    #[cfg(test)]
+    pub(crate) fn take(
+        pending: &DbgPending,
+        key: (u32, u32),
+        device: u32,
+        host_obj: u32,
+    ) -> Option<Self> {
+        let seat = DbgSeat {
+            gr: host_obj,
+            device,
+            cancelled: false,
+        };
+        pending.lock().ok()?.insert(key, seat);
         Some(PendingDebugger {
             pending: pending.clone(),
             key,
+            seat,
         })
     }
+
+    /// The act's half: one host session from `alloc`, published in `dbg` only if no guest free
+    /// cancelled the seat since admission ([`doom_debuggers`]); otherwise the session is handed
+    /// to `free` at once (no lock held) and the alloc is refused. The check and the insert are one
+    /// transaction under `dbg` → `pending`, the order [`doom_debuggers`] takes them in, so a
+    /// free either finds the row or has cancelled the seat.
+    ///
+    /// # Errors
+    /// `alloc`'s refusal, or `DEBUGGER_TARGET_FREED` with the session already freed.
+    pub(crate) fn settle<E: core::fmt::Debug>(
+        self,
+        dbg: &Mutex<DbgMap>,
+        alloc: impl FnOnce(u32) -> Result<u32, E>,
+        free: impl FnOnce(u32),
+    ) -> Result<u32, String> {
+        let (key, seat) = (self.key, self.seat);
+        let h = alloc(seat.gr).map_err(|e| format!("host object {:#x}: {e:?}", seat.gr))?;
+        let kept = match (dbg.lock(), self.pending.lock()) {
+            (Ok(mut live), Ok(pending)) => {
+                let kept = pending.get(&key).is_some_and(|s| !s.cancelled);
+                if kept {
+                    live.insert(key, (seat.device, h, seat.gr));
+                }
+                kept
+            }
+            _ => false,
+        };
+        if kept {
+            return Ok(h);
+        }
+        free(h);
+        Err(format!(
+            "DEBUGGER_TARGET_FREED: {:#x}:{:#x} (host GR object {:#x}) was freed before its session was made; host session {h:#x} freed",
+            key.0, key.1, seat.gr
+        ))
+    }
+}
+
+/// ★ G-1: the statement half of one guest `GT200_DEBUGGER` alloc: [`admit_debugger`] and the seat,
+/// in ONE transaction under `dbg` → `pending` (no window between the check and the seat).
+///
+/// # Errors
+/// [`admit_debugger`]'s refusal, or `DEBUGGER_MAP_POISONED`.
+pub(crate) fn seat_debugger(
+    dbg: &Mutex<DbgMap>,
+    pending: &DbgPending,
+    key: (u32, u32),
+    device: u32,
+    host_obj: u32,
+    per_vm: usize,
+) -> Result<PendingDebugger, &'static str> {
+    let (Ok(live), Ok(mut book)) = (dbg.lock(), pending.lock()) else {
+        return Err("DEBUGGER_MAP_POISONED");
+    };
+    admit_debugger(&live, &book, key, host_obj, per_vm)?;
+    let seat = DbgSeat {
+        gr: host_obj,
+        device,
+        cancelled: false,
+    };
+    book.insert(key, seat);
+    Ok(PendingDebugger {
+        pending: pending.clone(),
+        key,
+        seat,
+    })
+}
+
+/// ★ G-1 (security review of PR #540, F2): the debugger sessions a guest free takes with it, by
+/// name, by their device, by their client, or because the GR object they are bound to goes
+/// (`doomed` twins' objects, or `freed_obj`). Live rows leave `dbg` and their host sessions are
+/// returned for the free act; admitted sessions whose act has not run are CANCELLED, so the act
+/// frees its session instead of publishing a row the guest can no longer free (a seat held until
+/// the VM ends).
+pub(crate) fn doom_debuggers(
+    dbg: &Mutex<DbgMap>,
+    pending: &DbgPending,
+    client: u32,
+    object: u32,
+    doomed: &[u32],
+    freed_obj: Option<u32>,
+) -> Vec<u32> {
+    let goes = |(c, h): (u32, u32), dev: u32, gr: u32| {
+        (c == client && (h == object || object == client || dev == object))
+            || doomed.contains(&gr)
+            || freed_obj == Some(gr)
+    };
+    let (Ok(mut live), Ok(mut book)) = (dbg.lock(), pending.lock()) else {
+        return Vec::new();
+    };
+    for (k, s) in book.iter_mut() {
+        if goes(*k, s.device, s.gr) {
+            s.cancelled = true;
+        }
+    }
+    let keys: Vec<(u32, u32)> = live
+        .iter()
+        .filter(|(k, (dev, _, gr))| goes(**k, *dev, *gr))
+        .map(|(k, _)| *k)
+        .collect();
+    keys.into_iter()
+        .filter_map(|k| live.remove(&k).map(|v| v.1))
+        .collect()
 }
 
 impl Drop for PendingDebugger {
@@ -3361,7 +3496,7 @@ impl ChanPlane {
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
             dbg_pending: Arc::default(),
-            dbg_vm_cap: usize::try_from(channel_budget).unwrap_or(usize::MAX),
+            dbg_vm_cap: debugger_vm_cap(channel_budget),
             cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
             acts: Mutex::new(None),
             release,
@@ -5801,49 +5936,40 @@ impl ChanPlane {
                 };
             }
         };
-        // ★ G-1 (2026-11-20): admitted against the busy handle and both caps BEFORE any host call;
-        // the seat travels with the act and is given back when the act ends or is dropped.
-        let seat = {
-            let (Ok(live), Ok(pending)) = (self.dbg.lock(), self.dbg_pending.lock()) else {
-                return ChanAnswer::Refused {
-                    status: NV_ERR_INVALID_STATE,
-                    why: "DEBUGGER_MAP_POISONED".into(),
-                };
-            };
-            if let Err(why) =
-                admit_debugger(&live, &pending, (client, handle), host_obj, self.dbg_vm_cap)
-            {
+        // ★ G-1: admitted against the busy handle and both caps BEFORE any host call; the seat
+        // travels with the act, which alone can make the host session ([`PendingDebugger::settle`]).
+        let seat = match seat_debugger(
+            &self.dbg,
+            &self.dbg_pending,
+            (client, handle),
+            parent,
+            host_obj,
+            self.dbg_vm_cap,
+        ) {
+            Ok(seat) => seat,
+            Err(why) => {
                 kf_arch::rate_eprintln!(
                     "kf3: GT200_DEBUGGER {client:#x}:{handle:#x} over {obj3d:#x} REFUSED {why} (per GR object {DEBUGGERS_PER_GR_OBJECT}, per VM {})",
                     self.dbg_vm_cap
                 );
                 return ChanAnswer::Refused {
-                    status: if why == "DEBUGGER_HANDLE_BUSY" {
-                        NV_ERR_INVALID_ARGUMENT
-                    } else {
-                        NV_ERR_INSUFFICIENT_RESOURCES
+                    status: match why {
+                        "DEBUGGER_HANDLE_BUSY" => NV_ERR_INVALID_ARGUMENT,
+                        "DEBUGGER_MAP_POISONED" => NV_ERR_INVALID_STATE,
+                        _ => NV_ERR_INSUFFICIENT_RESOURCES,
                     },
                     why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}: {why}"),
                 };
             }
-            drop(pending);
-            drop(live);
-            PendingDebugger::take(&self.dbg_pending, (client, handle), host_obj)
-        };
-        let Some(seat) = seat else {
-            return ChanAnswer::Refused {
-                status: NV_ERR_INVALID_STATE,
-                why: "DEBUGGER_MAP_POISONED".into(),
-            };
         };
         self.defer(
             "debugger",
             Box::new(move |me: &ChanPlane| {
-                let _seat = seat;
-                let h = me.rm.alloc_debugger(host_obj).map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over host object {host_obj:#x}: {e:?}")))?;
-                if let Ok(mut m) = me.dbg.lock() {
-                    m.insert((client, handle), (parent, h, host_obj));
-                }
+                let h = seat
+                    .settle(&me.dbg, |o| me.rm.alloc_debugger(o), |h| {
+                        let _ = me.rm.free(h);
+                    })
+                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over {obj3d:#x}: {e}")))?;
                 Ok(format!("{client:#x}:{handle:#x} GT200_DEBUGGER over {obj3d:#x} -> host session {h:#x} (host GR object {host_obj:#x})"))
             }),
         )
@@ -5944,24 +6070,14 @@ impl ChanPlane {
                         .and_then(|v| v.objects.get(&object).map(|o| o.host))
                 })
             });
-        let debuggers: Vec<u32> = self
-            .dbg
-            .lock()
-            .map(|mut m| {
-                let keys: Vec<(u32, u32)> = m
-                    .iter()
-                    .filter(|((c, h), (dev, _, gr))| {
-                        (*c == client && (*h == object || object == client || *dev == object))
-                            || doomed_twin_objs.contains(gr)
-                            || freed_obj == Some(*gr)
-                    })
-                    .map(|(k, _)| *k)
-                    .collect();
-                keys.into_iter()
-                    .filter_map(|k| m.remove(&k).map(|v| v.1))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let debuggers = doom_debuggers(
+            &self.dbg,
+            &self.dbg_pending,
+            client,
+            object,
+            &doomed_twin_objs,
+            freed_obj,
+        );
         // ★ w827: a freed Device (or client) takes its CUDA-limit row; the host limit goes off with
         // the last one.
         let limit_off = self
@@ -10913,13 +11029,25 @@ mod nvenc_cap_tests {
 /// check, and a session kept even when the object seat refused the alloc afterwards.
 #[cfg(test)]
 mod debugger_tests {
-    use super::{DEBUGGERS_PER_GR_OBJECT, DbgMap, DbgPending, PendingDebugger, admit_debugger};
+    use super::{
+        DEBUGGERS_PER_GR_OBJECT, DbgMap, DbgPending, DbgSeat, PendingDebugger, admit_debugger,
+        debugger_vm_cap, doom_debuggers, seat_debugger,
+    };
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
     const C: u32 = 0xc1d0_0001;
     const GR1: u32 = 0xcafe_0100;
     const GR2: u32 = 0xcafe_0200;
+    const DEV: u32 = 0x5c00_0001;
+
+    fn seat(gr: u32) -> DbgSeat {
+        DbgSeat {
+            gr,
+            device: DEV,
+            cancelled: false,
+        }
+    }
 
     fn live(n: usize, gr: u32, base: u32) -> DbgMap {
         (0..n as u32)
@@ -10934,7 +11062,7 @@ mod debugger_tests {
             admit_debugger(&l, &HashMap::new(), (C, 0x10), GR2, 64),
             Err("DEBUGGER_HANDLE_BUSY")
         );
-        let p: HashMap<(u32, u32), u32> = [((C, 0x20), GR2)].into_iter().collect();
+        let p: HashMap<(u32, u32), DbgSeat> = [((C, 0x20), seat(GR2))].into_iter().collect();
         assert_eq!(
             admit_debugger(&DbgMap::new(), &p, (C, 0x20), GR1, 64),
             Err("DEBUGGER_HANDLE_BUSY")
@@ -10955,7 +11083,7 @@ mod debugger_tests {
     #[test]
     fn a_second_alloc_racing_a_pending_one_is_busy() {
         let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
-        let _seat = PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat");
+        let _seat = PendingDebugger::take(&pending, (C, 0x10), DEV, GR1).expect("seat");
         let p = pending.lock().unwrap();
         assert_eq!(
             admit_debugger(&DbgMap::new(), &p, (C, 0x10), GR2, 1 << 20),
@@ -10965,8 +11093,8 @@ mod debugger_tests {
 
     #[test]
     fn pending_sessions_alone_fill_the_vm_budget() {
-        let p: HashMap<(u32, u32), u32> = (0..3u32)
-            .map(|i| ((C, 0x40 + i), 0xcafe_0100 + i))
+        let p: HashMap<(u32, u32), DbgSeat> = (0..3u32)
+            .map(|i| ((C, 0x40 + i), seat(0xcafe_0100 + i)))
             .collect();
         assert_eq!(
             admit_debugger(&DbgMap::new(), &p, (C, 0x99), GR2, 3),
@@ -10976,8 +11104,8 @@ mod debugger_tests {
 
     #[test]
     fn pending_sessions_alone_fill_a_gr_object_budget() {
-        let p: HashMap<(u32, u32), u32> = (0..DEBUGGERS_PER_GR_OBJECT as u32)
-            .map(|i| ((C, 0x40 + i), GR1))
+        let p: HashMap<(u32, u32), DbgSeat> = (0..DEBUGGERS_PER_GR_OBJECT as u32)
+            .map(|i| ((C, 0x40 + i), seat(GR1)))
             .collect();
         assert_eq!(
             admit_debugger(&DbgMap::new(), &p, (C, 0x99), GR1, 1 << 20),
@@ -10988,7 +11116,7 @@ mod debugger_tests {
     #[test]
     fn a_finished_act_frees_its_seat_for_the_next_alloc() {
         let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
-        drop(PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat"));
+        drop(PendingDebugger::take(&pending, (C, 0x10), DEV, GR1).expect("seat"));
         let p = pending.lock().unwrap();
         assert_eq!(
             admit_debugger(&DbgMap::new(), &p, (C, 0x10), GR1, 1),
@@ -11018,7 +11146,7 @@ mod debugger_tests {
     #[test]
     fn the_debugger_caps_count_pending_sessions() {
         let l = live(DEBUGGERS_PER_GR_OBJECT - 1, GR1, 0x10);
-        let p: HashMap<(u32, u32), u32> = [((C, 0x80), GR1)].into_iter().collect();
+        let p: HashMap<(u32, u32), DbgSeat> = [((C, 0x80), seat(GR1))].into_iter().collect();
         assert_eq!(
             admit_debugger(&l, &p, (C, 0x99), GR1, 1 << 20),
             Err("DEBUGGER_GR_OBJECT_BUDGET")
@@ -11037,11 +11165,23 @@ mod debugger_tests {
             l.insert((C, 0x10 + i), (0, 0xcafe_1000 + i, 0xcafe_0100 + i));
         }
         assert_eq!(
-            admit_debugger(&l, &HashMap::new(), (C, 0x99), 0xcafe_0900, 8),
+            admit_debugger(
+                &l,
+                &HashMap::new(),
+                (C, 0x99),
+                0xcafe_0900,
+                debugger_vm_cap(8)
+            ),
             Err("DEBUGGER_VM_BUDGET")
         );
         assert_eq!(
-            admit_debugger(&l, &HashMap::new(), (C, 0x99), 0xcafe_0900, 9),
+            admit_debugger(
+                &l,
+                &HashMap::new(),
+                (C, 0x99),
+                0xcafe_0900,
+                debugger_vm_cap(9)
+            ),
             Ok(())
         );
     }
@@ -11049,12 +11189,158 @@ mod debugger_tests {
     #[test]
     fn the_pending_debugger_seat_is_released_when_its_act_is_dropped() {
         let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
-        let seat = PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat");
-        assert_eq!(pending.lock().unwrap().get(&(C, 0x10)), Some(&GR1));
-        drop(seat);
+        let held = PendingDebugger::take(&pending, (C, 0x10), DEV, GR1).expect("seat");
+        assert_eq!(pending.lock().unwrap().get(&(C, 0x10)), Some(&seat(GR1)));
+        drop(held);
         assert!(
             pending.lock().unwrap().is_empty(),
             "a dropped or finished act gives its seat back"
+        );
+    }
+
+    /// A fake host: counts session allocs, mints sessions from `0xd000_0000`, records frees.
+    #[derive(Default)]
+    struct FakeHost {
+        allocs: std::cell::Cell<u32>,
+        freed: std::cell::RefCell<Vec<u32>>,
+    }
+
+    impl FakeHost {
+        fn alloc(&self, _gr: u32) -> Result<u32, ()> {
+            self.allocs.set(self.allocs.get() + 1);
+            Ok(0xd000_0000 + self.allocs.get())
+        }
+        fn free(&self, h: u32) {
+            self.freed.borrow_mut().push(h);
+        }
+    }
+
+    fn book() -> (Mutex<DbgMap>, DbgPending) {
+        (
+            Mutex::new(DbgMap::new()),
+            Arc::new(Mutex::new(HashMap::new())),
+        )
+    }
+
+    /// ★ Security review of PR #540, F1 (mutants W1, W2): the statement half admits, the act half
+    /// alone reaches the host. Five allocs over ONE GR object with no act run yet: the fifth is
+    /// refused `DEBUGGER_GR_OBJECT_BUDGET`, and running the admitted acts makes four host
+    /// sessions, never five.
+    #[test]
+    fn five_debugger_allocs_over_one_gr_object_with_acts_pending_make_at_most_four_sessions() {
+        let (dbg, pending) = book();
+        let host = FakeHost::default();
+        let mut acts = Vec::new();
+        let mut refused = Vec::new();
+        for i in 0..5u32 {
+            match seat_debugger(&dbg, &pending, (C, 0x10 + i), DEV, GR1, 1 << 20) {
+                Ok(seat) => acts.push(seat),
+                Err(why) => refused.push((i, why)),
+            }
+        }
+        assert_eq!(refused, [(4, "DEBUGGER_GR_OBJECT_BUDGET")]);
+        assert_eq!(host.allocs.get(), 0, "no host call before an act runs");
+        for seat in acts {
+            seat.settle(&dbg, |g| host.alloc(g), |h| host.free(h))
+                .expect("admitted");
+        }
+        assert_eq!(host.allocs.get(), DEBUGGERS_PER_GR_OBJECT as u32);
+        assert_eq!(dbg.lock().unwrap().len(), DEBUGGERS_PER_GR_OBJECT);
+        assert!(pending.lock().unwrap().is_empty(), "every seat given back");
+        assert_eq!(
+            seat_debugger(&dbg, &pending, (C, 0x99), DEV, GR1, 1 << 20).err(),
+            Some("DEBUGGER_GR_OBJECT_BUDGET"),
+            "the live sessions hold the cap after their acts ran"
+        );
+    }
+
+    /// ★ F1 (mutant W3): the per-VM cap is the declared channel budget, counted over pending
+    /// sessions on distinct GR objects.
+    #[test]
+    fn the_vm_cap_is_the_channel_budget_with_acts_pending() {
+        let (dbg, pending) = book();
+        let per_vm = debugger_vm_cap(3);
+        assert_eq!(per_vm, 3);
+        let seats: Vec<_> = (0..3u32)
+            .map(|i| {
+                seat_debugger(&dbg, &pending, (C, 0x10 + i), DEV, 0xcafe_0100 + i, per_vm)
+                    .expect("under the budget")
+            })
+            .collect();
+        assert_eq!(
+            seat_debugger(&dbg, &pending, (C, 0x20), DEV, 0xcafe_0900, per_vm).err(),
+            Some("DEBUGGER_VM_BUDGET")
+        );
+        drop(seats);
+        assert!(seat_debugger(&dbg, &pending, (C, 0x20), DEV, 0xcafe_0900, per_vm).is_ok());
+    }
+
+    /// ★ Security review of PR #540, F2, interleaving forced: the guest frees its CLIENT after the
+    /// alloc was admitted and before the act ran. The act's session is freed at once, no row is
+    /// published, the seat is given back: the VM's debugger budget is whole again.
+    #[test]
+    fn a_client_freed_while_its_debugger_act_is_pending_leaves_no_row() {
+        let (dbg, pending) = book();
+        let host = FakeHost::default();
+        let seat = seat_debugger(&dbg, &pending, (C, 0x10), DEV, GR1, 1).expect("admitted");
+        assert_eq!(
+            doom_debuggers(&dbg, &pending, C, C, &[], None),
+            Vec::<u32>::new()
+        );
+        let r = seat.settle(&dbg, |g| host.alloc(g), |h| host.free(h));
+        assert!(r.is_err_and(|e| e.starts_with("DEBUGGER_TARGET_FREED")));
+        assert!(dbg.lock().unwrap().is_empty(), "no stale row");
+        assert_eq!(
+            *host.freed.borrow(),
+            [0xd000_0001],
+            "the session went at once"
+        );
+        assert!(pending.lock().unwrap().is_empty());
+        assert!(
+            seat_debugger(&dbg, &pending, (C + 1, 0x10), DEV, GR2, 1).is_ok(),
+            "a per-VM budget of one is free again"
+        );
+    }
+
+    /// ★ F2, the same race over the GR object: freed (on its own, or with its twin) before the act.
+    #[test]
+    fn a_gr_object_freed_while_its_debugger_act_is_pending_leaves_no_row() {
+        for (doomed, freed_obj) in [(vec![], Some(GR1)), (vec![GR2, GR1], None)] {
+            let (dbg, pending) = book();
+            let host = FakeHost::default();
+            let seat = seat_debugger(&dbg, &pending, (C, 0x10), DEV, GR1, 8).expect("admitted");
+            let other = seat_debugger(&dbg, &pending, (C, 0x11), DEV, 0xcafe_0300, 8).expect("ok");
+            doom_debuggers(&dbg, &pending, C, 0x0bad, &doomed, freed_obj);
+            assert!(
+                seat.settle(&dbg, |g| host.alloc(g), |h| host.free(h))
+                    .is_err()
+            );
+            assert_eq!(
+                other.settle(&dbg, |g| host.alloc(g), |h| host.free(h)),
+                Ok(0xd000_0002),
+                "a session over another GR object is untouched"
+            );
+            let live = dbg.lock().unwrap();
+            assert_eq!(live.keys().copied().collect::<Vec<_>>(), [(C, 0x11)]);
+            assert_eq!(*host.freed.borrow(), [0xd000_0001]);
+        }
+    }
+
+    /// The other order of the same race: the act ran first, so the free finds the row and returns
+    /// its session for the free act.
+    #[test]
+    fn a_free_after_the_act_takes_the_live_row() {
+        let (dbg, pending) = book();
+        let host = FakeHost::default();
+        let seat = seat_debugger(&dbg, &pending, (C, 0x10), DEV, GR1, 8).expect("admitted");
+        let h = seat
+            .settle(&dbg, |g| host.alloc(g), |h| host.free(h))
+            .expect("made");
+        assert_eq!(doom_debuggers(&dbg, &pending, C, DEV, &[], None), [h]);
+        assert!(dbg.lock().unwrap().is_empty());
+        assert!(
+            host.freed.borrow().is_empty(),
+            "the free act frees it, not the alloc act"
         );
     }
 }
