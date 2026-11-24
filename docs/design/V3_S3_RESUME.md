@@ -3,7 +3,7 @@
 **STATUS: LIVE, 2026-10-14 — MEASURED on the trusted host (RTX 4070, kf3 `559db30c`): the Linux desktop
 guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in one boot (§6).** Branch
 `claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
-(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-24 (§7b2, above §7b): the wake hunk is an optional patch by owner ruling (default off), with the public-source check and the open control experiments.** **UPDATE 2026-11-23 (§7b, above
+(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-24 (§7f, above §7b): the wake hunk is an optional patch by owner ruling (default off), with the public-source check and the open control experiments.** **UPDATE 2026-11-23 (§7b, above
 §7a): the Windows post-wake hang is root-caused (QEMU's wake reset wipes the Hyper-V TSC page while the TSC restarts) and
 fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** **UPDATE 2026-11-23 (§7c, above §7b):
 that TDR has two causes; the first (every RAM lease revoked by the wake's flat-view re-split) is fixed, the second (kf3's display
@@ -210,7 +210,7 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   declared 4 KiB), then the core channel parks waiting for that window's interlock. [inferred] the guest's window-channel
   PUT and the GET kf3 kept across the wake disagree. The release row `windows-sleep-wake` stays expected-FAIL.
 
-## 7b2. UPDATE 2026-11-24: the wake hunk is an optional patch (owner ruling), and what the public sources say
+## 7f. UPDATE 2026-11-24: the wake hunk is an optional patch (owner ruling), and what the public sources say
 
 **STATUS: LIVE, 2026-11-24. Owner ruling 2026-11-24: *"I am hesitant to force a patched QEMU binary. For some QEMU bug fixes, only if
 really needed, we may apply a .patch, if it remains optional."* The measurements of §7b stand; only how the fix is shipped changes.**
@@ -282,7 +282,7 @@ q35, Windows 11 LTSC with the 580.88 driver from `windows_gate.sh`; evidence `tr
   `TIME_REF_COUNT` (always KVM's) and the wake is clean with stock QEMU: the hang depends on the host. §7a's inference that
   the TSC is reset to 0 by the wake now holds as measured on a stable-TSC host; its inference that the common factor is
   i440FX + OVMF is withdrawn for arm B (q35 hangs the same way); arm A on q35 was clean once (R2).
-- ⊘ *Superseded by §7b2 (2026-11-24): the hunk is an optional patch, off by default; the text below says how it was first shipped.*
+- ⊘ *Superseded by §7f (2026-11-24): the hunk is an optional patch, off by default; the text below says how it was first shipped.*
 - **Fix (hardwired, no flag):** a third QEMU source hunk, `pc_machine_wakeup` keeps each vCPU's Hyper-V MSR block
   (`msr_hv_hypercall` .. `msr_hv_tsc_emulation_status`) across the `RESET_TYPE_WAKEUP` reset: read from KVM, reset, put back,
   then written to KVM, so KVM republishes a valid page for the restarted TSC. Architectural CPU state is reset as before; a
