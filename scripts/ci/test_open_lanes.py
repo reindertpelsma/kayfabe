@@ -131,6 +131,30 @@ class RealOutput(unittest.TestCase):
         self.assertEqual(NV.parse_text_devices("[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected"), [])
         self.assertEqual(NV.device_probe_argv("/x/nvbandwidth"), ["/x/nvbandwidth", "-t", "device_local_copy", "-b", "1", "-i", "1"])
 
+    def test_a_log_is_scrubbed_of_the_pci_address_and_the_host_name_before_it_is_kept(self):
+        import socket
+        text = "nvbandwidth Version: v0.9\n\n%s\nDevice 0: NVIDIA GeForce RTX 4090 (00000000:01:00)\nGPU-12345678-1234-1234-1234-123456789abc\n" % socket.gethostname()
+        out = NV.clean_log(text)
+        self.assertNotIn("00000000:01:00", out)
+        self.assertNotIn("GPU-12345678", out)
+        self.assertIn("Device 0: NVIDIA GeForce RTX 4090 (<pci>)", out)
+        self.assertNotIn(socket.gethostname() + "\n", out)
+        self.assertEqual(NV.parse_text_devices(text), ["NVIDIA GeForce RTX 4090"])      # the judge reads the raw text, the file is the cleaned one
+
+    def test_the_kept_logs_of_a_run_hold_no_pci_address(self):
+        d = Path(tempfile.mkdtemp())
+        bin_ = d / "nvbandwidth"
+        fake_nvbandwidth(bin_)
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            NV.cmd_run(Args(out=str(d / "out"), bin=str(bin_), only="device_local_copy"))
+        import socket
+        self.assertIn("(<pci>)", (d / "out" / "logs" / "devices.log").read_text())
+        self.assertNotIn("\n" + socket.gethostname() + "\n", (d / "out" / "logs" / "devices.log").read_text())
+        for f in (d / "out" / "logs").glob("*.log"):
+            self.assertNotRegex(f.read_text(), r"[0-9a-f]{8}:[0-9a-f]{2}:[0-9a-f]{2}")
+
     def test_the_real_copy_engine_case_passes_with_its_figure(self):
         body = self.real("nvbandwidth_real_host_to_device_ce_rtx4090_575.json")
         r = NV.judge_case(BY_ID["host_to_device_memcpy_ce"], 1, 0, body)
@@ -370,7 +394,7 @@ if "-j" not in a:                                 # text mode: the header lists 
     if ngpus == 0 and hidden:
         sys.stderr.write("[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected in expression cuInit(0)\\n")
         sys.exit(1)
-    print("nvbandwidth Version: v0.9\\nBuilt from Git version: v0.9\\n\\nCUDA Runtime Version: 12090\\nDriver Version: 575.51.03\\n\\nfakehost")
+    print("nvbandwidth Version: v0.9\\nBuilt from Git version: v0.9\\n\\nCUDA Runtime Version: 12090\\nDriver Version: 575.51.03\\n\\n" + __import__("socket").gethostname())
     for i in range(ngpus):
         print("Device %%d: NVIDIA GeForce RTX 4090 (00000000:%%02x:00)" %% (i, i + 1))
     sys.exit(0)

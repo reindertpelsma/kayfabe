@@ -1,0 +1,2 @@
+NEGCTL app=nvbandwidth control=CONTROL_OK judged=FAIL why=[app] FAIL: nvbandwidth listed no GPU device; no copy-engine case passed; no SM-copy case passed
+NEGCTL app=llama_vulkan control=CONTROL_OK judged=FAIL why=[app] FAIL: no `ggml_vulkan: N : <device>` line: no Vulkan device was found, the benchmark ran on the CPU

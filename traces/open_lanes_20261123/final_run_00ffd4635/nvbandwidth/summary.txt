@@ -1,0 +1,3 @@
+# gpu_use_why=memory.used rose 1975 MiB
+NVBANDWIDTH_PROOF device=NVIDIA_GeForce_RTX_4090 gpus=1 passed=18 ce=8 sm=8 latency=1 local=1 min_gbps=22.6533
+NVBANDWIDTH_SUMMARY status=PASS reason=ok pass=18 waived=17 fail=0 mismatch=0 not_run=0 cases=35 gpus=1 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_4090 buffer_mib=512 secs=45

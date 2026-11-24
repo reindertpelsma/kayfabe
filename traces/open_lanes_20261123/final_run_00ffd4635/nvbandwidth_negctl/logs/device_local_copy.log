@@ -1,0 +1,7 @@
+{
+	"nvbandwidth" : 
+	{
+		"error" : "[CUDA_ERROR_NO_DEVICE] no CUDA-capable device is detected in expression cuInit(0) in int main(int, char**)() : /opt/open_rows/src/nvbandwidth/nvbandwidth.cpp:291\n"
+	}
+}
+

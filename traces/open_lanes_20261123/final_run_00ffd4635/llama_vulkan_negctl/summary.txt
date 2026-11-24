@@ -1,0 +1,2 @@
+# gpu_use_why=the row did not pass, so there was no work to prove
+LLAMA_VULKAN_SUMMARY status=FAIL reason=no_vulkan_device device=none coopmat=unknown pp512_tps=0.00 tg64_tps=0.00 ngl=0 secs=34 gpu_use=NA

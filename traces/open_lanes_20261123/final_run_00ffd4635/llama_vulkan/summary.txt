@@ -1,0 +1,2 @@
+# gpu_use_why=memory.used rose 1337 MiB
+LLAMA_VULKAN_SUMMARY status=PASS reason=ok device=NVIDIA_GeForce_RTX_4090 coopmat=NV_coopmat2 pp512_tps=6091.44 tg64_tps=533.01 ngl=99 secs=11 gpu_use=PROVEN

@@ -29,6 +29,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -110,6 +111,17 @@ def device_names(body):
         m = DEVICE_RX.match(str(item))
         names.append(m.group(2) if m else str(item).split(":", 1)[-1].strip()[:80])
     return names
+
+
+PCI_PAREN_RX = re.compile(r"\([0-9a-fA-F]{8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\)")
+
+
+def clean_log(text):
+    """A log leaves the machine only through census.scrub (UUIDs, MACs, IPv4) and this: the `(domain:bus:device)` of a device line (census.scrub wants a function
+    number) and the host name nvbandwidth prints on a line of its own before the device lines."""
+    text = PCI_PAREN_RX.sub("(<pci>)", census.scrub(text))
+    host = socket.gethostname()
+    return "\n".join("<host>" if host and line.strip() == host else line for line in text.split("\n"))
 
 
 def parse_text_devices(text):
@@ -246,12 +258,12 @@ def cmd_run(a):
     if binary:
         rc, text, _, _ = run_cmd([binary, "-l"], 60)
         listed = parse_listing(text) if rc == 0 else []
-        (out / "logs" / "list.log").write_text(census.scrub(text[-4000:]))
+        (out / "logs" / "list.log").write_text(clean_log(text[-4000:]))
     else:
         header_note = "binary_missing"
     if binary:
         rc, text, _, _ = run_cmd(device_probe_argv(binary), 120)
-        (out / "logs" / "devices.log").write_text(census.scrub(text[-3000:]))
+        (out / "logs" / "devices.log").write_text(clean_log(text[-3000:]))
         names = parse_text_devices(text)
         ngpus, device = len(names), (names[0] if names else "")
     untabled = [n for n in listed if n not in {c["id"] for c in table}]
@@ -263,7 +275,7 @@ def cmd_run(a):
             res, why, status, vals, secs = "NOT_RUN", "binary_missing" if not binary else "not_in_binary", "-", [], 0.0
         else:
             rc, text, secs, timed_out = run_cmd(case_argv(binary, case["id"], a.buffer_mib, a.samples), CASE_TIMEOUT_S)
-            (out / "logs" / (case["id"] + ".log")).write_text(census.scrub(text[-6000:]))
+            (out / "logs" / (case["id"] + ".log")).write_text(clean_log(text[-6000:]))
             body = parse_json(text)
             if body is not None and not device:
                 names = device_names(body)

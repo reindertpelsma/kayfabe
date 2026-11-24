@@ -1,0 +1,26 @@
+{
+	"nvbandwidth" : 
+	{
+		"CUDA Runtime Version" : 12090,
+		"Driver Version" : "575.51.03",
+		"GPU Device list" : null,
+		"git_version" : "4a49bda",
+		"testcases" : 
+		[
+			{
+				"bandwidth_description" : "memcpy local GPU(column) bandwidth (GB/s)",
+				"bandwidth_matrix" : 
+				[
+					[
+						"459.724"
+					]
+				],
+				"name" : "device_local_copy",
+				"status" : "Passed",
+				"sum" : 459.72355322400006
+			}
+		],
+		"version" : "v0.9"
+	}
+}
+

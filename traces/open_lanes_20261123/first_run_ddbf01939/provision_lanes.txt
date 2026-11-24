@@ -1,0 +1,3 @@
+OPENROWS_nvbandwidth=ok
+OPENROWS_llama_vulkan=FAIL reason=E:_Unable_to_locate_package_glslc
+OPENROWS_llama_model=ok

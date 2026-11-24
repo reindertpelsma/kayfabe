@@ -1,0 +1,2 @@
+APPRES side=host app=nvbandwidth verdict=PASS rc=0 secs=45 quiet=0 note=warn:NVBANDWIDTH_SUMMARY status=PASS reason=ok pass=18 waived=17 fail=0 mismatch=0 not_run=0 cases=35 gpus=1 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_4090 buffer_mib gpu_use=PASS gpu_auth=guest gpu_subs=- gpu_births=-
+APPRES side=host app=llama_vulkan verdict=PASS rc=0 secs=1 quiet=0 note=- gpu_use=PASS gpu_auth=guest gpu_subs=- gpu_births=-
