@@ -27,8 +27,8 @@ control	0x20802806	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 e
 control	0x20803c01	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
 control	0x20808159	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
 control	0x20808162	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
-control	0x20808163	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
-control	0x20808164	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
+control	0x20808163	unknown-to-ogkm	Mode2Rpc	no tag of 535.309.01..615.71.09 exports it
+control	0x20808164	unknown-to-ogkm	Mode2Rpc	no tag of 535.309.01..615.71.09 exports it
 control	0x20808513	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
 control	0x20808524	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
 control	0x2080852a	unknown-to-ogkm	NotExported	no tag of 535.309.01..615.71.09 exports it
@@ -149,6 +149,10 @@ control	0x50800101	rule-allow	Mode2Rpc	NV5080_CTRL_CMD_DEFERRED_API: deferred-AP
 control	0x50800102	rule-allow	Mode2Rpc	NV5080_CTRL_CMD_REMOVE_API: deferred-API control served by kayfabe's deferred_api_control seat
 control	0x50800103	rule-allow	Mode2Rpc	NV5080_CTRL_CMD_DEFERRED_API_V2: deferred-API control served by kayfabe's deferred_api_control seat
 control	0x50800104	rule-allow	Mode2Rpc	NV5080_CTRL_CMD_DEFERRED_API_INTERNAL: deferred-API control served by kayfabe's deferred_api_control seat
+control	0x00801812	rule-allow	Mode2Rpc	NV0080_CTRL_DMA_SET_DEFAULT_VASPACE: kernel-only in ogkm (no visibility flag): reaches kayfabe because the guest KERNEL RM sends it over GSP RPC; consumed by the channel link as bookkeeping of the VM's own VA spaces, no host call
+control	0x20801117	rule-allow	Mode2Rpc	NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS: kernel-only in ogkm: the guest KERNEL's suspend path (nv_preempt_user_channels) sends it over GSP RPC; the channel plane disables or re-enables usermode on this VM's own twins with kayfabe's own verbs; refusing it broke every later UVM ioctl
+control	0x20808163	rule-allow	Mode2Rpc	GSS_ENC_SESSION_ACQUIRE: a GSS-legacy (bit 15) control no ogkm tag exports: the guest KERNEL RM routes it to its GSP (us); the channel plane carries exactly the measured 4 zero bytes as an acquire of the host's NVENC slot with zeroed params kayfabe authors, capped per VM (ENC_SESSIONS_PER_VM)
+control	0x20808164	rule-allow	Mode2Rpc	GSS_ENC_SESSION_RELEASE: the release half of GSS_ENC_SESSION_ACQUIRE (same transport, same consumer); a release with no slot held makes no host call
 class	0x0000000f	rule-refuse	HostScope	FABRIC_MANAGER_SESSION: reads or steers host- or board-wide state (power, ECC, PCIe/NVLink, BIOS, scheduling, caches, fabric); a VM must neither see nor change it
 class	0x00000020	rule-refuse	HostScope	NV0020_GPU_MANAGEMENT: reads or steers host- or board-wide state (power, ECC, PCIe/NVLink, BIOS, scheduling, caches, fabric); a VM must neither see nor change it
 class	0x0000003f	rule-refuse	CallerMemory	NV01_MEMORY_LOCAL_PRIVILEGED: describes memory by the caller's own address or as privileged video memory; in Mode 2 the caller is the guest kernel, so honouring it would hand the host a guest-chosen address
@@ -187,7 +191,6 @@ control	0x00731140	rule-refuse	DisplayEngine	NV0073_CTRL_CMD_DFP_GET_INFO: a dis
 control	0x00731142	rule-refuse	DisplayEngine	NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO: a display-engine query or setting; kayfabe's emulated display answers display state itself, and nothing after the gate consumes it
 control	0x00801306	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_FB_GET_COMPBIT_STORE_INFO: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0x0080170e	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
-control	0x0080170f	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0x00801714	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0x00801801	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_DMA_GET_PTE_INFO: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0x00801809	rule-refuse	AnsweredInChain	NV0080_CTRL_CMD_DMA_GET_PDE_INFO: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
@@ -258,7 +261,6 @@ control	0xa06c0102	rule-refuse	AnsweredInChain	NVA06C_CTRL_CMD_BIND: kayfabe ans
 control	0xa06f0108	rule-refuse	AnsweredInChain	NVA06F_CTRL_CMD_SET_ERROR_NOTIFIER: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0xa06f0109	rule-refuse	AnsweredInChain	NVA06F_CTRL_CMD_SET_INTERLEAVE_LEVEL: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0xa06f0111	rule-refuse	AnsweredInChain	NVA06F_CTRL_CMD_RESTART_RUNLIST: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
-control	0xa06f0112	rule-refuse	AnsweredInChain	NVA06F_CTRL_CMD_STOP_CHANNEL: kayfabe answers or refuses it in its own served chain (init tables, static info, ZBC, channel plane) before the gate; no lane needs the gate to admit it
 control	0xc3700101	rule-refuse	DisplayEngine	NVC370_CTRL_CMD_IDLE_CHANNEL: a display-engine query or setting; kayfabe's emulated display answers display state itself, and nothing after the gate consumes it
 control	0xc3700102	rule-refuse	DisplayEngine	NVC370_CTRL_CMD_SET_ACCL: a display-engine query or setting; kayfabe's emulated display answers display state itself, and nothing after the gate consumes it
 control	0xc3700103	rule-refuse	DisplayEngine	NVC370_CTRL_CMD_GET_ACCL: a display-engine query or setting; kayfabe's emulated display answers display state itself, and nothing after the gate consumes it
@@ -320,7 +322,6 @@ control	0x00731341	refused-by-name	Privileged	NV0073_CTRL_CMD_DP_AUXCH_CTRL 535.
 control	0x00731365	refused-by-name	Privileged	NV0073_CTRL_CMD_DP_SET_MANUAL_DISPLAYPORT 535.309.01..615.71.09
 control	0x00731369	refused-by-name	Privileged	NV0073_CTRL_CMD_DP_GET_CAPS 535.309.01..615.71.09
 control	0x00800106	refused-by-name	KernelOnly	NV0080_CTRL_CMD_BIF_GET_PCIE_POWER_CONTROL_MASK 535.309.01..615.71.09
-control	0x00801812	refused-by-name	KernelOnly	NV0080_CTRL_DMA_SET_DEFAULT_VASPACE 535.309.01..615.71.09
 control	0x00801909	refused-by-name	NotExported	NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL 535.309.01..545.23.08
 control	0x2080012d	refused-by-name	Privileged	NV2080_CTRL_CMD_GPU_INITIALIZE_CTX 535.309.01..615.71.09
 control	0x20800177	refused-by-name	KernelOnly	NV2080_CTRL_CMD_GPU_REPORT_NON_REPLAYABLE_FAULT 535.309.01..615.71.09
@@ -399,7 +400,6 @@ control	0x20801110	refused-by-name	NotExported	NV2080_CTRL_CMD_FIFO_CONFIG_CTXSW
 control	0x20801110	refused-by-name	Privileged	NV2080_CTRL_CMD_FIFO_CONFIG_CTXSW_TIMEOUT 580.105.08..615.71.09
 control	0x20801112	refused-by-name	KernelOnly	NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE 535.309.01..615.71.09
 control	0x20801116	refused-by-name	Privileged	NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO 535.309.01..615.71.09
-control	0x20801117	refused-by-name	KernelOnly	NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS 535.309.01..615.71.09
 control	0x20801119	refused-by-name	Privileged	NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS 535.309.01..615.71.09
 control	0x2080121f	refused-by-name	KernelOnly	NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE 535.309.01..615.71.09
 control	0x20801220	refused-by-name	KernelOnly	NV2080_CTRL_CMD_GR_GFX_POOL_INITIALIZE 535.309.01..615.71.09

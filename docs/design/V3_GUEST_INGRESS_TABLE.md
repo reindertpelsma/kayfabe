@@ -39,6 +39,19 @@ is kernel-only in RM (`ogkm-580: kernel/rmapi/control.c:702`) and is refused (`K
 
 ## 3. kayfabe's own rows (`ingress_rules.tsv`)
 
+⊘ **Correction, 2026-11-24 (security review of PR #545, F1).** The channel link (`kf_rm::chanlink`, ahead of the
+object seat in the served chain) carried six controls to host-twin acts without asking the gate: the GSS NVENC
+session pair `0x20808163`/`0x20808164` (no row), `DISABLE_USERMODE_CHANNELS` `0x20801117` and
+`DMA_SET_DEFAULT_VASPACE` `0x00801812` (refused `KernelOnly`), and `STOP_CHANNEL` `0xa06f0112` and
+`FIFO_SET_CHANNEL_PROPERTIES` `0x0080170f` (refused by `AnsweredInChain` rows, which said "nothing needs it
+admitted"; the link did). Every act was authored, bounded and on the VM's own objects, so nothing reached further
+than intended, but "the gate decides every guest control that reaches a host act" was false. Now the link asks the
+gate about every control before any arm, and the table says what is served: four `Mode2Rpc` allow rows (the
+NVENC pair, `DISABLE_USERMODE_CHANNELS`, `DMA_SET_DEFAULT_VASPACE`: each reaches kayfabe from the guest KERNEL RM
+over GSP RPC), and the two `AnsweredInChain` refuse rows are deleted (ogkm exports both `NON_PRIVILEGED`, so the
+derived verdict admits them). The counts below are therefore 53 allow rows (46 `Mode2Rpc`) and 119 refuse rows
+(29 `AnsweredInChain`). Guest-visible behaviour is unchanged: these ids were served before and are served now.
+
 - **49 allow rows**: 42 `Mode2Rpc` (they reach kayfabe only because in Mode 2 the guest's KERNEL RM talks to
   kayfabe as its GSP: the page-directory carriers, PROMOTE/EVICT_CTX, the CUDA-limit pair, MMU fault info, the
   display objects, `GP100_UVM_SW`, the deferred-API class and controls from 580.65.06, the two video classes
@@ -82,6 +95,17 @@ GSS-legacy ids and Windows-census ids); those are refused by the default, with o
 `0x0080028b` (no ogkm name; kept allowed as before, flagged for the owner).
 
 ## 5. Parity with the pre-I7 gate (tests)
+
+⊘ **Correction, 2026-11-24 (security review of PR #545, F1).** Item 2 below says that a newly refused id with no
+consumer is answered "the same `NV_ERR_NOT_SUPPORTED` either way". That was false for the NVENC session pair: the
+old gate admitted it (bit 15), the new table had no row, and the channel link served it before the gate, so the
+guest was served, not refused. The test's universe did not contain the pair and its consumer list named only the
+link's own constants. Now (a) the universe and the consumer list include every control the link claims
+(`kf_rm::chanlink::CLAIMED_CONTROLS` and the two version-dependent ids), (b)
+`every_control_the_channel_link_claims_is_admitted_at_every_tag`, `the_channel_link_asks_the_gate_before_any_arm`
+and `the_claimed_list_is_exactly_the_match_arms` pin the link to the gate, and (c) the exceptions file lists seven
+ids: the three below and the four ids of §3's correction that the old gate also refused while the link served
+them.
 
 The pre-I7 verdicts are kept ONLY as a test oracle: `crates/kf-rm/tests/fixtures/pre_i7_gate_verdicts.tsv`
 (id, verdict, tag span; no name, comment, ordering or structure of that table). `crates/kf-rm/tests/ingress_parity.rs`:

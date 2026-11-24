@@ -3985,8 +3985,10 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             "cmd {cmd:#x}",
         );
     }
-    // One below the modelled command is ogkm's `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE`, which
-    // RM gives no visibility flag (kernel clients only): refused by name, not merely unlisted.
+    // One below the modelled command is ogkm's `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` (kernel clients
+    // only in ogkm). The gate admits it by a `Mode2Rpc` row because the channel link serves it
+    // (security review of PR #545, F1); the bridge has no params shape for it, so it is refused HERE
+    // as unknown, never carried: admission is necessary, not sufficient.
     let below = 0x0080_1812u32;
     assert_eq!(
         xlate(&w::message(
@@ -3994,13 +3996,7 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             3,
             &w::control_body(spd::C, spd::DEV, below, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
         )),
-        Err(BridgeRefusal::ControlNotPermitted {
-            cmd: below,
-            denial: Denial::Refused {
-                name: "NV0080_CTRL_DMA_SET_DEFAULT_VASPACE",
-                why: Refusal::KernelOnly,
-            },
-        }),
+        Err(BridgeRefusal::UnknownControl { cmd: below }),
     );
     // ★ A control the port refuses BY NAME is a third answer, distinct from both — and
     // the `Denial` it carries is what a census counts it under.

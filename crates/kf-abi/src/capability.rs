@@ -29,7 +29,10 @@
 //! Admission is necessary, never sufficient: every admitted id still needs a consumer that
 //! decides its shape (`DriverAbiTable::control_params` / `alloc_params`, the channel plane, the
 //! display link). An admitted id without one is refused there. The gate exists so that writing
-//! a new decoder can never by itself widen what a guest may name.
+//! a new decoder can never by itself widen what a guest may name. The channel link
+//! (`kf_rm::chanlink`), which sits before the object seat in the served chain, asks the gate about
+//! every control before any of its arms; `crates/kf-rm/tests/ingress_parity.rs` pins that order and
+//! that every control it claims has an admitting row.
 
 use crate::DriverVersion;
 use crate::ingress_generated as g;

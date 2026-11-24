@@ -8,7 +8,9 @@
 //!    unless `tools/api_boundaries/ingress_parity_exceptions.tsv` (reviewed) lists it.
 //! 2. Never narrower where it matters: an id the old gate admitted and the new one refuses must
 //!    have no consumer after the gate at that tag (no control params shape, no channel-plane
-//!    constant, no alloc shape), so the guest sees the same `NV_ERR_NOT_SUPPORTED` either way.
+//!    constant, no alloc shape), so no consumer loses an id it served.
+//! 4. The channel link (`kf_rm::chanlink`) asks the gate before any arm, and the gate admits every
+//!    control the link claims at every tag (security review of PR #545, F1).
 //! 3. The lane evidence (`tests/fixtures/ingress_must_stay_allowed.tsv`) stays admitted wherever
 //!    the old gate admitted it.
 
@@ -23,30 +25,19 @@ const MUST: &str = include_str!("fixtures/ingress_must_stay_allowed.tsv");
 const EXCEPTIONS: &str =
     include_str!("../../../tools/api_boundaries/ingress_parity_exceptions.tsv");
 
-/// The controls kayfabe's channel plane asks the gate about by constant (`kf_rm::chanlink`), and
-/// the deferred-API seat's (`kf_rm::rmrpc::policy`).
-const GATE_CONSUMED_CONTROLS: &[u32] = &[
-    kf_rm::chanlink::DEBUG_SET_EXCEPTION_MASK,
-    kf_rm::chanlink::GR_SET_CTXSW_PREEMPTION_MODE,
-    kf_rm::chanlink::GR_CTXSW_ZCULL_BIND,
-    kf_rm::chanlink::TSG_SET_TIMESLICE,
-    kf_rm::chanlink::PERF_CUDA_LIMIT_SET_CONTROL,
-    kf_rm::chanlink::PERF_CUDA_LIMIT_DISABLE,
-    kf_rm::chanlink::PROMOTE_CTX,
-    kf_rm::chanlink::EVICT_CTX,
-    kf_rm::chanlink::GPFIFO_SCHEDULE,
-    kf_rm::chanlink::TSG_GPFIFO_SCHEDULE,
-    kf_rm::chanlink::BIND,
-    kf_rm::chanlink::GET_WORK_SUBMIT_TOKEN,
-    kf_rm::chanlink::STOP_CHANNEL,
-    kf_rm::chanlink::DISABLE_USERMODE_CHANNELS,
-    kf_rm::chanlink::DISABLE_CHANNELS,
-    kf_rm::chanlink::TSG_PREEMPT,
-    0x5080_0101,
-    0x5080_0102,
-    0x5080_0103,
-    0x5080_0104,
-];
+/// The deferred-API seat's controls (`kf_rm::rmrpc::policy`); the channel link's are
+/// [`chain_claimed`].
+const GATE_CONSUMED_CONTROLS: &[u32] = &[0x5080_0101, 0x5080_0102, 0x5080_0103, 0x5080_0104];
+
+/// Every control id the channel link turns into a statement at tag `t`: its fixed list and the two
+/// whose id depends on the driver version (security review of PR #545, F1: the ENC session pair
+/// and the version-dependent ids were outside this test's view).
+fn chain_claimed(t: DriverVersion) -> Vec<u32> {
+    let mut v = kf_rm::chanlink::CLAIMED_CONTROLS.to_vec();
+    v.extend(kf_rm::chanlink::DefaultVaspaceCtl::at(t).map(|d| d.cmd));
+    v.extend(kf_abi::fifoctl::ChannelPropsLayout::at(t).map(|l| l.cmd));
+    v
+}
 
 fn tag_of(s: &str) -> DriverVersion {
     let p: Vec<u16> = s.split('.').map(|x| x.parse().unwrap()).collect();
@@ -122,6 +113,12 @@ fn universe(old: &Old) -> BTreeSet<(String, u32)> {
     let mut u: BTreeSet<(String, u32)> = old.at.keys().cloned().collect();
     u.extend(CONTROLS.iter().map(|r| ("control".to_string(), r.id)));
     u.extend(CLASSES.iter().map(|r| ("class".to_string(), r.id)));
+    // The channel link's ids, row or not (the NVENC pair had none and was outside this universe).
+    u.extend(
+        TAGS.iter()
+            .flat_map(|t| chain_claimed(*t))
+            .map(|id| ("control".to_string(), id)),
+    );
     u
 }
 
@@ -171,7 +168,9 @@ fn what_the_new_gate_newly_refuses_has_no_consumer_after_the_gate() {
                 continue;
             };
             let consumed = if kind == "control" {
-                abi.control_params(ControlCmd(id)).is_some() || GATE_CONSUMED_CONTROLS.contains(&id)
+                abi.control_params(ControlCmd(id)).is_some()
+                    || GATE_CONSUMED_CONTROLS.contains(&id)
+                    || chain_claimed(*t).contains(&id)
             } else {
                 kf_rm::chanlink::alloc_shape(abi, id).is_some()
             };
@@ -221,4 +220,141 @@ fn every_gate_consumed_control_is_admitted_wherever_it_was() {
             }
         }
     }
+}
+
+/// ★ Security review of PR #545, F1: the channel link carries a control to a host act only through
+/// the gate. Every id it claims (the fixed list and the version-dependent two) is admitted at every
+/// tag; a claimed id with no row, or a refusing row, fails here by name.
+#[test]
+fn every_control_the_channel_link_claims_is_admitted_at_every_tag() {
+    let mut refused = Vec::new();
+    for t in TAGS {
+        for id in chain_claimed(*t) {
+            if !new_allows("control", id, *t) {
+                refused.push(format!("{id:#010x} at {t}"));
+            }
+        }
+    }
+    assert!(
+        refused.is_empty(),
+        "the channel link claims controls the gate refuses (give each a row in \
+         tools/api_boundaries/ingress_rules.tsv with its reason, or drop the arm): {refused:#?}"
+    );
+}
+
+const CHANLINK: &str = include_str!("../src/chanlink.rs");
+
+/// The body of `fn on_control` in the channel link's source.
+fn on_control_body() -> &'static str {
+    let at = CHANLINK
+        .find("fn on_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {")
+        .expect("fn on_control");
+    let open = at + CHANLINK[at..].find('{').expect("body");
+    let mut depth = 0usize;
+    for (i, c) in CHANLINK[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &CHANLINK[open..open + i + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unbalanced on_control");
+}
+
+/// The constant names (last path segment) and hex literals in `text`: an arm on a bare literal is
+/// seen too, and can never equal a name in the list.
+fn last_segment_idents(text: &str) -> BTreeSet<String> {
+    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':'))
+        .filter_map(|w| w.rsplit("::").next())
+        .filter(|w| {
+            w.starts_with("0x")
+                || (w.len() > 2
+                    && w.chars()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+/// ★ F1 (mutant M9): the gate is asked about `h.cmd` before the first arm that can claim it
+/// (`default_vas`, `chan_props`, the `match`), so removing that check, or moving it into some arms
+/// only, fails here.
+#[test]
+fn the_channel_link_asks_the_gate_before_any_arm() {
+    let body: String = on_control_body().split_whitespace().collect();
+    let gate = "if!self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted(){returnNone;}";
+    let g = body
+        .find(gate)
+        .expect("on_control asks the gate about h.cmd and returns None when refused");
+    for arm in ["self.default_vas", "self.chan_props", "matchh.cmd{"] {
+        let a = body
+            .find(arm)
+            .unwrap_or_else(|| panic!("{arm} is in on_control"));
+        assert!(g < a, "the gate check comes after {arm}");
+    }
+}
+
+/// ★ F1: `CLAIMED_CONTROLS` is exactly the arms of `on_control`'s `match h.cmd`, so a new arm cannot
+/// skip the admission test above.
+#[test]
+fn the_claimed_list_is_exactly_the_match_arms() {
+    let body = on_control_body();
+    let m = body.find("match h.cmd {").expect("the match");
+    let open = m + body[m..].find('{').expect("{");
+    let mut depth = 0usize;
+    let mut top = String::new();
+    for c in body[open..].chars() {
+        match c {
+            '{' => {
+                depth += 1;
+                if depth == 1 {
+                    continue;
+                }
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            _ => {}
+        }
+        if depth == 1 {
+            top.push(c);
+        } else if c == '\n' {
+            top.push('\n');
+        }
+    }
+    // Arm patterns sit at the arms' own indentation (bodies are blanked or deeper); a pattern line
+    // ends at `=>` and a guard (` if `) is cut off.
+    let indent = |l: &str| l.len() - l.trim_start().len();
+    let arm_indent = top
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .map(indent)
+        .expect("an arm");
+    let mut arms = BTreeSet::new();
+    for line in top
+        .lines()
+        .filter(|l| !l.trim().is_empty() && indent(l) == arm_indent)
+    {
+        let pat = line.split("=>").next().unwrap_or("");
+        let pat = pat.split(" if ").next().unwrap_or("");
+        arms.extend(last_segment_idents(pat));
+    }
+    let l = CHANLINK
+        .find("pub const CLAIMED_CONTROLS: &[u32] = &[")
+        .expect("the list");
+    let e = l + CHANLINK[l..].find("];").expect("end");
+    let listed = last_segment_idents(&CHANLINK[l + "pub const CLAIMED_CONTROLS".len()..e]);
+    assert!(arms.len() >= 15, "the scan found only {arms:?}");
+    assert_eq!(
+        arms, listed,
+        "CLAIMED_CONTROLS and the arms of on_control's match differ"
+    );
 }
