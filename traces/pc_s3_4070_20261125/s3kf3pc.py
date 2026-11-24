@@ -237,6 +237,8 @@ def cmd_session(a):
         hh, mm = (int(x) for x in a.no_new_boot_after.split(":"))
         t = time.gmtime()
         deadline = time.mktime((t.tm_year, t.tm_mon, t.tm_mday, hh, mm, 0, 0, 0, 0)) - time.timezone
+        if deadline < time.time():
+            deadline += 86400    # HH:MM names the next such time of day
     fd = os.open(S.LOCK, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
