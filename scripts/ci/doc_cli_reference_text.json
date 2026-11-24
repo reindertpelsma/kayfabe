@@ -78,8 +78,8 @@
   "meaning": "Shows the guest the physical GPU's utilisation in `nvidia-smi` and NVML. On a GPU shared by several VMs every guest sees the whole GPU's load, including the other VMs'; set `off` for tenants that must not see each other's load."
  },
  "unmapped-reads-zero": {
-  "status": "Not yet run on hardware",
-  "meaning": "A GPU read of an unmapped guest address returns zero and a write is dropped, with no fault. Vulkan sparse residency then works; every fault the guest expects becomes a silent zero, including application bugs that read freed memory. Off by default, where such a read faults and the guest sees the error."
+  "status": "Linux guest measured (Vulkan sparse residency, RTX 4090); Windows not run",
+  "meaning": "A GPU read of an unmapped guest address returns zero and a write is dropped, with no fault, for every guest. Vulkan sparse residency then works; with `off` it hangs the guest's GPU channel (host `Xid 109`) and the application loses the device. The cost of `on`: every fault the guest expects becomes a silent zero, including application bugs that read freed memory and CUDA managed memory or HMM pages that need demand paging (kayfabe does not serve them: with `off` they fail with an error, with `on` they read zero and the result can be wrong). Set `off` for a VM that uses managed memory and no sparse resources."
  },
  "doorbell-ioeventfd": {
   "status": "Experimental",

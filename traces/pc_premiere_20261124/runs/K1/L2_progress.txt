@@ -1,0 +1,5 @@
+1795501157940 begin 27.0.0 mode=learn clip=Preview-Your-Clips.prproj
+1795501157948 opening the project
+1795501158906 openDocument returned true; sequences 0
+1795501158913 creating sequence
+1795501158921 done ERR=TypeError: null is not an object line 24

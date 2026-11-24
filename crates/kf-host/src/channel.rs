@@ -119,16 +119,19 @@ pub const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
 /// virtual address range should not fault but simply return 0's").
 pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
 
-/// What an UNMAPPED VA of the static guest ranges ([`GUEST_VA_RANGES`] and the low
-/// range) reads as on the host twin. The `unmapped-reads-zero` device property, default off
-/// (`V3_SPARSE_RESIDENCY_RCA.md` §5, option B).
+/// What an UNMAPPED VA of the static guest ranges ([`GUEST_VA_RANGES`] and the low range) reads as on
+/// the host twin. The kf3 device sets it from its `unmapped-reads-zero` property, which defaults to on
+/// ([`GuestVaFill::Zero`]) for every guest and profile (`V3_SPARSE_RESIDENCY_RCA.md` §5, option B). Only a
+/// [`HostRm`] that nobody configures (the harness, the raw client, the kf-mem model) keeps
+/// [`GuestVaFill::default`], the fault, so a bare-metal reference run still sees the host's own behaviour.
 ///
 /// Only the static guest ranges take it: micro reservations ([`HostRm::reserve_va`]) and bare spaces
 /// keep [`NVOS32_RESERVE_FLAGS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GuestVaFill {
     /// INVALID: a GPU access to an unmapped guest VA faults (an RC, which reaches the guest). The
-    /// default. A guest's SPARSE pages (Vulkan sparse residency) fault too: those cases hang.
+    /// default of an unconfigured [`HostRm`], and what `unmapped-reads-zero=off` gives a guest. A
+    /// guest's SPARSE pages (Vulkan sparse residency) fault too: those cases hang.
     #[default]
     Fault,
     /// SPARSE: a GPU read of any unmapped guest VA returns zero and a write is dropped, with no
@@ -736,9 +739,9 @@ impl HostRm {
         self.alloc_vaspace_at(MirrorVaStart::HostDefault)
     }
 
-    /// Set what an unmapped VA of the static guest ranges reads as in every space
-    /// allocated AFTER this call ([`GuestVaFill`]). Called once at device realize from the
-    /// `unmapped-reads-zero` property; never from the environment.
+    /// Set what an unmapped VA of the static guest ranges reads as in every space allocated AFTER
+    /// this call ([`GuestVaFill`]). Called once at device realize from the `unmapped-reads-zero`
+    /// property; never from the environment.
     pub fn set_guest_va_fill(&self, fill: GuestVaFill) {
         self.guest_va_zero.store(
             fill == GuestVaFill::Zero,
@@ -2503,10 +2506,43 @@ mod guest_va_fill_tests {
         }
     }
 
-    /// A HostRm-free stand-in for `set_guest_va_fill` / `guest_va_fill`: the default plan of a
-    /// floor-started space has no `_SPARSE` range (S2 holds by default).
+    /// The Linux guest's space (host-default start, no floor, no Windows profile) takes the ZERO fill
+    /// like a Windows-profile one: the fill is chosen by the property alone, never by the profile.
     #[test]
-    fn the_default_plan_has_no_sparse_range() {
+    fn the_zero_fill_reaches_a_host_default_space_like_a_floor_space() {
+        let linux: Vec<_> =
+            guest_range_plan(MirrorVaStart::HostDefault, GuestVaFill::Zero).collect();
+        let windows: Vec<_> =
+            guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Zero).collect();
+        assert!(!linux.is_empty());
+        assert!(
+            linux
+                .iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0)
+        );
+        assert!(
+            windows
+                .iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0)
+        );
+        assert_eq!(
+            linux
+                .iter()
+                .map(|&(.., f)| f)
+                .collect::<std::collections::BTreeSet<_>>(),
+            windows
+                .iter()
+                .map(|&(.., f)| f)
+                .collect::<std::collections::BTreeSet<_>>(),
+            "one flag word for both profiles"
+        );
+    }
+
+    /// A HostRm-free stand-in for an unconfigured host (`GuestVaFill::default()`, as the harness and
+    /// the raw client run): its plan of a floor-started space has no `_SPARSE` range. The kf3 device
+    /// default is the opposite and is tested in kf-qemu (`config_tests`).
+    #[test]
+    fn the_unconfigured_plan_has_no_sparse_range() {
         let plan: Vec<_> =
             guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::default()).collect();
         assert_eq!(plan.len(), 3);

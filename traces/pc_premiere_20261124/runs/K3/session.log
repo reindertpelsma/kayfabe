@@ -1,0 +1,7 @@
+2026-11-24T07:02:34Z host cuInit before kf3: (0, 'cuInit 0\n')
+2026-11-24T07:02:34Z swtpm: (0, '')
+2026-11-24T07:02:34Z qemu started pid 518366 (/workspace/bench/kf3-bins/ed41beea/qemu-system-x86_64)
+2026-11-24T07:10:34Z STOP file
+2026-11-24T07:10:34Z guest shutdown via ssh rc=0
+2026-11-24T07:10:46Z qemu exited after the guest shutdown
+2026-11-24T07:10:48Z host cuInit after: (0, 'cuInit 0\n')

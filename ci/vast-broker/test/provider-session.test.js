@@ -63,7 +63,10 @@ for (const restart of [false, true]) {
       const r = await record(h);
       assert.equal(r.providerRetries, i + 1);
       assert.equal(r.originalStarted, clock);
-      assert.equal(r.hardDeadline, clock + 180 * 60000);
+      // the deadlines move by the time since the first rental, up to the extension cap, and by nothing else
+      const cap = configuration(env).provider.replacementExtensionMinutes * 60000;
+      assert.equal(r.deadlineExtension, Math.min(cap, r.started - clock));
+      assert.equal(r.hardDeadline, clock + 180 * 60000 + r.deadlineExtension);
       assert.equal(r.rentalAttempts.length, i + 1);
       assert.equal((await h.storage.list({ prefix: 'cost:' })).size, i + 2);
       assert.equal(h.cloud.instances.has(old.id), false);

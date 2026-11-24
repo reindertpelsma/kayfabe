@@ -877,6 +877,7 @@ def main():
             "payload_instruction.py",
             "box_downloader.py",
             "propimage_apps.py",
+            "kfml_skip_codes.py",  # kfml_stage.py and a strict kfml_rows load the skip-code vocabulary with it
             "kfml_stage.py",  # test_vast_payload_apps and the v7 fixture build the kfml stage log with it (default stage since 2026-11-17)
             "kf_fetch.py",
             "vast_payload.sh",
@@ -951,6 +952,9 @@ def main():
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parents[1] / relative, target)
+        vocabulary = root / "scripts/kfml/kfml/errors.py"  # the file kfml_skip_codes.py loads the vocabulary from
+        vocabulary.parent.mkdir(parents=True)
+        shutil.copyfile(HERE.parent / "kfml/kfml/errors.py", vocabulary)
         baseline = run(root)
         assert not baseline["killers"], baseline
         print("baseline: %d tests, no killers" % baseline["tests"], file=sys.stderr, flush=True)

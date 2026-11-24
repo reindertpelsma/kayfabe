@@ -29,10 +29,11 @@
 //!   (`V3_BUILD.md` C: today they fail LOUDLY, a forwarded RC and CUDA 719), into silent zero reads.
 //!   GREEN; it is the guard on any fix.
 //!
-//! Option B as an opt-in (`unmapped-reads-zero=on`, [`GuestVaFill::Zero`]): S1 holds
-//! with it ON ([`on_s1_guest_sparse_slots_read_zero`], [`on_s1_an_unbound_slot_returns_to_zero`]),
-//! and S2 is then broken BY DESIGN ([`on_s2_consequence_guest_invalid_vas_read_zero_silently`]
-//! documents it). With it OFF (the default) nothing changes: S2 holds, S1 is the known gap.
+//! Option B (`unmapped-reads-zero`, [`GuestVaFill::Zero`]): S1 holds with it ON
+//! ([`on_s1_guest_sparse_slots_read_zero`], [`on_s1_an_unbound_slot_returns_to_zero`]), and S2 is then
+//! broken BY DESIGN ([`on_s2_consequence_guest_invalid_vas_read_zero_silently`] documents it). The
+//! kf3 device default is ON; the model's own default is the unconfigured host, OFF: S2 holds there and
+//! S1 is the known gap.
 
 use super::*;
 use kf_host::channel::GuestVaFill;

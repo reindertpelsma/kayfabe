@@ -54,17 +54,17 @@ citation: ask whether its reason still holds before relying on it.
 
 ## §BH. Sparse zero fill: `unmapped-reads-zero` defaults to ON for every guest, 2026-11-24
 
-**STATUS: LIVE as a ruling, 2026-11-24; owner decision. The code is implemented by another change; until it lands, `next` still defaults the property to `off` and the documents below say so, marked pending.**
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. IMPLEMENTED 2026-11-24 by PR #580 (`kf3.c` default `true`, `KF3_ABI` 37); the pending notes of item 3 are resolved there. Windows has not been run.**
 
 <!-- src: owner, 2026-11-24; the measurement is docs/design/V3_SPARSE_RESIDENCY_RCA.md section 6 -->
 
 1. **The default of `unmapped-reads-zero` is ON for everything, Linux guests included.** *Reason (owner):* real host sparse residency proves the ioctl exists on Linux, so the fill is not a Windows-only need. *Owner's statement of 2026-11-24 (not re-run for this entry):* Linux Vulkan sparse-residency cases hang with the fill off. The hardware record in the repository is narrower: `docs/design/V3_SPARSE_RESIDENCY_RCA.md` section 6 (one RTX 4090 box, the Vulkan CTS residency cases hang with Xid 109 with the fill off and pass with it on).
 2. Supersedes the `auto` mode proposed by open PR #507 (on for Windows-profile guests, off for Linux): there is no Linux exception. The property remains a boolean, so `off` is still expressible.
-3. The documents that state the old default are `docs/howto/cli-reference.md` (generated property table), `docs/howto/troubleshooting.md` and `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`; each carries a pending marker until the implementing change lands and the generated table is regenerated from `kf3.c`.
+3. The documents that state the old default are `docs/howto/cli-reference.md` (generated property table), `docs/howto/troubleshooting.md` and `docs/design/V3_PACKAGING_AND_DISTRIBUTION.md`; each carried a pending marker until the implementing change (#580) landed; the generated table is regenerated from `kf3.c` there and the markers are replaced by the implemented state.
 
 ## §BG. Skips: a row may end NOT_RUN only for a cause outside kayfabe; every other skip fails, 2026-11-24
 
-**STATUS: LIVE as a ruling, 2026-11-24; owner decision. It replaces the zero-skip acceptance rule where the two conflict. NOT YET IN CODE: the payload, the runner and the stages still implement the old strict rule (`kfml_not_run`, `STRICT_SKIP:...`, `apps_discovery_not_run`, `windows_open_rows_not_run`, `--strict-rows`) until a separate code change lands; the documents that describe them carry a dated note.**
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. It replaces the zero-skip acceptance rule where the two conflict. IN CODE for the kfml stage only, since 2026-11-24 (PR #579: `skip_code` vocabulary, `kfml_rows(..., strict=True)`; GPU-free tested, not yet run on a box). NOT YET IN CODE: the payload's other stages, the runner and the propimage stages still implement the old strict rule (`STRICT_SKIP:...`, `apps_discovery_not_run`, `windows_open_rows_not_run`, `--strict-rows`) until a separate code change lands; the documents that describe them carry a dated note.**
 
 <!-- src: owner, 2026-11-24 -->
 

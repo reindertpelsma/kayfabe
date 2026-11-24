@@ -85,6 +85,70 @@ lines = [
 # Valid evidence includes both CUDA modes for this exact original revision.
 lines.insert(3, lines[2].replace("mode=host", "mode=guest"))
 event, ref = "push", "refs/heads/master"
+# The middle tier gate of a pull request to master plans more stages than the four of a push; the names and the
+# durations are those of a real run (the box is told what to plan; the frame states how many it planned).
+MIDDLE = [
+    ("provision", 389217),
+    ("cuda_host", 13265),
+    ("merge_bar", 973608),
+    ("cuda_guest", 238583),
+    ("apps", 2059783),
+    ("windows_gate", 2552316),
+    ("windows_apps", 1137570),
+]
+
+
+def frame(stages, count=None, results=None):
+    out = [
+        "[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=" + str(count or len(stages))
+    ]
+    for name, ms in stages:
+        result = (results or {}).get(name, "PASS")
+        out.append(
+            "[untrusted] [box] stage name="
+            + name
+            + " rc=0 duration_ms="
+            + str(ms)
+            + " result="
+            + result
+        )
+    return out
+
+
+if case.startswith("valid-middle") or case.startswith("logs-middle"):
+    stages = list(MIDDLE)
+    if case == "valid-middle-kfml":
+        stages.insert(5, ("kfml", 100))
+    results, count = None, None
+    if case == "logs-middle-stage-failed":
+        results = {"windows_apps": "FAIL"}
+    if case == "logs-middle-count-mismatch":
+        count = 8
+    if case == "logs-middle-too-many":
+        stages = [(n, ms) for n, ms in MIDDLE[:4]] + [("s" + str(i), 1) for i in range(13)]
+    if case == "logs-middle-base-order":
+        stages[1], stages[2] = stages[2], stages[1]
+    if case == "logs-middle-no-base":
+        stages = stages[3:]
+    if case == "logs-middle-extra":
+        # more PASS lines than the frame planned (stages=7, eight lines)
+        stages.append(("kfml", 100))
+        count = 7
+    if case == "logs-middle-duplicate":
+        stages.append(("windows_apps", 5))
+    if case == "logs-middle-forged-name":
+        stages[5] = ("Windows_Gate$x", 1)
+    lines[4:] = frame(stages, count, results)
+if case in {"valid-middle-replaced", "logs-middle-rental-overflow"}:
+    # A box that never became usable was replaced: one rental and one selection line per box, one verdict frame.
+    extra = 1 if case == "valid-middle-replaced" else 8
+    first = lines[0]
+    lines[:1] = [first.replace("machine=42", "machine=" + str(100 + i)) for i in range(extra)] + [
+        first
+    ]
+    lines[extra + 1 : extra + 2] = [
+        lines[extra + 1].replace("die=GA106", "die=GA10" + str(i)) for i in range(extra)
+    ] + [lines[extra + 1]]
 if case == "tree":
     data["/commits/" + parent]["commit"]["tree"]["sha"] = "f" * 40
 if case in ["status-failure", "status-pending"]:
@@ -255,7 +319,17 @@ if case.startswith("release"):
 else:
     module = load("gate_reuse")
     proof = module.find_reuse(sha, event, ref, get, lambda _: "\n".join(lines))
-    assert bool(proof) == (case in {"valid", "ci-multiple-success", "prepare-pending"}), (
+    assert bool(proof) == (
+        case
+        in {
+            "valid",
+            "valid-middle",
+            "valid-middle-kfml",
+            "valid-middle-replaced",
+            "ci-multiple-success",
+            "prepare-pending",
+        }
+    ), (
         case,
         proof,
     )
