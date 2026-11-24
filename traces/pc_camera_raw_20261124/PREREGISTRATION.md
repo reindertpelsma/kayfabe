@@ -95,3 +95,16 @@ Order: K, then C, then V. The bind comes last, so its restore ends the GPU work 
   - the udev queue empty.
 - On a wedge: the SysRq ladder (s, u, b). Never a normal reboot.
 - Throwaway overlays are removed at the end. Nothing else on the pc is deleted. The Adobe image never leaves the pc.
+
+## Addendum, 2026-11-24 03:15Z (written after runs K1 and V1, before any further run)
+In K1 and V1 Camera Raw answered both Select Background actions (D and J), and Select Subject, with "Something went wrong.
+Unable to load AI selection model": on bare metal too. It shows no mask and no hang. So the offline image cannot exercise
+the action, and H1, H2 and H3 are NOT-EXERCISED for it. C is not run for Select Background: it cannot reach the walk either.
+
+**Exploratory arm E (not part of the owner question; labelled as exploratory in the README).** Under K, on the DNG, try
+the Camera Raw AI tool that reads the most GPU memory, Enhance > Denoise (raw). It needs a raw file, which 2026-11-21 did
+not have.
+- If its model loads, the same classes apply. A walk cut with CLEAN-RESET supports H2. A walk cut with SILENT-HANG
+  falsifies H2.
+- If the model does not load either, E is NOT-EXERCISED and the session stops there. No second bind is made for E unless
+  K shows a hang or reset; V is then the reference.
