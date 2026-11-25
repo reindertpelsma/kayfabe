@@ -39,7 +39,7 @@ with state `DESIGN_ONLY`. Owner configuration cannot enable it through `RELEASE_
 `KF_STAGES=llm_parity`, alone or with SPEC, is refused before work. The existing fat-guest
 `llm_parity.sh` is not a CI stage adapter and is not invoked here. A short llama.cpp probe in
 the app list is not qualification of that real workload. SPEC keeps its existing `KF_STAGES`
-/ `KF_SPEC` plumbing. No LLM execution is wired and no large-tier qualification is claimed.
+/ `KF_SPEC` plumbing. No LLM execution is wired and no large-tier qualification is claimed. ⊘ Update 2026-11-25: `TIER_CONTENTS.large` lists `llm_parity` in `additionalStages` and SPEC in `invokedStages` (not required; `OWNER_RULINGS.md` §AZ, §BE); the middle tier's contents are unchanged.
 
 ## Trusted selection and the two opt-ins
 

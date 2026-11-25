@@ -508,7 +508,7 @@ class SpecIsGatedLikeTheWorker(unittest.TestCase):
         defaults = json.loads((ROOT / "ci/vast-broker/defaults.json").read_text())
         self.assertEqual(defaults["releaseStages"], [])
         self.assertEqual(defaults["stageSlots"]["specviewperf"], {
-            "tiers": ["large"], "state": "PLUMBING",
+            "tiers": ["large"], "state": "PLUMBING", "required": False,
             "requiredRowsPerDie": ["specviewperf_lanea", "specviewperf_laneb"],
             "lanes": ["lanea", "laneb"], "requiresSeparateRentals": True,
         })

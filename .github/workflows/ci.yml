@@ -2264,6 +2264,10 @@ jobs:
       # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
       - name: Windows support profile mutations require two named killers each
         run: python3 scripts/ci/windows_profile_mutants.py
+      # The walk cut at a per-space limit (2026-11-25: kf-mem vasmgr cut branch, walk_cut_line and entry need, kf-cuda KF_ENTRY_CUT;
+      # a cut space fails its split and holds its invalidate): each mutant needs two named killers.
+      - name: Walk-cut mutations require two named killers each
+        run: python3 scripts/ci/walk_cut_mutants.py
 
   rust-mutants-b:
     name: rust mutants B — oracle gate, video classes, offer filter, unmap cap, VA profiling
@@ -2453,6 +2457,13 @@ jobs:
             sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
           fi
           exit "$rc"
+      # The `KF3_NEGCTL_*` control switches are compiled in only by the cargo feature `negctl` (control builds only; the release kit
+      # and a plain build_kf3.sh never set it). The default-feature test above covers the release configuration; this runs the two crates that read the
+      # switches with the feature on, then builds the staticlib both ways and scans each archive for the switch names.
+      - name: Control switches (negctl feature on; default archive holds no switch name)
+        run: |
+          KF_REQUIRE_ORACLES=1 KAYFABE_NO_KVM=1 cargo test -p kf-host -p kf-qemu --features kf-qemu/negctl --no-fail-fast
+          python3 -B -I scripts/ci/negctl_artifact.py
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove

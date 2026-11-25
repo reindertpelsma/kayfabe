@@ -356,13 +356,14 @@ test('mid Windows app profile contains every small app without a union override'
   );
   assert.ok(p.profiles.small.apps.every((id) => p.profiles.mid.apps.includes(id)));
 });
-test('large tier contract inherits middle and adds SPEC plus reserved LLM', async () => {
+test('large tier contract inherits middle and requires only the reserved LLM stage; SPEC is invoked, not required', async () => {
   const { TIER_CONTENTS } = await import('../src/tier.js');
   assert.equal(TIER_CONTENTS.small.base, 'check');
   assert.equal(TIER_CONTENTS.middle.inherits, 'small');
   assert.deepEqual(TIER_CONTENTS.middle.appProfiles, { linux: 'middle', windows: 'mid' });
   assert.equal(TIER_CONTENTS.large.inherits, 'middle');
-  assert.deepEqual(TIER_CONTENTS.large.additionalStages, ['specviewperf', 'llm_parity']);
+  assert.deepEqual(TIER_CONTENTS.large.additionalStages, ['llm_parity']);
+  assert.deepEqual(TIER_CONTENTS.large.invokedStages, ['specviewperf']);
   // 2026-11-12: the apps pair is sent for large (large includes middle); the tier is still not executable.
   assert.equal(TIER_CONTENTS.large.state, 'APPS_SENT');
 });
@@ -390,6 +391,61 @@ test('large retains the complete inherited probe profiles before adding workload
   assert.deepEqual(profiles('small'), {});
   assert.deepEqual(profiles('middle'), { linux: 'middle', windows: 'mid' });
   assert.deepEqual(profiles('large'), profiles('middle'));
-  assert.ok(TIER_CONTENTS.large.additionalStages.includes('specviewperf'));
+  assert.ok(!TIER_CONTENTS.large.additionalStages.includes('specviewperf'));
   assert.ok(TIER_CONTENTS.large.additionalStages.includes('llm_parity'));
+});
+
+// No tier requires SPECviewperf or a proprietary
+// image, and the per-PR middle run is exactly what it was. Falsifier: a required list names a stage whose slot says it is
+// not required, or the small or middle tier gains a stage or a different request.
+test('the SPEC slot is an invoked app-lane stage: not required, only an operator adds it to a release run', async () => {
+  const { TIER_CONTENTS } = await import('../src/tier.js');
+  const { DEFAULTS } = await import('../src/defaults.js');
+  assert.equal(DEFAULTS.stageSlots.specviewperf.required, false);
+  assert.deepEqual(TIER_CONTENTS.large.invokedStages, ['specviewperf']);
+  // The slot's data stays, and an operator can still enable it (off by default).
+  assert.deepEqual(DEFAULTS.stageSlots.specviewperf.tiers, ['large']);
+  assert.deepEqual(DEFAULTS.releaseStages, []);
+  assert.deepEqual(configuration({ ...env, RELEASE_STAGES: '["specviewperf"]' }).releaseStages, [
+    'specviewperf',
+  ]);
+});
+test('no tier requires an app-lane stage and no required list names a propimage', async () => {
+  const { TIER_CONTENTS } = await import('../src/tier.js');
+  const { DEFAULTS } = await import('../src/defaults.js');
+  const lane = Object.entries(DEFAULTS.stageSlots)
+    .filter(([, slot]) => slot.required === false)
+    .map(([name]) => name);
+  assert.deepEqual(lane, ['specviewperf']);
+  for (const [name, tier] of Object.entries(TIER_CONTENTS))
+    for (const stage of tier.additionalStages ?? [])
+      assert.ok(!lane.includes(stage), name + ' requires ' + stage);
+  for (const stage of TIER_CONTENTS.large.invokedStages) assert.ok(lane.includes(stage));
+  for (const name of ['small', 'middle'])
+    assert.deepEqual(TIER_CONTENTS[name].additionalStages ?? [], []);
+  const everyName = Object.values(TIER_CONTENTS).flatMap((t) => [
+    ...(t.additionalStages ?? []),
+    ...(t.invokedStages ?? []),
+  ]);
+  assert.ok(everyName.every((n) => !/propimage|matlab|install_flow/.test(n)));
+});
+test('the per-PR middle run is unchanged: the Windows stage, both app requests, no extra stage', async () => {
+  const { TIER_CONTENTS, tierEnvironment, middleAppsRequest } = await import('../src/tier.js');
+  for (const name of ['small', 'middle']) {
+    assert.equal(TIER_CONTENTS[name].additionalStages, undefined, name);
+    assert.equal(TIER_CONTENTS[name].invokedStages, undefined, name);
+  }
+  const request = middleAppsRequest('check', 'middle', true);
+  assert.deepEqual(request, { linuxApps: true, winApps: 'mid' });
+  assert.deepEqual(tierEnvironment('check', { tierName: 'middle', ...request }), {
+    KF_MERGE_WINDOWS: '1',
+    KF_TIER: 'middle',
+    KF_LINUX_APPS: '1',
+    KF_WINAPPS: 'mid',
+  });
+  assert.deepEqual(MIDDLE_APP_COUNTS, { apps: 66, windows_apps: 10 });
+  assert.throws(
+    () => tierEnvironment('check', { tierName: 'middle', stages: ['specviewperf'] }),
+    /stages/,
+  );
 });

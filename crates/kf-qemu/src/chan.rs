@@ -2109,26 +2109,64 @@ fn reenable_noact() -> bool {
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
 /// CONTROL: every recorded resolution is perturbed, so `stale_binds=` must move on a box run that
 /// retires any T-mode work. Default OFF; read once. Never set in production.
+#[cfg(feature = "negctl")]
 fn negctl_stale_bind() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_STALE_BIND").is_some_and(|v| v != "0"))
 }
 
+/// Without the `negctl` feature (the release build) this control is never on.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_stale_bind() -> bool {
+    false
+}
+
 /// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_HEAP=1`**, the `heap_out=` counter's POSITIVE CONTROL:
 /// every birth is counted as if its USERD lay outside the usable heap — counted only, NEVER refused
 /// ([`heap_gate`]). Default OFF; read once.
+#[cfg(feature = "negctl")]
 fn negctl_heap() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_HEAP").is_some_and(|v| v != "0"))
+}
+
+/// Without the `negctl` feature (the release build) this control is never on.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_heap() -> bool {
+    false
 }
 
 /// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_TWIN=1`** (T-mode), the `twin_refused=` counter's
 /// POSITIVE CONTROL: every passthrough birth is answered as if its space were a guest-KERNEL space
 /// — refused by name, counted. Destructive by design (no guest user channel is born): a dedicated
 /// control run only. Default OFF; read once.
+#[cfg(feature = "negctl")]
 fn negctl_twin() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN").is_some_and(|v| v != "0"))
+}
+
+/// Without the `negctl` feature (the release build) this control is never on.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_twin() -> bool {
+    false
+}
+
+/// The suffix a refusal carries while the T-mode twin control is on.
+#[cfg(feature = "negctl")]
+fn negctl_twin_note() -> &'static str {
+    if negctl_twin() {
+        " [KF3_NEGCTL_TWIN positive control]"
+    } else {
+        ""
+    }
+}
+
+/// The suffix a refusal carries while the T-mode twin control is on: none in a build without the
+/// `negctl` feature.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_twin_note() -> &'static str {
+    ""
 }
 
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TCENSUS=1`** (or
@@ -2482,6 +2520,15 @@ enum HeapGate {
     Count(String),
 }
 
+/// What the positive control's count-only arm records for a birth inside the heap. The name of the
+/// switch is in the text only in a `negctl` build.
+#[cfg(feature = "negctl")]
+const NEGCTL_HEAP_NOTE: &str = "KF3_NEGCTL_HEAP positive control";
+/// What the positive control's count-only arm records for a birth inside the heap (a build without
+/// the `negctl` feature never takes the arm outside a test).
+#[cfg(not(feature = "negctl"))]
+const NEGCTL_HEAP_NOTE: &str = "positive control";
+
 /// ★ P1+P2 inc A / S1-43 (review fix 2026-10-04): [`heap_bounds`], refusing only when `strict`;
 /// `negctl` (`KF3_NEGCTL_HEAP`, the counter's positive control) counts EVERY birth and refuses none.
 fn heap_gate(
@@ -2493,7 +2540,7 @@ fn heap_gate(
 ) -> HeapGate {
     match heap_bounds(layout, userd, notifier) {
         Err(why) if negctl => HeapGate::Count(format!("{why} (positive control)")),
-        Ok(()) if negctl => HeapGate::Count("KF3_NEGCTL_HEAP positive control".into()),
+        Ok(()) if negctl => HeapGate::Count(NEGCTL_HEAP_NOTE.into()),
         Ok(()) => HeapGate::Inside,
         Err(why) if strict => HeapGate::Refuse(why),
         Err(why) => HeapGate::Count(why),
@@ -7378,11 +7425,7 @@ impl ChanPlane {
                         NV_ERR_INVALID_STATE,
                         format!(
                             "twin state: VA space {key:?} is a guest-KERNEL space — a channel the guest created non-kernel never runs in it (V3_P1P2_TSPACE.md §4.2){}",
-                            if negctl_twin() {
-                                " [KF3_NEGCTL_TWIN positive control]"
-                            } else {
-                                ""
-                            }
+                            negctl_twin_note()
                         ),
                     );
                 }
@@ -11487,5 +11530,46 @@ mod debugger_wiring_tests {
         ] {
             assert_eq!(flat.matches(needle).count(), n, "{what}: `{needle}`");
         }
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(!super::negctl_stale_bind());
+            assert!(!super::negctl_heap());
+            assert!(!super::negctl_twin());
+            assert!(super::negctl_twin_note().is_empty());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(!super::negctl_stale_bind());
+        assert!(!super::negctl_heap());
+        assert!(!super::negctl_twin());
+        assert!(super::negctl_twin_note().is_empty());
+    }
+
+    /// The positive control's count-only arm counts a birth inside the heap and refuses nothing (a pure seam: the
+    /// switch is a parameter of `heap_gate`).
+    #[test]
+    fn the_heap_gate_counts_and_never_refuses_under_its_control() {
+        use super::{HeapGate, heap_gate};
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        assert!(matches!(
+            heap_gate(true, true, &l, None, None),
+            HeapGate::Count(_)
+        ));
+        assert!(matches!(
+            heap_gate(true, false, &l, None, None),
+            HeapGate::Inside
+        ));
     }
 }

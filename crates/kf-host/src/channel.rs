@@ -647,6 +647,7 @@ pub struct RingSpec {
 /// `ADMIN` and the reply check must refuse **every** birth: the knob can only make births fail,
 /// never let a privileged channel live. It exists to show the check fires on a real RM reply
 /// (a check that has only ever reported zero has not shown it can report one).
+#[cfg(feature = "negctl")]
 fn negctl_skip_cap_bracket() -> bool {
     static SKIP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *SKIP.get_or_init(|| {
@@ -659,6 +660,12 @@ fn negctl_skip_cap_bracket() -> bool {
         }
         on
     })
+}
+
+/// Without the `negctl` feature (the release build) the capability bracket is never skipped.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_skip_cap_bracket() -> bool {
+    false
 }
 
 /// ★ The `NV_CHANNEL_ALLOC_PARAMS` request every kf3 channel birth sends.
@@ -4117,5 +4124,24 @@ mod reaper_tests {
             }
         }
         assert_eq!(got, vec![0, 1, 2, 3]);
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(!super::negctl_skip_cap_bracket());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(!super::negctl_skip_cap_bracket());
     }
 }

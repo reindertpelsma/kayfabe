@@ -1,0 +1,29 @@
+{
+ "arm": "Wdef",
+ "up_at_s": 10,
+ "qemu_exit_at_s": null,
+ "qemu_rc": null,
+ "alive_at_end": true,
+ "poll_s": 300,
+ "host_uptime_window_s": [
+  101521.4,
+  101826.3
+ ],
+ "host_mmuWalkMap_lines": 0,
+ "host_no_memory_lines": 3,
+ "log_counts": {
+  "through our reservation": 0,
+  "HELD BY HOST": 0,
+  "HELD-BY-HOST": 0,
+  "HELD-BY-OURSELVES": 0,
+  "WINDOWS GUEST REFUSED": 0,
+  "kf3: unmapped-reads-zero=auto": 1,
+  "kf3: unmapped-reads-zero=on": 0,
+  "kf3: unmapped-reads-zero=off": 0
+ },
+ "unmapped_reads_zero_lines": [
+  "kf3: unmapped-reads-zero=auto: ZERO (no fault) for a Linux guest's spaces, FAULT for the spaces of a guest under the Win"
+ ],
+ "qemu_log_0x51_lines": 0,
+ "qemu_log_refusal_lines": 398
+}

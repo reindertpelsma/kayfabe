@@ -68,9 +68,14 @@ export function tierForClaims(c, profile) {
   });
 }
 // Tier contents, owner 2026-11-09; 'large includes middle' (owner ruling, 2026-11-12): a large leg also requests the middle
-// apps pair (Linux apps + Windows apps `mid`) through middleAppsRequest, so a large leg is small + apps + Windows gate(s) +
-// SPEC. Only that is sent today (state APPS_SENT): the large tier as a whole is still not executable (the release matrix is
-// proposed), and `llm_parity` stays DESIGN_ONLY. SPECviewperf keeps its own slot state in defaults.json stageSlots.
+// apps pair (Linux apps + Windows apps `mid`) through middleAppsRequest, so a large leg is small + apps + Windows gate(s).
+// Only that is sent today (state APPS_SENT): the large tier as a whole is still not executable (the release matrix is
+// proposed), and `llm_parity` stays DESIGN_ONLY. SPECviewperf and every proprietary image are not part of the required
+// gate of any tier. `additionalStages` is what a
+// tier requires; `invokedStages` is what an operator may add to a release run on purpose (RELEASE_STAGES, off by default),
+// which never makes it required. The small and middle tiers carry neither list, and the middle tier's contents are
+// unchanged. SPECviewperf keeps its own slot state in defaults.json stageSlots; propimage stages are manual-only in the
+// box payload (MANUAL_ONLY_STAGES) and start from the admin route, never from a tier.
 export const TIER_CONTENTS = Object.freeze({
   small: Object.freeze({ base: 'check' }),
   middle: Object.freeze({
@@ -79,7 +84,8 @@ export const TIER_CONTENTS = Object.freeze({
   }),
   large: Object.freeze({
     inherits: 'middle',
-    additionalStages: Object.freeze(['specviewperf', 'llm_parity']),
+    additionalStages: Object.freeze(['llm_parity']),
+    invokedStages: Object.freeze(['specviewperf']),
     state: 'APPS_SENT',
   }),
 });

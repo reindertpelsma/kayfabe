@@ -203,6 +203,7 @@ test('KF_SPEC (the SPECviewperf lane) is sent only when asked for, only for rele
 test('the Worker sends no SPECviewperf stage and no lane by default', () => {
   assert.deepEqual(DEFAULTS.releaseStages, []);
   assert.equal(DEFAULTS.stageSlots.specviewperf.state, 'PLUMBING');
+  assert.equal(DEFAULTS.stageSlots.specviewperf.required, false);
   assert.deepEqual(planRelease(market(cfgOf()), cfgOf()).required_stage_rows_per_die, {});
 });
 test('plan: per family one LARGE die (two Windows runs) and one MIDDLE die (one run), one box per die', () => {

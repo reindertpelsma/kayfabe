@@ -1831,9 +1831,16 @@ fn batching_enabled() -> bool {
 /// that misbehaves with reservations, never a launcher setting (off, an over-bound row is refused
 /// by name and every big-leaf row costs one host mapping per 4 KiB page). Named NEGCTL, not DIAG,
 /// because it changes behaviour (`V3_FLAG_INVENTORY.md` §8). Read once.
+#[cfg(feature = "negctl")]
 fn micro_reserve_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("KF3_NEGCTL_NO_MICRO_RESERVE").as_deref() != Ok("1"))
+}
+
+/// Without the `negctl` feature (the release build) micro reservations are always on.
+#[cfg(not(feature = "negctl"))]
+const fn micro_reserve_enabled() -> bool {
+    true
 }
 
 fn ns_since(t: std::time::Instant) -> u64 {
@@ -3766,9 +3773,17 @@ impl TwinHost for HostRm {
 /// reintroduces exactly the S1-21 defect. Use this flag only in a dedicated control run.
 /// Default off. The value is read once.
 #[must_use]
+#[cfg(feature = "negctl")]
 pub fn negctl_twin_window() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN_WINDOW").is_some_and(|v| v != "0"))
+}
+
+/// Without the `negctl` feature (the release build) no twin ever gets a store window.
+#[must_use]
+#[cfg(not(feature = "negctl"))]
+pub const fn negctl_twin_window() -> bool {
+    false
 }
 
 /// ★ A T-mode twin's record — its [`Mirror`] and the VMM ranges a guest leaf must avoid — both
@@ -6917,5 +6932,26 @@ mod c02_unplug_tests {
         let mut b = [0u8; 4];
         assert!(!ram.read_file(0, &mut b));
         assert_eq!(RAM_GUARDS_HELD.get(), 0);
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(super::micro_reserve_enabled());
+            assert!(!super::negctl_twin_window());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(super::micro_reserve_enabled());
+        assert!(!super::negctl_twin_window());
     }
 }

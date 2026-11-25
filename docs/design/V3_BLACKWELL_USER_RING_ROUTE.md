@@ -1,6 +1,6 @@
 # Blackwell Windows user-work route: the creo-04 Xid 32 and a Blackwell-capable private ring
 
-**STATUS: DESIGN-ONLY, 2026-11-18. CORRECTION, 2026-11-24 (above the text it corrects):** one part of section 2 was
+**STATUS: DESIGN-ONLY, 2026-11-18. NOTE, 2026-11-25 (tentative, RC1, pending the owner's ruling on decision A11):** section 3 records the binding conditions C0-C10 from an independent design review for any future wiring of the semaphore-marker design of sections 2.6 and 2.7. Nothing is wired and nothing is approved: the approval is PENDING (section 3.1). **CORRECTION, 2026-11-24 (above the text it corrects):** one part of section 2 was
 measured on hardware after this status was written, in one run on 2026-11-18, and section 2.7 reports it. That run
 measured, on one GB203 die with host driver 595.91.07: variant A raised one `Xid 32 ... intr 00200000` on its single
 attempt (A has N=1, not the N=3 that was asked for; the run stopped there, fail closed), and the witness release
@@ -370,3 +370,126 @@ Falsifier: A gives no Xid (then B1n's METHOD has another cause, to be named from
    - the rows PASS.
    Control: the same tree on an Ada box, creo-04 PASS. Repeat property-off once on the Blackwell box to show
    the failure is the route (H-F).
+
+## 3. Binding conditions for any wiring of the semaphore-marker design (independent design review, 2026-11-24)
+
+**STATUS: DESIGN-ONLY, 2026-11-25. Tentative, RC1, pending the owner's ruling on decision A11.** The tentative default is
+"approve in principle, with C0-C10 binding and nothing wired until the C9 and C10 tests exist". To flip it, the owner
+rules B (not now: Blackwell stays declined on this route, and this section stays as a record of what any later attempt must
+meet) or C (choose option O2, the authored native relocation of section 2.2, which is unmeasured on GB20x and needs its own
+review). Source: an independent design review, 2026-11-24, not in the repository. It was read-only, ran no hardware, and
+read the design, the stage-1 module and the memory-mirror code of `origin/next` as they stood then. Its verdict on the design
+of sections 2.5 to 2.7 was SAFE-WITH-CONDITIONS, C0-C10. The statements below are the review's reading of the code (read, not
+measured on hardware) unless a line says measured.
+
+### 3.1 Where this stands
+
+- **Nothing is wired.** Stage 1 is a pure module that no production path calls, the probe tool changes no VM behaviour, and
+  the relay still declines the Windows user-work route on Blackwell. Blackwell stays declined on this route.
+- **The owner's approval is PENDING.** The design adds one host-owned 4 KiB vidmem page, mapped GPU-writable at a VA that
+  kayfabe reserves in the guest-mirrored address space. The owner ruling in `docs/OWNER_RULINGS.md`, section AI, today allows
+  only GPU-read-only kayfabe mappings there ("no writable private fence is included"). So this design needs the owner's
+  explicit approval, and until it is given nothing may map the writable page. This document records no approval, and
+  `docs/OWNER_RULINGS.md` is not edited by it.
+- **Wiring is blocked until the C9 and C10 tests exist** (and the rest of C0-C8 are met, each with a test or with the box
+  evidence the condition names).
+- The design does not modify guest VRAM, the guest's pushbuffers or the guest's GPFIFO. The marker cells live in kayfabe's own
+  private read-only ring. The only new guest-addressable object is the one marker page, which holds one 32-bit word.
+
+### 3.2 Why a guest cannot move or replace kayfabe's VA (the review's reading of the code)
+
+The GPU never walks the guest's page tables. The guest's tables are input that the walker diffs against placements kayfabe has
+already confirmed, and kayfabe's VA thread applies the diff as host RM maps and unmaps. A guest page-table entry only states
+what the guest wants. The review found these layers, each by reading code only:
+
+- an exclusion ledger of private slots (`crates/kf-qemu/src/userva.rs`);
+- slot choice only where no guest row, SKED row, reserved range, guest RM range or batch-layer mapping exists, with checking and
+  claiming under the same guards;
+- a check of the exclusions in every guest-driven host map and unmap, which fails with `USER_RING_PRIVATE_OVERLAP`;
+- refusal, by name and before any host call, of a walked guest leaf or usermode view that overlaps a private slot;
+- slot requests served only on the VA thread, and only when no walk is in flight and every received diff is settled;
+- a slot lease that is never retired by a guest free, an error or a timer, and whose native channel must first be freed;
+- an RM VA reservation made before anything is mapped, so RM refuses a second allocation inside it.
+
+What the review found untested or only by convention, which C9 below turns into tests:
+
+- no end-to-end test puts a guest leaf over a live private slot through the mirror and the apply (the apply refusal is tested
+  only with generic reserved ranges, the exclusion logic only as a unit);
+- "release the storage only after the channel is freed" is a comment at the storage layer (`crates/kf-qemu/src/user_storage.rs`),
+  enforced only by the lease path;
+- whether the marker page sits inside a claimed slot is a stage-2 choice that nothing forces today.
+
+If a guest writes an entry inside a private slot, only that leaf is refused and counted. The guest's mapping is not made, and it
+does not replace kayfabe's. The guest can fill the slot window so that no slot is free; that denies only its own channel (the
+route is declined with `USER_RING_NO_PRIVATE_SLOT`).
+
+### 3.3 The untrusted-VA rule applied to each element (the review's reading)
+
+The owner's rule, taken literally: assume any data in an untrusted VA is readable, writable and remappable by the guest.
+
+| element | what the guest can do | consequence | holds only if |
+|---|---|---|---|
+| marker word (new, GPU-writable) | read it; write any value at any time from its own pushbuffers; not remap it | one 32-bit load, checked by `SemaphoreProgress::observe`: an untagged, not-issued or regressing value fails that channel closed (sticky); an early but valid value reorders only that channel's own work | C10a |
+| private ring, GP entries, marker cells (host vidmem, GPU read-only) | read them (they are in its VA space); a GPU write is an RO-violation fault, measured on an Ada RTX 4070 only; no guest CPU path; no remap | even if the guest could rewrite them, the GPU would run guest-chosen methods on the guest's own USER channel in the guest's own VA space, which it can already do natively | C10b, C10c |
+| guest pushbuffers | rewrite after the scan (the scan reads an immutable bounded snapshot, the GPU fetches the live bytes) | mutated bytes run as the guest's own USER work; the owner accepted this in section AI (2026-10-12) | C10d |
+| guest USERD `GP_PUT` | any value at any time | read each turn as a cursor, bounded by the entry count; copies are bounded and go through confirmed rows only | C10e |
+| private USERD | nothing: it has no GPU mapping | none | holds |
+| guest pointer and length in a ring-growth registration | any value | read only through confirmed rows, bounded at 8 MiB, refused if not placed | C10d |
+| host mapping of the page | cannot change host PTEs; only kayfabe's VA thread does, with the exclusion check | justified by the mirror model; the residual risk is a kayfabe path that maps or unmaps without the check | C9 |
+
+A semaphore release needs a VA in the channel's own space, so every marker target is reachable by that channel's own methods. A
+separate host-owned page-directory subtree would add nothing the mirror model does not already give. The only placement that
+removes the writable page is option O2, which is unmeasured on GB20x.
+
+### 3.4 The conditions
+
+Each condition names what a test or a box run must show before the writable page is mapped for any guest. They bind any future
+wiring of sections 2.6 and 2.7, whoever writes it.
+
+- **C0. Approval.** The owner approves the section 2.6 report, which extends the section AI exception beyond GPU read-only
+  mappings. The change is recorded in `docs/OWNER_RULINGS.md` section AI at that time, with the superseded read-only line marked
+  in place. (Not given today.)
+- **C1. Placement.** The page sits inside the twin's exclusive kayfabe VA reservation. It is mapped only in that ring's own VA
+  space, never in a space shared with another guest process's channels.
+- **C2. Separate granule.** The writable page sits in its own 64 KiB granule and its own allocation, apart from the read-only
+  commands, GP entries and marker cells. A test asserts that no read-only cell, GP entry or USERD is ever GPU-writable,
+  including after page-size promotion.
+- **C3. Zero before exposure; reader.** The word is zeroed before the GPU can see it. Only the relay worker reads it, through a
+  CPU view, never on a vCPU and never under a lock a vCPU takes.
+- **C4. Teardown order, enforced in code.** The channel is freed or quiesced, then the page is unmapped, then the reservation is
+  freed, then the memory. Freed or reused vidmem never stays behind a live VA. This is enforced by code, not by a comment.
+- **C5. No host action from the word.** Nothing derived from the word drives a host RM verb, a mapping, or a slot or cell outside
+  this ring. The existing forged-value tests stay red-first and run through the wired path.
+- **C6. Windows only.** Linux Passthrough never takes this path, even when a guest declares Windows (the Windows user-ring permit
+  plus the ownership checks). A negative test shows it.
+- **C7. Bounded relay work.** A storm of guest `NON_STALL_INTERRUPT` methods costs only bounded relay work per wake.
+- **C8. Hardware runs.** The serial run of section 2.8 item 3 (gates 9/9, fast suite 30/30, creo-04 twice, GravityMark), plus
+  one hostile run in which a guest pushbuffer forges the word: the result must be a fail-closed reset of that channel only, and no
+  host Xid on any other channel.
+- **C9. VA collision is prevented structurally and tested.**
+  - The marker page sits inside the twin's claimed slot, or claims its own slot through the same claim path.
+  - An end-to-end GPU-free test puts each of these over a live private slot, through the mirror and the apply: a guest leaf, a
+    batched run, a SKED row, a usermode view and an `unmap_range`. Each is refused, and the host mapping is unchanged.
+  - Every mapping mutation, including kayfabe-internal ones (reset, retire, life reset), either checks the exclusions or a test
+    shows it runs only after the lease is released.
+  - Slot service stays on the VA thread.
+  - The storage layer enforces "channel freed before release", for example by taking a proof value from the channel free.
+- **C10. The untrusted-VA rule.**
+  - **C10a.** The marker word is read once per observation into a local, validated, and never re-read for the same decision.
+    Nothing derived from it reaches a host verb, a mapping, or a slot or cell outside this ring.
+  - **C10b.** Kayfabe never reads back GPU-visible private storage (ring, cells, GP entries) to make a decision. Its truth lives
+    in host memory, and the CPU view is write-only for the relay, the marker word excepted.
+  - **C10c.** Read-only enforcement of the command mapping is re-measured on GB20x with the probe's write-attempt variant (an
+    RO-violation fault with the sentinel unchanged) before any step enables Blackwell on this route. Today it is measured on Ada
+    only.
+  - **C10d.** No host action is authorised by scanned guest bytes or guest pointers beyond staging a copy of the guest's own
+    trigger, and host-validated, authored parameters (no replay of guest bundles or handles). A test mutates a segment after its
+    scan and shows that only the guest's own channel is affected.
+  - **C10e.** Every guest-written index or length (`GP_PUT`, ring size, registration span) is bounded before use, and every copy
+    goes through confirmed rows into an immutable snapshot, with no double fetch from guest memory.
+
+### 3.5 Gate for wiring
+
+Wiring is blocked until all of these hold: the owner's approval is recorded (C0); the C9 and C10 tests exist and pass GPU-free;
+C10c has its GB20x result; and C8 has its box runs. Until then the relay keeps declining Blackwell on this route, and
+no section of this document is a claim that the route works.
