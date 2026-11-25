@@ -64,8 +64,8 @@ stages: `display=on` without a broker). The gate's own `KFROOT_ASSERT` lines (bo
 *Falsifier:* any `PROCSAMPLE_SUMMARY` violation, a `KFROOT_ASSERT ... ok=0`, or a root-owned QEMU or swtpm.
 Consequence noted in advance: with `CapEff` 0 on every QEMU thread, host RM's admin checks (`capable(CAP_SYS_ADMIN)`,
 cited in `crates/kf-cuda/src/posture.rs` as `ogkm-580: kernel_channel.c:277-291`, `escape.c:304`) are false for every call,
-so a PASS means every RM call kf3 made succeeded without the admin privilege [inferred, from that citation; not a separate
-measurement]. The kf3 log's birth lines (`PRIVILEGED_CHANNEL=0 privilege=USER`) are counted as a second reading.
+so a PASS means every RM call kf3 made succeeded without the admin privilege [inferred, from that citation; this run does not test it
+on its own]. The kf3 log's birth lines (`PRIVILEGED_CHANNEL=0 privilege=USER`) are counted as a second reading.
 The open item S1-22 (under a root QEMU only channel births and libcuda threads drop `CAP_SYS_ADMIN`) is sidestepped by a
 rootless QEMU, not fixed; this run says nothing about a root QEMU.
 
