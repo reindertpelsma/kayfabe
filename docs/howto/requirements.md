@@ -39,15 +39,17 @@ What has been run (revisions and boxes are in the repository's status records):
 | Ampere GA106 (RTX 3060) | Works; the usual test GPU | Windows gate passed |
 | Ampere GA104 | Works (also with host and guest 595.91.07) | Windows gate passed |
 | Turing TU116 | Works | Windows gate passed |
-| Blackwell GB205 | Works | Windows gate passed |
+| Blackwell GB205 | Passed before the walker fix of 2026-11-14 (see the note below the table) | Windows gate passed, also before that fix |
 | Blackwell GB202 | One run, recorded on an unmerged branch: the thin-guest suite 30 of 30 and CUDA 4 of 4 with host and guest 595.91.07, with heartbeat warnings; a desktop attempt with guest 580.159.04 showed a black frame | Windows gate intermittent: one failure, then two passes on one machine |
 | Blackwell GB206 | Passed at earlier source revisions | Windows gate passed |
-| Blackwell GB203 (RTX 5070 Ti) | Works (the merge bar passed: gates 9 of 9 and suite 30 of 30) | The gate passed once, on an unmerged branch: desktop, `nvidia-smi`, CUDA and D3D11 probes, a 300 s idle, no resets |
+| Blackwell GB203 (RTX 5070 Ti) | Tested on 2026-11-03, before the walker fix of 2026-11-14, and not re-run since: the merge bar passed (gates 9 of 9, bare metal 30 of 30, thin-guest suite 30 of 30) | Tested the same day: the gate passed once, on an unmerged branch (desktop, `nvidia-smi`, CUDA and D3D11 probes, a 300 s idle, no resets) |
 
-<!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md -->
+<!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md; GB203 row: traces/blackwell_hw_20261103/README.md (merge bar) and traces/blackwell_win_20261103/README.md (Windows gate) -->
+
+**Blackwell, read this before relying on a row above.** Every Blackwell result on this page (GB202, GB203, GB205, GB206) was recorded on 2026-11-03 or 2026-11-04 or earlier. On 2026-11-14 the walker (the GPU program that mirrors the guest's GPU page tables) was fixed for the newest page-table format, used by Hopper and Blackwell: when a guest unmapped a big page, stale small-page entries under it could stay mapped inside that guest. The fix is tested without a GPU only. No Blackwell card has run since the fix. Consumer Blackwell (GB20x) stays among the first release's supported GPUs only after one run on a Blackwell box with the fix: the walker tests, the GPU gates (9 of 9) and the 30-test suite. That run has not happened yet. <!-- tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 (option B). To flip: option A removes the Blackwell rows from the first release claims; option C keeps the claim on GPU-free evidence with this caveat. Evidence: traces/blackwell_hw_20261103/, traces/blackwell_win_20261103/, traces/die_coverage_20261104/blackwell/, docs/audits/2026-10-03-v3-stage1.md S1-60 -->
 
 - Earlier revisions also passed Linux on GA102, GB203 and a floor-swept RTX 3060 Ti. <!-- src: docs/STATUS_DETAIL.md section 0 and section 1 -->
-- **Hopper, GA100 and datacentre Blackwell (GB10x)** are derived from the open driver's source only; no hardware was available. GA100 and GB10B are refused by name. <!-- src: docs/STATUS_DETAIL.md section 0 -->
+- **Hopper and the datacentre Blackwell dies (GB100, GB102, GB110, GB112) are not in the first release claims.** They are derived from the open driver's source only and have never run on hardware, so the walker fix of 2026-11-14 for their page-table format has not run on one either. GA100 and GB10B are refused by name. <!-- src: docs/STATUS_DETAIL.md section 0; tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 (option B: Hopper and GB10x out) -->
 - **Pre-Turing GPUs cannot work.** Below Turing there is no GSP firmware interface for kayfabe to impersonate: the guest driver would drive the hardware directly. <!-- src: docs/design/THE_ARCHITECTURE_v3.md section 0.0.1 -->
 - Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. <!-- src: README.md table -->
 - The table above is a map of results of past runs, with their scope stated. It does not establish that every die passes with the current source. <!-- src: docs/design/V3_FAMILY_COVERAGE.md -->
@@ -92,7 +94,7 @@ See [Building from source](building.md) for the package list, the pinned Rust to
 ## Not supported or not finished
 
 - Windows sleep/wake. <!-- src: README.md, docs/WINDOWS_GUEST_SETUP.md -->
-- GA100, GB10B (refused by name); Hopper and GB10x (never run on hardware). <!-- src: docs/STATUS_DETAIL.md -->
+- GA100, GB10B (refused by name); Hopper and GB10x (GB100, GB102, GB110, GB112): not in the first release claims, never run on hardware. <!-- src: docs/STATUS_DETAIL.md; tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 -->
 - Multi-GPU: the two-GPU thin-guest record covers copy-engine checks, serially and concurrently; the full 30-arm regression was a separate, single-device run (two RTX 3060s on one host). CUDA inside a two-GPU guest, UVM across two GPUs and peer access were not measured. <!-- src: docs/STATUS_DETAIL.md section 3; docs/design/V3_MULTI_GPU_AUDIT.md section 7 -->
 - Several VMs sharing one GPU as a verified, isolated configuration: the suite's fault arms ran beside two guests and a host loop (RTX 4090), and general fault containment remains unverified. <!-- src: README.md -->
 
