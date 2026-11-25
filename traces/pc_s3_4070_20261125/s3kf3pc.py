@@ -118,6 +118,10 @@ def cycle(vm, n, out, label):
         # no unattended re-sleep after a wake no user input followed (the 2026-11-23 display probe's addendum 2)
         _, o = vm.guest("powercfg /setacvalueindex scheme_current sub_sleep 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0; "
                         "powercfg /setactive scheme_current", 60)
+    for _ in range(9):    # a cycle needs a baseline boot time; an ssh that fails here is retried, not judged
+        if S.guest_facts(vm).get("boot"):
+            break
+        time.sleep(10)
     k0 = kf3_counts(log)
     t0 = time.time()
     res = S.cycle(vm, n, out, label)
