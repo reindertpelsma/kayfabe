@@ -1,0 +1,4 @@
+ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK
+PNP Microsoft Basic Display Adapter status=Unknown problem=
+PNP NVIDIA GeForce RTX 4070 status=OK problem=0
+NVSMI NVIDIA GeForce RTX 4070, 580.88

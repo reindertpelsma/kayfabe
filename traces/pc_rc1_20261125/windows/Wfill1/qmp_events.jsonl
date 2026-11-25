@@ -1,0 +1,5 @@
+{"recorder": "connected", "t": 1795581697.1312227}
+{"timestamp": {"seconds": 1795581700, "microseconds": 826712}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}, "t_host": 1795581700.8268151}
+{"timestamp": {"seconds": 1795581706, "microseconds": 27948}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[2]/virtio-backend"}, "t_host": 1795581706.0280468}
+{"timestamp": {"seconds": 1795581999, "microseconds": 25054}, "event": "SHUTDOWN", "data": {"guest": false, "reason": "host-qmp-quit"}, "t_host": 1795581999.0251377}
+{"recorder": "socket closed", "t": 1795581999.0353863}

@@ -1,0 +1,13 @@
+== HOST MODE: kernel 7.0.0-34-generic, modules from /lib/modules/7.0.0-34-generic
+== modules taken from the host (with closure): 5
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 280 file(s)
+== GUEST DRIVER 595.91.07 (verified from the packed module; ../fg/driver.STAGED)
+== built: ../fg/vmlinuz  17M
+== built: ../fg/initrd.cpio.gz  361M
+== kernel release: 7.0.0-34-generic
+FG_EXIT=0

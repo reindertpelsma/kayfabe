@@ -1,0 +1,1 @@
+qemu-10.2.4 tree not a git repo; hw/i386/pc.c KF_HV_LO occurrences: 4; patch -R --dry-run of tools/qemu-patches/hyperv-wake.patch does not apply cleanly (hunk already present in modified form)

@@ -1,4 +1,4 @@
-# Preregistration, written before any measurement (pc_rc1_20261125)
+# Preregistration, written before any run (pc run 2026-11-25, `237349e0`, tag pc_rc1_20261125)
 
 STATUS: LIVE, 2026-11-25. Design intent and falsifiers only; no result here.
 
