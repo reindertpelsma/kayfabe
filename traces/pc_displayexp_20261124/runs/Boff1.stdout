@@ -1,0 +1,31 @@
+[     0.3s] 0s rc=255 qemu_rc=None (no answer)
+[    20.9s] 10s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    23.0s] 20s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    31.9s] 30s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    41.9s] 40s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    52.0s] 50s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    64.0s] 60s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK
+[    71.9s] 70s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    82.1s] 80s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[    91.8s] 90s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   101.9s] 100s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   111.9s] 110s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   123.6s] 120s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=O
+[   131.9s] 130s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   141.9s] 140s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   151.9s] 150s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   161.9s] 160s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   171.9s] 170s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   183.6s] 180s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=O
+[   191.9s] 190s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   201.9s] 200s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   211.9s] 210s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   221.8s] 220s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   231.9s] 230s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   243.6s] 240s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=O
+[   251.9s] 250s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   261.9s] 260s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   271.9s] 270s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   281.9s] 280s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+[   291.9s] 290s rc=0 qemu_rc=None boot=2026-11-24T20:18:35.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+DISPEXP_RESULT {"arm": "Boff", "up_at_s": 10, "qemu_exit_at_s": null, "qemu_rc": null, "alive_at_end": true, "poll_s": 300, "host_uptime_window_s": [71030.1, 71334.8], "host_mmuWalkMap_lines": 0, "host_no_memory_lines": 0, "qemu_log_0x51_lines": 0, "qemu_log_refusal_lines": 340} ['RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SHUTDOWN']

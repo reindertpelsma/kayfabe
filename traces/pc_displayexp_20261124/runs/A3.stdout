@@ -1,0 +1,6 @@
+[     0.1s] 0s rc=255 qemu_rc=None (no answer)
+[    20.6s] 10s rc=0 qemu_rc=None boot=2026-11-24T20:12:34.5000000+00:00 ev(id=count) 153=1 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    22.5s] 20s rc=0 qemu_rc=None boot=2026-11-24T20:12:34.5000000+00:00 ev(id=count) 153=1 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    31.7s] 30s rc=0 qemu_rc=None boot=2026-11-24T20:12:34.5000000+00:00 ev(id=count) 153=4 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    42.0s] 40s rc=0 qemu_rc=None boot=2026-11-24T20:12:34.5000000+00:00 ev(id=count) 153=5 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+DISPEXP_RESULT {"arm": "A", "up_at_s": 10, "qemu_exit_at_s": 50.00037932395935, "qemu_rc": 0, "alive_at_end": false, "poll_s": 300, "host_uptime_window_s": [70668.6, 70721.0], "host_mmuWalkMap_lines": 1, "host_no_memory_lines": 26, "qemu_log_0x51_lines": 0, "qemu_log_refusal_lines": 293} ['RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'GUEST_PANICKED', 'SHUTDOWN']
