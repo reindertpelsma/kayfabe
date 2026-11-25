@@ -317,12 +317,17 @@ pub const VA_ROW_WRAPS: u32 = 0x4B78;
 /// A FIXED map routed THROUGH a VA reservation of ours (a live [`GuestVaRange`] or a reservation the
 /// caller made with [`HostRm::reserve_va`]) that host RM answered `0x51` (`NV_ERR_NO_MEMORY`).
 ///
-/// Host RM's own allocator places nothing inside a reservation of ours, so inside one the answer is
-/// never another owner's mapping. It is host capacity (RM could not allocate a page-table level for
-/// the map) or a mapping of ours that is still there. Either way the guest's row is absent on the
-/// twin, so the map is refused by name. It is never reported as [`crate::VA_ALREADY_MAPPED`], which
-/// the memory plane acknowledges as satisfied by a host mapping: that acknowledgement would hide the
-/// missing row, and under [`GuestVaFill::Zero`] the row would read zero with no fault.
+/// Inferred from the host RM source, not measured: RM's own allocator places nothing inside a
+/// reservation of ours (the reserved VA is allocated to the `NV50_MEMORY_VIRTUAL` object, which is
+/// why [`GuestVaRange`] exists), so inside one the answer is not another owner's mapping. It is
+/// host capacity (RM could not allocate a page-table level for the map) or a mapping of ours that
+/// is still there, for example a piece whose rollback unmap was refused. In neither case has this
+/// call placed the row, and the memory plane has no host mapping it could name as the owner, so
+/// the map is refused by name. It is never reported as [`crate::VA_ALREADY_MAPPED`], which the
+/// memory plane acknowledges as satisfied by a host mapping: that acknowledgement would hide a
+/// missing row, and under [`GuestVaFill::Zero`] a missing row reads zero with no fault. The
+/// caller's ledger is not consulted: `kf-mem` removes every mapping of ours it has on record
+/// before it maps a row, so what is left is not on record.
 pub const VA_RESERVED_MAP_REFUSED: u32 = 0x4B7B;
 
 /// The answer of a FIXED map that was routed through `h_dma`, a reservation of ours:
