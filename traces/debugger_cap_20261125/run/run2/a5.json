@@ -1,0 +1,968 @@
+{
+ "arm": "a5",
+ "ceiling": 20000,
+ "fb_after_exit_mib": 0,
+ "fb_after_free_mib": 72,
+ "fb_after_setup_mib": 72,
+ "fb_at_done_mib": 72,
+ "fb_baseline_mib": 0,
+ "fb_kib_per_session": 0.0,
+ "fb_limit_mib": 4096,
+ "fb_peak_mib": 72,
+ "fb_setup_mib_per_gr": 4.5,
+ "free_ok": true,
+ "grs_per_proc": 1,
+ "leak_after_exit_vs_baseline": "ok",
+ "leak_after_free_vs_setup": "ok",
+ "meminfo_kb": {
+  "MemAvailable_at_done": 50109604,
+  "MemAvailable_min": 50081976,
+  "MemAvailable_start": 50312220,
+  "SUnreclaim_at_done": 274060,
+  "SUnreclaim_max": 274060,
+  "SUnreclaim_start": 164288,
+  "Slab_at_done": 483580,
+  "Slab_start": 373792
+ },
+ "new_nv_assert_lines": 0,
+ "new_nvrm_lines": 32,
+ "new_xids": 0,
+ "per_gr": 0,
+ "procs": 16,
+ "ready": true,
+ "refusing_workers": 16,
+ "sessions_total": 11652,
+ "setup": [
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "21",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "34",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "19",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "16",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "10",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "47",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "42",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "39",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "26",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "31",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "30",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "44",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "43",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "3",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "21",
+   "rss_kib": "2704"
+  },
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "43",
+   "rss_kib": "2704"
+  }
+ ],
+ "stop_cause": "workers_done",
+ "workers": [
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41530",
+    "mean_us": "13004",
+    "ms": "10087",
+    "p50_us": "12391",
+    "p99_us": "34403",
+    "per_gr_max": "766",
+    "per_gr_min": "766",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "766"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1079",
+    "win_max_us": "31799",
+    "win_mean_us": "10792",
+    "win_p99_us": "25587"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "766",
+    "ms": "17979"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "8981",
+    "win_max_us": "41530",
+    "win_mean_us": "14417",
+    "win_p99_us": "36272"
+   },
+   "proc": 0,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10087",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "766",
+     "raw": "NoMemory",
+     "total": "766"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "38249",
+    "mean_us": "13534",
+    "ms": "10046",
+    "p50_us": "12427",
+    "p99_us": "34651",
+    "per_gr_max": "735",
+    "per_gr_min": "735",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "735"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1183",
+    "win_max_us": "26926",
+    "win_mean_us": "11829",
+    "win_p99_us": "26630"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "735",
+    "ms": "17609"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9402",
+    "win_max_us": "36698",
+    "win_mean_us": "15137",
+    "win_p99_us": "35999"
+   },
+   "proc": 1,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10046",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "735",
+     "raw": "NoMemory",
+     "total": "735"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41076",
+    "mean_us": "14036",
+    "ms": "10165",
+    "p50_us": "12565",
+    "p99_us": "34557",
+    "per_gr_max": "710",
+    "per_gr_min": "710",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "710"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1294",
+    "win_max_us": "32878",
+    "win_mean_us": "12944",
+    "win_p99_us": "30165"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "710",
+    "ms": "17194"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9796",
+    "win_max_us": "41076",
+    "win_mean_us": "14639",
+    "win_p99_us": "38885"
+   },
+   "proc": 2,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10165",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "710",
+     "raw": "NoMemory",
+     "total": "710"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "48950",
+    "mean_us": "13706",
+    "ms": "10151",
+    "p50_us": "12440",
+    "p99_us": "35457",
+    "per_gr_max": "727",
+    "per_gr_min": "727",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "727"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1318",
+    "win_max_us": "34329",
+    "win_mean_us": "13180",
+    "win_p99_us": "30967"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "727",
+    "ms": "17855"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9561",
+    "win_max_us": "48950",
+    "win_mean_us": "15485",
+    "win_p99_us": "42988"
+   },
+   "proc": 3,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10151",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "727",
+     "raw": "NoMemory",
+     "total": "727"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "42101",
+    "mean_us": "13743",
+    "ms": "10113",
+    "p50_us": "12456",
+    "p99_us": "34756",
+    "per_gr_max": "724",
+    "per_gr_min": "724",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "724"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1121",
+    "win_max_us": "27573",
+    "win_mean_us": "11216",
+    "win_p99_us": "24717"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "724",
+    "ms": "17559"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9660",
+    "win_max_us": "42101",
+    "win_mean_us": "14710",
+    "win_p99_us": "37400"
+   },
+   "proc": 4,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10113",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "724",
+     "raw": "NoMemory",
+     "total": "724"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "44082",
+    "mean_us": "13742",
+    "ms": "10193",
+    "p50_us": "12473",
+    "p99_us": "35694",
+    "per_gr_max": "725",
+    "per_gr_min": "725",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "725"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1285",
+    "win_max_us": "27981",
+    "win_mean_us": "12855",
+    "win_p99_us": "27751"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "725",
+    "ms": "17904"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9549",
+    "win_max_us": "42400",
+    "win_mean_us": "13035",
+    "win_p99_us": "40262"
+   },
+   "proc": 5,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10193",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "725",
+     "raw": "NoMemory",
+     "total": "725"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "42550",
+    "mean_us": "12473",
+    "ms": "10179",
+    "p50_us": "12253",
+    "p99_us": "36357",
+    "per_gr_max": "799",
+    "per_gr_min": "799",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "799"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1332",
+    "win_max_us": "34276",
+    "win_mean_us": "13320",
+    "win_p99_us": "26955"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "799",
+    "ms": "18010"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "8754",
+    "win_max_us": "42550",
+    "win_mean_us": "13496",
+    "win_p99_us": "38266"
+   },
+   "proc": 6,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10179",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "799",
+     "raw": "NoMemory",
+     "total": "799"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "40088",
+    "mean_us": "13756",
+    "ms": "10022",
+    "p50_us": "12575",
+    "p99_us": "35025",
+    "per_gr_max": "724",
+    "per_gr_min": "724",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "724"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1288",
+    "win_max_us": "27414",
+    "win_mean_us": "12884",
+    "win_p99_us": "26566"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "724",
+    "ms": "17812"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9540",
+    "win_max_us": "40088",
+    "win_mean_us": "14743",
+    "win_p99_us": "37636"
+   },
+   "proc": 7,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10022",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "724",
+     "raw": "NoMemory",
+     "total": "724"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "44088",
+    "mean_us": "13741",
+    "ms": "10208",
+    "p50_us": "12483",
+    "p99_us": "34106",
+    "per_gr_max": "725",
+    "per_gr_min": "725",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "725"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1268",
+    "win_max_us": "31021",
+    "win_mean_us": "12688",
+    "win_p99_us": "29391"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "725",
+    "ms": "17866"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9537",
+    "win_max_us": "40500",
+    "win_mean_us": "14233",
+    "win_p99_us": "35611"
+   },
+   "proc": 8,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10208",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "725",
+     "raw": "NoMemory",
+     "total": "725"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41333",
+    "mean_us": "12878",
+    "ms": "9981",
+    "p50_us": "12345",
+    "p99_us": "33408",
+    "per_gr_max": "772",
+    "per_gr_min": "772",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "772"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1312",
+    "win_max_us": "28259",
+    "win_mean_us": "13120",
+    "win_p99_us": "26204"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "772",
+    "ms": "17971"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "8865",
+    "win_max_us": "35602",
+    "win_mean_us": "13254",
+    "win_p99_us": "34121"
+   },
+   "proc": 9,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "9981",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "772",
+     "raw": "NoMemory",
+     "total": "772"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "39329",
+    "mean_us": "13776",
+    "ms": "10008",
+    "p50_us": "12481",
+    "p99_us": "36199",
+    "per_gr_max": "722",
+    "per_gr_min": "722",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "722"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1140",
+    "win_max_us": "32761",
+    "win_mean_us": "11406",
+    "win_p99_us": "27363"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "722",
+    "ms": "17907"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9646",
+    "win_max_us": "38185",
+    "win_mean_us": "14915",
+    "win_p99_us": "36199"
+   },
+   "proc": 10,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10008",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "722",
+     "raw": "NoMemory",
+     "total": "722"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41415",
+    "mean_us": "13138",
+    "ms": "9995",
+    "p50_us": "12403",
+    "p99_us": "35885",
+    "per_gr_max": "758",
+    "per_gr_min": "758",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "758"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1091",
+    "win_max_us": "26571",
+    "win_mean_us": "10919",
+    "win_p99_us": "24542"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "758",
+    "ms": "17887"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9014",
+    "win_max_us": "38995",
+    "win_mean_us": "13649",
+    "win_p99_us": "35534"
+   },
+   "proc": 11,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "9995",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "758",
+     "raw": "NoMemory",
+     "total": "758"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41121",
+    "mean_us": "14192",
+    "ms": "10073",
+    "p50_us": "12578",
+    "p99_us": "37067",
+    "per_gr_max": "701",
+    "per_gr_min": "701",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "701"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1280",
+    "win_max_us": "33981",
+    "win_mean_us": "12805",
+    "win_p99_us": "33517"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "701",
+    "ms": "17613"
+   },
+   "last_progress": {
+    "n": "700",
+    "rss_kib": "2704",
+    "t_ms": "9941",
+    "win_max_us": "41121",
+    "win_mean_us": "13698",
+    "win_p99_us": "38584"
+   },
+   "proc": 12,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10073",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "701",
+     "raw": "NoMemory",
+     "total": "701"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "39608",
+    "mean_us": "14648",
+    "ms": "10059",
+    "p50_us": "12689",
+    "p99_us": "35562",
+    "per_gr_max": "680",
+    "per_gr_min": "680",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "680"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1385",
+    "win_max_us": "31880",
+    "win_mean_us": "13853",
+    "win_p99_us": "28931"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "680",
+    "ms": "17289"
+   },
+   "last_progress": {
+    "n": "600",
+    "rss_kib": "2704",
+    "t_ms": "8780",
+    "win_max_us": "36741",
+    "win_mean_us": "14780",
+    "win_p99_us": "35562"
+   },
+   "proc": 13,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10059",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "680",
+     "raw": "NoMemory",
+     "total": "680"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "41232",
+    "mean_us": "14255",
+    "ms": "10100",
+    "p50_us": "12593",
+    "p99_us": "35255",
+    "per_gr_max": "698",
+    "per_gr_min": "698",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "698"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1208",
+    "win_max_us": "27302",
+    "win_mean_us": "12083",
+    "win_p99_us": "25317"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "698",
+    "ms": "17281"
+   },
+   "last_progress": {
+    "n": "600",
+    "rss_kib": "2704",
+    "t_ms": "8354",
+    "win_max_us": "34768",
+    "win_mean_us": "15195",
+    "win_p99_us": "33976"
+   },
+   "proc": 14,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10100",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "698",
+     "raw": "NoMemory",
+     "total": "698"
+    }
+   ]
+  },
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "42038",
+    "mean_us": "14525",
+    "ms": "10127",
+    "p50_us": "12565",
+    "p99_us": "33006",
+    "per_gr_max": "686",
+    "per_gr_min": "686",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2704",
+    "total": "686"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "1472",
+    "win_max_us": "31315",
+    "win_mean_us": "14728",
+    "win_p99_us": "31105"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "686",
+    "ms": "16909"
+   },
+   "last_progress": {
+    "n": "600",
+    "rss_kib": "2704",
+    "t_ms": "8506",
+    "win_max_us": "33006",
+    "win_mean_us": "14668",
+    "win_p99_us": "32533"
+   },
+   "proc": 15,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "10127",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "686",
+     "raw": "NoMemory",
+     "total": "686"
+    }
+   ]
+  }
+ ]
+}

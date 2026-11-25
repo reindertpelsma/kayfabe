@@ -1,0 +1,154 @@
+{
+ "arm": "a3",
+ "ceiling": 20000,
+ "fb_after_exit_mib": 0,
+ "fb_after_free_mib": 72,
+ "fb_after_setup_mib": 72,
+ "fb_at_done_mib": 72,
+ "fb_baseline_mib": 0,
+ "fb_kib_per_session": 0.0,
+ "fb_limit_mib": 4096,
+ "fb_peak_mib": 72,
+ "fb_setup_mib_per_gr": 4.5,
+ "free_ok": true,
+ "grs_per_proc": 16,
+ "leak_after_exit_vs_baseline": "ok",
+ "leak_after_free_vs_setup": "ok",
+ "meminfo_kb": {
+  "MemAvailable_at_done": 50035252,
+  "MemAvailable_min": 50029452,
+  "MemAvailable_start": 50272864,
+  "SUnreclaim_at_done": 274204,
+  "SUnreclaim_max": 274204,
+  "SUnreclaim_start": 162800,
+  "Slab_at_done": 483692,
+  "Slab_start": 372288
+ },
+ "new_nv_assert_lines": 3,
+ "new_nvrm_lines": 22,
+ "new_xids": 0,
+ "per_gr": 0,
+ "procs": 1,
+ "ready": true,
+ "refusing_workers": 1,
+ "sessions_total": 11659,
+ "setup": [
+  {
+   "driver": "580.159.04",
+   "grs_asked": "16",
+   "grs_built": "16",
+   "ms": "58",
+   "rss_kib": "2704"
+  }
+ ],
+ "stop_cause": "workers_done",
+ "workers": [
+  {
+   "alloc_done": {
+    "grs": "16",
+    "max_us": "11710",
+    "mean_us": "792",
+    "ms": "9410",
+    "p50_us": "739",
+    "p99_us": "1197",
+    "per_gr_max": "729",
+    "per_gr_min": "728",
+    "reason": "all_refused",
+    "refused_grs": "16",
+    "rss_kib": "3120",
+    "total": "11659"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "72",
+    "win_max_us": "936",
+    "win_mean_us": "727",
+    "win_p99_us": "930"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "11659",
+    "ms": "11797"
+   },
+   "last_progress": {
+    "n": "11600",
+    "rss_kib": "3120",
+    "t_ms": "9204",
+    "win_max_us": "11710",
+    "win_mean_us": "849",
+    "win_p99_us": "873"
+   },
+   "proc": 0,
+   "rc": 0,
+   "refusal_count": 16,
+   "refusals": [
+    {
+     "after_ms": "9263",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "11",
+     "on_gr": "728",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9287",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "12",
+     "on_gr": "728",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9301",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "13",
+     "on_gr": "728",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9309",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "14",
+     "on_gr": "728",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9317",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "15",
+     "on_gr": "728",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9324",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "729",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9343",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "1",
+     "on_gr": "729",
+     "raw": "NoMemory",
+     "total": "11659"
+    },
+    {
+     "after_ms": "9350",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "2",
+     "on_gr": "729",
+     "raw": "NoMemory",
+     "total": "11659"
+    }
+   ]
+  }
+ ]
+}

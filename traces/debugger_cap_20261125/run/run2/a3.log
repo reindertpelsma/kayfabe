@@ -1,0 +1,154 @@
+   1.10 p0 kf-host: host tier: stock
+   1.10 p0 kf-host: channel birth h=0xcafe0008 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.11 p0 kf-host: channel birth h=0xcafe000e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.11 p0 kf-host: channel birth h=0xcafe0014 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.11 p0 kf-host: channel birth h=0xcafe001a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe0020 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe0026 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe002c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe0032 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe0038 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe003e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.14 p0 kf-host: channel birth h=0xcafe0044 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.14 p0 kf-host: channel birth h=0xcafe004a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.15 p0 kf-host: channel birth h=0xcafe0050 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.15 p0 kf-host: channel birth h=0xcafe0056 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.15 p0 kf-host: channel birth h=0xcafe005c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.16 p0 kf-host: channel birth h=0xcafe0062 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.16 p0 SETUP driver=580.159.04 grs_built=16 grs_asked=16 ms=58 rss_kib=2704
+   1.16 p0 READY
+   2.30 p0 PROGRESS n=100 t_ms=72 rss_kib=2704 win_mean_us=727 win_p99_us=930 win_max_us=936
+   2.37 p0 PROGRESS n=200 t_ms=142 rss_kib=2704 win_mean_us=693 win_p99_us=710 win_max_us=822
+   2.44 p0 PROGRESS n=300 t_ms=213 rss_kib=2704 win_mean_us=713 win_p99_us=870 win_max_us=910
+   2.51 p0 PROGRESS n=400 t_ms=284 rss_kib=2704 win_mean_us=708 win_p99_us=1112 win_max_us=1223
+   2.58 p0 PROGRESS n=500 t_ms=353 rss_kib=2704 win_mean_us=692 win_p99_us=729 win_max_us=827
+   2.65 p0 PROGRESS n=600 t_ms=426 rss_kib=2704 win_mean_us=728 win_p99_us=885 win_max_us=1462
+   2.73 p0 PROGRESS n=700 t_ms=499 rss_kib=2704 win_mean_us=730 win_p99_us=746 win_max_us=1559
+   2.80 p0 PROGRESS n=800 t_ms=572 rss_kib=2704 win_mean_us=725 win_p99_us=957 win_max_us=1689
+   2.87 p0 PROGRESS n=900 t_ms=645 rss_kib=2704 win_mean_us=732 win_p99_us=888 win_max_us=1420
+   2.94 p0 PROGRESS n=1000 t_ms=718 rss_kib=2704 win_mean_us=730 win_p99_us=804 win_max_us=1802
+   3.02 p0 PROGRESS n=1100 t_ms=792 rss_kib=2704 win_mean_us=739 win_p99_us=904 win_max_us=1817
+   3.09 p0 PROGRESS n=1200 t_ms=865 rss_kib=2704 win_mean_us=727 win_p99_us=760 win_max_us=859
+   3.17 p0 PROGRESS n=1300 t_ms=940 rss_kib=2704 win_mean_us=742 win_p99_us=875 win_max_us=2111
+   3.24 p0 PROGRESS n=1400 t_ms=1013 rss_kib=2704 win_mean_us=731 win_p99_us=883 win_max_us=2205
+   3.31 p0 PROGRESS n=1500 t_ms=1085 rss_kib=2704 win_mean_us=717 win_p99_us=837 win_max_us=2354
+   3.39 p0 PROGRESS n=1600 t_ms=1160 rss_kib=2704 win_mean_us=752 win_p99_us=965 win_max_us=1798
+   3.46 p0 PROGRESS n=1700 t_ms=1237 rss_kib=2704 win_mean_us=766 win_p99_us=918 win_max_us=2450
+   3.54 p0 PROGRESS n=1800 t_ms=1312 rss_kib=2704 win_mean_us=752 win_p99_us=940 win_max_us=2553
+   3.61 p0 PROGRESS n=1900 t_ms=1385 rss_kib=2704 win_mean_us=729 win_p99_us=769 win_max_us=852
+   3.69 p0 PROGRESS n=2000 t_ms=1460 rss_kib=2704 win_mean_us=744 win_p99_us=747 win_max_us=2781
+   3.76 p0 PROGRESS n=2100 t_ms=1537 rss_kib=2704 win_mean_us=770 win_p99_us=874 win_max_us=2875
+   3.84 p0 PROGRESS n=2200 t_ms=1614 rss_kib=2704 win_mean_us=772 win_p99_us=901 win_max_us=2958
+   3.92 p0 PROGRESS n=2300 t_ms=1695 rss_kib=2704 win_mean_us=807 win_p99_us=2149 win_max_us=3056
+   4.00 p0 PROGRESS n=2400 t_ms=1771 rss_kib=2704 win_mean_us=757 win_p99_us=894 win_max_us=3205
+   4.07 p0 PROGRESS n=2500 t_ms=1847 rss_kib=2704 win_mean_us=765 win_p99_us=808 win_max_us=872
+   4.15 p0 PROGRESS n=2600 t_ms=1926 rss_kib=2704 win_mean_us=791 win_p99_us=935 win_max_us=3363
+   4.23 p0 PROGRESS n=2700 t_ms=2003 rss_kib=2704 win_mean_us=761 win_p99_us=757 win_max_us=3461
+   4.30 p0 PROGRESS n=2800 t_ms=2076 rss_kib=2704 win_mean_us=734 win_p99_us=859 win_max_us=885
+   4.38 p0 PROGRESS n=2900 t_ms=2156 rss_kib=2704 win_mean_us=799 win_p99_us=926 win_max_us=3696
+   4.47 p0 PROGRESS n=3000 t_ms=2240 rss_kib=2704 win_mean_us=836 win_p99_us=2486 win_max_us=3701
+   4.55 p0 PROGRESS n=3100 t_ms=2320 rss_kib=2704 win_mean_us=796 win_p99_us=914 win_max_us=3816
+   4.63 p0 PROGRESS n=3200 t_ms=2401 rss_kib=2704 win_mean_us=812 win_p99_us=921 win_max_us=4063
+   4.70 p0 PROGRESS n=3300 t_ms=2477 rss_kib=2704 win_mean_us=762 win_p99_us=782 win_max_us=903
+   4.78 p0 PROGRESS n=3400 t_ms=2556 rss_kib=2704 win_mean_us=788 win_p99_us=797 win_max_us=4170
+   4.86 p0 PROGRESS n=3500 t_ms=2635 rss_kib=2704 win_mean_us=787 win_p99_us=909 win_max_us=4193
+   4.94 p0 PROGRESS n=3600 t_ms=2714 rss_kib=2704 win_mean_us=788 win_p99_us=923 win_max_us=4281
+   5.02 p0 PROGRESS n=3700 t_ms=2797 rss_kib=2704 win_mean_us=828 win_p99_us=3321 win_max_us=4445
+   5.10 p0 PROGRESS n=3800 t_ms=2876 rss_kib=2704 win_mean_us=791 win_p99_us=883 win_max_us=4619
+   5.18 p0 PROGRESS n=3900 t_ms=2951 rss_kib=2704 win_mean_us=747 win_p99_us=783 win_max_us=873
+   5.26 p0 PROGRESS n=4000 t_ms=3029 rss_kib=2704 win_mean_us=779 win_p99_us=764 win_max_us=4734
+   5.33 p0 PROGRESS n=4100 t_ms=3105 rss_kib=2912 win_mean_us=765 win_p99_us=974 win_max_us=4761
+   5.41 p0 PROGRESS n=4200 t_ms=3182 rss_kib=2912 win_mean_us=767 win_p99_us=860 win_max_us=4993
+   5.49 p0 PROGRESS n=4300 t_ms=3262 rss_kib=2912 win_mean_us=799 win_p99_us=972 win_max_us=5121
+   5.57 p0 PROGRESS n=4400 t_ms=3340 rss_kib=2912 win_mean_us=774 win_p99_us=1071 win_max_us=3209
+   5.65 p0 PROGRESS n=4500 t_ms=3419 rss_kib=2912 win_mean_us=788 win_p99_us=906 win_max_us=5178
+   5.72 p0 PROGRESS n=4600 t_ms=3491 rss_kib=2912 win_mean_us=722 win_p99_us=742 win_max_us=864
+   5.80 p0 PROGRESS n=4700 t_ms=3570 rss_kib=2912 win_mean_us=790 win_p99_us=763 win_max_us=5372
+   5.88 p0 PROGRESS n=4800 t_ms=3654 rss_kib=2912 win_mean_us=834 win_p99_us=5530 win_max_us=5647
+   5.95 p0 PROGRESS n=4900 t_ms=3726 rss_kib=2912 win_mean_us=720 win_p99_us=783 win_max_us=863
+   6.03 p0 PROGRESS n=5000 t_ms=3805 rss_kib=2912 win_mean_us=796 win_p99_us=1113 win_max_us=5713
+   6.11 p0 PROGRESS n=5100 t_ms=3881 rss_kib=2912 win_mean_us=752 win_p99_us=1115 win_max_us=3596
+   6.19 p0 PROGRESS n=5200 t_ms=3966 rss_kib=2912 win_mean_us=848 win_p99_us=5931 win_max_us=6122
+   6.27 p0 PROGRESS n=5300 t_ms=4040 rss_kib=2912 win_mean_us=746 win_p99_us=757 win_max_us=880
+   6.34 p0 PROGRESS n=5400 t_ms=4118 rss_kib=2912 win_mean_us=773 win_p99_us=735 win_max_us=6160
+   6.42 p0 PROGRESS n=5500 t_ms=4196 rss_kib=2912 win_mean_us=778 win_p99_us=862 win_max_us=6333
+   6.50 p0 PROGRESS n=5600 t_ms=4270 rss_kib=2912 win_mean_us=746 win_p99_us=778 win_max_us=874
+   6.59 p0 PROGRESS n=5700 t_ms=4358 rss_kib=2912 win_mean_us=871 win_p99_us=6370 win_max_us=6577
+   6.66 p0 PROGRESS n=5800 t_ms=4434 rss_kib=2912 win_mean_us=760 win_p99_us=1029 win_max_us=3895
+   6.74 p0 PROGRESS n=5900 t_ms=4514 rss_kib=2912 win_mean_us=806 win_p99_us=764 win_max_us=6652
+   6.82 p0 PROGRESS n=6000 t_ms=4595 rss_kib=2912 win_mean_us=803 win_p99_us=901 win_max_us=6772
+   6.89 p0 PROGRESS n=6100 t_ms=4668 rss_kib=2912 win_mean_us=732 win_p99_us=758 win_max_us=875
+   6.98 p0 PROGRESS n=6200 t_ms=4754 rss_kib=2912 win_mean_us=860 win_p99_us=6962 win_max_us=6990
+   7.06 p0 PROGRESS n=6300 t_ms=4829 rss_kib=2912 win_mean_us=746 win_p99_us=771 win_max_us=893
+   7.14 p0 PROGRESS n=6400 t_ms=4917 rss_kib=2912 win_mean_us=883 win_p99_us=4256 win_max_us=7044
+   7.22 p0 PROGRESS n=6500 t_ms=4993 rss_kib=2912 win_mean_us=751 win_p99_us=767 win_max_us=878
+   7.30 p0 PROGRESS n=6600 t_ms=5071 rss_kib=2912 win_mean_us=786 win_p99_us=755 win_max_us=7183
+   7.38 p0 PROGRESS n=6700 t_ms=5153 rss_kib=2912 win_mean_us=815 win_p99_us=778 win_max_us=7349
+   7.46 p0 PROGRESS n=6800 t_ms=5232 rss_kib=2912 win_mean_us=790 win_p99_us=749 win_max_us=7357
+   7.54 p0 PROGRESS n=6900 t_ms=5311 rss_kib=2912 win_mean_us=788 win_p99_us=880 win_max_us=7413
+   7.62 p0 PROGRESS n=7000 t_ms=5392 rss_kib=2912 win_mean_us=811 win_p99_us=883 win_max_us=7551
+   7.71 p0 PROGRESS n=7100 t_ms=5480 rss_kib=2912 win_mean_us=873 win_p99_us=4724 win_max_us=7692
+   7.78 p0 PROGRESS n=7200 t_ms=5552 rss_kib=2912 win_mean_us=726 win_p99_us=753 win_max_us=854
+   7.86 p0 PROGRESS n=7300 t_ms=5634 rss_kib=2912 win_mean_us=812 win_p99_us=873 win_max_us=7816
+   7.94 p0 PROGRESS n=7400 t_ms=5713 rss_kib=2912 win_mean_us=794 win_p99_us=878 win_max_us=7787
+   8.02 p0 PROGRESS n=7500 t_ms=5795 rss_kib=2912 win_mean_us=819 win_p99_us=887 win_max_us=7912
+   8.10 p0 PROGRESS n=7600 t_ms=5877 rss_kib=2912 win_mean_us=813 win_p99_us=887 win_max_us=8030
+   8.19 p0 PROGRESS n=7700 t_ms=5960 rss_kib=2912 win_mean_us=833 win_p99_us=900 win_max_us=8114
+   8.27 p0 PROGRESS n=7800 t_ms=6039 rss_kib=2912 win_mean_us=790 win_p99_us=1277 win_max_us=5011
+   8.35 p0 PROGRESS n=7900 t_ms=6121 rss_kib=2912 win_mean_us=813 win_p99_us=762 win_max_us=8246
+   8.43 p0 PROGRESS n=8000 t_ms=6202 rss_kib=2912 win_mean_us=808 win_p99_us=875 win_max_us=8365
+   8.50 p0 PROGRESS n=8100 t_ms=6276 rss_kib=2912 win_mean_us=746 win_p99_us=769 win_max_us=892
+   8.59 p0 PROGRESS n=8200 t_ms=6366 rss_kib=2912 win_mean_us=899 win_p99_us=8447 win_max_us=8456
+   8.67 p0 PROGRESS n=8300 t_ms=6442 rss_kib=2912 win_mean_us=750 win_p99_us=879 win_max_us=885
+   8.77 p0 PROGRESS n=8400 t_ms=6539 rss_kib=2912 win_mean_us=975 win_p99_us=8576 win_max_us=8829
+   8.84 p0 PROGRESS n=8500 t_ms=6613 rss_kib=2912 win_mean_us=738 win_p99_us=885 win_max_us=898
+   8.91 p0 PROGRESS n=8600 t_ms=6688 rss_kib=2912 win_mean_us=748 win_p99_us=815 win_max_us=857
+   9.00 p0 PROGRESS n=8700 t_ms=6770 rss_kib=2912 win_mean_us=818 win_p99_us=751 win_max_us=8794
+   9.09 p0 PROGRESS n=8800 t_ms=6861 rss_kib=2912 win_mean_us=912 win_p99_us=8848 win_max_us=9000
+   9.16 p0 PROGRESS n=8900 t_ms=6936 rss_kib=2912 win_mean_us=742 win_p99_us=890 win_max_us=893
+   9.25 p0 PROGRESS n=9000 t_ms=7020 rss_kib=2912 win_mean_us=840 win_p99_us=891 win_max_us=9003
+   9.34 p0 PROGRESS n=9100 t_ms=7111 rss_kib=2912 win_mean_us=914 win_p99_us=5621 win_max_us=9225
+   9.41 p0 PROGRESS n=9200 t_ms=7184 rss_kib=2912 win_mean_us=729 win_p99_us=744 win_max_us=864
+   9.49 p0 PROGRESS n=9300 t_ms=7268 rss_kib=2912 win_mean_us=834 win_p99_us=764 win_max_us=9219
+   9.58 p0 PROGRESS n=9400 t_ms=7350 rss_kib=2912 win_mean_us=817 win_p99_us=837 win_max_us=9309
+   9.66 p0 PROGRESS n=9500 t_ms=7434 rss_kib=2912 win_mean_us=841 win_p99_us=883 win_max_us=9415
+   9.74 p0 PROGRESS n=9600 t_ms=7517 rss_kib=2912 win_mean_us=830 win_p99_us=897 win_max_us=9462
+   9.82 p0 PROGRESS n=9700 t_ms=7592 rss_kib=2912 win_mean_us=745 win_p99_us=760 win_max_us=881
+   9.92 p0 PROGRESS n=9800 t_ms=7692 rss_kib=2912 win_mean_us=1000 win_p99_us=9662 win_max_us=10246
+   9.99 p0 PROGRESS n=9900 t_ms=7765 rss_kib=2912 win_mean_us=731 win_p99_us=747 win_max_us=864
+  10.09 p0 PROGRESS n=10000 t_ms=7859 rss_kib=2912 win_mean_us=936 win_p99_us=9801 win_max_us=9968
+  10.16 p0 PROGRESS n=10100 t_ms=7934 rss_kib=2912 win_mean_us=752 win_p99_us=869 win_max_us=891
+  10.25 p0 PROGRESS n=10200 t_ms=8019 rss_kib=2912 win_mean_us=846 win_p99_us=919 win_max_us=10035
+  10.32 p0 PROGRESS n=10300 t_ms=8094 rss_kib=2912 win_mean_us=752 win_p99_us=880 win_max_us=885
+  10.42 p0 PROGRESS n=10400 t_ms=8197 rss_kib=2912 win_mean_us=1030 win_p99_us=10334 win_max_us=10365
+  10.50 p0 PROGRESS n=10500 t_ms=8272 rss_kib=2912 win_mean_us=747 win_p99_us=904 win_max_us=922
+  10.58 p0 PROGRESS n=10600 t_ms=8355 rss_kib=2912 win_mean_us=829 win_p99_us=758 win_max_us=10423
+  10.67 p0 PROGRESS n=10700 t_ms=8439 rss_kib=3120 win_mean_us=841 win_p99_us=759 win_max_us=10640
+  10.75 p0 PROGRESS n=10800 t_ms=8522 rss_kib=3120 win_mean_us=829 win_p99_us=750 win_max_us=10665
+  10.83 p0 PROGRESS n=10900 t_ms=8606 rss_kib=3120 win_mean_us=838 win_p99_us=902 win_max_us=10866
+  10.92 p0 PROGRESS n=11000 t_ms=8692 rss_kib=3120 win_mean_us=854 win_p99_us=880 win_max_us=11055
+  11.01 p0 PROGRESS n=11100 t_ms=8787 rss_kib=3120 win_mean_us=953 win_p99_us=6705 win_max_us=11079
+  11.10 p0 PROGRESS n=11200 t_ms=8871 rss_kib=3120 win_mean_us=841 win_p99_us=865 win_max_us=11290
+  11.17 p0 PROGRESS n=11300 t_ms=8946 rss_kib=3120 win_mean_us=751 win_p99_us=905 win_max_us=916
+  11.26 p0 PROGRESS n=11400 t_ms=9033 rss_kib=3120 win_mean_us=867 win_p99_us=776 win_max_us=11431
+  11.34 p0 PROGRESS n=11500 t_ms=9119 rss_kib=3120 win_mean_us=851 win_p99_us=759 win_max_us=11509
+  11.43 p0 PROGRESS n=11600 t_ms=9204 rss_kib=3120 win_mean_us=849 win_p99_us=873 win_max_us=11710
+  11.49 p0 REFUSED gr=11 on_gr=728 total=11659 after_ms=9263 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.51 p0 REFUSED gr=12 on_gr=728 total=11659 after_ms=9287 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.53 p0 REFUSED gr=13 on_gr=728 total=11659 after_ms=9301 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.54 p0 REFUSED gr=14 on_gr=728 total=11659 after_ms=9309 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.54 p0 REFUSED gr=15 on_gr=728 total=11659 after_ms=9317 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.55 p0 REFUSED gr=0 on_gr=729 total=11659 after_ms=9324 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.57 p0 REFUSED gr=1 on_gr=729 total=11659 after_ms=9343 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.58 p0 REFUSED gr=2 on_gr=729 total=11659 after_ms=9350 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.58 p0 REFUSED gr=3 on_gr=729 total=11659 after_ms=9358 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.59 p0 REFUSED gr=4 on_gr=729 total=11659 after_ms=9365 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.60 p0 REFUSED gr=5 on_gr=729 total=11659 after_ms=9373 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.61 p0 REFUSED gr=6 on_gr=729 total=11659 after_ms=9380 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.62 p0 REFUSED gr=7 on_gr=729 total=11659 after_ms=9388 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.62 p0 REFUSED gr=8 on_gr=729 total=11659 after_ms=9395 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.63 p0 REFUSED gr=9 on_gr=729 total=11659 after_ms=9403 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.64 p0 REFUSED gr=10 on_gr=729 total=11659 after_ms=9410 err=NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a) raw=NoMemory
+  11.64 p0 ALLOC_DONE reason=all_refused total=11659 refused_grs=16 grs=16 per_gr_min=728 per_gr_max=729 ms=9410 rss_kib=3120 mean_us=792 p50_us=739 p99_us=1197 max_us=11710
+  25.50 p0 FREE_DONE freed=11659 failed=0 ms=11797 first_failure=-
+  27.59 p0 EXIT rc=0

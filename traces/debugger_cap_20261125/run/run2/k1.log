@@ -1,0 +1,72 @@
+   1.10 p0 kf-host: host tier: stock
+   1.10 p0 kf-host: channel birth h=0xcafe0008 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.11 p0 kf-host: channel birth h=0xcafe000e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.11 p0 kf-host: channel birth h=0xcafe0014 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe001a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe0020 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.12 p0 kf-host: channel birth h=0xcafe0026 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe002c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe0032 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.13 p0 kf-host: channel birth h=0xcafe0038 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.14 p0 kf-host: channel birth h=0xcafe003e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.14 p0 kf-host: channel birth h=0xcafe0044 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.14 p0 kf-host: channel birth h=0xcafe004a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.15 p0 kf-host: channel birth h=0xcafe0050 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.15 p0 kf-host: channel birth h=0xcafe0056 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.16 p0 kf-host: channel birth h=0xcafe005c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.16 p0 kf-host: channel birth h=0xcafe0062 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.16 p0 kf-host: channel birth h=0xcafe0068 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.17 p0 kf-host: channel birth h=0xcafe006e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.17 p0 kf-host: channel birth h=0xcafe0074 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.18 p0 kf-host: channel birth h=0xcafe007a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.18 p0 kf-host: channel birth h=0xcafe0080 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.18 p0 kf-host: channel birth h=0xcafe0086 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.19 p0 kf-host: channel birth h=0xcafe008c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.19 p0 kf-host: channel birth h=0xcafe0092 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.19 p0 kf-host: channel birth h=0xcafe0098 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.20 p0 kf-host: channel birth h=0xcafe009e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.20 p0 kf-host: channel birth h=0xcafe00a4 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.21 p0 kf-host: channel birth h=0xcafe00aa engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.21 p0 kf-host: channel birth h=0xcafe00b0 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.21 p0 kf-host: channel birth h=0xcafe00b6 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.22 p0 kf-host: channel birth h=0xcafe00bc engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.22 p0 kf-host: channel birth h=0xcafe00c2 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.23 p0 kf-host: channel birth h=0xcafe00c8 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.23 p0 kf-host: channel birth h=0xcafe00ce engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.23 p0 kf-host: channel birth h=0xcafe00d4 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.24 p0 kf-host: channel birth h=0xcafe00da engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.24 p0 kf-host: channel birth h=0xcafe00e0 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.24 p0 kf-host: channel birth h=0xcafe00e6 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.25 p0 kf-host: channel birth h=0xcafe00ec engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.25 p0 kf-host: channel birth h=0xcafe00f2 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.26 p0 kf-host: channel birth h=0xcafe00f8 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.26 p0 kf-host: channel birth h=0xcafe00fe engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.26 p0 kf-host: channel birth h=0xcafe0104 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.27 p0 kf-host: channel birth h=0xcafe010a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.27 p0 kf-host: channel birth h=0xcafe0110 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.27 p0 kf-host: channel birth h=0xcafe0116 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.28 p0 kf-host: channel birth h=0xcafe011c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.28 p0 kf-host: channel birth h=0xcafe0122 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.29 p0 kf-host: channel birth h=0xcafe0128 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.29 p0 kf-host: channel birth h=0xcafe012e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.29 p0 kf-host: channel birth h=0xcafe0134 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.30 p0 kf-host: channel birth h=0xcafe013a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.30 p0 kf-host: channel birth h=0xcafe0140 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.30 p0 kf-host: channel birth h=0xcafe0146 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.31 p0 kf-host: channel birth h=0xcafe014c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.31 p0 kf-host: channel birth h=0xcafe0152 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.32 p0 kf-host: channel birth h=0xcafe0158 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.32 p0 kf-host: channel birth h=0xcafe015e engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.32 p0 kf-host: channel birth h=0xcafe0164 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.33 p0 kf-host: channel birth h=0xcafe016a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.33 p0 kf-host: channel birth h=0xcafe0170 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.33 p0 kf-host: channel birth h=0xcafe0176 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.34 p0 kf-host: channel birth h=0xcafe017c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.34 p0 kf-host: channel birth h=0xcafe0182 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+   1.34 p0 SETUP driver=580.159.04 grs_built=64 grs_asked=64 ms=240 rss_kib=2496
+   1.34 p0 READY
+   2.50 p0 PROGRESS n=100 t_ms=76 rss_kib=2496 win_mean_us=765 win_p99_us=959 win_max_us=1003
+   2.57 p0 PROGRESS n=200 t_ms=148 rss_kib=2496 win_mean_us=722 win_p99_us=825 win_max_us=838
+   2.61 p0 ALLOC_DONE reason=per_gr_full total=256 refused_grs=0 grs=64 per_gr_min=4 per_gr_max=4 ms=188 rss_kib=2496 mean_us=734 p50_us=719 p99_us=954 max_us=1003
+   5.19 p0 FREE_DONE freed=256 failed=0 ms=150 first_failure=-
+   7.36 p0 EXIT rc=0

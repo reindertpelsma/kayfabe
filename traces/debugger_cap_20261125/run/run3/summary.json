@@ -1,0 +1,111 @@
+[
+ {
+  "arm": "x1",
+  "ceiling": 20000,
+  "fb_after_exit_mib": 0,
+  "fb_after_free_mib": 5,
+  "fb_after_setup_mib": 5,
+  "fb_at_done_mib": 5,
+  "fb_baseline_mib": 0,
+  "fb_kib_per_session": 0.0,
+  "fb_limit_mib": 4096,
+  "fb_peak_mib": 5,
+  "fb_setup_mib_per_gr": 5.0,
+  "free_ok": true,
+  "grs_per_proc": 1,
+  "late_worker": {
+   "alloc_done": null,
+   "refused": [],
+   "setup": {
+    "driver": "580.159.04",
+    "grs_asked": "1",
+    "grs_built": "0",
+    "ms": "2",
+    "rss_kib": "2704"
+   }
+  },
+  "leak_after_exit_vs_baseline": "ok",
+  "leak_after_free_vs_setup": "ok",
+  "meminfo_kb": {
+   "MemAvailable_at_done": 50002460,
+   "MemAvailable_min": 49987792,
+   "MemAvailable_start": 50314156,
+   "SUnreclaim_at_done": 277916,
+   "SUnreclaim_max": 277916,
+   "SUnreclaim_start": 167708,
+   "Slab_at_done": 487528,
+   "Slab_start": 377320
+  },
+  "new_nv_assert_lines": 3,
+  "new_nvrm_lines": 7,
+  "new_xids": 0,
+  "per_gr": 0,
+  "procs": 1,
+  "ready": true,
+  "refusing_workers": 1,
+  "sessions_total": 11734,
+  "setup": [
+   {
+    "driver": "580.159.04",
+    "grs_asked": "1",
+    "grs_built": "1",
+    "ms": "3",
+    "rss_kib": "2704"
+   }
+  ],
+  "stop_cause": "workers_done",
+  "workers": [
+   {
+    "alloc_done": {
+     "grs": "1",
+     "max_us": "12008",
+     "mean_us": "778",
+     "ms": "9161",
+     "p50_us": "727",
+     "p99_us": "1193",
+     "per_gr_max": "11734",
+     "per_gr_min": "11734",
+     "reason": "all_refused",
+     "refused_grs": "1",
+     "rss_kib": "3120",
+     "total": "11734"
+    },
+    "first_progress": {
+     "n": "100",
+     "rss_kib": "2704",
+     "t_ms": "71",
+     "win_max_us": "978",
+     "win_mean_us": "716",
+     "win_p99_us": "938"
+    },
+    "free_done": {
+     "failed": "0",
+     "first_failure": "-",
+     "freed": "11734",
+     "ms": "11689"
+    },
+    "last_progress": {
+     "n": "11700",
+     "rss_kib": "3120",
+     "t_ms": "9121",
+     "win_max_us": "12008",
+     "win_mean_us": "865",
+     "win_p99_us": "769"
+    },
+    "proc": 0,
+    "rc": 0,
+    "refusal_count": 1,
+    "refusals": [
+     {
+      "after_ms": "9161",
+      "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+      "gr": "0",
+      "on_gr": "11734",
+      "raw": "NoMemory",
+      "total": "11734"
+     }
+    ]
+   }
+  ]
+ }
+]

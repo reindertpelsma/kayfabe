@@ -1,0 +1,16 @@
+ARM_START a3 04:11:53
+ARM_DONE a3 sessions=11659 stop=workers_done kib_per_session=0.0 after_free=ok after_exit=ok xids=0
+ARM_START a4 04:12:23
+ARM_DONE a4 sessions=11718 stop=workers_done kib_per_session=0.0 after_free=ok after_exit=ok xids=0
+ARM_START a5 04:12:56
+ARM_DONE a5 sessions=11652 stop=workers_done kib_per_session=0.0 after_free=ok after_exit=ok xids=0
+ARM_START k1 04:13:34
+ARM_DONE k1 sessions=256 stop=workers_done kib_per_session=0.0 after_free=ok after_exit=ok xids=0
+ARM_START k2 04:13:44
+ARM_DONE k2 sessions=1792 stop=workers_done kib_per_session=0.0 after_free=ok after_exit=ok xids=0
+arm  procs x GR  sessions  stop          refused      FB KiB/session  peak-base MiB  after free  after exit
+a3   1x16        11659     workers_done  1/1 procs    0.0             72             ok          ok        
+a4   4x1         11718     workers_done  4/4 procs    0.0             18             ok          ok        
+a5   16x1        11652     workers_done  16/16 procs  0.0             72             ok          ok        
+k1   1x64        256       workers_done  0/1 procs    0.0             286            ok          ok        
+k2   1x448       1792      workers_done  0/1 procs    0.0             2001           ok          ok        

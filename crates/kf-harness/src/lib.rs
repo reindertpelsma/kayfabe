@@ -3,6 +3,7 @@
 //! ★ A verdict is computed from named checks, never from reaching the end of a program (the old
 //! tree's *"the last line is not the verdict"*). Every check prints `CHECK <name> PASS|FAIL <why>`.
 
+pub mod dbgcap;
 pub mod publish;
 pub mod semprobe;
 pub mod semprobe_host;
