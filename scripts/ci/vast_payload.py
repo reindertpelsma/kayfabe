@@ -1316,6 +1316,11 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded, *, roo
                 refusal = str(error)
                 print("KF_PAYLOAD_ROOTLESS_REFUSED stage=" + name + " why=" + refusal[:60], flush=True)
         rc = 125 if (short or refusal) else runner(command, soft, stage["output"], stage["progress"])
+        # A stage may name one action to run once it has ended, whatever its result, before it is graded and before the next stage starts
+        # (freeing its private prefix). A stage that did not run has nothing to free.
+        after = stage.get("after")
+        if after is not None and not short and not refusal:
+            after()
         if rootless is not None and not short and not refusal:
             rootless.finish(name, head_tail_text(stage["output"]))
         if rootless is not None:
@@ -1872,6 +1877,18 @@ def install_flow_rows(text, rc, sha, result):
 KFML_IN_MIDDLE_LARGE = True
 KFML_MIN_REMAINING_MS = {"middle": 20 * 60000, "large": 30 * 60000}   # MEASURED stage wall: about 4 and 5 minutes with the datasets prefetched, about 10 without (kfml_run_20261117_tier_decision), with margin
 KFML_PREFIX = "/workspace/kf-kfml"
+# The private prefixes a finished stage may be told to free before the next stage starts. Constants only: no path from an instruction, the
+# environment or a box file ever reaches reclaim_stage_prefix.
+RECLAIMABLE_PREFIXES = (KFML_PREFIX,)
+
+
+def reclaim_stage_prefix(path, rmtree=shutil.rmtree, usage=shutil.disk_usage):
+    """Remove a finished stage's private prefix (its environment and downloads; its evidence lives elsewhere) and print the free space left.
+    The Windows gate refuses to start under 45 GB free, and it runs last on a disk the Linux stages have filled."""
+    if path not in RECLAIMABLE_PREFIXES:
+        raise ValueError("not a reclaimable stage prefix: " + str(path))
+    rmtree(path, ignore_errors=True)
+    print("KF_PAYLOAD_RECLAIM path=" + path + " free_bytes=" + str(usage("/").free), flush=True)
 KFML_TIER = {"middle": "mid", "large": "large"}
 
 
@@ -2394,6 +2411,10 @@ def main():
                 lambda rc, output=output_kf: kfml_rows(bounded_text(output), rc, sha, result, strict=instruction.propimages_strict),
             )
             stage.update(min_remaining_ms=KFML_MIN_REMAINING_MS[tier], short_row="kfml_retry_time")
+            if windows:
+                # The Windows gate runs last and needs 45 GB free; the kfml prefix (its Python environment and datasets) is of no use after
+                # the stage, and its record is in the evidence directory.
+                stage.update(after=lambda: reclaim_stage_prefix(KFML_PREFIX))
             stages.append(stage)
         if "install_flow" in plan:
             output_if = evidence / "install_flow.run"
