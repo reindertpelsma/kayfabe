@@ -123,7 +123,7 @@ impl CommandObserver for IdentityObserver {
 
 /// The line a Windows guest without the display plane is refused with (the QEMU log; one per rate
 /// window).
-pub const WINDOWS_NEEDS_DISPLAY: &str = "kf3: WINDOWS GUEST REFUSED: the guest declared the Windows driver and this device has no display plane (display=off). NVIDIA's Windows driver resets itself without one. Start the VM with display=on,gop=on on the kf3 device and -vga none (docs/howto/windows-guest.md), or set windows-support=off for a Linux-only VM";
+pub const WINDOWS_NEEDS_DISPLAY: &str = "kf3: WINDOWS GUEST REFUSED: the guest declared the Windows driver and this device has no display plane (display=off). In the runs on record NVIDIA's Windows driver started without one and then reset itself. Start the VM with display=on,gop=on on the kf3 device and -vga none (docs/howto/windows-guest.md), or set windows-support=off for a Linux-only VM";
 
 /// The link that refuses a Windows guest on a device without the display plane, by name, at its
 /// fn 1: the guest driver's first call fails with `NV_ERR_NOT_SUPPORTED` and the device does not

@@ -50,6 +50,12 @@ Woff2 Wfill2 Wdef3 Woffsup1 (`windows/chain.out`).
 - H-Woffsup: recorded only (no refusal line, Code 43, alive, no bugcheck).
 
 ## Unexpected and open (MEASURED unless marked INFERRED)
+⊘ **Correction 2026-11-25 (release integrator), to item 1 below.** The inference in item 1 (the old bugcheck came from the fill, not from the missing display plane) is
+   contradicted by evidence already in the tree, and this run cannot test it. `traces/pc_hwgates_20261124/README.md` (pc run 2026-11-24, kf3 `63e46069` and `ed41beea`, all eight boots display-off)
+   has the guest ending early and `nvlddmkm` 153 with the fill OFF (rows r2 and r7, `unmapped-reads-zero=off`) and on the pre-fill binary (rows r4 and r6, `ed41beea`), with the adapter at
+   Code 0. In the three display-off boots of this run (pc run 2026-11-25, `237349e0`) the driver never started (Code 43: refused at fn 1 in two boots, no Windows profile in the third), so a
+   driver that starts and then resets was not observable here. What this run adds is the guest-side effect of the refusal: Code 43, no `nvlddmkm` event, alive at 300 s.
+
 1. **The 2026-11-24 display-off bugcheck did not reproduce.** `traces/pc_displayexp_20261124/` (pc, 2026-11-24, `63e46069`) measured arm A (display off, default fill ON) as
    `nvlddmkm` 153 and bugcheck 0x113 in 3 of 3 boots at 50-170 s. Here (pc 2026-11-25, `237349e0`) both display-off boots, and the `windows-support=off` boot, stay alive for 300 s with 0
    `nvlddmkm` events. The `windows-support=off` boot carries no refusal line, so the refusal line is not what changed the outcome. INFERRED, not tested: the cause of the old bugcheck was the fill
