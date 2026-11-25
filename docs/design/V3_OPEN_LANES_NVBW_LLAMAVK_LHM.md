@@ -61,6 +61,8 @@ Under the Vast payload `apt-get` is the cache-only shim (V3_OPEN_ROWS_FFMPEG_DCG
 
 ## 6. The Windows row and why it is not an `apps.json` row yet
 
+⊘ Update 2026-11-25: the RC1 worker-tiers change (`claude/rc1-worker-tiers-pin-20261125`) did not add the row to `apps.json`, for the reason below: the bundle republish is still the coordinator's. `nvbandwidth` and `llama_vulkan` are rows of `run_apps.sh` (Linux), not `apps.json` rows; they stay out of the per-PR middle app set.
+
 `appmatrix/apps.json` is a hash-covered input of the published public Windows apps bundle (`appmatrix/bundle.pin`, `package_bundle.input_hash`, the `RECIPE_INPUT_DRIFT` guard). A new row there changes the input hash and turns `test_bundle_pin.RepoPin` red until the coordinator republishes the bundle to the public bucket; that is not this change's to do. So the row lives in `open_rows.json` (with its matrix definition as data and tests that hold that definition against what the code prints) and runs through `kfopen.py` on any Windows machine, which is also how the other open Windows rows are driven by hand. [design] When the bundle is next republished, wiring it is one `open_row("hwmon_lhm_nvapi", ...)` call from `matrix.row`, the `online_source` list and `app_requires` entry of `gate_profiles.json`, and `gen_doc.py`.
 
 `lhm_dump.ps1` loads the library with `Assembly.LoadFrom` and resolves every dependency from the zip's directory with an `AssemblyResolve` handler, because the zip's `LibreHardwareMonitor.exe.config` redirects assembly versions for the executable and the reader is `powershell.exe`. That handler, `Computer.Open()` under PowerShell 5.1 and the NVAPI sensor names are [inferred] from the library's structure; nothing of this ran on Windows.

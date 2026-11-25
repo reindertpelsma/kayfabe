@@ -1301,3 +1301,16 @@ Pin: the Worker bundle changed (items 1 to 3 are in `src/` and `defaults.json`),
 regenerated 2026-11-23"). [MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`, two identical dry-runs] The new pin is
 `2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
 
+
+## Bundle pin regenerated 2026-11-25 (tiers)
+
+STATUS: LIVE as code on the RC1 integration branch, 2026-11-25 (`claude/rc1-worker-tiers-pin-20261125`); nothing deployed.
+Owner rulings of 2026-11-18 (section AZ) and 2026-11-24 (section BE): `src/tier.js` no longer lists `specviewperf` in the large tier's
+required `additionalStages` (it is `invokedStages`, which an operator adds with `RELEASE_STAGES`, off by default), and the `specviewperf` slot in
+`defaults.json` carries `"required": false`. What the `gpu-vast` middle run requests is unchanged. Details: `docs/CI_V3.md`, "What a PR runs".
+
+[MEASURED 2026-11-25, wrangler 4.152.0, clean `npm ci --ignore-scripts` with the dev dependencies, two identical dry-runs] The pin moved from
+`2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab` (the RC1 base) to
+`5b7b95a7cf03003b4920be2f2f63389360d57df68a80b76aff7c2e1938904806`, in `deployment.json` and `wrangler.toml`. master pins `bf98dfcd...`. The DEPLOYED
+Worker is unchanged: deploy it only after master carries this pin. **The Worker source is frozen after this change: any further change under `src/` or
+`defaults.json` changes the bundle, so re-measure the pin.**
