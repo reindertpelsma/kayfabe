@@ -54,6 +54,8 @@ citation: ask whether its reason still holds before relying on it.
 
 ## §BH. Sparse zero fill: `unmapped-reads-zero` defaults to ON for every guest, 2026-11-24
 
+⊘ **Note 2026-11-25 (not a ruling; recorded by the release integrator):** Windows has since been run. With the fill on, every Windows boot of 2026-11-24 lost the guest kernel's framebuffer alias to a host `0x51` (pc RTX 4070 at `63e46069`, `traces/pc_hwgates_20261124`; Vast RTX 4090 at `4a6a2108e`, `traces/fill_probe_20261124`); none did with it off. The release-candidate branch `integration/release-rc1-20261125` therefore carries a TENTATIVE default that departs from item 1 for Windows-profile guests only (`auto`: on for Linux, off for Windows; `KF3_ABI` 38; `docs/design/V3_SPARSE_RESIDENCY_RCA.md` §9). This ruling is unchanged until the owner answers decision B1; if the owner keeps item 1, the default is one constant in `kf3.c` and one in `kf-qemu`.
+
 **STATUS: LIVE as a ruling, 2026-11-24; owner decision. IMPLEMENTED 2026-11-24 by PR #580 (`kf3.c` default `true`, `KF3_ABI` 37); the pending notes of item 3 are resolved there. Windows has not been run.**
 
 <!-- src: owner, 2026-11-24; the measurement is docs/design/V3_SPARSE_RESIDENCY_RCA.md section 6 -->

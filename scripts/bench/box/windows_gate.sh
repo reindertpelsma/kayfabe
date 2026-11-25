@@ -179,6 +179,10 @@ collect_evidence() {
         echo "unloading_guest_driver=$(grep -ac 'UNLOADING_GUEST_DRIVER' "${lastq:-/dev/null}" || true)"
         echo "running_to_suspending=$(grep -ac 'Running -> Suspending' "${lastq:-/dev/null}" || true)"
         echo "host_xid_in_boots=$(cat "$VM"/logs/${TAG}_b*_host_dmesg.txt 2> /dev/null | grep -ac 'NVRM: Xid' || true)"
+        # a guest mapping that is absent on the host twin: kf3 acknowledged it as held, or refused it inside a reservation
+        # of its own (the Windows kernel's framebuffer alias with unmapped-reads-zero on), or host RM failed the map
+        echo "guest_map_missing=$(cat "$VM"/logs/${TAG}_b*_qemu.log 2> /dev/null | grep -acE 'HELD BY HOST|HELD-BY-HOST|HELD-BY-OURSELVES|through our reservation .*REFUSED' || true)"
+        echo "host_map_failed=$(cat "$VM"/logs/${TAG}_b*_host_dmesg.txt 2> /dev/null | grep -ac 'mmuWalkMap: Failed to map' || true)"
         grep -aE 'Cold ->|ProtectedRegionUp|Booted|GSP_SET_SYSTEM_INFO|bGspNocatEnabled|REFUSED' "${lastq:-/dev/null}" | head -60
     } > "$EV/gsp_signals.txt" 2>&1
 }
@@ -285,6 +289,9 @@ conclude() {
             elif [ "$(sed -n 's/^refused_0x2080121f=//p' "$EV/gsp_signals.txt")" != 0 ]; then
                 STAGE=gsp_signals
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
+            elif [ "$(sed -n 's/^guest_map_missing=//p' "$EV/gsp_signals.txt")" != 0 ] || [ "$(sed -n 's/^host_map_failed=//p' "$EV/gsp_signals.txt")" != 0 ]; then
+                STAGE=guest_map
+                verdict FAIL KAYFABE "a guest mapping is absent on the host although the guest passed (kf3 held or refused lines: $(sed -n 's/^guest_map_missing=//p' "$EV/gsp_signals.txt"), host mmuWalkMap failures: $(sed -n 's/^host_map_failed=//p' "$EV/gsp_signals.txt"); gsp_signals.txt)"
             elif [ "${ROOTLESS_FINAL_RC:-0}" != 0 ]; then
                 STAGE=rootless
                 verdict RETRY OPERATOR "KF_ROOTLESS=require: this run was not rootless (a root or capable process, or a sudo entry other than the kfroot wrapper; rootless_*.json)"
@@ -514,15 +521,15 @@ selftest() {
     finish() { return 0; }
     # the rootless assertion is a separate concern (scripts/ci/test_kfroot.py): here its outcome is a variable
     rootless_final() { ROOTLESS_FINAL_RC=${SELFTEST_ROOTLESS_RC:-0}; }
-    sc() { # NAME WANT_RC WANT_TEXT MODE BEFORE AFTER [BAR1 [XID [REFUSED]]]
-        local name=$1 wrc=$2 wtext=$3 mode=$4 before=$5 after=$6 bar1=${7:-0} xid=${8:-0} refused=${9:-0}
+    sc() { # NAME WANT_RC WANT_TEXT MODE BEFORE AFTER [BAR1 [XID [REFUSED [MAP_MISSING [HOST_MAP_FAILED]]]]]
+        local name=$1 wrc=$2 wtext=$3 mode=$4 before=$5 after=$6 bar1=${7:-0} xid=${8:-0} refused=${9:-0} missing=${10:-0} hostmap=${11:-0}
         n=$((n + 1))
         out=$(
             EV=$(mktemp -d)
             LOG=$EV/log
             GUEST_STARTED=1
             HOSTREF_BEFORE=$before HOSTREF_AFTER=$after FAILMODE=$mode FAILWHY=why STAGE=probe
-            printf 'refused_0x2080121f=%s\nhost_xid_in_boots=%s\n' "$refused" "$xid" > "$EV/gsp_signals.txt"
+            printf 'refused_0x2080121f=%s\nhost_xid_in_boots=%s\nguest_map_missing=%s\nhost_map_failed=%s\n' "$refused" "$xid" "$missing" "$hostmap" > "$EV/gsp_signals.txt"
             printf 'HOSTREF_XID_DELTA 0\n' > "$EV/hostref_after.txt"
             if [ "$bar1" = 1 ]; then bar1_refusal() { return 0; }; fi
             conclude
@@ -545,6 +552,9 @@ selftest() {
     sc pass-after-red 3 'class=HOSTREF' none green RED
     sc pass-with-xid 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 2
     sc pass-with-flag-refusal 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 0 1
+    sc pass-with-missing-map 1 'a guest mapping is absent on the host' none green green 0 0 0 4
+    sc pass-with-host-map-failure 1 'a guest mapping is absent on the host' none green green 0 0 0 0 1
+    sc guest-fail-with-missing-map 1 'WINDOWS_GATE_FAIL diag=KAYFABE stage=probe why="why"' guest green green 0 0 0 4
     # KF_ROOTLESS=require and the run was not rootless (a root or capable process, or a stray sudo entry): never a pass,
     # but a real guest failure stays the verdict of the guest
     SELFTEST_ROOTLESS_RC=1

@@ -87,7 +87,10 @@
 /* 37 (2026-11-24, claude/sparse-fill-on-20261124, docs/design/V3_SPARSE_RESIDENCY_RCA.md): no signature change. The
  * unmapped-reads-zero property defaults to ON for every guest (it was off). The default is C text, so the number
  * moves: a QEMU built from the old kf3.c would otherwise keep the old default against this archive without a word. */
-#define KF3_ABI 37
+/* 38: no signature change. unmapped_reads_zero is now QEMU's OnOffAuto word (0 = auto, the default; 1 = on; 2 = off)
+ * instead of a boolean, and the unmapped-reads-zero property defaults to auto: on for a Linux guest, off for a guest
+ * under the Windows support profile. The meaning of the word changed, so the number moves. */
+#define KF3_ABI 38
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
