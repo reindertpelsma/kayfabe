@@ -395,7 +395,7 @@ test('large retains the complete inherited probe profiles before adding workload
   assert.ok(TIER_CONTENTS.large.additionalStages.includes('llm_parity'));
 });
 
-// Owner rulings 2026-11-18 (section AZ) and 2026-11-24 (section BE): no tier requires SPECviewperf or a proprietary
+// No tier requires SPECviewperf or a proprietary
 // image, and the per-PR middle run is exactly what it was. Falsifier: a required list names a stage whose slot says it is
 // not required, or the small or middle tier gains a stage or a different request.
 test('the SPEC slot is an invoked app-lane stage: not required, only an operator adds it to a release run', async () => {
