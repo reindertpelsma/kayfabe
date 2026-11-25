@@ -561,6 +561,15 @@ pub fn served_chain(
     chain.push(Box::new(kf_gsp::Observing(Box::new(
         winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
     ))));
+    // A Windows guest on a device without the display plane is refused at its fn 1, by name, ahead of
+    // every link that answers fn 1 (`winprofile::WindowsNeedsDisplay`).
+    if let Some(link) = winprofile::WindowsNeedsDisplay::seat(
+        driver.driver_version(),
+        windows.support(),
+        display.is_some(),
+    ) {
+        chain.push(Box::new(link));
+    }
     // ★ 2026-11-15: software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
     // identity observer refuses every allocation until the guest declares the measured Windows build.
     if windows.support()

@@ -346,6 +346,8 @@ fn plane_view(arm: Arm) -> Vec<(u32, bool, bool)> {
         Default::default(),
         kf_rm::ObjectLinks {
             channels: Some(sink),
+            // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+            display: Some((&kf_chip::display::AMPERE).into()),
             windows: if arm == Arm::WindowsOnAnOffVm {
                 WindowsProfile::off()
             } else {

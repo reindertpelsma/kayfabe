@@ -49,7 +49,7 @@ The full list, with defaults, is in the [Command-line reference](cli-reference.m
 
 <!-- src: qemu/hw/misc/kf3/kf3.c (kf3_properties), docs/howto/installing.md, docs/howto/troubleshooting.md, scripts/fastguest/run_fast_guest.sh, crates/kf-qemu/src/cardbudget.rs -->
 
-The recorded shapes are two. A **compute-only** Linux guest keeps the default VGA and uses `display=off` (`boot_nvkvm.sh`). A **desktop** guest uses `-vga none` and `display=on,gop=on` (`interactive.sh`, `win_vm.sh`). Windows with `display=off` reached driver Code 0, then reset and later stopped responding; no application results exist for it. <!-- src: scripts/bench/boot_nvkvm.sh, scripts/bench/display/interactive.sh, docs/howto/requirements.md -->
+The recorded shapes are two. A **compute-only** Linux guest keeps the default VGA and uses `display=off` (`boot_nvkvm.sh`). A **desktop** guest uses `-vga none` and `display=on,gop=on` (`interactive.sh`, `win_vm.sh`). Windows with `display=off` reached driver Code 0, then reset and later stopped responding; no application results exist for it, and the device now refuses a Windows guest without `display=on` by name (QEMU's log: `kf3: WINDOWS GUEST REFUSED`; NVIDIA's driver does not start in the guest). <!-- src: scripts/bench/boot_nvkvm.sh, scripts/bench/display/interactive.sh, docs/howto/requirements.md -->
 
 ## libvirt (not tested)
 

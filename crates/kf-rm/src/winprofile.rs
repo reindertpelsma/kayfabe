@@ -121,6 +121,52 @@ impl CommandObserver for IdentityObserver {
     }
 }
 
+/// The line a Windows guest without the display plane is refused with (the QEMU log; one per rate
+/// window).
+pub const WINDOWS_NEEDS_DISPLAY: &str = "kf3: WINDOWS GUEST REFUSED: the guest declared the Windows driver and this device has no display plane (display=off). NVIDIA's Windows driver resets itself without one. Start the VM with display=on,gop=on on the kf3 device and -vga none (docs/howto/windows-guest.md), or set windows-support=off for a Linux-only VM";
+
+/// The link that refuses a Windows guest on a device without the display plane, by name, at its
+/// fn 1: the guest driver's first call fails with `NV_ERR_NOT_SUPPORTED` and the device does not
+/// start in the guest, instead of the driver starting and then resetting itself.
+///
+/// It is seated only when `windows-support` is on and the device was realized with `display=off`
+/// ([`WindowsNeedsDisplay::seat`]); it answers fn 1 only when the payload declares the
+/// Windows build of the guest driver ([`declares_windows`]) and nothing else, so a Linux guest's fn 1 falls through to
+/// the next link unchanged. The declaration is not a security boundary: a guest that declares
+/// Windows falsely is refused its own driver start and nothing else.
+pub struct WindowsNeedsDisplay {
+    version: kf_abi::DriverVersion,
+}
+
+impl WindowsNeedsDisplay {
+    /// The link for a device with `windows_support` and `display_plane` as given: `Some` exactly
+    /// when the profile is on and there is no display plane.
+    #[must_use]
+    pub fn seat(
+        version: kf_abi::DriverVersion,
+        windows_support: bool,
+        display_plane: bool,
+    ) -> Option<WindowsNeedsDisplay> {
+        (windows_support && !display_plane).then_some(WindowsNeedsDisplay { version })
+    }
+}
+
+impl CommandPolicy for WindowsNeedsDisplay {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if cmd.function != RpcFunction::SetGuestSystemInfo
+            || !declares_windows(self.version, &cmd.payload)
+        {
+            return None;
+        }
+        kf_arch::rate_eprintln!("{WINDOWS_NEEDS_DISPLAY}");
+        Some(Reply {
+            rpc_result_private: None,
+            rpc_result: kf_abi::NV_ERR_NOT_SUPPORTED,
+            body: Vec::new(),
+        })
+    }
+}
+
 /// A link that is reachable only while [`WindowsProfile::active`]: with a Linux declaration, no
 /// declaration, or `windows-support=off`, it answers nothing, holds nothing and defers nothing, so
 /// the command falls through to the next link exactly as if the link were not in the chain.
@@ -325,6 +371,68 @@ mod tests {
         assert!(
             !off.active(),
             "windows-support=off: a Windows declaration reaches nothing"
+        );
+    }
+
+    /// A Windows guest's fn 1 on a device without the display plane is refused with
+    /// `NV_ERR_NOT_SUPPORTED` and an empty body; a Linux guest's fn 1 and every other command fall
+    /// through.
+    #[test]
+    fn a_windows_fn1_without_the_display_plane_is_refused_by_name() {
+        let abi = fn1::abi();
+        let v = abi.driver_version();
+        let (win, lin) = (fn1::windows(&abi), fn1::linux(&abi));
+        let mut link = WindowsNeedsDisplay::seat(v, true, false).expect("seated");
+        let reply = link.respond(&win).expect("a Windows fn 1 is answered");
+        assert_eq!(reply.rpc_result, kf_abi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(reply.rpc_result_private, None);
+        assert!(reply.body.is_empty());
+        assert!(link.respond(&lin).is_none(), "a Linux fn 1 falls through");
+        assert!(link.respond(&any_control()).is_none(), "only fn 1");
+        assert!(!link.holds_for_refresh(&win));
+        assert!(link.defers(&win).is_none());
+        assert!(WINDOWS_NEEDS_DISPLAY.contains("display=on,gop=on"));
+        assert!(WINDOWS_NEEDS_DISPLAY.contains("docs/howto/windows-guest.md"));
+    }
+
+    /// The link exists only with `windows-support` on and no display plane: a device with the
+    /// display plane, and a Linux-only VM, have no such link.
+    #[test]
+    fn the_refusal_is_seated_only_without_a_display_plane_and_with_windows_support() {
+        let v = fn1::abi().driver_version();
+        for (support, display, seated) in [
+            (true, false, true),
+            (true, true, false),
+            (false, false, false),
+            (false, true, false),
+        ] {
+            assert_eq!(
+                WindowsNeedsDisplay::seat(v, support, display).is_some(),
+                seated,
+                "windows_support={support} display_plane={display}"
+            );
+        }
+    }
+
+    /// Ahead of a link that would accept the fn 1, the refusal wins for a Windows guest and the
+    /// accepting link still answers a Linux guest.
+    #[test]
+    fn in_a_chain_the_refusal_answers_before_the_fn1_link() {
+        let abi = fn1::abi();
+        let v = abi.driver_version();
+        let (win, lin) = (fn1::windows(&abi), fn1::linux(&abi));
+        let mut chain = kf_gsp::PolicyChain::new(vec![
+            Box::new(WindowsNeedsDisplay::seat(v, true, false).expect("seated")),
+            Box::new(AnswersEverything),
+        ]);
+        assert_eq!(
+            chain.respond(&win).map(|r| r.rpc_result),
+            Some(kf_abi::NV_ERR_NOT_SUPPORTED)
+        );
+        assert_ne!(
+            chain.respond(&lin).map(|r| r.rpc_result),
+            Some(kf_abi::NV_ERR_NOT_SUPPORTED),
+            "a Linux guest is not refused"
         );
     }
 
