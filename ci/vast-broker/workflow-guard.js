@@ -359,9 +359,7 @@ export function checkWorkflows(workflows) {
     for (const job of jobs) {
       outsideJobs = outsideJobs.replace(job.body, '');
       const gpuOidc = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename) && job.id === 'gpu';
-      const releaseOidc =
-        (filename === 'release-build.yml' && job.id === 'build') ||
-        (filename === 'release-qemu.yml' && job.id === 'attest');
+      const releaseOidc = filename === 'release-qemu.yml' && job.id === 'attest';
       const pagesOidc = filename === 'site.yml' && job.id === 'deploy';
       if (job.grants['id-token'] === 'write' && !gpuOidc && !releaseOidc && !pagesOidc)
         errors.push(filename + ': OIDC outside approved GPU/release/Pages job');

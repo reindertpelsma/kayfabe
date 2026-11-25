@@ -254,7 +254,7 @@ ids ~1k = roughly 75-85k lines of the 194k the closure declares. The rest of the
 | Thin guest | binary copied to `/bin/rmladder`; init runs `/bin/rmladder --gpu $g $ARMS` (arms from kernel cmdline `KF_ARMS=<arm>,--probe-launch-dma`); prints `FASTGUEST: client rc=N`; the host reads that rc | `build_fast_guest.sh:54-59,317,524,546`; `run_fast_guest.sh:336-339` |
 | Driver matrix | `cargo build --release --target x86_64-unknown-linux-musl -p kayfabe-rm-ladder --bin kayfabe-rm-ladder`; static musl in the guest | `scripts/drivermatrix/sweep.sh:390-393`; `guest_walk.sh:27` |
 | Axis cell | builds and exports `KF_LADDER` | `scripts/fastguest/axis_cell.sh:64-68` |
-| Release | `cargo build --locked --release --workspace`; **attests `target/release/kayfabe-rm-ladder`** (and `kayfabe-isolate-host`, line 42: UNSURE that path exists; the crate's bins are `kayfabe-isolate` and `kayfabe-sandbox-probe`) | `.github/workflows/release-build.yml:36,42-43` |
+| Release | `cargo build --locked --release --workspace`; **attests `target/release/kayfabe-rm-ladder`** (and `kayfabe-isolate-host`, line 42: UNSURE that path exists; the crate's bins are `kayfabe-isolate` and `kayfabe-sandbox-probe`) | `.github/workflows/release-build.yml:36,42-43` (workflow retired 2026-11-25, tentative, RC1, pending the owner's ruling on A5) |
 | CI `stable` | `cargo build --workspace` builds it; `scripts/ci/test_dependencies.py:13` names it | `.github/workflows/ci.yml` |
 | Hooks | ~14 more bench scripts and 14 Windows host-tool scripts name the binary | MEASURED: 47 files outside docs match `kayfabe-rm-ladder` (35 outside `windows/host_tools`) |
 | Docs | `docs/howto/building.md:90-94` documents the two build commands | must change with any rename |
