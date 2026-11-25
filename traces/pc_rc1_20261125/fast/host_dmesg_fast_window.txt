@@ -1,0 +1,7 @@
+[100369.930943] NVRM: Xid (PCI:0000:01:00): 31, pid=N, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCES
+[100372.966140] NVRM: Xid (PCI:0000:01:00): 31, pid=N, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCES
+[100375.969519] NVRM: Xid (PCI:0000:01:00): 31, pid=N, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCES
+[100379.002878] NVRM: Xid (PCI:0000:01:00): 31, pid=N, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCES
+[100408.287973] NVRM: Xid (PCI:0000:01:00): 31, pid=N, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS
+pool_alloc.c:605 NV_ERR_NO_MEMORY assertion lines in the same window (host uptime 100280-100606 s, gates tail + 30 fast arms): 106
+mmuWalkMap lines in the same window: 0

@@ -1,0 +1,4 @@
+ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error
+PNP Microsoft Basic Display Adapter status=Unknown problem=
+PNP NVIDIA GeForce RTX 4070 status=Error problem=43
+NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode. | 

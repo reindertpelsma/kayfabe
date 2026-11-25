@@ -1,0 +1,2 @@
+kf3: unmapped-reads-zero=auto: ZERO (no fault) for a Linux guest's spaces, FAULT for the spaces of a guest under the Windows support profile (V3_SPARSE_RESIDENCY_RCA.md) [#1, rate-limited]
+kf3: WINDOWS GUEST REFUSED: the guest declared the Windows driver and this device has no display plane (display=off). NVIDIA's Windows driver resets itself without one. Start the VM with display=on,gop=on on the kf3 device and -vga none (docs/howto/windows-guest.md), or set windows-support=off for a Linux-only VM [#1, rate-limited]

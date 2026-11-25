@@ -1,0 +1,30 @@
+0s rc=255 qemu_rc=None (no answer)
+10s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+20s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+30s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+40s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+50s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+60s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88
+70s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+80s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+90s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+100s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+110s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+120s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88
+130s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+140s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+150s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+160s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+170s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+180s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88
+190s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+200s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+210s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+220s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+230s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+240s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0 | ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88
+250s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+260s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+270s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+280s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0
+290s rc=0 qemu_rc=None boot=2026-11-25T04:46:47.5000000+00:00 ev(id=count) 153=0 141=0 41=0 1074=0 6008=0 1001=0 4101=0 153KernelBoot=1 nvlddmkm_any=0

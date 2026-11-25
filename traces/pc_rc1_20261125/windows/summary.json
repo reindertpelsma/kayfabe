@@ -1,0 +1,226 @@
+[
+ {
+  "step": "Wdef1",
+  "arm": "Wdef",
+  "up_at_s": 20,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=0",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Wdef2",
+  "arm": "Wdef",
+  "up_at_s": 10,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=0",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Wdef3",
+  "arm": "Wdef",
+  "up_at_s": 20,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=0",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Wfill1",
+  "arm": "Wfill",
+  "up_at_s": 20,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=0",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88",
+  "host_mmuWalkMap": 1,
+  "host_no_memory_assert": 18,
+  "log_counts": {
+   "through our reservation": 1,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 0,
+   "kf3: unmapped-reads-zero=on": 1,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Wfill2",
+  "arm": "Wfill",
+  "up_at_s": 20,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=0",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=OK problem=0 ; NVSMI NVIDIA GeForce RTX 4070, 580.88",
+  "host_mmuWalkMap": 1,
+  "host_no_memory_assert": 18,
+  "log_counts": {
+   "through our reservation": 1,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 0,
+   "kf3: unmapped-reads-zero=on": 1,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Woff1",
+  "arm": "Woff",
+  "up_at_s": 10,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=43",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=Error problem=43 ; NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 1,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Woff2",
+  "arm": "Woff",
+  "up_at_s": 10,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=43",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=Error problem=43 ; NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 1,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ },
+ {
+  "step": "Woffsup1",
+  "arm": "Woffsup",
+  "up_at_s": 10,
+  "alive_at_end": true,
+  "qemu_exit_at_s": null,
+  "max_nvlddmkm_153": 0,
+  "qmp_events": [
+   "NIC_RX_FILTER_CHANGED",
+   "SHUTDOWN"
+  ],
+  "bugcheck": "none",
+  "shutdown_reason": "host-qmp-quit",
+  "adapter_last": "NVIDIA GeForce RTX 4070 code=43",
+  "pnp_at_end": "ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error ; PNP Microsoft Basic Display Adapter status=Unknown problem= ; PNP NVIDIA GeForce RTX 4070 status=Error problem=43 ; NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and",
+  "host_mmuWalkMap": 0,
+  "host_no_memory_assert": 3,
+  "log_counts": {
+   "through our reservation": 0,
+   "HELD BY HOST": 0,
+   "HELD-BY-HOST": 0,
+   "HELD-BY-OURSELVES": 0,
+   "WINDOWS GUEST REFUSED": 0,
+   "kf3: unmapped-reads-zero=auto": 1,
+   "kf3: unmapped-reads-zero=on": 0,
+   "kf3: unmapped-reads-zero=off": 0
+  }
+ }
+]
