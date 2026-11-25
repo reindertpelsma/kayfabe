@@ -106,6 +106,8 @@ fn child_case() {
         channels: Some(std::sync::Arc::new(|statement| {
             panic!("unexpected channel action: {statement:?}")
         })),
+        // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+        display: Some((&kf_chip::display::AMPERE).into()),
         windows: if arm == "windows-support-off" {
             kf_rm::winprofile::WindowsProfile::off()
         } else {

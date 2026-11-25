@@ -346,6 +346,8 @@ fn plane_view(arm: Arm) -> Vec<(u32, bool, bool)> {
         Default::default(),
         kf_rm::ObjectLinks {
             channels: Some(sink),
+            // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+            display: Some((&kf_chip::display::AMPERE).into()),
             windows: if arm == Arm::WindowsOnAnOffVm {
                 WindowsProfile::off()
             } else {
@@ -435,6 +437,8 @@ fn a_rebuilt_chain_starts_undeclared() {
             Default::default(),
             Default::default(),
             kf_rm::ObjectLinks {
+                // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+                display: Some((&kf_chip::display::AMPERE).into()),
                 windows: profile,
                 ..Default::default()
             },
@@ -466,6 +470,8 @@ fn a_device_reset_clears_the_windows_declaration() {
                 Default::default(),
                 Default::default(),
                 kf_rm::ObjectLinks {
+                    // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+                    display: Some((&kf_chip::display::AMPERE).into()),
                     windows: p2.clone(),
                     ..Default::default()
                 },

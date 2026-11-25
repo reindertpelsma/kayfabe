@@ -44,6 +44,7 @@ RM = [
     ["cargo", "test", "-p", "kf-rm", "--test", "windows_profile_chain"],
     ["cargo", "test", "-p", "kf-rm", "--test", "memory_list_chain"],
     ["cargo", "test", "-p", "kf-rm", "--test", "sw_runlist_probe_chain"],
+    ["cargo", "test", "-p", "kf-rm", "--test", "windows_needs_display"],
     ["cargo", "test", "-p", "kf-rm", "--lib", "--", "winprofile", "chanlink", "sw_runlist_probe"],
 ]
 QEMU = [
@@ -154,6 +155,13 @@ CASES = [
     ("bare-space-takes-the-floor", ed(HOST, "    if reserve_guest {\n        start\n    } else {\n        MirrorVaStart::HostDefault\n    }", "    start"), HOSTT),
     ("mirror-space-never-takes-the-floor", ed(HOST, "    if reserve_guest {\n        start\n    } else {\n        MirrorVaStart::HostDefault\n    }", "    MirrorVaStart::HostDefault"), HOSTT),
     ("cross-client-re-enable-always", ed(CL, "(self.windows_identity && !d.disable)", "(true && !d.disable)"), RM),
+    # --- a Windows guest without the display plane is refused at fn 1 (winprofile.rs WindowsNeedsDisplay)
+    ("needs-display-seated-with-a-display-plane", ed(WP, "(windows_support && !display_plane).then_some(WindowsNeedsDisplay { version })", "(windows_support && display_plane).then_some(WindowsNeedsDisplay { version })"), RM),
+    ("needs-display-seated-on-a-linux-only-vm", ed(WP, "(windows_support && !display_plane).then_some(WindowsNeedsDisplay { version })", "(!display_plane).then_some(WindowsNeedsDisplay { version })"), RM),
+    ("needs-display-refuses-a-linux-guest", ed(WP, "            || !declares_windows(self.version, &cmd.payload)\n        {\n            return None;\n        }\n        kf_arch::rate_eprintln!(\"{WINDOWS_NEEDS_DISPLAY}\");", "            || false\n        {\n            return None;\n        }\n        kf_arch::rate_eprintln!(\"{WINDOWS_NEEDS_DISPLAY}\");"), RM),
+    ("needs-display-answers-ok", ed(WP, "            rpc_result: kf_abi::NV_ERR_NOT_SUPPORTED,\n            body: Vec::new(),\n        })\n    }\n}\n\n/// A link that is reachable only while", "            rpc_result: 0,\n            body: Vec::new(),\n        })\n    }\n}\n\n/// A link that is reachable only while"), RM),
+    ("needs-display-seated-behind-the-identity-observer", ed_all(LIB, [("    ) {\n        chain.push(Box::new(link));\n    }\n    chain.push(Box::new(kf_gsp::Observing(Box::new(\n        winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),\n    ))));", "    ) {\n        chain.push(Box::new(kf_gsp::Observing(Box::new(\n            winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),\n        ))));\n        chain.push(Box::new(link));\n    }\n    chain.push(Box::new(kf_gsp::Observing(Box::new(\n        winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),\n    ))));")]), RM),
+    ("needs-display-not-seated-in-the-chain", ed(LIB, "        windows.support(),\n        display.is_some(),\n    ) {", "        windows.support(),\n        true,\n    ) {"), RM),
 ]
 
 

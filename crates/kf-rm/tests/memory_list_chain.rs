@@ -122,6 +122,8 @@ fn run(
             channels: Some(std::sync::Arc::new(|s| {
                 panic!("unexpected channel action {s:?}")
             })),
+            // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+            display: Some((&kf_chip::display::AMPERE).into()),
             windows: profile,
             ..Default::default()
         },
