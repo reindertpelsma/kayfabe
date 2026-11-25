@@ -35,7 +35,7 @@ Arms (processes x GR objects per process; sessions per GR object unlimited unles
 Stop (first that happens, per arm): host RM refuses on every GR object of every process; the first new `Xid` line in `dmesg`;
 20000 sessions in the arm (all processes); 4 GiB of host FB growth since the arm's start (`nvidia-smi memory.used`); a 15 minute
 wall limit. Then every session is freed one by one (time recorded), `memory.used` is read, the processes exit (the client
-closes) and `memory.used` is read again after at most 60 s of settling. Measured per arm: sessions reached, per-process
+closes) and `memory.used` is read again after at most 60 s of settling. Recorded per arm (planned, no run yet): sessions reached, per-process
 counts, the refusal as the host answered it, FB used at start / after GR setup / at the peak / after freeing the sessions /
 after process exit, time per alloc (mean, p50, p99, max, by thousand), the worker's RSS, and `/proc/meminfo` (`MemAvailable`,
 `Slab`, `SUnreclaim`) at the same points.
@@ -65,7 +65,7 @@ from "per client" with kf-host's API; a refusal that depends on the process coun
 The owner decides; this only fixes how the recommendation is derived so the result cannot steer it.
 - If there is a global refusal count R (the smallest total of a4/a5/a1): recommend a global cap of floor(R / 4), rounded down to a
   multiple of 64, as the headroom left for the host's other clients and GSP.
-- If there is none below the ceiling: recommend the count whose measured FB cost (peak growth per session x count) stays under
+- If there is none below the ceiling: recommend the count whose recorded FB cost (peak growth per session x count) stays under
   1 GiB (about 4 percent of 24 GB), rounded down to a multiple of 64, and never below 1789 (one VM at the default budget).
 - VMs allowed at the default budget = floor(cap / 1789), and at the 256 minimum = floor(cap / 256).
 - Whatever the arms say, the policy-compliant ceiling of one VM is bounded by GR objects: k1 and k2 give the cost of a VM that

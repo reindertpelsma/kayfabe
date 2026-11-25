@@ -46,7 +46,7 @@ Host only, no VM: each process is one host RM client, device and subdevice, as k
   The per-VM budget x VMs is already past it for 7 VMs at the 1789 default.
 - **H2 (tens of KiB of host FB per session): FALSIFIED.** FB growth per session is below the 1 MiB resolution of `nvidia-smi`
   (peak equals the after-setup value over 11.7k sessions, so under 0.1 KiB). The cost is host kernel memory, about 9.7 KB per
-  session (MEASURED), plus the GSP side (not measurable here; INFERRED to be what is exhausted).
+  session (run2, 2026-11-25, revision `71614d548`), plus the GSP side (not observable from the box; INFERRED to be what is exhausted).
 - **H3 (leak): FB part HOLDS** (no FB leak); the host assertions above are a finding.
 - **H4 (global): HOLDS** (a4/a5 sum to the a1 count within 1 percent).
 - **Denial of service (not preregistered, MEASURED once, x1):** with one client holding the 11.7k sessions, a fresh process could
