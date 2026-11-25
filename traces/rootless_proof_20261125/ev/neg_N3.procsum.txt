@@ -1,0 +1,1 @@
+PROCSAMPLE_SUMMARY {"by_comm": {"bash": {"processes": 2, "threads": 2}}, "first_violations": [], "threads_seen": 2, "uid": 1002, "user": "kfrun", "violations": 0}

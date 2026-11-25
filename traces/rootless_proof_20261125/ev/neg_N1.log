@@ -1,0 +1,26 @@
+RUN_PROOF_START label=neg_N1 t=2026-11-25T04:14:22Z argv=['prlimit', '--memlock=8388608:8388608', 'python3', '-I', '/workspace/kf-src/scripts/ci/kfroot.py', 'run', '--user', 'kfrun', '--no-memlock', '--', 'bash', '/workspace/kf-src/traces/rootless_proof_20261125/stage.sh', 'arm', 'rlneg_N1']
+ROOTLESS_PROC stage=arm id=uid=1002(kfrun) gid=1002(kfrun) groups=1002(kfrun),109(kvm) memlock_kb=8192
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	109 
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	0
+== kf3 binary: /workspace/bench/kf3-bins/ae1ebd74/qemu-system-x86_64 (binary directory ae1ebd74; harness rev ae1ebd74)
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+== arms: --timer,--probe-launch-dma   budget: 180s   self-deadline: 176000ms   trace: ring
+== qemu:  /workspace/bench/kf3-bins/ae1ebd74/qemu-system-x86_64  (built 2026-11-25 04:14:08)
+KF_GUEST_PROFILE image=/workspace/bench/fastguest/initrd.cpio.gz source=receipt version=580.159.04
+== device(s): -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04
+== console: hvc (console=ttyS0 console=hvc0)
+=== FAST GUEST rlneg_N1 — 0s of a 180s budget, qemu rc=1 ===
+FAST_VERDICT=CRASH (the serial log is EMPTY — QEMU wrote nothing at all)
+⊘ This is NOT 'the guest died before reporting': nothing was ever written. The
+   usual cause is a CONCURRENT run whose pkill shot this one — the lock above
+   prevents that, so if you see this with the lock held, QEMU failed to start.
+ROOTLESS_STAGE_EXIT stage=arm rc=1
+RUN_PROOF_EXIT label=neg_N1 rc=1 t=2026-11-25T04:14:57Z

@@ -70,7 +70,7 @@ What is not verified yet: that an unmodified VFIO guest image boots with only th
 
 ## Permissions
 
-QEMU must be able to open `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia<n>` and `/dev/nvidia-uvm`. Run it as an ordinary user. One run as a throwaway user whose only group was `kvm` passed the Linux test suite and a Windows guest; it relied on NVIDIA's default mode 0666 for the `nvidia*` nodes and was recorded on one host. See [Security model](security.md). `nvidia-modprobe -c 0 -u` creates missing nodes.
+QEMU must be able to open `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia<n>` and `/dev/nvidia-uvm`. Run it as an ordinary user. Measured on one host (2026-11-25, RTX 4090): a new user whose only group was `kvm`, with no capabilities, no `sudo` and the default 8 MiB locked-memory limit, passed the Linux test suite and the Windows guest test with the display on; it relied on NVIDIA's default mode 0666 for the `nvidia*` nodes. <!-- src: traces/rootless_proof_20261125/README.md --> See [Security model](security.md). `nvidia-modprobe -c 0 -u` creates missing nodes.
 
 ## Check that it works
 

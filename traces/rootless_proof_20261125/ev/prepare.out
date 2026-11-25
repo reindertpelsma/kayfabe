@@ -1,0 +1,5 @@
+WINDOWS_GATE_START tag=prepare1795579939 rev=ae1ebd74 source=/root/kayfabe 2026-11-25T04:12:20+00:00 idle_s=300 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+[2026-11-25T04:12:44Z] AppArmor: swtpm may use /workspace/winvm
+WINDOWS_GATE_PREPARED
+WINDOWS_GATE_EXIT rc=0 2026-11-25T04:12:44+00:00

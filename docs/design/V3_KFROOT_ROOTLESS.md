@@ -1,9 +1,28 @@
 # V3: the Windows gate and the box harness without root, and the explicit `kfroot` step
 
-STATUS: LIVE as code, 2026-11-15; NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3). 2026-11-20: the payload now has a rootless mode and every root step is audited, see [V3_KFROOT_AUDIT](V3_KFROOT_AUDIT.md) and `docs/CI_V3.md` ("Rootless payload run"); section 8 below is corrected there first.
+STATUS: LIVE as code, 2026-11-15; 2026-11-25: RUN ON ONE BOX for the VM run (section 0: kf3 QEMU as an unprivileged uid with no capability, Linux suite 30/30 and the Windows gate PASS); the payload's rootless mode and `kfroot` itself are still not run on a box. Before 2026-11-25: NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3). 2026-11-20: the payload now has a rootless mode and every root step is audited, see [V3_KFROOT_AUDIT](V3_KFROOT_AUDIT.md) and `docs/CI_V3.md` ("Rootless payload run"); section 8 below is corrected there first.
 Implements OWNER_RULINGS section AR item 6 (rootless proof; owner 2026-11-11 and 2026-11-15) for the Windows stages
 (`scripts/bench/box/windows_gate.sh`, `windows_apps.sh`, `scripts/bench/windows/win_vm.sh`). Not done (section 8): the payload
 (`vast_payload.py`, `vast_onstart.sh`) still starts every stage as root; nothing here has run on a GPU box.
+
+## 0. UPDATE 2026-11-25: the VM run measured rootless on one box (corrects "nothing here has run on a GPU box" above and section 7's "nothing below has been run")
+
+Run: `traces/rootless_proof_20261125/README.md` (Vast 62458518, RTX 4090 AD102, host driver 580.159.04, 2026-11-25; Linux
+stages at `ae1ebd74`, Windows at `f00cf99f`; hypotheses committed before the run). A fresh `useradd --groups kvm` user with
+no sudoers entry, every stage started by root through `kfroot.py run --no-memlock` under `prlimit --memlock=8 MiB` (no sudo,
+no `kfroot install`), NVIDIA node modes as the driver left them (0666):
+
+- `fast_suite.sh` 30 arms: `FAST_SUITE_PASS=30`; `win_vm.sh install` and `windows_gate.sh` (`KF_ROOTLESS=require`, display on):
+  `WINDOWS_GATE_PASS rev=f00cf99f ... rootless=ok ... resets=0`, guest `nvidia-smi` naming the card.
+- Every QEMU and swtpm thread read from `/proc` during those stages: uid 1002, all five capability sets 0, `NoNewPrivs 1`; the
+  gate's `KFROOT_ASSERT mode=require ok=1 ... procs=5` at boot 1. Section 7's open questions: RLIMIT_MEMLOCK is not needed
+  above 8 MiB by kf3, QEMU or swtpm in these runs; no `LD_*` carry was needed; no nbd, loop or tap was used.
+- One rootless defect of the Windows harness was met and fixed: `swtpm_setup`'s CA directory `/var/lib/swtpm-localca`
+  is not writable by an ordinary uid (`win_vm.sh` now uses a per-VM CA then). One refusal was made clearer: a denied
+  `/dev/nvidia-uvm` gave only `cuInit refused: 999 (CUDA_ERROR_UNKNOWN)`; kf3 now names the node.
+- Not covered by that run: the payload's `--rootless require` mode, `kfroot.py install`/`bootstrap` and the sudo audit (no
+  sudo was configured), `windows_apps.sh`, the merge bar, and a second die or driver. S1-22 (a root QEMU) is sidestepped, not
+  fixed.
 
 ## 1. What this is
 

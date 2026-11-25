@@ -1,0 +1,13 @@
+{
+ "mode": "require",
+ "ok": true,
+ "schema": 1,
+ "sudo": {
+  "commands": [],
+  "entries": 0,
+  "kfroot_calls": 0,
+  "violations": []
+ },
+ "tree": null,
+ "violations": []
+}
