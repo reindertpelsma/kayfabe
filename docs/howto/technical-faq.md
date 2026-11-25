@@ -56,7 +56,7 @@ In short: <!-- src: docs/FAQ.md, site/content/how-it-differs.md -->
 | VFIO passthrough | no, one VM owns it | stock | any GPU |
 | NVIDIA vGPU | the VMs share it, the host does not | the vendor's vGPU driver | a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html) (workstation and data-centre cards), vGPU software and a licence |
 | API forwarding (nvkvm-pv, virtio-nvgpu) | yes | a custom guest module | any NVIDIA GPU |
-| kayfabe | yes | stock, unmodified | goal: any NVIDIA GPU; tested on consumer cards, Turing to Blackwell; the open host driver |
+| kayfabe | yes | stock, unmodified | goal: any NVIDIA GPU; tested on consumer cards, Turing to Blackwell (Blackwell before the 2026-11-14 walker fix, not re-run since); the open host driver |
 
 ## What does running as an ordinary process change?
 

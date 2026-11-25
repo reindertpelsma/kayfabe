@@ -538,6 +538,7 @@
         "large"
       ],
       "state": "PLUMBING",
+      "required": false,
       "requiredRowsPerDie": [
         "specviewperf_lanea",
         "specviewperf_laneb"

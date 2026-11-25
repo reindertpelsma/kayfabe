@@ -73,7 +73,7 @@ RENTING_ENABLED = "false"
 # Owner kill switch for new middle-tier real-app requests; exact true/false only.
 MIDDLE_APPS_ENABLED = "true"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab"
+DEPLOYED_BUNDLE_SHA256 = "5b7b95a7cf03003b4920be2f2f63389360d57df68a80b76aff7c2e1938904806"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 # Public https origin of the log bucket (a report names its log by this URL); on kayfabe.dev only.

@@ -50,6 +50,8 @@ MUTANTS = [
     ("unreadable-declaration-skipped", 'raise RefError("unrecognised property declaration: "', 'continue; raise RefError("unrecognised property declaration: "'),
     # wrong default
     ("bool-default-inverted", '{"true": "on", "false": "off"}[args[3]]', '{"true": "off", "false": "on"}[args[3]]'),
+    ("on-off-auto-default-swapped", 'ON_OFF_AUTO = {"ON_OFF_AUTO_AUTO": "auto", "ON_OFF_AUTO_ON": "on",', 'ON_OFF_AUTO = {"ON_OFF_AUTO_AUTO": "on", "ON_OFF_AUTO_ON": "auto",'),
+    ("on-off-auto-unknown-default-accepted", "if args[3] not in ON_OFF_AUTO:", "if False:"),
     ("integer-default-off-by-one", 'row["default_text"] = str(value)', 'row["default_text"] = str(value + 1)'),
     ("mib-is-a-million", "MIB = 1024 * 1024", "MIB = 1000 * 1000"),
     ("define-not-resolved", "elif factor in names:", "elif False:"),

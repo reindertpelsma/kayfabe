@@ -53,6 +53,7 @@
 #include "hw/pci/msi.h"
 #include "hw/pci/msix.h"
 #include "hw/qdev-properties.h"
+#include "qapi/qapi-types-common.h" /* OnOffAuto (the unmapped-reads-zero property) */
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu/module.h"
@@ -181,7 +182,7 @@ struct Kf3State {
     uint32_t user_view_keep; /* ABI 30: user-view-keep property (0 = the default, 16 views per channel) */
     bool windows_support;    /* ABI 33: windows-support property (default on); off = a Linux-only VM */
     bool report_utilization; /* ABI 34: report-utilization property (default on); off = no GPU utilisation shown, no host call */
-    bool unmapped_reads_zero; /* unmapped-reads-zero property (default on since ABI 37) */
+    OnOffAuto unmapped_reads_zero; /* unmapped-reads-zero property (auto, on or off; default auto since ABI 38) */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1696,7 +1697,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
                     s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->windows_support ? 1 : 0, s->report_utilization ? 1 : 0,
-                    s->unmapped_reads_zero ? 1 : 0, &s->h, err, sizeof(err));
+                    (uint32_t)s->unmapped_reads_zero, &s->h, err, sizeof(err));
     g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
     if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
@@ -2069,10 +2070,11 @@ static const Property kf3_properties[] = {
      * fixed host-authored unprivileged control, never from a guest byte (docs/design/V3_UTILIZATION_FLAG.md). Default
      * on; off for hosts that share a GPU between tenants that must not see each other's load. */
     DEFINE_PROP_BOOL("report-utilization", Kf3State, report_utilization, true),
-    /* ABI 35: unmapped guest VAs read zero on the host (Vulkan sparse residency, DX12 reserved resources). Default on
-     * since ABI 37, for every guest and profile; off restores the fault. docs/howto/installing.md states the cost:
-     * faults the guest expects become silent zeros. */
-    DEFINE_PROP_BOOL("unmapped-reads-zero", Kf3State, unmapped_reads_zero, true),
+    /* ABI 35: unmapped guest VAs read zero on the host (Vulkan sparse residency, DX12 reserved resources). ABI 38:
+     * auto (the default) is on for a Linux guest and off for a guest under the Windows support profile; on and off
+     * apply to every guest. docs/howto/troubleshooting.md states the cost of on: faults the guest expects become
+     * silent zeros. */
+    DEFINE_PROP_ON_OFF_AUTO("unmapped-reads-zero", Kf3State, unmapped_reads_zero, ON_OFF_AUTO_AUTO),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

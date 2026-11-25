@@ -91,7 +91,11 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 37 (2026-11-24, `claude/sparse-fill-on-20261124`, `docs/design/V3_SPARSE_RESIDENCY_RCA.md`): no signature change.
 /// `unmapped-reads-zero` defaults to on for every guest. The default is C text, so the number moves: a QEMU built from the
 /// old `kf3.c` would otherwise keep the old default against this archive without a word.
-pub const KF3_ABI: u32 = 37;
+/// 38: no signature change. `unmapped_reads_zero` is now QEMU's `OnOffAuto` word (0 = auto, the default; 1 = on;
+/// 2 = off) instead of a boolean, and the property defaults to `auto`: on for a Linux guest, off for a guest under
+/// the Windows support profile. The meaning of the word changed, so the number moves: a QEMU built from the old
+/// `kf3.c` would otherwise pass 1 for its default against this archive and 0 for `off`.
+pub const KF3_ABI: u32 = 38;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -300,6 +304,13 @@ pub unsafe extern "C" fn kf3_realize(
     let gop_efi = text(gop_efi);
     let gpu_uuid = text(gpu_uuid);
     let vm_id = text(vm_id);
+    let Some(unmapped_reads_zero) = crate::device::UnmappedReadsZero::from_abi(unmapped_reads_zero)
+    else {
+        err.write(&format!(
+            "unmapped-reads-zero: word {unmapped_reads_zero} is not auto (0), on (1) or off (2)"
+        ));
+        return -1;
+    };
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -319,7 +330,7 @@ pub unsafe extern "C" fn kf3_realize(
         channel_budget,
         windows_support: windows_support != 0,
         report_utilization: report_utilization != 0,
-        unmapped_reads_zero: unmapped_reads_zero != 0,
+        unmapped_reads_zero,
     };
     crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).

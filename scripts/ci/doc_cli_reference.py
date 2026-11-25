@@ -35,8 +35,9 @@ PAGE = "docs/howto/cli-reference.md"
 BEGIN = "<!-- kf-generated: device-properties begin (scripts/ci/doc_cli_reference.py; do not edit by hand) -->"
 END = "<!-- kf-generated: device-properties end -->"
 MIB = 1024 * 1024
-TYPES = {"UINT32": "uint32", "UINT64": "uint64", "INT64": "int64", "BOOL": "bool", "STRING": "string"}
-MACRO = re.compile(r"DEFINE_PROP_([A-Z0-9]+)\(")
+TYPES = {"UINT32": "uint32", "UINT64": "uint64", "INT64": "int64", "BOOL": "bool", "STRING": "string", "ON_OFF_AUTO": "on/off/auto"}
+ON_OFF_AUTO = {"ON_OFF_AUTO_AUTO": "auto", "ON_OFF_AUTO_ON": "on", "ON_OFF_AUTO_OFF": "off"}
+MACRO = re.compile(r"DEFINE_PROP_([A-Z0-9_]+)\(")
 
 
 class RefError(Exception):
@@ -121,6 +122,10 @@ def parse_properties(root: Path = ROOT) -> list[dict]:
             row["default_text"] = "unset"
         elif kind == "BOOL":
             row["default_text"] = {"true": "on", "false": "off"}[args[3]]
+        elif kind == "ON_OFF_AUTO":
+            if args[3] not in ON_OFF_AUTO:
+                raise RefError("unrecognised on/off/auto default: " + args[3])
+            row["default_text"] = ON_OFF_AUTO[args[3]]
         else:
             value = evaluate(args[3], names)
             row["default"] = value
@@ -167,7 +172,7 @@ def page_rows(block: str) -> dict[str, str]:
     """name -> the raw default (the first backticked token of the Default cell) of each table row of the page."""
     found = {}
     for line in block.splitlines():
-        m = re.match(r"\|\s*`([a-z0-9-]+)`(?: \\\*)?\s*\|\s*[a-z0-9]+\s*\|\s*`([^`]*)`", line)
+        m = re.match(r"\|\s*`([a-z0-9-]+)`(?: \\\*)?\s*\|\s*[a-z0-9/]+\s*\|\s*`([^`]*)`", line)
         if m:
             found[m[1]] = m[2]
     return found

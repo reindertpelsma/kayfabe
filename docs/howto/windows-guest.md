@@ -11,6 +11,7 @@ A Windows 11 guest runs NVIDIA's stock driver on kayfabe. You install Windows an
 3. **Install NVIDIA's driver** with NVIDIA's own installer. Version 580.88 is the Windows driver that has been tested.
 4. **Restart** the guest. Check `nvidia-smi` and that Device Manager shows no error on the display adapter.
 5. Give a Windows guest `display=on,gop=on` on the device (with `-vga none`), even when nobody watches the screen; view it with a broker window or VNC ([Display and the broker](display.md)). Without the virtual display, NVIDIA's Windows driver resets itself (System log: `nvlddmkm` event 153) within two minutes of boot, and in one series the guest then powered itself off. Secure Boot guests need the boot display driver signed and given with `gop-efi=`. <!-- src: traces/fill_probe_20261124/README.md (Experiment 2) -->
+6. Leave `unmapped-reads-zero` at its default (`auto`, which is off for a Windows guest). With `unmapped-reads-zero=on` the host refused a large mapping of NVIDIA's Windows driver in every boot that was run ([Troubleshooting](troubleshooting.md)). <!-- src: traces/fill_probe_20261124/README.md, traces/pc_hwgates_20261124/README.md -->
 
 
 You supply and license Windows yourself. Kayfabe ships no Windows and no NVIDIA binary ([Credits and notices](credits.md)).
@@ -71,7 +72,7 @@ The Windows support set (the behaviours the Windows driver needs and Linux does 
 
 - **Windows sleep and wake is not supported yet.** One optional QEMU patch addresses the wake hang of a guest that has Hyper-V enlightenments; it is applied only when you ask and is not part of any release binary ([Building from source](building.md#optional-qemu-patch-sleep-and-wake-of-a-windows-guest)). <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md, docs/howto/building.md -->
 - Edge can reset the display driver after 7 to 16 minutes of video playback. <!-- src: README.md "Not finished" -->
-- Windows 11 reached a passing Windows gate on these GPUs: TU106, TU116, GA102, GA104, GA106, AD102, AD104, GB205 and GB206. GB202 was intermittent: one failure, then two passes on one machine. On GB203 (RTX 5070 Ti) the gate passed once; the screen had stayed black before the display fixes. These are results of past runs, not a promise for the current source. See [Requirements](requirements.md). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md; traces/blackwell_win_20261103/ -->
+- Windows 11 reached a passing Windows gate on these GPUs: TU106, TU116, GA102, GA104, GA106, AD102, AD104, GB205 and GB206. GB202 was intermittent: one failure, then two passes on one machine. On GB203 (RTX 5070 Ti) the gate passed once, on 2026-11-03; the screen had stayed black before the display fixes. These are results of past runs, not a promise for the current source; every Blackwell result predates the walker fix of 2026-11-14 and has not been repeated since (see [Requirements](requirements.md)). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md; traces/blackwell_win_20261103/; tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 (option B) -->
 - Heavy scenes can reset the display driver (a TDR), and on some cards it loops. See [Troubleshooting](troubleshooting.md).
 
 ## Not documented yet

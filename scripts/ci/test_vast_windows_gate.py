@@ -80,7 +80,7 @@ class GateVerdicts(unittest.TestCase):
     def test_the_selftest_classifies_every_case(self):
         p = run_gate("--selftest")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=27$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=30$")
 
     def test_a_guest_failure_is_kayfabes_only_with_both_references_green(self):
         text = code(GATE)
@@ -162,6 +162,9 @@ class GateTeardownAndStateAtFailure(unittest.TestCase):
         # 2026-11-06 (GA106, run 42111518119): a run loop that has not started QEMU yet is read as "QEMU is gone"
         "no-start-wait": ("        sleep 1\n        w=$((w + 1))\n    done\n    say \"GATE_NOTE QEMU boot", "        return 1\n        w=$((w + 1))\n    done\n    say \"GATE_NOTE QEMU boot"),
         # a loop that ended or refused is waited for until the timeout
+        # a guest mapping absent on the host (kf3 held or refused it; host RM failed the map) is not seen by the pass path
+        "missing-map-not-checked": ("elif [ \"$(sed -n 's/^guest_map_missing=//p' \"$EV/gsp_signals.txt\")\" != 0 ] || [", "elif false || ["),
+        "host-map-failure-not-checked": ("|| [ \"$(sed -n 's/^host_map_failed=//p' \"$EV/gsp_signals.txt\")\" != 0 ]; then", "|| false; then"),
         "no-run-end-check": ('grep -q "WINVM_RUN_END tag=$tag \\|REFUSED: " "$rl"', "false"),
     }
 

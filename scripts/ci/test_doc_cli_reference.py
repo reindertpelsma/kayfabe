@@ -31,7 +31,7 @@ def independent_properties():
     table = table[:table.index("};")]
     found = {}
     for line in table.splitlines():
-        m = re.match(r'\s*DEFINE_PROP_([A-Z0-9]+)\("([^"]+)",\s*Kf3State,\s*\w+(?:,\s*(.*?))?\),\s*$', line)
+        m = re.match(r'\s*DEFINE_PROP_([A-Z0-9_]+)\("([^"]+)",\s*Kf3State,\s*\w+(?:,\s*(.*?))?\),\s*$', line)
         if m and m[1] != "END_OF_LIST":
             found[m[2]] = (m[1], m[3])
     return found
@@ -64,6 +64,8 @@ class Repository(unittest.TestCase):
         for name, (kind, default) in independent_properties().items():
             if kind == "BOOL":
                 expected = {"true": "on", "false": "off"}[default]
+            elif kind == "ON_OFF_AUTO":
+                expected = {"ON_OFF_AUTO_AUTO": "auto", "ON_OFF_AUTO_ON": "on", "ON_OFF_AUTO_OFF": "off"}[default]
             elif kind == "STRING":
                 expected = "unset"
             elif re.fullmatch(r"-?\d+", default):
@@ -170,6 +172,18 @@ class Fixture(unittest.TestCase):
     def test_a_boolean_default_flipped_in_the_source_fails(self):
         self.edit(ref.SOURCE, 'windows_support, true)', "windows_support, false)")
         self.assertIn("property windows-support shows default on, the source says off", self.findings())
+
+    def test_an_on_off_auto_default_changed_in_the_source_fails(self):
+        self.edit(ref.SOURCE, "unmapped_reads_zero, ON_OFF_AUTO_AUTO)", "unmapped_reads_zero, ON_OFF_AUTO_ON)")
+        self.assertIn("property unmapped-reads-zero shows default auto, the source says on", self.findings())
+
+    def test_an_on_off_auto_default_that_is_no_such_value_is_refused(self):
+        self.edit(ref.SOURCE, "unmapped_reads_zero, ON_OFF_AUTO_AUTO)", "unmapped_reads_zero, true)")
+        self.assertIn("unrecognised on/off/auto default: true", self.findings())
+
+    def test_a_misspelled_on_off_auto_default_is_a_finding(self):
+        self.edit(ref.SOURCE, "unmapped_reads_zero, ON_OFF_AUTO_AUTO)", "unmapped_reads_zero, ON_OFF_AUTO_MAYBE)")
+        self.assertIn("unrecognised on/off/auto default: ON_OFF_AUTO_MAYBE", self.findings())
 
     def test_a_default_given_by_a_define_follows_the_define(self):
         self.edit(ref.SOURCE, "#define KF3_BAR1_OVERLAYS_DEFAULT 64", "#define KF3_BAR1_OVERLAYS_DEFAULT 96")
