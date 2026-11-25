@@ -35,7 +35,8 @@ FAKE_WORKER = textwrap.dedent(
 
     print("SETUP driver=0.0 grs_built=1 grs_asked=1 ms=1 rss_kib=1000", flush=True)
     print("READY", flush=True)
-    readline_wait({{"go"}})
+    if "--no-wait" not in args:
+        readline_wait({{"go"}})
     n = 0
     reason = "ceiling"
     while True:
@@ -134,7 +135,7 @@ class Pure(unittest.TestCase):
         self.assertEqual(arms.ARMS["a1"], (1, 1, 0))
         self.assertEqual(arms.ARMS["a5"], (16, 1, 0))
         self.assertEqual(arms.ARMS["k2"], (1, 448, 4))
-        self.assertEqual(sorted(arms.ARMS), ["a1", "a2", "a3", "a4", "a5", "k1", "k2"])
+        self.assertEqual(sorted(arms.ARMS), ["a1", "a2", "a3", "a4", "a5", "k1", "k2", "x1"])
 
 
 class Lifecycle(unittest.TestCase):
@@ -156,6 +157,18 @@ class Lifecycle(unittest.TestCase):
             self.assertEqual(s["refusing_workers"], 1)
             self.assertIn("0x51", s["workers"][0]["refusals"][0]["err"])
             self.assertEqual(s["workers"][0]["alloc_done"]["reason"], "all_refused")
+
+    def test_a_late_worker_runs_while_the_first_holds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = Path(tmp) / "fake_probe.py"
+            probe.write_text(FAKE_WORKER.format(refuse_at=0))
+            sh = Path(tmp) / "probe"
+            sh.write_text("#!/bin/sh\nexec %s %s \"$@\"\n" % (sys.executable, probe))
+            sh.chmod(0o755)
+            s = arms.run_arm("x1", arms.ARMS["x1"], sh, Path(tmp) / "out", FakeSources(), 120, 4096, 30, 0.2, 2, 0,
+                             sample_s=0.02, progress_every=50, pause_s=0.05)
+            self.assertEqual(s["late_worker"]["alloc_done"]["total"], "50")
+            self.assertTrue(s["free_ok"])
 
     def test_an_xid_stops_the_arm(self):
         with tempfile.TemporaryDirectory() as tmp:

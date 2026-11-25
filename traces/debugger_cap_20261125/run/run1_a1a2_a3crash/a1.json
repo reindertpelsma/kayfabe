@@ -1,0 +1,96 @@
+{
+ "arm": "a1",
+ "ceiling": 20000,
+ "fb_after_exit_mib": 0,
+ "fb_after_free_mib": 5,
+ "fb_after_setup_mib": 5,
+ "fb_at_done_mib": 5,
+ "fb_baseline_mib": 0,
+ "fb_kib_per_session": 0.0,
+ "fb_limit_mib": 4096,
+ "fb_peak_mib": 5,
+ "fb_setup_mib_per_gr": 5.0,
+ "free_ok": true,
+ "grs_per_proc": 1,
+ "leak_after_exit_vs_baseline": "ok",
+ "leak_after_free_vs_setup": "ok",
+ "meminfo_kb": {
+  "MemAvailable_at_done": 49730788,
+  "MemAvailable_min": 49611808,
+  "MemAvailable_start": 49745596,
+  "SUnreclaim_at_done": 271604,
+  "SUnreclaim_max": 271604,
+  "SUnreclaim_start": 160012,
+  "Slab_at_done": 481012,
+  "Slab_start": 369420
+ },
+ "new_xids": 0,
+ "per_gr": 0,
+ "procs": 1,
+ "ready": true,
+ "refusing_workers": 1,
+ "sessions_total": 11734,
+ "setup": [
+  {
+   "driver": "580.159.04",
+   "grs_asked": "1",
+   "grs_built": "1",
+   "ms": "3",
+   "rss_kib": "2704"
+  }
+ ],
+ "stop_cause": "workers_done",
+ "workers": [
+  {
+   "alloc_done": {
+    "grs": "1",
+    "max_us": "10895",
+    "mean_us": "791",
+    "ms": "9308",
+    "p50_us": "740",
+    "p99_us": "1344",
+    "per_gr_max": "11734",
+    "per_gr_min": "11734",
+    "reason": "all_refused",
+    "refused_grs": "1",
+    "rss_kib": "2912",
+    "total": "11734"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "74",
+    "win_max_us": "1005",
+    "win_mean_us": "747",
+    "win_p99_us": "972"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "11734",
+    "ms": "11920"
+   },
+   "last_progress": {
+    "n": "11700",
+    "rss_kib": "2912",
+    "t_ms": "9267",
+    "win_max_us": "10895",
+    "win_mean_us": "1047",
+    "win_p99_us": "10778"
+   },
+   "proc": 0,
+   "rc": 0,
+   "refusal_count": 1,
+   "refusals": [
+    {
+     "after_ms": "9308",
+     "err": "NV_ERR_NO_MEMORY(0x51)_or_NV_ERR_INSUFFICIENT_RESOURCES(0x1a)",
+     "gr": "0",
+     "on_gr": "11734",
+     "raw": "NoMemory",
+     "total": "11734"
+    }
+   ]
+  }
+ ]
+}

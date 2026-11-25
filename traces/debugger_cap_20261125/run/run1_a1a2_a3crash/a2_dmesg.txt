@@ -1,0 +1,5 @@
+[  528.143794] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  538.540286] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de3; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.548459] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de4; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.556430] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de5; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.564365] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de6; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040

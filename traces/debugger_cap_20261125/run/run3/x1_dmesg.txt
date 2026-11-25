@@ -1,0 +1,7 @@
+[  872.644072] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  882.924043] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d11d10; hParent=0xcafe0001; hObject=0xcafe2de0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  885.118784] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  885.121956] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:5187
+[  885.121974] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:4129
+[  885.121977] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:611
+[  885.121989] NVRM: vaspaceapiConstruct_IMPL: Could not construct VA space. Status 51

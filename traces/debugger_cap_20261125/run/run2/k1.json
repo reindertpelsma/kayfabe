@@ -1,0 +1,89 @@
+{
+ "arm": "k1",
+ "ceiling": 20000,
+ "fb_after_exit_mib": 0,
+ "fb_after_free_mib": 286,
+ "fb_after_setup_mib": 286,
+ "fb_at_done_mib": 286,
+ "fb_baseline_mib": 0,
+ "fb_kib_per_session": 0.0,
+ "fb_limit_mib": 4096,
+ "fb_peak_mib": 286,
+ "fb_setup_mib_per_gr": 4.47,
+ "free_ok": true,
+ "grs_per_proc": 64,
+ "leak_after_exit_vs_baseline": "ok",
+ "leak_after_free_vs_setup": "ok",
+ "meminfo_kb": {
+  "MemAvailable_at_done": 50159672,
+  "MemAvailable_min": 50146768,
+  "MemAvailable_start": 50334980,
+  "SUnreclaim_at_done": 174968,
+  "SUnreclaim_max": 174968,
+  "SUnreclaim_start": 167900,
+  "Slab_at_done": 384520,
+  "Slab_start": 377452
+ },
+ "new_nv_assert_lines": 0,
+ "new_nvrm_lines": 1,
+ "new_xids": 0,
+ "per_gr": 4,
+ "procs": 1,
+ "ready": true,
+ "refusing_workers": 0,
+ "sessions_total": 256,
+ "setup": [
+  {
+   "driver": "580.159.04",
+   "grs_asked": "64",
+   "grs_built": "64",
+   "ms": "240",
+   "rss_kib": "2496"
+  }
+ ],
+ "stop_cause": "workers_done",
+ "workers": [
+  {
+   "alloc_done": {
+    "grs": "64",
+    "max_us": "1003",
+    "mean_us": "734",
+    "ms": "188",
+    "p50_us": "719",
+    "p99_us": "954",
+    "per_gr_max": "4",
+    "per_gr_min": "4",
+    "reason": "per_gr_full",
+    "refused_grs": "0",
+    "rss_kib": "2496",
+    "total": "256"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2496",
+    "t_ms": "76",
+    "win_max_us": "1003",
+    "win_mean_us": "765",
+    "win_p99_us": "959"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "256",
+    "ms": "150"
+   },
+   "last_progress": {
+    "n": "200",
+    "rss_kib": "2496",
+    "t_ms": "148",
+    "win_max_us": "838",
+    "win_mean_us": "722",
+    "win_p99_us": "825"
+   },
+   "proc": 0,
+   "rc": 0,
+   "refusal_count": 0,
+   "refusals": []
+  }
+ ]
+}

@@ -1,0 +1,2 @@
+[  497.404989] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  507.739373] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0012b; hParent=0xcafe0001; hObject=0xcafe2de0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a

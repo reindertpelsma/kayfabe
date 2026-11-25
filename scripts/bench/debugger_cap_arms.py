@@ -31,7 +31,9 @@ ARMS = {
     "a5": (16, 1, 0),
     "k1": (1, 64, 4),
     "k2": (1, 448, 4),
+    "x1": (1, 1, 0),  # as a1, then a second process starts while the first still holds its sessions
 }
+LATE = {"x1"}
 DEFAULT_BUDGET = 1789  # the derived channel-budget default seen in kf3 logs on an idle host
 MIN_BUDGET = 256
 
@@ -186,11 +188,17 @@ class Sources:
         self.smi_index = smi_index
 
     def fb_mib(self):
-        out = subprocess.run(
-            ["nvidia-smi", "-i", str(self.smi_index), "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=60, check=True,
-        ).stdout
-        return int(out.strip().splitlines()[0])
+        err = None
+        for _ in range(5):
+            r = subprocess.run(
+                ["nvidia-smi", "-i", str(self.smi_index), "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return int(r.stdout.strip().splitlines()[0])
+            err = r.returncode
+            time.sleep(1.0)
+        raise RuntimeError("nvidia-smi failed 5 times, last rc %s" % err)
 
     def meminfo(self):
         return parse_meminfo(Path("/proc/meminfo").read_text())
@@ -296,6 +304,22 @@ def run_arm(name, spec, probe, out, src, ceiling, fb_limit_mib, wall_s, settle_s
             "SUnreclaim_at_done": mem.get("SUnreclaim"),
             "Slab_start": base_mem.get("Slab"), "Slab_at_done": mem.get("Slab"),
         }
+        if name in LATE:
+            # Host RM is out of debugger sessions: can a fresh client still build a GR object and
+            # make one more session, and does a non-debugger object still allocate?
+            late = Worker(len(workers), argv[:-4] + ["--max-sessions", "50", "--progress-every", "10", "--no-wait"], log)
+            wait_all([late], "ALLOC_DONE", 120, stop_on_death=True)
+            summary["late_worker"] = {"setup": late.tags.get("SETUP"), "refused": late.refusals[:3],
+                                       "alloc_done": late.tags.get("ALLOC_DONE")}
+            late.say("release")
+            wait_all([late], "FREE_DONE", 60, stop_on_death=True)
+            late.say("exit")
+            try:
+                late.proc.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                late.kill()
+            late.thread.join(timeout=5)
+            late.close()
         for w in workers:
             w.say("release")
         freed = wait_all(workers, "FREE_DONE", wall_s, stop_on_death=False)
@@ -344,6 +368,8 @@ def run_arm(name, spec, probe, out, src, ceiling, fb_limit_mib, wall_s, settle_s
     dm = src.dmesg()
     summary["new_xids"] = count_xids(dm) - base_xids
     new = [ln for ln in nvrm_lines(dm) if ln not in base_lines]
+    summary["new_nvrm_lines"] = len(new)
+    summary["new_nv_assert_lines"] = sum(1 for ln in new if "Assertion failed" in ln)
     (out / ("%s_dmesg.txt" % name)).write_text("\n".join(new[:200]) + ("\n" if new else ""))
     with open(out / ("%s_timeline.tsv" % name), "w") as f:
         f.write("t_s\tsessions\tfb_used_mib\tmem_available_kb\tsunreclaim_kb\n")

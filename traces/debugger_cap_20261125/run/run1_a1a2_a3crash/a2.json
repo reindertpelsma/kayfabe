@@ -1,0 +1,120 @@
+{
+ "arm": "a2",
+ "ceiling": 20000,
+ "fb_after_exit_mib": 0,
+ "fb_after_free_mib": 18,
+ "fb_after_setup_mib": 18,
+ "fb_at_done_mib": 18,
+ "fb_baseline_mib": 0,
+ "fb_kib_per_session": 0.0,
+ "fb_limit_mib": 4096,
+ "fb_peak_mib": 18,
+ "fb_setup_mib_per_gr": 4.5,
+ "free_ok": true,
+ "grs_per_proc": 4,
+ "leak_after_exit_vs_baseline": "ok",
+ "leak_after_free_vs_setup": "ok",
+ "meminfo_kb": {
+  "MemAvailable_at_done": 49818000,
+  "MemAvailable_min": 49806448,
+  "MemAvailable_start": 50029680,
+  "SUnreclaim_at_done": 272660,
+  "SUnreclaim_max": 272596,
+  "SUnreclaim_start": 161144,
+  "Slab_at_done": 482068,
+  "Slab_start": 370552
+ },
+ "new_xids": 0,
+ "per_gr": 0,
+ "procs": 1,
+ "ready": true,
+ "refusing_workers": 1,
+ "sessions_total": 11719,
+ "setup": [
+  {
+   "driver": "580.159.04",
+   "grs_asked": "4",
+   "grs_built": "4",
+   "ms": "14",
+   "rss_kib": "2704"
+  }
+ ],
+ "stop_cause": "workers_done",
+ "workers": [
+  {
+   "alloc_done": {
+    "grs": "4",
+    "max_us": "11444",
+    "mean_us": "790",
+    "ms": "9303",
+    "p50_us": "739",
+    "p99_us": "1209",
+    "per_gr_max": "2930",
+    "per_gr_min": "2929",
+    "reason": "all_refused",
+    "refused_grs": "4",
+    "rss_kib": "3120",
+    "total": "11719"
+   },
+   "first_progress": {
+    "n": "100",
+    "rss_kib": "2704",
+    "t_ms": "73",
+    "win_max_us": "1001",
+    "win_mean_us": "732",
+    "win_p99_us": "939"
+   },
+   "free_done": {
+    "failed": "0",
+    "first_failure": "-",
+    "freed": "11719",
+    "ms": "11925"
+   },
+   "last_progress": {
+    "n": "11700",
+    "rss_kib": "3120",
+    "t_ms": "9245",
+    "win_max_us": "11424",
+    "win_mean_us": "848",
+    "win_p99_us": "867"
+   },
+   "proc": 0,
+   "rc": 0,
+   "refusal_count": 4,
+   "refusals": [
+    {
+     "after_ms": "9279",
+     "err": "NV_ERR_INVALID_STATE(0x40)",
+     "gr": "3",
+     "on_gr": "2929",
+     "raw": "Other(64)",
+     "total": "11719"
+    },
+    {
+     "after_ms": "9287",
+     "err": "NV_ERR_INVALID_STATE(0x40)",
+     "gr": "0",
+     "on_gr": "2930",
+     "raw": "Other(64)",
+     "total": "11719"
+    },
+    {
+     "after_ms": "9295",
+     "err": "NV_ERR_INVALID_STATE(0x40)",
+     "gr": "1",
+     "on_gr": "2930",
+     "raw": "Other(64)",
+     "total": "11719"
+    },
+    {
+     "after_ms": "9302",
+     "err": "NV_ERR_INVALID_STATE(0x40)",
+     "gr": "2",
+     "on_gr": "2930",
+     "raw": "Other(64)",
+     "total": "11719"
+    }
+   ]
+  }
+ ]
+}

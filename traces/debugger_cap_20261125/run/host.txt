@@ -1,0 +1,4 @@
+6.8.0-59-generic
+NVIDIA GeForce RTX 4090, 580.159.04, 24564 MiB
+26
+rev=71614d548

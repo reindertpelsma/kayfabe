@@ -1,0 +1,166 @@
+[    2.990877] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  435.200660] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  442.180638] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  482.816540] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  497.404989] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  507.739373] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0012b; hParent=0xcafe0001; hObject=0xcafe2de0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  528.143794] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  538.540286] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de3; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.548459] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de4; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.556430] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de5; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  538.564365] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d02f38; hParent=0xcafe0001; hObject=0xcafe2de6; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000040; status=0x00000040
+[  558.530311] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  568.998446] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ad6; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  568.998449] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  568.998455] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.004823] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.005428] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ad7; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.005429] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.005432] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.011714] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.012259] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ad8; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.012261] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.012264] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.018538] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.019112] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ad9; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.019115] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.019118] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.025427] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.025984] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ada; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.025985] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.025987] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.032268] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.032833] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08adb; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.032834] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.032836] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.039152] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.039876] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08adc; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.039878] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.039880] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.046180] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.046712] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08add; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.046713] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.046716] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.052980] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.053548] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ade; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.053549] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.053551] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.059805] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.060363] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08adf; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.060364] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.060368] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.066594] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.067158] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae0; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.067158] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.067161] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.073451] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.074010] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae1; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.074011] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.074013] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.080288] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.080862] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae2; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.080863] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.080865] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.087172] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.099595] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae3; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.099596] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.099599] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.105848] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.106421] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae4; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.106422] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.106424] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.112751] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.113303] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e08ae5; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.113304] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  569.113306] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  569.119629] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  569.477296] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08ae6; hParent=0xa55a0020; hObject=0xa55a0030; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  569.477299] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  574.884546] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  580.112961] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  584.979837] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  589.505794] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  593.697711] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  597.545378] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  601.030337] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  604.160814] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  606.950727] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  609.383912] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  611.483055] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  613.223760] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  614.629410] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  615.709673] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  616.484428] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  616.903253] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  619.844087] NVRM: nvAssertFailedNoLog: Assertion failed: pGpu->numSubdeviceBackReferences == 0 @ gpu.c:1601
+[  716.222380] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  726.605055] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2def; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.629732] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.643627] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df1; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.651460] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df2; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.659071] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df3; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.666654] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df4; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.685003] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df5; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.692528] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df6; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.700108] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df7; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.707658] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df8; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.715221] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2df9; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.722753] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2dfa; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.730371] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2dfb; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.737896] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2dfc; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.745464] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d08b22; hParent=0xcafe0001; hObject=0xcafe2dfd; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  726.753211] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e0b8d0; hParent=0xcaf00000; hObject=0xcaf00001; hClass=0x00002080; paramsSize=0x00000004; paramsStatus=0x0000001a; status=0x0000001a
+[  726.753213] NVRM: nvAssertOkFailedNoLog: Assertion failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from status @ subdevice.c:127
+[  726.753218] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from pRmApi->AllocWithHandle(pRmApi, pKernelSMDebuggerSession->hInternalClient, pKernelSMDebuggerSe
+[  726.759509] NVRM: nvCheckOkFailedNoLog: Check failed: Ran out of a critical resource, other than memory [NV_ERR_INSUFFICIENT_RESOURCES] (0x0000001A) returned from _ksmdbgssnInitClient(pGpu, pKernelSMDebuggerSession) @ kernel_sm_debugger_session.c:346
+[  742.697864] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelGraphicsContextShared->activeDebuggers) == 0 @ kernel_graphics_context.c:3571
+[  742.896376] NVRM: nvAssertFailedNoLog: Assertion failed: pGpu->numSubdeviceBackReferences == 0 @ gpu.c:1601
+[  746.572861] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  746.572955] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  746.573013] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  746.573032] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  757.205488] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0b8f1; hParent=0xcafe0001; hObject=0xcafe0b86; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  757.241947] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0b8f4; hParent=0xcafe0001; hObject=0xcafe0b7e; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  757.255964] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0b8f2; hParent=0xcafe0001; hObject=0xcafe0b9b; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  757.269940] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0b8f3; hParent=0xcafe0001; hObject=0xcafe0b4f; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  779.527447] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527542] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527629] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527684] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527746] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527811] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527825] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527852] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527867] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527929] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.527974] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.528027] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.528029] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.528119] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.528125] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  779.528227] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  790.637135] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6fb; hParent=0xcafe0001; hObject=0xcafe030e; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.651023] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6fd; hParent=0xcafe0001; hObject=0xcafe0300; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.664851] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6fe; hParent=0xcafe0001; hObject=0xcafe02dc; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.678739] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f9; hParent=0xcafe0001; hObject=0xcafe02de; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.702330] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f3; hParent=0xcafe0001; hObject=0xcafe02e9; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.716040] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6fc; hParent=0xcafe0001; hObject=0xcafe02b2; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.729766] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6ff; hParent=0xcafe0001; hObject=0xcafe02c7; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.743508] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f2; hParent=0xcafe0001; hObject=0xcafe0308; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.756963] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e700; hParent=0xcafe0001; hObject=0xcafe02c4; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  790.770463] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f6; hParent=0xcafe0001; hObject=0xcafe02de; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  790.784014] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e701; hParent=0xcafe0001; hObject=0xcafe02b8; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  790.807532] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f5; hParent=0xcafe0001; hObject=0xcafe02e1; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  790.821034] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f4; hParent=0xcafe0001; hObject=0xcafe02d0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  790.834975] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f7; hParent=0xcafe0001; hObject=0xcafe0329; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.849149] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6f8; hParent=0xcafe0001; hObject=0xcafe02df; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  790.863799] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0e6fa; hParent=0xcafe0001; hObject=0xcafe02df; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x0000001a; status=0x0000001a
+[  816.978055] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  827.030362] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  872.644072] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  882.924043] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d11d10; hParent=0xcafe0001; hObject=0xcafe2de0; hClass=0x000083de; paramsSize=0x0000000c; paramsStatus=0x00000051; status=0x00000051
+[  885.118784] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  885.121956] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:5187
+[  885.121974] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:4129
+[  885.121977] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:611
+[  885.121989] NVRM: vaspaceapiConstruct_IMPL: Could not construct VA space. Status 51
