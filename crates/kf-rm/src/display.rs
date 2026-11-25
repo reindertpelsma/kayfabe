@@ -241,6 +241,11 @@ pub struct DisplayPolicy {
     /// ★ EXPERIMENT `x11-dispsw`: each display-SW constructor's query paired with its alloc
     /// ([`DispSwPairing`]); `None` with the switch off (nothing is looked at).
     dispsw_pairing: Option<DispSwPairing>,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_IMP_ENABLE`): the Windows support profile.
+    /// At every fn 1 the model is told whether the guest declared the measured Windows build, and
+    /// answers `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` TRUE only then ([`Self::with_windows_profile`]).
+    /// `None` (a link built without a profile) answers FALSE, as before.
+    windows: Option<crate::winprofile::WindowsProfile>,
 }
 
 /// ⚠ EXPERIMENT flag (default off, 2026-10-08, H-edidseen): see
@@ -381,7 +386,22 @@ impl DisplayPolicy {
             seen: Vec::new(),
             claimed,
             dispsw_pairing: None,
+            windows: None,
         }
+    }
+
+    /// ★ 2026-11-15 (was `KF3_DISPLAY_IMP_ENABLE`): serve the Windows profile's display answer — the
+    /// real GPU's TRUE for `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` (vfio-10 RPC 2645, run56; ⊘
+    /// `IS_MODE_POSSIBLE` already answers "possible") — to a guest that declares the measured Windows
+    /// build at fn 1, and FALSE to every other guest, including every Linux guest. Evaluated at each
+    /// fn 1, so a later declaration replaces it.
+    #[must_use]
+    pub fn with_windows_profile(
+        mut self,
+        profile: crate::winprofile::WindowsProfile,
+    ) -> DisplayPolicy {
+        self.windows = Some(profile);
+        self
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off): offer the `GF100_DISP_SW` object — the model answers
@@ -393,15 +413,6 @@ impl DisplayPolicy {
     /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
     #[must_use]
     pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
-        // ⚠ PROBE (default off, 2026-10-08, Windows run56): report IMP enabled, as the real GPU does.
-        if std::env::var("KF3_DISPLAY_IMP_ENABLE").as_deref() == Ok("1")
-            && let Some(m) = &self.model
-        {
-            lock(m).report_imp_enabled(true);
-            eprintln!(
-                "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
-            );
-        }
         // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): see [`Self::answering_hdcp_state`].
         if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1") && self.model.is_some() {
             self = self.answering_hdcp_state();
@@ -743,12 +754,12 @@ impl DisplayRegistry {
         else {
             return;
         };
-        // ★ 2026-10-07 (owner ruling §S.2, hotplug implemented for real): the INDEX is what
+        // The INDEX is what
         // `gpuNotifySubDeviceEvent` matches (`ogkm-580: kernel_gsp.c:514-522` fans a list post out to
         // every event whose notify index is HOTPLUG). The top six bits are flags (`nvos.h:418-436`:
         // BROADCAST … CLIENT_RM), so NVKMS's `HOTPLUG | CLIENT_RM` (0x7e) and the Windows driver's
         // class-0x78 HOTPLUG event both register; any other index does not.
-        // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): a RUNLIST_PREEMPT_COMPLETE registration is the
+        // A RUNLIST_PREEMPT_COMPLETE registration is the
         // `(hClient, hEvent)` a preempt-complete post names (vfio-10: `hEvent 0xff0620a0`, index 139).
         if idx & NOTIFY_INDEX_MASK == kf_disp::model::NOTIFIERS_RUNLIST_PREEMPT_COMPLETE {
             let kept = lock(&self.model).register_preempt(kf_disp::model::HotplugRegistration {
@@ -784,7 +795,7 @@ impl DisplayRegistry {
         );
     }
 
-    /// ★ 2026-10-07: an accepted event alloc whose NOTIFIER resource is a remembered display object
+    /// An accepted event alloc whose NOTIFIER resource is a remembered display object
     /// binds the event to that object — RM's `eventInit(…, hParentClient, hSrcResource, …)` then
     /// `registerEventNotification` on it (`ogkm-580.65.06: event.c:116-120, 187-194`;
     /// `hParentClient == 0` means the allocating client, `:66-73`). That binding is what
@@ -961,6 +972,9 @@ impl CommandPolicy for DisplayPolicy {
                 if let Some(m) = &self.model {
                     let (n, e) = {
                         let mut g = lock(m);
+                        // The IMP answer follows THIS declaration (the profile's
+                        // identity observer sits ahead of this link, so it has already read this fn 1).
+                        g.report_imp_enabled(self.windows.as_ref().is_some_and(|w| w.active()));
                         (g.retire_all_hotplug(), g.retire_all_display_events())
                     };
                     if e > 0 {
@@ -1506,7 +1520,7 @@ mod tests {
         assert_eq!(target(&shared), None, "retired by its own FREE");
         registry.observe(&alloc(c, sub, 0xe0, 0x7e, &ev(1 | 0x0400_0000)));
         assert!(target(&shared).is_some());
-        // ★ 2026-10-07 (owner ruling §S.2): the Windows driver's class-0x78 HOTPLUG event, without
+        // The Windows driver's class-0x78 HOTPLUG event, without
         // CLIENT_RM, registers too, and is the newest target; a flagged non-hotplug index does not.
         registry.observe(&alloc(c, sub, 0xe3, 0x78, &ev(1)));
         registry.observe(&alloc(c, sub, 0xe4, 0x78, &ev(0x2c | 0x0800_0000)));
@@ -1570,7 +1584,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-10-03 (B5, the review of `v3-gop-unload`): `SET_RMFREE_FLAGS` reaches the model with
+    /// `SET_RMFREE_FLAGS` reaches the model with
     /// the object its `GSP_RM_CONTROL` names, and only a channel allocated under THAT display object
     /// frees preserving (`disp_objs.c:563-578`; NVKMS sends it to `displayHandle`, the channels'
     /// parent, `nvkms-rm.c:2815-2819`, `:3010-3013`).

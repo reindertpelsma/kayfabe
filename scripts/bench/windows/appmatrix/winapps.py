@@ -47,6 +47,22 @@ WEB = ["webgl", "webgpu", "video", "webgl_conformance", "webgpu_conformance"]
 PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py", "hf_generate.py", "cdp_quicksort.py", "stream_perthread.py",
           "release_oracles.py", "llama_release.py", "blender_release.py", "release_cuda_smoke.py"]
 PY_LINUX = ["torch_correct.py", "ai_bench.py", "cupy_check.py", "blender_render.py"]     # the unmodified Linux-row scripts
+OPEN_ROWS_DIR = os.path.join(REPO, "scripts", "bench", "windows", "open_rows")
+
+
+def open_rows_files():
+    """The files of scripts/bench/windows/open_rows the guest needs for the `vkglcts_*` / `dxsamples_*` rows (not the tests or the mutants), as
+    forward-slash paths relative to that directory. They go to C:\\kf\\open_rows\\ (2026-11-17, docs/design/V3_WINDOWS_OPEN_ROWS.md)."""
+    out = []
+    for dp, dirs, files in os.walk(OPEN_ROWS_DIR):
+        dirs[:] = sorted(d for d in dirs if d not in ("tests", "__pycache__"))
+        for f in sorted(files):
+            if f.endswith("_mutants.py") or f.endswith(".pyc") or f == "CMakeLists.txt" and os.path.basename(dp) != "soak":
+                continue
+            out.append(os.path.relpath(os.path.join(dp, f), OPEN_ROWS_DIR).replace(os.sep, "/"))
+    return sorted(out)
+
+
 PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 
@@ -311,7 +327,11 @@ class WinVmVm(Vm):
         if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uuid):
             raise RuntimeError("no per-VM identity (VM_UUID) in identity.env")
         cmd = ["bash", self.winvm, "run", "--detach", "--overlay", self.overlay, "--arm", self.arm, "--guest-driver", self.gdrv,
-               "--kf3-extra", f"gpu-uuid=GPU-{uuid}", "--env-file", self.flags, "--tag", self.runtag]
+               "--kf3-extra", f"gpu-uuid=GPU-{uuid}"]
+        # 2026-11-15 (flag cleanup, Stage 1): an env file only when the caller names one (measurement flags).
+        if self.flags:
+            cmd += ["--env-file", self.flags]
+        cmd += ["--tag", self.runtag]
         r = subprocess.run(cmd, env=self._env(), capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
         self.log(f"win_vm.sh run --detach tag={self.runtag} rc={r.returncode}")
         if r.returncode != 0:
@@ -551,7 +571,7 @@ class GuestSession:
 
     def _push(self):
         q = self.q
-        q.exec(PS, ["-NoProfile", "-Command", "New-Item -ItemType Directory -Force -Path C:\\kf\\py,C:\\kf\\web,C:\\kf\\apps,C:\\kf\\results,C:\\kf\\logs | Out-Null"], timeout=60)
+        q.exec(PS, ["-NoProfile", "-Command", "New-Item -ItemType Directory -Force -Path C:\\kf\\py,C:\\kf\\web,C:\\kf\\apps,C:\\kf\\results,C:\\kf\\logs,C:\\kf\\open_rows\\caselists,C:\\kf\\open_rows\\soak | Out-Null"], timeout=60)
         n = 0
         for g, rel in PS_PUSH.items():
             q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
@@ -561,6 +581,8 @@ class GuestSession:
             q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
         for p in PY_LINUX:
             q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+        for rel in open_rows_files():
+            q.file_write("C:\\kf\\open_rows\\" + rel.replace("/", "\\"), open(os.path.join(OPEN_ROWS_DIR, *rel.split("/")), "rb").read()); n += 1
         q.file_write(r"C:\kf\stage.json", json.dumps(self.stage_json).encode()); n += 1
         self.log(f"[{self.tag}] pushed {n} guest files")
 
@@ -949,7 +971,7 @@ def main(argv=None):
     ap.add_argument("--winvm-root", default=os.environ.get("WINVM_ROOT", "/workspace/winvm"))
     ap.add_argument("--winvm-name", default=os.environ.get("WINVM_NAME", "kfwin"))
     ap.add_argument("--parent-overlay", default="", help="(vm winvm) the overlay (name, in disk/) every guest is a child of: the gate's, with the driver")
-    ap.add_argument("--flags-file", default="", help="(vm winvm) the kf3 env file of the gate (--env-file of win_vm.sh run)")
+    ap.add_argument("--flags-file", default="", help="(vm winvm) OPTIONAL measurement-only kf3 env file (--env-file of win_vm.sh run); default none: the product defaults are the Windows profile (2026-11-15)")
     ap.add_argument("--guest-driver", default="580.65.06", help="(vm winvm) kf3 guest-driver= (the guest ABI of the Windows 580.88 driver)")
     ap.add_argument("--arm", default="B", help="(vm winvm) win_vm.sh run --arm")
     ap.add_argument("--ssh-port", type=int, default=int(os.environ.get("WINVM_SSH_PORT", "2224")))
@@ -1000,7 +1022,7 @@ def main(argv=None):
                 cfg.password = cfg.password or "mockpw"
                 sleep = lambda s: time.sleep(min(s, 0.02) if a.fast else s)
             elif a.vm == "winvm":
-                for what, val in (("--iso", a.iso), ("--parent-overlay", a.parent_overlay), ("--flags-file", a.flags_file)):
+                for what, val in (("--iso", a.iso), ("--parent-overlay", a.parent_overlay)):
                     if not val:
                         raise SystemExit(f"vm winvm needs {what}")
                 if cfg.password:

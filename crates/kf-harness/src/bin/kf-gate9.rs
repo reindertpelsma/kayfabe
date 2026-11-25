@@ -65,7 +65,7 @@ fn main() {
     ) {
         l.check("ver2_growth_run", false, e);
     }
-    // ★ 2026-10-07: Windows run43's walk #2192, replayed per format (KF_PDE_ADDR_ZERO_IS_A_TABLE).
+    // Windows run43's walk #2192, replayed per format (KF_PDE_ADDR_ZERO_IS_A_TABLE).
     for (tag, v3) in [("ver2", false), ("ver3", true)] {
         if let Err(e) = level_move_replay(&mut l, tag, v3) {
             l.check(
@@ -500,7 +500,7 @@ fn differential(
     Ok(())
 }
 
-/// ★ 2026-10-07 — Windows run43's walk #2192, replayed on the GPU (`KF_PDE_ADDR_ZERO_IS_A_TABLE`
+/// Windows run43's walk #2192, replayed on the GPU (`KF_PDE_ADDR_ZERO_IS_A_TABLE`
 /// in `cuda/walk/kf_walk.cu`). A guest kernel VA space's rows lie under one 512 MiB entry of the
 /// shift-29 level (run43: 22 rows in `[0x2000_0000, 0x4000_0000)`); the guest moves that level to a
 /// new instance at FB offset 0, repoints the parent and invalidates. No translation changed, so once

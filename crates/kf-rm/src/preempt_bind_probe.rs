@@ -1,6 +1,11 @@
-//! ⚠⚠ **PROBE — default off (`KF3_PREEMPT_BIND_PROBE=1`), never a shipped behaviour.**
+//! ⚠⚠ **FABRICATED ANSWER, now PRODUCT behaviour for a declared Windows guest (2026-11-15).** Was the
+//! default-off `KF3_PREEMPT_BIND_PROBE` / `KF3_ZCULL_BIND_PROBE` probes; the owner's 2026-11-15 ruling
+//! made them part of the Windows
+//! support profile ([`crate::winprofile`]): the chain seats them behind [`crate::winprofile::WindowsOnly`],
+//! so they answer nothing for a Linux guest, for no declaration, or with `windows-support=off`. The text
+//! below is the 2026-10-08 probe's own, kept as the provenance of the answer.
 //!
-//! 2026-10-08 (Windows 580.88, H-preempt-bind): `[measured, run53 at 80169b57, 2026-10-08]` every
+//! `[measured, run53 at 80169b57, 2026-10-08]` every
 //! failed D3D device creation ends with two `NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND`
 //! (`0x20801211`, 112-byte params at 580.x) RmControl RPCs, both refused `0x56`, and then the Free
 //! of everything; vfio-10's real GSP answers both with status 0. The question this probe answers
@@ -21,15 +26,6 @@ use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 const NV_OK: u32 = 0;
 /// Answers logged per run (the rest are counted only).
 const LOG_CAP: u64 = 32;
-
-/// The flag.
-pub const FLAG: &str = "KF3_PREEMPT_BIND_PROBE";
-
-/// Whether the flag is on (`=1`).
-#[must_use]
-pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
-}
 
 /// The command id and params layout at one driver version.
 #[derive(Debug, Clone, Copy)]
@@ -117,7 +113,7 @@ impl CommandPolicy for PreemptBindProbe {
         self.answered += 1;
         if self.answered <= LOG_CAP {
             eprintln!(
-                "kf-rm: PROBE {FLAG} {:#010x} client={:#x} object={:#x} flags={:#x} hClient={:#x} hChannel={:#x} gfxp={} cilp={}: NV_OK, request echoed, NOTHING bound on the host — a probe, not a shipped behaviour #{}",
+                "kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND {:#010x} client={:#x} object={:#x} flags={:#x} hClient={:#x} hChannel={:#x} gfxp={} cilp={}: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #{}",
                 req.cmd,
                 req.client,
                 req.object,
@@ -139,19 +135,11 @@ impl CommandPolicy for PreemptBindProbe {
 
 kf_util::assert_send_sync!(PreemptBindProbe);
 
-/// ⚠⚠ **PROBE — default off (`KF3_ZCULL_BIND_PROBE=1`).** 2026-10-08 (Windows run56): with the
+/// ⚠⚠ **FABRICATED ANSWER, Windows profile (was the default-off `KF3_ZCULL_BIND_PROBE`).** 2026-10-08 (Windows run56): with the
 /// preemption binds answered, each failed D3D create sends `GR_CTXSW_ZCULL_BIND` from the KMD's kernel
 /// client naming the UMD client's channel, which the channel plane refuses `0x1b` (another client's
 /// channel). This probe answers ONLY that cross-client case `NV_OK` with the request echoed and
 /// nothing bound on the host; a same-client bind still reaches the channel plane as before.
-pub const ZCULL_FLAG: &str = "KF3_ZCULL_BIND_PROBE";
-
-/// Whether the ZCULL probe flag is on (`=1`).
-#[must_use]
-pub fn zcull_enabled() -> bool {
-    std::env::var(ZCULL_FLAG).as_deref() == Ok("1")
-}
-
 /// The ZCULL cross-client probe link.
 #[derive(Debug, Clone)]
 pub struct ZcullBindProbe {
@@ -209,7 +197,7 @@ impl CommandPolicy for ZcullBindProbe {
         self.answered += 1;
         if self.answered <= LOG_CAP {
             eprintln!(
-                "kf-rm: PROBE {ZCULL_FLAG} {:#010x} from client={:#x} names hClient={:#x} hChannel={:#x} va={:#x} mode={}: NV_OK, request echoed, NOTHING bound on the host — a probe #{}",
+                "kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND {:#010x} from client={:#x} names hClient={:#x} hChannel={:#x} va={:#x} mode={}: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #{}",
                 req.cmd,
                 req.client,
                 named,

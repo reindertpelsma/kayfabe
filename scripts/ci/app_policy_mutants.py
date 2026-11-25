@@ -25,8 +25,8 @@ CATALOG = 'scripts/bench/windows/appmatrix/apps.json'
 LEDGER = 'docs/RELEASE_CLAIMS.tsv'
 MATRIX = 'docs/design/V3_WINDOWS_APP_MATRIX.md'
 MUTANTS = [
-    ('manual-apps-run', GP, 'set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))\n    return [', 'set(prof.get("known_unsupported", {}))\n    return ['),
-    ('unsupported-apps-run', GP, 'set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))\n    return [', 'set(prof["manual"]["apps"])\n    return ['),
+    ('manual-apps-run', GP, 'set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {})) | online_source(prof)\n    return [', 'set(prof.get("known_unsupported", {})) | online_source(prof)\n    return ['),
+    ('unsupported-apps-run', GP, 'set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {})) | online_source(prof)\n    return [', 'set(prof["manual"]["apps"]) | online_source(prof)\n    return ['),
     ('explicit-policy-app-runs', GP, 'x not in known or x in non_gating', 'x not in known'),
     ('release-policy-app-runs', GP, 'or set(ids) & non_gating', ''),
     ('manual-evidence-unchecked', GP, 'if name.startswith("overlay_yuv_") and (item.get("reason") != "needs real display" or not item.get("evidence_template")):', 'if False:'),

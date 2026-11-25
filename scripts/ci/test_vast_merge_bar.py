@@ -146,13 +146,27 @@ class MergeCheckRun(unittest.TestCase):
 
     WORKERIGNORE = "/.git\n/.workerignore\n/docs\n**/*.md\n"
 
-    def run_bar(self, workerignore=WORKERIGNORE, ladder=True, **extra):
+    def run_bar(self, workerignore=WORKERIGNORE, ladder=True, args=(), crates=1, stubs=False, tree=False,
+                break_origin=False, **extra):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "repo"
             (root / "scripts/bench/box").mkdir(parents=True)
             (root / "scripts/ci").mkdir(parents=True)
-            (root / "crates/kf-only").mkdir(parents=True)
-            (root / "crates/kf-only/Cargo.toml").write_text("[package]\nname='kf-only'\n")
+            for i in range(crates):
+                (root / f"crates/kf-only{i or ''}").mkdir(parents=True)
+                (root / f"crates/kf-only{i or ''}/Cargo.toml").write_text("[package]\nname='kf-only'\n")
+            if stubs:  # record which stages the script reaches; every stage passes
+                for rel, line in (
+                    ("scripts/bench/v3_gates.sh", 'echo "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS" > "$1"'),
+                    ("scripts/bench/build_kf3.sh", "echo kf3-built"),
+                    ("scripts/fastguest/bare_metal_suite.sh", 'echo "BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30"'),
+                    ("scripts/fastguest/build_fast_guest.sh", "echo fg"),
+                    ("scripts/fastguest/fast_suite.sh", 'echo "FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30" > "$BENCH_DIR/$1_suite.out"'),
+                    ("scripts/bench/box/birth_census.sh", 'echo BIRTH_CENSUS_SUITE; echo BIRTH_CENSUS_GATES; echo BIRTH_CENSUS_OK'),
+                ):
+                    f = root / rel
+                    f.parent.mkdir(parents=True, exist_ok=True)
+                    f.write_text(f'#!/bin/bash\necho "STAGE {Path(rel).name}" >> "$STAGE_LOG"\n{line}\n')
             (root / "docs").mkdir()
             (root / "docs/ignored.txt").write_text("doc\n")
             if workerignore is not None:
@@ -166,28 +180,92 @@ class MergeCheckRun(unittest.TestCase):
             subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
             subprocess.run([*git, "add", "-A"], check=True)
             subprocess.run([*git, "commit", "-q", "-m", "x"], check=True)
-            subprocess.run([*git, "remote", "add", "origin", str(root)], check=True)
+            subprocess.run([*git, "remote", "add", "origin", str(Path(d) / "nowhere") if break_origin else str(root)], check=True)
+            fakebin = Path(d) / "fakebin"
+            fakebin.mkdir()
+            (fakebin / "cargo").write_text("#!/bin/bash\necho STAGE cargo >> \"$STAGE_LOG\"\n")
+            (fakebin / "cargo").chmod(0o755)
             env = dict(
                 os.environ,
+                PATH=f"{fakebin}:{os.environ['PATH']}",
+                STAGE_LOG=str(Path(d) / "stages"),
                 BENCH_DIR=str(Path(d) / "bench"),
                 KF_PROV_DIR=str(Path(d) / "prov"),
                 CARGO_TARGET_DIR=str(Path(d) / "target"),
                 **extra,
             )
             p = subprocess.run(
-                ["bash", str(root / "scripts/bench/box/merge_check.sh"), "main", "tag1"],
+                ["bash", str(root / "scripts/bench/box/merge_check.sh"), *args, *(["--tree", str(root)] if tree else []), "main", "tag1"],
                 env=env,
                 capture_output=True,
                 text=True,
                 timeout=120,
             )
-            return p.returncode, (Path(d) / "prov/tag1.log").read_text()
+            self.stages = (Path(d) / "stages").read_text().split("\n") if (Path(d) / "stages").exists() else []
+            return p.returncode, (Path(d) / "prov/tag1.log").read_text() if (Path(d) / "prov/tag1.log").exists() else p.stderr
 
     def run_or_skip(self, **extra):
         rc, log = self.run_bar(**extra)
         if "another merge check is running" in log:
             self.skipTest("a real merge check holds /tmp/kayfabe-merge-check.lock")
         return rc, log
+
+    # --- S9 (2026-11-15): --no-fetch, --tree and per-section flags --------------------------------
+    def stage_names(self):
+        return [l.split()[1] for l in self.stages if l.startswith("STAGE ")]
+
+    def test_the_default_runs_every_section_in_bar_order(self):
+        rc, log = self.run_or_skip(crates=36, stubs=True)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.stage_names(), ["v3_gates.sh", "build_kf3.sh", "cargo", "bare_metal_suite.sh",
+                                              "build_fast_guest.sh", "fast_suite.sh", "birth_census.sh", "birth_census.sh"])
+
+    def test_one_section_flag_runs_only_that_section(self):
+        for flag, want in (("--gates", ["v3_gates.sh"]), ("--kf3", ["build_kf3.sh"]),
+                           ("--host", ["cargo", "bare_metal_suite.sh"]),
+                           ("--fast", ["cargo", "build_fast_guest.sh", "fast_suite.sh"]),
+                           ("--census", ["birth_census.sh", "birth_census.sh"])):
+            with self.subTest(flag):
+                rc, log = self.run_or_skip(crates=36, stubs=True, args=(flag,))
+                if flag == "--census":
+                    self.assertEqual(self.stage_names(), want, log)  # the stub census passes without logs
+                    continue
+                self.assertEqual(rc, 0, log)
+                self.assertEqual(self.stage_names(), want, log)
+                self.assertIn("SECTIONS= " + flag[2:] + " ", log)
+
+    def test_two_flags_run_in_bar_order_not_flag_order(self):
+        rc, log = self.run_or_skip(crates=36, stubs=True, args=("--fast", "--gates"))
+        self.assertEqual(self.stage_names(), ["v3_gates.sh", "cargo", "build_fast_guest.sh", "fast_suite.sh"], log)
+
+    def test_an_unknown_option_or_a_wrong_positional_count_is_refused_before_any_log(self):
+        for args in (("--nope",),):
+            rc, log = self.run_bar(args=args)
+            self.assertEqual(rc, 2)
+            self.assertIn("unknown option", log)
+
+    def test_no_fetch_never_asks_origin(self):
+        rc, log = self.run_or_skip(break_origin=True)
+        self.assertEqual(rc, 128, log)  # the broken origin makes the default fetch fail (git's rc under set -e)
+        rc, log = self.run_or_skip(break_origin=True, args=("--no-fetch",))
+        self.assertEqual(rc, 2, log)
+        self.assertIn("NOFETCH=1", log)
+        self.assertIn("v3 crate census truncated", log)  # got past the checkout, the strip and verify
+
+    def test_tree_uses_the_checkout_as_is_with_no_worktree_and_no_strip(self):
+        rc, log = self.run_or_skip(tree=True)
+        self.assertEqual(rc, 2, log)
+        self.assertIn("v3 crate census truncated", log)
+        self.assertNotIn("IGNORE_STRIP", log)
+        self.assertRegex(log, r"TREE=/\S+repo ")
+        self.assertNotIn("verify-worktrees", log)
+
+    def test_tree_must_be_a_git_checkout(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = subprocess.run(["bash", str(MERGE_CHECK), "--tree", d, "-", "tag1"], capture_output=True, text=True,
+                               timeout=30, env=dict(os.environ, KF_PROV_DIR=d))
+            self.assertEqual(p.returncode, 2)
+            self.assertIn("not a git checkout", p.stderr)
 
     def test_a_truncated_checkout_stops_at_the_census_with_rc_2(self):
         rc, log = self.run_or_skip()

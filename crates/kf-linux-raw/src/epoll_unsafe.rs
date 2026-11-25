@@ -43,7 +43,7 @@ pub enum PollTimeout {
     Immediate,
     /// Block for at most this many milliseconds.
     Millis(u32),
-    /// ★ 2026-11-03: block for at most this many **microseconds** (`epoll_pwait2`, Linux
+    /// Block for at most this many **microseconds** (`epoll_pwait2`, Linux
     /// 5.11+). A kernel or sandbox without that call gets the wait rounded **up** to whole
     /// milliseconds — later, never earlier, and never a spin; [`micro_timeouts_available`]
     /// says which one this process has. The calling thread's timer slack still applies
@@ -408,7 +408,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-11-03 (walk wake): a pending GPU walk is checked on a microsecond scale. The
+    /// A pending GPU walk is checked on a microsecond scale. The
     /// wait must time out in microseconds, not round up to a millisecond, and must still be a
     /// real sleep (never a spin). The upper bound is loose for loaded CI hosts (best of 20).
     #[test]

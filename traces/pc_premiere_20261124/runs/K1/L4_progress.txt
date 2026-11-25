@@ -1,0 +1,5 @@
+1795501358821 begin 27.0.0 mode=learn clip=Preview-Your-Clips.prproj
+1795501358825 waiting for the project (passed on the command line, as a double click does)
+1795501479576 project ; sequences 0
+1795501479581 creating sequence
+1795501479585 done ERR=TypeError: null is not an object line 25

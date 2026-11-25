@@ -1,0 +1,9 @@
+== System 4101/4116/14/13 (display driver)
+2026-11-24 03:14:01Z 14 Microsoft-Windows-Wininit Credential Guard configuration: Registry Configuration: 0x0 Test Configuration: 0 Auto Enablement: 0
+2026-11-24 03:13:53Z 153 Microsoft-Windows-Kernel-Boot Virtualization-based security (policies: 0) is disabled.
+== Application 1000/1001/1002 (crash, WER, hang)
+== LiveKernelReports
+== Photoshop
+pid 11832 responding=True cpu=895.9s ws=1,621MB title=
+
+RC 0 

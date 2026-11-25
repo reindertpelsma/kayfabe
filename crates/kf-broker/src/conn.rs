@@ -28,7 +28,7 @@
 //! - **The ATTACH flags travel with the frame** on the live, owed AND replay paths (nvkvm-pv's
 //!   replay dropped `F_SHM`, `relay.c:1965-1973`).
 //! - **Rung 1b** — the implicit modifier (`MOD_INVALID`) for a broker without `CAP_MODIFIERS`.
-//! - ★ **Rung 0, the GPU copy** (`V3_DISPLAY.md` §8.11, `OWNER_RULINGS.md` §L, 2026-10-03): a
+//! - ★ **Rung 0, the GPU copy**: a
 //!   frame packed into a VRAM object kayfabe owns goes as a block-linear dma-buf
 //!   (`DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D`), only on an EXPLICIT yes to
 //!   `QUERY_FORMAT(XR24, that modifier)` with `CAP_MODIFIERS` and `CAP_RELEASE`, never while the
@@ -39,7 +39,7 @@
 //!   permanent "no", because on X11 with the NVIDIA DDX the host rungs may well be a black window.
 //!   The relay's per-connection choice reaches the display worker through one atomic
 //!   ([`FrameRing::want_vram`]).
-//! - ★ **The guest's cursor as the host pointer** (`OWNER_RULINGS.md` §O, 2026-10-03): with a
+//! - ★ **The guest's cursor as the host pointer**: with a
 //!   [`CursorShare`] attached ([`Relay::with_cursor`]) and a broker advertising `CAP_CURSOR`, the
 //!   relay tracks the grab (`EV_GRAB`, and `F_GRABBED` on EVERY packet), publishes the mode the
 //!   worker composes by, and in hover brings the broker to the guest's newest cursor with at most
@@ -99,7 +99,7 @@ pub const RECLAIM_AFTER_MS: u64 = 1000;
 /// The most packets one read takes (`kf3_broker_ready`'s batch).
 pub const READ_BATCH: usize = 64;
 /// Distinct (fourcc, modifier) verdicts remembered per connection. ⊘ 4 (`relay.c:92`) until
-/// 2026-10-04: since nvkvm-pv `badf2d7` the broker VOLUNTEERS `x` = 0 for pairs the relay never
+/// Since nvkvm-pv `badf2d7` the broker VOLUNTEERS `x` = 0 for pairs the relay never
 /// asked about — an ATTACH dropped at its format gate, and on X11 both alpha twins of one refusal
 /// (`nvkvm_broker.c:768-821`, `:1735-1749`) — and it tells each pair ONCE per connection, so a
 /// forgotten "no" is a pair the next frame goes into with nothing on the wire to say why. The
@@ -595,7 +595,7 @@ impl Ack {
 
     /// ★ A counted commit was REFUSED by name (`EV_FORMAT x=0` for its pair, its frame reclaimed):
     /// it is an answer, not a silent drop, so it no longer counts toward a trip. (⊘ The review of
-    /// 2026-10-04: the first frames of a connection race the relay's own question, and their drop
+    /// The first frames of a connection race the relay's own question, and their drop
     /// at the broker's format gate tripped a back-off that blamed `/proc/self/fdinfo`.) The first
     /// remaining commit's time is not known; the earlier one is kept, which can only trip sooner.
     fn uncount(&mut self) {

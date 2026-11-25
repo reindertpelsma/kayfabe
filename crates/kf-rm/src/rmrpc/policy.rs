@@ -253,7 +253,7 @@ pub trait RmObjects: Send {
     /// [`ObjectsRefusal`], by name.
     fn page_dir(&mut self, st: PageDirStatement) -> Result<(), ObjectsRefusal>;
 
-    /// ★ OWNER_RULINGS §U: a class-5080 registration control (`ctl`) on `(client, object)` —
+    /// A class-5080 registration control (`ctl`) on `(client, object)` returns
     /// the status the GSP answers, or `None` when this seat holds no deferred-API tables (the
     /// control then falls through and is refused as before). Default: no tables.
     fn deferred_api(
@@ -265,12 +265,6 @@ pub trait RmObjects: Send {
         _params: &[u8],
     ) -> Option<u32> {
         None
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: is `(client, object)` a live `NV20_SUBDEVICE_0` in this
-    /// object model? Default: no (a model that does not know cannot say yes).
-    fn is_subdevice(&self, _client: u32, _object: u32) -> bool {
-        false
     }
 }
 
@@ -286,8 +280,8 @@ pub struct GraphObjects {
     pub graph: RmGraph,
     ram: Option<std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>>,
     fb: Option<kf_chip::bar0::FbLayout>,
-    /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (shared with the channel plane, which
-    /// looks entries up at the trigger). `None`: 5080 controls fall through, refused as before.
+    /// The VM's deferred-API tables, shared with the channel plane, which
+    /// looks entries up at the trigger. `None`: 5080 controls fall through, refused as before.
     deferred: Option<std::sync::Arc<crate::defapi::Registry>>,
     fifo_update_filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
 }
@@ -358,7 +352,7 @@ impl GraphObjects {
         }
     }
 
-    /// ★ OWNER_RULINGS §U: serve the class-5080 registration controls into `registry` (the
+    /// Serve the class-5080 registration controls into `registry` (the
     /// device's one registry, shared with the channel plane).
     #[must_use]
     pub fn with_deferred_api(mut self, registry: std::sync::Arc<crate::defapi::Registry>) -> Self {
@@ -413,18 +407,6 @@ impl GraphObjects {
 }
 
 impl RmObjects for GraphObjects {
-    fn is_subdevice(&self, client: u32, object: u32) -> bool {
-        self.graph
-            .allocated_node(crate::rmgraph::NodeKey::new(
-                kf_arch::ids::HClient(client),
-                kf_arch::ids::HObject(object),
-            ))
-            .is_some_and(|n| {
-                n.kind == kf_arch::ObjectKind::Subdevice
-                    && n.class.0 == kf_abi::generated::classes::NV20_SUBDEVICE_0
-            })
-    }
-
     fn memory_list(
         &mut self,
         request: kf_abi::memory_list::Declaration,
@@ -513,7 +495,11 @@ impl RmObjects for GraphObjects {
 
 /// The shared half of [`GraphPolicy`] and [`ObjectPolicy`]: reassemble → translate → apply.
 struct Bridge {
-    memory_list_probe: bool,
+    /// The Windows support profile that admits the
+    /// contiguous-SYSRAM `ALLOC_MEMORY` descriptor; the descriptor is served only while the profile
+    /// is active (`windows-support=on` and a declared Windows guest), per command, so a Linux guest
+    /// that sends the same function code reaches the ledger as before.
+    memory_list_probe: Option<crate::winprofile::WindowsProfile>,
     sw_runlist_probe: Option<crate::sw_runlist_probe::Probe>,
     abi: DriverAbiTable,
     guest_os: GuestOs,
@@ -529,10 +515,17 @@ struct Bridge {
 }
 
 impl Bridge {
+    /// Whether the Windows profile's memory-list descriptor may be served right now.
+    fn memory_list_active(&self) -> bool {
+        self.memory_list_probe
+            .as_ref()
+            .is_some_and(crate::winprofile::WindowsProfile::active)
+    }
+
     fn new(abi: DriverAbiTable, guest_os: GuestOs, limits: ReasmLimits) -> Bridge {
         Bridge {
             sw_runlist_probe: None,
-            memory_list_probe: false,
+            memory_list_probe: None,
             abi,
             guest_os,
             reasm: Reassembler::with_limits(limits),
@@ -552,6 +545,7 @@ impl Bridge {
     ) -> Result<Translation, BridgeRefusal> {
         let abi = &self.abi;
         let guest_os = self.guest_os;
+        let memory_list_active = self.memory_list_active();
         let outcome = self.reasm.accept(abi, cmd).and_then(|r| {
             let whole: &RpcCommand = match &r {
                 Reassembled::Whole => cmd,
@@ -559,8 +553,7 @@ impl Bridge {
                 Reassembled::Complete(full) => full,
             };
             let probe_request = self.sw_runlist_probe.as_ref().and_then(|p| p.decode(whole));
-            let memory_cell = self
-                .memory_list_probe
+            let memory_cell = memory_list_active
                 .then(|| kf_abi::memory_list::cell(abi.driver_version()))
                 .flatten();
             let is_memory = memory_cell
@@ -778,14 +771,11 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
 pub struct ObjectPolicy {
     bridge: Bridge,
     objects: Box<dyn RmObjects>,
-    /// ★ OWNER_RULINGS §U: the deferred-API surface at the served version (`None` where the
+    /// The deferred-API surface at the served version (`None` where the
     /// matrix does not measure it — its controls then fall through, refused as before).
     defapi: Option<kf_abi::defapi::DefApiAbi>,
     /// 5080 controls served (for the bounded log).
     defapi_served: u64,
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off; `None`): GSS-legacy subdevice controls carried to
-    /// the host ([`crate::gssnative`]).
-    gss: Option<crate::gssnative::GssNative>,
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -801,8 +791,11 @@ pub const OBJECT_VERBS: &[kf_gsp::RpcFunction] = &[
 ];
 
 impl ObjectPolicy {
-    pub(crate) fn with_memory_list_probe(mut self) -> Self {
-        self.bridge.memory_list_probe = true;
+    pub(crate) fn with_memory_list_probe(
+        mut self,
+        profile: crate::winprofile::WindowsProfile,
+    ) -> Self {
+        self.bridge.memory_list_probe = Some(profile);
         self
     }
 
@@ -834,20 +827,10 @@ impl ObjectPolicy {
             objects,
             defapi: kf_abi::defapi::DefApiAbi::at(abi.driver_version()),
             defapi_served: 0,
-            gss: None,
         }
     }
 
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): carry non-privileged subdevice-level GSS-legacy
-    /// controls to the host RM through `seat` (`docs/design/V3_GSS_NATIVE.md`). Without this call
-    /// the link is byte for byte what it was.
-    #[must_use]
-    pub fn with_gss_native(mut self, seat: crate::gssnative::GssSeat) -> Self {
-        self.gss = Some(crate::gssnative::GssNative::new(seat));
-        self
-    }
-
-    /// ★ OWNER_RULINGS §U — a class-5080 registration control, served from the object graph's
+    /// A class-5080 registration control, served from the object graph's
     /// tables (`crate::defapi`): `NV_OK` with the params echoed (what the real GSP answered
     /// `[measured: the 2026-10-05 VFIO boots 8/9/10]`), or the real body's status. `None`: not a 5080 control this seat
     /// serves (no tables, not permitted at this boundary) — it falls through as before.
@@ -891,7 +874,7 @@ impl ObjectPolicy {
             let inner = params
                 .get(4..8)
                 .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: DEFERRED-API {:#010x} on {:#x}:{:#x} hApiHandle={handle:#x} cmd={inner:#x} psz={} -> {status:#x}",
                 h.cmd,
                 h.client,
@@ -954,29 +937,13 @@ impl core::fmt::Debug for ObjectPolicy {
 }
 
 impl CommandPolicy for ObjectPolicy {
-    fn defers(&mut self, _cmd: &RpcCommand) -> Option<kf_gsp::Deferred> {
-        self.gss
-            .as_mut()
-            .and_then(crate::gssnative::GssNative::take_pending)
-    }
-
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         if cmd.function == kf_gsp::RpcFunction::RmControl
             && let Some(r) = self.deferred_api_control(cmd)
         {
             return Some(r);
         }
-        // ★ EXPERIMENT `KF3_GSS_NATIVE`: after the links that answer known controls, before the
-        // ledger. Off (`gss: None`): not here.
-        if cmd.function == kf_gsp::RpcFunction::RmControl
-            && let Some(gss) = self.gss.as_mut()
-        {
-            let objects = &*self.objects;
-            if let Some(r) = gss.control(&self.bridge.abi, cmd, |c, o| objects.is_subdevice(c, o)) {
-                return Some(r);
-            }
-        }
-        let memory = self.bridge.memory_list_probe
+        let memory = self.bridge.memory_list_active()
             && kf_abi::memory_list::cell(self.bridge.abi.driver_version())
                 .is_some_and(|c| cmd.function == kf_gsp::RpcFunction::Other(c.function()));
         if !ObjectPolicy::claims(cmd.function) && !memory {

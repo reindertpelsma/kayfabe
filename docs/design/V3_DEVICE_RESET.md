@@ -140,7 +140,7 @@ excluded. M = covered by a GPU-free test (§7), I = inferred from reading.
 | `ChainLogs.os_events` (registrations, non-stall arms) | B | `clear` (counters kept) | drainer, workers read arms | arms zero before channels are freed: no paced raise | I |
 | unserviced / fault-buffer logs, census, refusal ledgers, counters | A (diagnostic) | kept: the VM's run, never a decision input | — | — | I |
 | `defapi::Registry` | B | `clear_life` | drainer (chain), act/worker (lookups) | channels gone at stage 3 | M |
-| `gssnative::Stats` (experiment) | B (cap) | `new_boot` (cap only) | act thread | — | I |
+| ⊘ `gssnative::Stats` (experiment; removed 2026-11-13, module deleted 2026-11-24: no state left to reset) | B (cap) | `new_boot` (cap only) | act thread | — | I |
 | `CpuIntr` | B | `reset` at stage 2 and Finish, read-back republished | vCPU, workers (latch), display | gate + second reset after every owner acked | M |
 | `FspEmem` (Hopper+) | B | `reset` | vCPU | gate | M |
 | BAR0 shadow pieces, hole pages | B | rewritten where they differ from `piece_image` (the realize image) + republish | vCPU, drainer, VA, display | gate; publication is drainer-owned | I (fill shared by construction) |

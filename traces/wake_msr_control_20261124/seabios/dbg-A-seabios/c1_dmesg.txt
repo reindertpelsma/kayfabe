@@ -1,0 +1,70 @@
+[   16.869082] PM: suspend entry (deep)
+[   16.871352] Filesystems sync: 0.002 seconds
+[   16.905249] Freezing user space processes
+[   16.906684] Freezing user space processes completed (elapsed 0.001 seconds)
+[   16.906694] OOM killer disabled.
+[   16.906697] Freezing remaining freezable tasks
+[   16.907756] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[   16.915872] ata3.00: Check power mode failed (err_mask=0x1)
+[   16.930774] ACPI: PM: Preparing to enter system sleep state S3
+[   16.930946] ACPI: PM: Saving platform NVS memory
+[   16.930962] Disabling non-boot CPUs ...
+[   16.934711] smpboot: CPU 1 is now offline
+[   22.488545] unchecked MSR access error: WRMSR to 0xc0011029 (tried to write 0x0000000000000000) at rIP: 0xffffffffaf6c8c74 (native_write_msr+0x4/0x40)
+[   22.488843] Call Trace:
+[   22.488871]  <TASK>
+[   22.488882]  ? __restore_processor_state.constprop.0+0x1a8/0x220
+[   22.489173]  restore_processor_state+0x9/0x10
+[   22.489182]  x86_acpi_suspend_lowlevel+0xfc/0x180
+[   22.489200]  acpi_suspend_enter+0x57/0x200
+[   22.489240]  ? _raw_spin_unlock_irqrestore+0x11/0x60
+[   22.489279]  suspend_enter+0x345/0x440
+[   22.489498]  suspend_devices_and_enter+0x195/0x2f0
+[   22.489509]  enter_state+0x21b/0x5f0
+[   22.489516]  pm_suspend+0x44/0xe0
+[   22.489523]  state_store+0x2b/0x60
+[   22.489529]  kobj_attr_store+0x12/0x40
+[   22.489536]  sysfs_kf_write+0x3e/0x60
+[   22.489572]  kernfs_fop_write_iter+0x166/0x1f0
+[   22.489579]  vfs_write+0x2a4/0x470
+[   22.489600]  ksys_write+0x73/0x100
+[   22.489607]  __x64_sys_write+0x19/0x30
+[   22.489613]  x64_sys_call+0x7e/0x25a0
+[   22.489627]  do_syscall_64+0x87/0x180
+[   22.489637]  ? srso_return_thunk+0x5/0x5f
+[   22.489662]  ? generic_file_llseek+0x24/0x40
+[   22.489667]  ? srso_return_thunk+0x5/0x5f
+[   22.489673]  ? kernfs_fop_llseek+0x70/0xb0
+[   22.489680]  ? srso_return_thunk+0x5/0x5f
+[   22.489685]  ? ksys_lseek+0x80/0xd0
+[   22.489690]  ? srso_return_thunk+0x5/0x5f
+[   22.489696]  ? arch_exit_to_user_mode_prepare.isra.0+0x1a/0xe0
+[   22.489711]  ? srso_return_thunk+0x5/0x5f
+[   22.489717]  ? syscall_exit_to_user_mode+0x43/0x1e0
+[   22.489725]  ? srso_return_thunk+0x5/0x5f
+[   22.489730]  ? do_syscall_64+0x94/0x180
+[   22.489736]  ? srso_return_thunk+0x5/0x5f
+[   22.489742]  ? do_syscall_64+0x94/0x180
+[   22.489747]  ? exc_page_fault+0x94/0x1b0
+[   22.489754]  entry_SYSCALL_64_after_hwframe+0x78/0x80
+[   22.489760] RIP: 0033:0x7a07caf1c844
+[   22.490166] Code: c7 00 16 00 00 00 b8 ff ff ff ff c3 66 2e 0f 1f 84 00 00 00 00 00 f3 0f 1e fa 80 3d 05 f8 0e 00 00 74 13 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 54 c3 0f 1f 00 55 48 89 e5 48 83 ec 20 48 89
+[   22.490172] RSP: 002b:00007ffc198beb68 EFLAGS: 00000202 ORIG_RAX: 0000000000000001
+[   22.490194] RAX: ffffffffffffffda RBX: 00007a07cb1baff8 RCX: 00007a07caf1c844
+[   22.490198] RDX: 0000000000000003 RSI: 000000001769a0c0 RDI: 0000000000000003
+[   22.490202] RBP: 00007ffc198bebb0 R08: 0000000000000000 R09: 0000000000000000
+[   22.490205] R10: 0000000000000003 R11: 0000000000000202 R12: 0000000000000003
+[   22.490208] R13: 0000000000000003 R14: 000000001769a0c0 R15: 0000000000ba6748
+[   22.490220]  </TASK>
+[   22.490257] ACPI: PM: Low-level resume complete
+[   22.490816] ACPI: PM: Restoring platform NVS memory
+[   22.500325] Enabling non-boot CPUs ...
+[   22.500982] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   22.510685] CPU1 is up
+[   22.512132] ACPI: PM: Waking up from system sleep state S3
+[   22.536581] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   22.538435] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   22.554477] OOM killer enabled.
+[   22.554481] Restarting tasks ... done.
+[   22.559115] random: crng reseeded on system resumption
+[   22.579858] PM: suspend exit

@@ -1,5 +1,7 @@
 # The C reference replay traces — the standing oracle
 
+**Where to look (2026-11-23):** `traces/` is the repository's committed evidence, one directory per run. [`INDEX.md`](INDEX.md) lists every directory (with the ones that still lack a README), [`EVIDENCE_ARCHIVE.md`](EVIDENCE_ARCHIVE.md) says where the bulk files of 61 directories went and how to fetch them. The rest of this file is about the two C-reference replay traces at the top level, `cap1` and `cap1b`.
+
 **Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
 
 **STATUS: LIVE, 2026-11-07.** ★ 2026-11-07 (owner decision, `docs/OWNER_QUESTIONS_2026-10-03.md` section 3, option (b)): every

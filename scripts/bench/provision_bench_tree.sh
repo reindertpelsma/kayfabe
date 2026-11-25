@@ -50,7 +50,10 @@ KF_FATAL=""
 kf_fatal() { say "⊘ FATAL: $*"; KF_FATAL="${KF_FATAL:+$KF_FATAL; }$*"; }
 REPO=$(kf_resolve_repo) || exit 1
 echo "== repo: $REPO  rev: $(git -C "$REPO" log --oneline -1 2>/dev/null || echo UNKNOWN)"
-QEMU_VER=10.2.4
+# The QEMU source is pinned by sha256 in scripts/bench/qemu.pin and fetched ONLY by scripts/ci/qemu_source.py, which
+# refuses on a size or hash mismatch (2026-11-15). KF_QEMU_TARBALL=<path> supplies a local copy; it is hash-checked too.
+QEMU_SRC="$REPO/scripts/ci/qemu_source.py"
+QEMU_VER=$(python3 -I "$QEMU_SRC" version) || { echo "⊘ FATAL: scripts/bench/qemu.pin is unreadable" >&2; exit 2; }
 RUN=/root/NVIDIA-Linux-x86_64-580.159.04.run
 say(){ echo "[$(date -Is)] $*"; }
 say "BENCH_TREE_START"
@@ -60,12 +63,14 @@ grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null \
   || { say "⊘ host driver is not the OPEN module -- run provision_host_driver.sh first"; exit 2; }
 # The fat guest's pinned package is independent of the installed host driver.
 # A fresh host installed directly at595 will not already have the580 package.
-if [ ! -s "$RUN" ]; then
+# [2026-11-17] anchored by scripts/ci/kf_trust.py (NVIDIA's own .sha256sum and the vendor-published pin in trust_manifest.json), never TLS alone.
+# A copy already at $RUN is held to the same anchors; a refusal is named on stderr (TRUST_...).
+if [ -s "$RUN" ]; then
+  python3 -I "$REPO/scripts/ci/kf_trust.py" verify nvidia-linux-run-580.159.04 "$RUN" \
+    || { say "⊘ the guest package at $RUN is not the anchored 580.159.04 installer"; exit 2; }
+else
   say "fetching the pinned guest580.159.04 package"
-  curl --fail --location --retry 3 --connect-timeout 20 \
-    -o "$RUN.part" \
-    https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run \
-    && mv "$RUN.part" "$RUN" \
+  python3 -I "$REPO/scripts/ci/kf_trust.py" fetch nvidia-linux-run-580.159.04 --out "$RUN" \
     || { say "⊘ pinned guest package download failed"; exit 2; }
 fi
 mkdir -p "$BENCH"
@@ -88,14 +93,15 @@ say "apt rc=$?  (ninja=$(command -v ninja||echo NO) meson=$(command -v meson||ec
 
 # ---- 2. downloads, in parallel ----------------------------------------------------------
 say "phase 3: downloads"
-[ -s "$BENCH/qemu-$QEMU_VER.tar.xz" ] || \
-  curl -fsSL -o "$BENCH/qemu-$QEMU_VER.tar.xz" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz" &
+python3 -I "$QEMU_SRC" fetch "$BENCH" ${KF_QEMU_TARBALL:+--from-file "$KF_QEMU_TARBALL"} >/dev/null &
 P1=$!
 [ -s "$BENCH/noble-server-cloudimg-amd64.img" ] || \
   curl -fsSL -o "$BENCH/noble-server-cloudimg-amd64.img" \
     "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" &
 P2=$!
-wait $P1; say "qemu tarball rc=$?  $(ls -la $BENCH/qemu-$QEMU_VER.tar.xz 2>/dev/null | awk '{print $5}')"
+wait $P1; QRC=$?; say "qemu tarball (pinned, verified) rc=$QRC"
+# Fail closed: nothing below may build from a tarball that did not match the pin.
+[ "$QRC" = 0 ] || { say "⊘ FATAL: QEMU source tarball did not match scripts/bench/qemu.pin; refusing to build"; exit 2; }
 wait $P2; say "cloudimg rc=$?  $(ls -la $BENCH/noble-server-cloudimg-amd64.img 2>/dev/null | awk '{print $5}')"
 
 # ---- 3. tap + NAT ----------------------------------------------------------------------
@@ -200,7 +206,7 @@ UD
   qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none \
     -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
     -drive if=virtio,file="$BENCH/seed.iso",format=raw \
-    -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
+    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=n0 \
     -serial file:"$BENCH/provision_serial.log" -daemonize -pidfile "$BENCH/prov.pid"
   say "B2: qemu pid=$(cat $BENCH/prov.pid 2>/dev/null)"
 

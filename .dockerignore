@@ -59,6 +59,7 @@
 /traces/can*
 /traces/i*
 /traces/rel*
+/traces/res*
 /traces/f*
 /traces/cw*
 /traces/do*
@@ -95,9 +96,13 @@
 /scripts/ci/dependencies.py
 /scripts/ci/doc_freshness.py
 /scripts/ci/doc_status_check.py
+/scripts/ci/comment_hygiene.py
+/scripts/ci/env_allowlist.py
+/scripts/ci/env_registry.json
 /scripts/ci/no_gpu_uuids.py
 /scripts/ci/no_private_refs.py
 /scripts/ci/runner_namespaces.py
+/scripts/ci/trust_lint.py
 /scripts/ci/workflow_lint.py
 /scripts/bench/tests
 /scripts/mutate

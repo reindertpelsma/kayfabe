@@ -1,0 +1,1 @@
+{"count": 1, "die": "GA102", "entries": 3, "max_count": 1, "resolved_count": 1, "resolved_lower_bound": 1, "source_evidence": {"date": "2026-11-03", "path": "traces/ampere_hw_20261103/boxA/am2_win/wer_reports.txt", "revision": "006d845a"}, "unit": "distinct_reports", "unresolved_entries": 0, "verdict": "PASS"}

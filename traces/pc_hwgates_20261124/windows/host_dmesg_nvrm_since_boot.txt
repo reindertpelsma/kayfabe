@@ -1,0 +1,283 @@
+[Tue Nov 24 03:13:37 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:39 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:42 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:44 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:46 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:49 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:51 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:54 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:56 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:13:59 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:01 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:04 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:06 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:09 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:11 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:14 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:17 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:19 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:22 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:24 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:27 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:29 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:32 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:14:34 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 03:53:15 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 04:12:01 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 04:13:44 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 06:59:07 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 07:36:19 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 08:00:49 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[Tue Nov 24 08:02:34 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:04 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:04 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:06 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:06 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:07 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:23 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:23 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
+[Tue Nov 24 19:18:23 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
+[Tue Nov 24 19:18:23 2026] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[Tue Nov 24 19:18:23 2026] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[Tue Nov 24 19:18:31 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:35 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:39 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:40 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:18:44 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:18:45 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:50 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:18:57 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:04 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:18 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:22 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:27 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:31 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:35 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:40 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:47 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:51 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:19:57 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:01 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:10 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:14 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:18 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:44 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:48 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:52 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:20:57 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:01 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:15 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:19 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:25 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:29 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:42 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:21:45 2026] NVRM: GPU at PCI:0000:01:00: GPU-<uuid>
+[Tue Nov 24 19:21:45 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540121, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:21:48 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540121, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:21:51 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540121, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:21:54 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540121, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:21:58 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:22:01 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540262, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIR
+[Tue Nov 24 19:22:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:22:08 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540412, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:11 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540412, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:14 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540412, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:17 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540412, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:21 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:22:24 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540680, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:27 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540680, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:34 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:22:38 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540916, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:41 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540916, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:44 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540916, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:47 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=540916, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:22:51 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:22:54 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541107, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIR
+[Tue Nov 24 19:22:58 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:23:01 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541256, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:23:04 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541256, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:23:07 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541256, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:23:10 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541256, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:23:14 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:23:17 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=541409, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIR
+[Tue Nov 24 19:23:21 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:23:34 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:23:54 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:24:06 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:24:06 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpPara
+[Tue Nov 24 19:24:06 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:24:06 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 19:24:06 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:24:06 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:24:06 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:24:06 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:25:03 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:27:52 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:03 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:30:11 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:30:24 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:30:24 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpPara
+[Tue Nov 24 19:30:24 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:30:24 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 19:30:24 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:30:24 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:30:24 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:30:24 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:31:14 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:33:46 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:34:03 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:34:17 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:34:32 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:36:20 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:36:33 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:36:33 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpPara
+[Tue Nov 24 19:36:33 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:36:33 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 19:36:33 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:36:33 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:36:33 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:36:33 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:38:03 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:38:13 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:17 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:21 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:22 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_T
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+[Tue Nov 24 19:38:25 2026] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engin
+[Tue Nov 24 19:38:26 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:30 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:38 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:45 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:38:48 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=546666, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:38:51 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=546666, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:38:54 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=546666, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:38:57 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=546666, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VI
+[Tue Nov 24 19:39:01 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:09 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:14 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:18 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:22 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:25 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=547584, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIR
+[Tue Nov 24 19:39:29 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:33 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:38 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:42 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:46 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:51 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:55 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:39:59 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:25 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:29 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:33 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:38 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:42 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:40:56 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:41:00 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:41:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:41:09 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:41:14 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:41:31 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:42:18 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:42:35 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:42:48 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:43:04 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 19:43:43 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:43:55 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:43:55 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpPara
+[Tue Nov 24 19:43:55 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:43:55 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 19:43:55 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:43:55 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:43:55 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:43:55 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:45:03 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000

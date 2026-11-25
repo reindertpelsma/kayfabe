@@ -52,7 +52,13 @@ apt-get -o DPkg::Lock::Timeout=600 install -y -qq build-essential pkg-config lib
   kmod pciutils cpio zstd psmisc busybox-static ninja-build meson flex bison \
   libglib2.0-dev libpixman-1-dev libslirp-dev musl-tools linux-headers-"$(uname -r)"
 if ! command -v cargo >/dev/null; then
-  curl --fail --silent --show-error https://sh.rustup.rs | sh -s -- -y --profile minimal
+  # [2026-11-17] rustup-init is fetched for a PINNED rustup version and checked against the official .sha256 on static.rust-lang.org
+  # and the vendor-published sha256 in scripts/ci/trust_manifest.json (kf_trust.py, audit row 3); `curl | sh` anchored nothing.
+  rustup_dir=$(mktemp -d)
+  python3 -I "$source_root/scripts/ci/kf_trust.py" fetch rustup-init-1.29.3 --out "$rustup_dir/rustup-init"
+  chmod 0700 "$rustup_dir/rustup-init"
+  "$rustup_dir/rustup-init" -y --profile minimal
+  rm -rf "$rustup_dir"
 fi
 export PATH="$HOME/.cargo/bin:$PATH"
 pin=$(sed -n 's/^channel = "\([^"]*\)"/\1/p' rust-toolchain.toml)
@@ -66,10 +72,10 @@ export BENCH_DIR=/workspace/bench KF_DEVICE=kf3 KF_FROM_HOST=1
 export CARGO_TARGET_DIR=/workspace/kf-ci-target CARGO_BUILD_JOBS=2
 mkdir -p "$BENCH_DIR" /workspace/kf-ci-evidence
 evidence=/workspace/kf-ci-evidence
-qemu_version=10.2.4
-curl --fail --location --show-error --connect-timeout 20 --max-time 600 \
-  "https://download.qemu.org/qemu-$qemu_version.tar.xz" -o "$BENCH_DIR/qemu.tar.xz"
-tar -C "$BENCH_DIR" -xf "$BENCH_DIR/qemu.tar.xz"
+# The QEMU source is pinned by sha256 in scripts/bench/qemu.pin; qemu_source.py refuses on any mismatch (set -e stops the run).
+qemu_version=$(python3 -I scripts/ci/qemu_source.py version)
+qemu_tarball=$(python3 -I scripts/ci/qemu_source.py fetch "$BENCH_DIR")
+tar -C "$BENCH_DIR" -xf "$qemu_tarball"
 crates=()
 for manifest in crates/kf-*/Cargo.toml; do crate=${manifest#crates/}; crates+=(-p "${crate%/Cargo.toml}"); done
 [[ ${#crates[@]} -ge 36 ]]

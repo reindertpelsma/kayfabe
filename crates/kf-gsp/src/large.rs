@@ -189,7 +189,7 @@ impl Assembler {
                     by: cmd.code,
                 })
             }
-            // ★ 2026-10-14: any head the FSM declared a length for — a `GSP_RM_CONTROL`
+            // Any head the FSM declared a length for — a `GSP_RM_CONTROL`
             // (bidirectional) or an `ALLOC_MEMORY` PTE list (`_issuePteDescRpc`, one reply).
             (None, _) if declared.is_some() => match declared {
                 Some(d) if d > cmd.payload.len() => {
@@ -238,7 +238,7 @@ impl Assembler {
     }
 }
 
-/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): whether the guest waits for a reply fragment
+/// (`docs/design/V3_S3_RESUME.md`): whether the guest waits for a reply fragment
 /// per request fragment. Only `GSP_RM_CONTROL` goes through `_issueRpcAndWaitLarge` with
 /// `bBidirectional = NV_TRUE` (`ogkm-580: rpc.c:11030-11060`); a PTE list
 /// (`_issuePteDescRpc`, `rpc.c:2252-2300`) passes `NV_FALSE`, and the guest then waits for ONE
@@ -302,7 +302,7 @@ mod tests {
         }
     }
 
-    /// ★ 2026-10-14: a non-control head with a declared length is joined too.
+    /// A non-control head with a declared length is joined too.
     #[test]
     fn an_alloc_memory_head_with_a_declared_length_is_joined() {
         let mut a = Assembler::default();

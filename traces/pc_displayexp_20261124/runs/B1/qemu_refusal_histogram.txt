@@ -1,0 +1,25 @@
+    144  kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=N mem[inval=N
+     64  kf-mem: PRIVILEGED leaf N+N (ap=N at=N kind=N) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express
+     55  kfN: GSP REFUSED fnN/N=N (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+     32  kfN: walk refusal sample: space=N va=N raw=N level=N gpga=N ps=N bit=N(MISALIGNED_LEAF)
+     13  kayfabe: HELD-REPLY-POSTED n=N — their rows are on the host now [#N, rate-limited]
+     10  kayfabe: HELD-REPLY fn=RmControl depth=N — this map reply WAITS for its rows [#N, rate-limited]
+      9  kfN: mem invalidate seq N CLEARED OVER ABSENCE (Some(VasKey(N))): its refused leaves are absent on the host (a GPU access faults on that spa
+      7  kf-host: HOST-ABI REFUSED control N: : body is N bytes, its layout is N [#N, rate-limited]
+      7  kfN: host facts: GSS N [] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+      6  kfN: family=Ada phase=Cold trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=N mem[inval=N wa
+      6  kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: Judgement(NoBoardBus) } } ⇒ answered NV_ERR
+      6  kfN: walk report carried refusals=N refuse_mask=N pdbs=[efaNaN] runs=N
+      6  kfN: mem t=N.Ns REFUSED VasKey(N) root N: the walk REFUSED leaves (refuse_mask=N) — absent, not mapped
+      4  kfN: USER_RING_LIFECYCLE (cNdN, ffN) mode=Pointer Counts { entries_scan: N, entries_pointer: N, pointer_large_entries: N, pointer_entry_max_
+      3  kfN: mem t=N.Ns retire VasKey(N): N row(s) unmapped (N refused) in N us, N host call(s), host space N kept as a spare — host RM over its lif
+      3  kfN: mem t=N.Ns REFUSED VasKey(N) root N: N run(s) not applied: leaf N+N names store N, inside the firmware carve-out at N — a twin maps no 
+      2  kfN: host facts: GSS N [(N, N), (N, N), (c, N), (Nc, N)]: the background probe was refused or changed the answer — zero-probe bytes only
+      2  kfN: w#N barN @N = N phase=ProtectedRegionUp
+      2  WNAUTHORED key=rm.N die=ADN branch=N: rm.N: unmeasured on ADN branch N (measured on: GAN/N, GAN/N, GAN/N, GAN/N, GAN/N, GAN/N, GAN/N) — refu
+      2  WNREFUSE key=rm.N die=ADN branch=N: rm.N: unmeasured on ADN branch N (measured on: GAN/N, GAN/N, GAN/N, GAN/N, GAN/N, GAN/N, GAN/N, ADN/N, T
+      1  kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by na
+      1  N-N-NTN:N:N.NZ qemu-system-xN_N: -device kfN-gpu,id=kfN,fb-mb=N,barN-size=N,barN-size=N,gpu-uuid=GPU-<uuid>,guest-driver=N.N.N,display=on,go
+      1  kayfabe: HELD-REPLY fn=UpdateBarPde depth=N — this map reply WAITS for its rows [#N, rate-limited]
+      1  kayfabe: HELD-REPLY fn=RmAlloc depth=N — this map reply WAITS for its rows [#N, rate-limited]
+      1  kayfabe: HELD-REPLY fn=Free depth=N — this map reply WAITS for its rows [#N, rate-limited]

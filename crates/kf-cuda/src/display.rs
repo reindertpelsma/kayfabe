@@ -13,7 +13,7 @@
 //! walk must never wait on a scanout copy.
 
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, PinnedBuf,
+    CompletionFd, CtxHandle, Cuda, CudaError, DevBuf, DevSpan, EventHandle, Func, PinnedBuf,
     StreamHandle,
 };
 
@@ -245,7 +245,9 @@ pub struct DisplayGpu {
     cu: Cuda,
     ctx: CtxHandle,
     device: i32,
-    store: Option<(CUdeviceptr, u64)>,
+    /// ★ F-7: `cuDeviceGetAttribute(PAGEABLE_MEMORY_ACCESS)` at bring-up (`None`: unknown).
+    pageable: Option<bool>,
+    store: Option<DevBuf>,
     /// The scanout copies' stream (blocking, like every stream this binding creates).
     stream: StreamHandle,
     /// Readable once the last queued scanout copy completed (`cuLaunchHostFunc` after it).
@@ -253,42 +255,119 @@ pub struct DisplayGpu {
     /// The compose kernel, or why it did not load (every scanout is refused by it).
     compose: Result<Func, String>,
     /// The device staging frame the windows compose into: address and bytes.
-    staging: Option<(CUdeviceptr, usize)>,
+    staging: Option<DevBuf>,
     /// The pack kernel, or why it did not load (the GPU-copy rung is refused by it).
     pack: Result<Func, String>,
     /// ★ The imported display slots: device pointer and bytes, indexed by [`SlotId`]. Never
     /// unmapped while the device lives (a compositor may hold an import of any of them).
-    slots: Vec<(CUdeviceptr, u64)>,
+    slots: Vec<DevBuf>,
     /// ★ `display-max-fps`: the checksum kernel, or why it did not load (every non-flip check is
     /// then sent — the detection is lost, never the picture).
     sum: Result<Func, String>,
     /// Its row sums: the device buffer (zeroed before each launch), the page-locked copy the worker
     /// reads after the completion, and the rows both hold. Grown, never shrunk.
-    sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
+    sums: Option<(DevBuf, PinnedBuf, usize)>,
     color: Result<[Func; 4], String>,
     /// ★ The YUV window kernel, or why it did not load.
     yuv: Result<[Func; 2], String>,
-    color_frame: Option<(CUdeviceptr, usize)>,
+    color_frame: Option<DevBuf>,
     /// Fixed slots: 32 ILUTs, 32 TMO tables and one OLUT. Never guest-sized.
-    color_luts: Option<CUdeviceptr>,
-    color_pipelines: Option<CUdeviceptr>,
-    color_status: Option<(CUdeviceptr, PinnedBuf)>,
+    color_luts: Option<DevBuf>,
+    color_pipelines: Option<DevBuf>,
+    color_status: Option<(DevBuf, PinnedBuf)>,
     color_event: EventHandle,
     color_recorded: bool,
     color_snapshots: [Option<ColorLut>; 65],
-    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): recorded with every completion signal, so a copy whose
+    /// Recorded with every completion signal, so a copy whose
     /// signal is late can be asked "still queued, or failed?" without blocking.
     signal_event: EventHandle,
     /// ★ The expanded cursor (an `A1R5G5B5` image the VMM converted to 32 bits): two slots of
     /// [`CURSOR_PX_MAX`] bytes the VMM owns, the one the next copy writes, and the address of the
     /// one the last upload filled. Two, because the previous frame's kernel may still read the
     /// other.
-    cursor_px: Option<([CUdeviceptr; 2], usize)>,
-    cursor_at: Option<(CUdeviceptr, usize)>,
+    cursor_px: Option<([DevBuf; 2], usize)>,
+    /// The slot (index into `cursor_px`) the last upload filled, and how many bytes it holds.
+    cursor_at: Option<(usize, usize)>,
 }
 
 /// The most an expanded cursor image takes: 256 x 256 pixels of 4 bytes.
 pub const CURSOR_PX_MAX: usize = 256 * 256 * 4;
+
+/// ★ D-11 (security review 2, 2026-11-13; DESIGN, not measured): the most pixels a composition's
+/// device staging frame may hold, `3840 x 2160` — the same ceiling as
+/// `kf_disp::scanout::MAX_PIXELS`, which the only production caller (kf-qemu's display worker)
+/// already enforces before [`DisplayGpu::compose_begin`], and as the colour path's fixed 4K
+/// ceiling. 33 MB of device memory instead of the 1 GiB a 16384 x 16384 request used to allocate
+/// outside `fb-mb`. A larger request is refused by name.
+pub const MAX_STAGING_PIXELS: u64 = 3840 * 2160;
+
+/// ★ D-11 (DESIGN): the most display slots one [`DisplayGpu`] imports. The broker's ring has
+/// `kf_broker::slots::MAX_SLOTS` (5) and imports are never unmapped while the device lives, so 16
+/// is three times the need; at 64 MiB per slot it bounds the imported VRAM at 1 GiB. The 17th
+/// import is refused by name (kf-qemu then withdraws the GPU-copy rung, loudly).
+pub const MAX_IMPORTED_SLOTS: usize = 16;
+
+/// The staging frame's bytes for a `w x h` composition, or why it is refused (empty, a side past
+/// 16384, or more than [`MAX_STAGING_PIXELS`]).
+fn staging_request(w: u32, h: u32) -> Result<usize, String> {
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels == 0 || w > 16384 || h > 16384 || pixels > MAX_STAGING_PIXELS {
+        return Err(format!(
+            "a {w}x{h} frame (at most 16384 a side and {MAX_STAGING_PIXELS} pixels, D-11)"
+        ));
+    }
+    usize::try_from(pixels * 4).map_err(|_| format!("{w}x{h}"))
+}
+
+/// The bytes of one more imported slot, or why it is refused: not whole 2 MiB granules, more than
+/// 64 MiB, or [`MAX_IMPORTED_SLOTS`] already imported (`imported`).
+fn slot_request(imported: usize, bytes: u64) -> Result<usize, String> {
+    if bytes == 0 || !bytes.is_multiple_of(2 << 20) || bytes > 64 << 20 {
+        return Err(format!("a {bytes:#x}-byte slot"));
+    }
+    if imported >= MAX_IMPORTED_SLOTS {
+        return Err(format!(
+            "{MAX_IMPORTED_SLOTS} slots are already imported (D-11 cap)"
+        ));
+    }
+    usize::try_from(bytes).map_err(|_| format!("{bytes:#x}"))
+}
+
+/// ★★★ D-03 (security review 2, 2026-11-13): the device frame a kernel writes, validated ONCE
+/// against the allocation it lands in. A compose/colour kernel bounds its writes by the `w x h` its
+/// caller names; this is where that pair is checked against the bytes actually allocated, so a
+/// `(w, h)` larger than the frame can only be refused, never become a GPU write past it.
+///
+/// `frame` is the allocation (`(address, bytes)`), `bpp` the bytes per pixel the kernel writes.
+///
+/// # Errors
+/// Refused by name: no frame, an empty or overflowing `w x h x bpp`, or more bytes than the frame.
+fn frame_for<'a>(
+    frame: Option<&'a DevBuf>,
+    w: u32,
+    h: u32,
+    bpp: u64,
+    what: &'static str,
+) -> Result<DevSpan<'a>, CudaError> {
+    let Some(buf) = frame else {
+        return Err(refused(what, "no composition frame was begun".into()));
+    };
+    let len = buf.len();
+    let need = u64::from(w)
+        .checked_mul(u64::from(h))
+        .and_then(|p| p.checked_mul(bpp));
+    match need {
+        // ★ carried as a `DevSpan` of exactly the frame: validated once, here
+        Some(n) if n > 0 && n <= len as u64 => Ok(buf.span(0, n as usize)),
+        _ => Err(refused(
+            what,
+            format!(
+                "a {w}x{h} frame at {bpp} bytes per pixel does not fit the {len:#x}-byte frame \
+                 it would be written into"
+            ),
+        )),
+    }
+}
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
 /// QEMU console as an integer; this crate writes it only through the GPU copy engine.
@@ -472,7 +551,7 @@ pub struct YuvLayer {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U.
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage (`kf_disp::scanout::YUV_SEMI_PLANAR_8` = 0, `_16` = 1, packed
+    /// The storage (`kf_disp::scanout::YUV_SEMI_PLANAR_8` = 0, `_16` = 1, packed
     /// YUYV = 2, UYVY = 3; a packed layout reads its chroma from the luma plane).
     pub layout: u32,
     /// 0 = nearest, 1 = bilinear.
@@ -498,7 +577,7 @@ impl YuvLayer {
         {
             return Err(format!("{l:?}: source geometry outside the kernel's range"));
         }
-        // ⊘ 2026-10-14: the destination may extend past the frame (its scale is the window's); the
+        // The destination may extend past the frame (its scale is the window's); the
         // kernel skips every write outside it, and the launch covers only the visible rows
         if l.ox >= fw || l.oy >= fh {
             return Err(format!("{l:?} starts outside the {fw}x{fh} frame"));
@@ -518,28 +597,33 @@ impl YuvLayer {
             x_end.div_ceil(1 << l.sub_x_log2),
             y_end.div_ceil(1 << l.sub_y_log2),
         );
-        let need = |pitch: u32, bpp: u64, xe: u64, ye: u64| -> Result<u64, String> {
+        // `row`: the bytes of one row the kernel may read (whole macropixels for packed 4:2:2)
+        let need = |pitch: u32, row: u64, ye: u64| -> Result<u64, String> {
             if l.block_linear {
-                if l.block_height_log2 > 5 || xe * bpp > u64::from(pitch) * 64 || pitch == 0 {
+                if l.block_height_log2 > 5 || row > u64::from(pitch) * 64 || pitch == 0 {
                     return Err(format!("{l:?}: the row leaves the surface's GOB columns"));
                 }
                 Ok(ye.div_ceil(8u64 << l.block_height_log2)
                     * u64::from(pitch)
                     * (512u64 << l.block_height_log2))
             } else {
-                if xe * bpp > u64::from(pitch) {
+                if row > u64::from(pitch) {
                     return Err(format!("{l:?}: a row is wider than the pitch"));
                 }
-                Ok((ye - 1) * u64::from(pitch) + xe * bpp)
+                Ok((ye - 1) * u64::from(pitch) + row)
             }
         };
-        let (luma_bytes, chroma_bytes) = match l.layout {
-            0 => (1, 2),
-            1 => (2, 4),
-            _ => (2, 0),
+        // A packed 4:2:2 row is read in whole
+        // 4-byte macropixels — the last luma pixel's chroma is the second half of its macropixel, so
+        // an odd `x_end` reads 2 bytes past `x_end * 2`. ⊘ Was `x_end * 2`. Same formula as
+        // `kf_disp::scanout::YuvFormat::plane0_row_bytes`, re-derived here on purpose.
+        let (luma_row, chroma_bytes) = match l.layout {
+            0 => (x_end, 2),
+            1 => (x_end * 2, 4),
+            _ => (x_end.div_ceil(2) * 4, 0),
         };
-        if need(l.y_pitch, luma_bytes, x_end, y_end)? > l.y_extent
-            || (chroma_bytes != 0 && need(l.c_pitch, chroma_bytes, cx_end, cy_end)? > l.c_extent)
+        if need(l.y_pitch, luma_row, y_end)? > l.y_extent
+            || (chroma_bytes != 0 && need(l.c_pitch, cx_end * chroma_bytes, cy_end)? > l.c_extent)
         {
             return Err(format!(
                 "{l:?}: the planes need more bytes than their extents"
@@ -553,7 +637,7 @@ impl std::fmt::Debug for DisplayGpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DisplayGpu")
             .field("device", &self.device)
-            .field("store_bytes", &self.store.map(|s| s.1))
+            .field("store_bytes", &self.store.as_ref().map(DevBuf::len))
             .finish()
     }
 }
@@ -572,29 +656,43 @@ impl DisplayGpu {
     /// # Errors
     /// [`CudaError`], by name.
     pub fn bring_up_on(bdf: &str) -> Result<DisplayGpu, CudaError> {
-        let cu = Cuda::open()?;
+        Self::bring_up_with(Cuda::open()?, bdf)
+    }
+
+    /// [`Self::bring_up_on`] over a binding the caller opened (the tests' fake driver).
+    pub(crate) fn bring_up_with(cu: Cuda, bdf: &str) -> Result<DisplayGpu, CudaError> {
         cu.init()?;
         let device = cu.device_by_pci_bus_id(bdf)?;
-        let ctx = cu.ctx_create(device)?;
+        let pageable = cu.pageable_memory_access(device);
+        // ★ F-7 / S1-05 (2026-11-14): one line at bring-up, so a run's log says whether a kernel
+        // address leaving its buffer could reach this process's memory (the bounds hold either way)
+        eprintln!(
+            "kf-cuda: display device {bdf} pageable_memory_access={} (yes: every compose-kernel \
+             bound is a host-memory-safety obligation, OWNER_RULINGS S1-05)",
+            pageable.map_or("unknown", |p| if p { "yes" } else { "no" })
+        );
+        // Guarded — a `?` below destroys the context (and
+        // the stream, events and modules made in it) instead of leaking them.
+        let ctx = cu.ctx_create_guarded(device)?;
         let stream = cu.stream_create()?;
         let done = CompletionFd::new()?;
         let mut ptx = SCANOUT_PTX.to_vec();
         ptx.push(0);
         let compose = cu
             .module_load(&ptx)
-            .and_then(|m| cu.module_function(m, COMPOSE_ENTRY))
+            .and_then(|m| cu.module_function(&m, COMPOSE_ENTRY))
             .map_err(|e| format!("the compose kernel did not load: {e}"));
         let mut pack_ptx = PACK_PTX.to_vec();
         pack_ptx.push(0);
         let pack = cu
             .module_load(&pack_ptx)
-            .and_then(|m| cu.module_function(m, PACK_ENTRY))
+            .and_then(|m| cu.module_function(&m, PACK_ENTRY))
             .map_err(|e| format!("the pack kernel did not load: {e}"));
         let mut sum_ptx = SUM_PTX.to_vec();
         sum_ptx.push(0);
         let sum = cu
             .module_load(&sum_ptx)
-            .and_then(|m| cu.module_function(m, SUM_ENTRY))
+            .and_then(|m| cu.module_function(&m, SUM_ENTRY))
             .map_err(|e| format!("the checksum kernel did not load: {e}"));
         let mut color_ptx = COLOR_PTX.to_vec();
         color_ptx.push(0);
@@ -602,10 +700,10 @@ impl DisplayGpu {
             .module_load(&color_ptx)
             .and_then(|m| {
                 Ok([
-                    cu.module_function(m, "kf_color_compose")?,
-                    cu.module_function(m, "kf_color_output")?,
-                    cu.module_function(m, "kf_color_validate")?,
-                    cu.module_function(m, "kf_tmo_validate")?,
+                    cu.module_function(&m, "kf_color_compose")?,
+                    cu.module_function(&m, "kf_color_output")?,
+                    cu.module_function(&m, "kf_color_validate")?,
+                    cu.module_function(&m, "kf_tmo_validate")?,
                 ])
             })
             .map_err(|e| format!("the SDR colour kernels did not load: {e}"));
@@ -615,17 +713,19 @@ impl DisplayGpu {
             .module_load(&yuv_ptx)
             .and_then(|m| {
                 Ok([
-                    cu.module_function(m, YUV_ENTRY)?,
-                    cu.module_function(m, YUV_COLOR_ENTRY)?,
+                    cu.module_function(&m, YUV_ENTRY)?,
+                    cu.module_function(&m, YUV_COLOR_ENTRY)?,
                 ])
             })
             .map_err(|e| format!("the YUV kernel did not load: {e}"));
         let color_event = cu.event_create()?;
         let signal_event = cu.event_create()?;
+        let ctx = ctx.disarm();
         Ok(DisplayGpu {
             cu,
             ctx,
             device,
+            pageable,
             store: None,
             stream,
             done,
@@ -650,6 +750,13 @@ impl DisplayGpu {
         })
     }
 
+    /// ★ F-7 / S1-05: whether this device's kernels can reach pageable host memory (HMM/ATS), as
+    /// the driver answered at bring-up; `None` when it could not say.
+    #[must_use]
+    pub fn pageable_memory_access(&self) -> Option<bool> {
+        self.pageable
+    }
+
     /// Why the checksum kernel is unavailable, if it is (the worker logs it once and sends every
     /// check).
     #[must_use]
@@ -670,18 +777,13 @@ impl DisplayGpu {
     /// error.
     pub fn compose_checksum(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_checksum";
-        let f = *self.sum.as_ref().map_err(|e| refused(what, e.clone()))?;
-        let Some((src, len)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
-        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
-            .map_err(|_| refused(what, format!("{w}x{h}")))?;
-        if w == 0 || h == 0 || n > len {
-            return Err(refused(
-                what,
-                format!("a {w}x{h} frame in a {len:#x}-byte staging frame"),
-            ));
-        }
+        let f = self
+            .sum
+            .as_ref()
+            .map_err(|e| refused(what, e.clone()))?
+            .clone();
+        // the frame lies inside the staging allocation (the kernel reads `rows x 4w` bytes)
+        frame_for(self.staging.as_ref(), w, h, 4, what)?;
         let rows = h as usize;
         if self.sums.as_ref().is_none_or(|s| s.2 < rows) {
             if let Some((p, host, _)) = self.sums.take() {
@@ -709,28 +811,23 @@ impl DisplayGpu {
         let Some((dev, host, _)) = self.sums.as_ref() else {
             return Err(refused(what, "no row buffer".into()));
         };
+        let src = frame_for(self.staging.as_ref(), w, h, 4, what)?;
+        let rows_span = dev.span(0, rows * 8);
         self.cu.memset_d8_async(
-            self.stream,
-            *dev,
+            &self.stream,
+            rows_span,
             0,
-            rows * 8,
             "cuMemsetD8Async(display checksum)",
         )?;
         let u = |x: u32| x.to_le_bytes().to_vec();
-        let mut params = vec![
-            src.to_le_bytes().to_vec(),
-            dev.to_le_bytes().to_vec(),
-            u(w),
-            u(w * 4),
-        ];
+        let mut params = vec![src.kernel_arg(), rows_span.kernel_arg(), u(w), u(w * 4)];
         self.cu
-            .launch_args(self.stream, f, h, SUM_THREADS, 0, &mut params, what)?;
+            .launch_args(&self.stream, &f, h, SUM_THREADS, 0, &mut params, what)?;
         self.cu.memcpy_d2h_async(
-            self.stream,
+            &self.stream,
             host,
             0,
-            *dev,
-            rows * 8,
+            rows_span,
             "cuMemcpyDtoHAsync(display checksum)",
         )
     }
@@ -835,25 +932,24 @@ impl DisplayGpu {
     /// [`CudaError`]; an empty or oversized frame is refused.
     pub fn compose_begin(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_begin";
-        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
-            .map_err(|_| refused(what, format!("{w}x{h}")))?;
-        if n == 0 || w > 16384 || h > 16384 {
-            return Err(refused(what, format!("a {w}x{h} frame")));
-        }
-        if self.staging.is_none_or(|(_, len)| len < n) {
-            if let Some((p, _)) = self.staging.take() {
+        let n = staging_request(w, h).map_err(|e| refused(what, e))?;
+        if self.staging.as_ref().is_none_or(|b| b.len() < n) {
+            if let Some(p) = self.staging.take() {
                 // the stream drains first: a queued compose may still write the old staging
                 self.cu.ctx_synchronize()?;
                 self.cu.mem_free(p);
             }
-            self.staging = Some((
-                self.cu.mem_alloc_zeroed(n, "cuMemAlloc(display staging)")?,
-                n,
-            ));
+            self.staging = Some(self.cu.mem_alloc_zeroed(n, "cuMemAlloc(display staging)")?);
         }
-        let (p, _) = self.staging.unwrap_or((0, 0));
-        self.cu
-            .memset_d8_async(self.stream, p, 0, n, "cuMemsetD8Async(display staging)")
+        let Some(p) = self.staging.as_ref() else {
+            return Err(refused(what, "no staging frame".into()));
+        };
+        self.cu.memset_d8_async(
+            &self.stream,
+            p.span(0, n),
+            0,
+            "cuMemsetD8Async(display staging)",
+        )
     }
 
     /// ★ Queue window `l` of the composition begun by [`Self::compose_begin`] (`w` x `h`).
@@ -880,23 +976,33 @@ impl DisplayGpu {
         if px.is_empty() || px.len() > CURSOR_PX_MAX {
             return Err(refused(what, format!("a {}-byte cursor image", px.len())));
         }
-        let ([a, b], next) = match self.cursor_px {
-            Some(c) => c,
-            None => (
-                [
-                    self.cu
-                        .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")?,
-                    self.cu
-                        .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")?,
-                ],
-                0,
-            ),
+        if self.cursor_px.is_none() {
+            let a = self
+                .cu
+                .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")?;
+            let b = match self
+                .cu
+                .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")
+            {
+                Ok(b) => b,
+                Err(e) => {
+                    self.cu.mem_free(a);
+                    return Err(e);
+                }
+            };
+            self.cursor_px = Some(([a, b], 0));
+        }
+        let Some((bufs, next)) = self.cursor_px.as_mut() else {
+            return Err(refused(what, "no cursor buffers".into()));
         };
-        self.cursor_px = Some(([a, b], 1 - next));
-        let dst = [a, b][next];
-        self.cu
-            .memcpy_h2d(dst, px, "cuMemcpyHtoD(display cursor)")?;
-        self.cursor_at = Some((dst, px.len()));
+        let slot = *next;
+        *next = 1 - slot;
+        self.cu.memcpy_h2d(
+            bufs[slot].span(0, px.len()),
+            px,
+            "cuMemcpyHtoD(display cursor)",
+        )?;
+        self.cursor_at = Some((slot, px.len()));
         Ok(())
     }
 
@@ -909,7 +1015,7 @@ impl DisplayGpu {
     pub fn compose_cursor(&self, l: &ComposeLayer, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_cursor";
         l.check(w, h).map_err(|e| refused(what, e))?;
-        let Some((src, len)) = self.cursor_at else {
+        let (Some((slot, len)), Some((bufs, _))) = (self.cursor_at, self.cursor_px.as_ref()) else {
             return Err(refused(what, "no cursor image was uploaded".into()));
         };
         if l.src != 0 || l.block_linear || l.extent > len as u64 {
@@ -918,7 +1024,8 @@ impl DisplayGpu {
                 format!("{l:?} reads past the {len}-byte cursor image"),
             ));
         }
-        self.launch_compose(src, l, w, h, what)
+        let n = usize::try_from(l.extent).map_err(|_| refused(what, format!("{l:?}")))?;
+        self.launch_compose(bufs[slot].span(0, n), l, w, h, what)
     }
 
     /// ★ Is the YUV kernel loaded? (When not, the console copy leaves YUV windows out, by name.)
@@ -937,11 +1044,10 @@ impl DisplayGpu {
     /// store, or a write the frame; the CUDA error otherwise.
     pub fn compose_yuv(&self, l: &YuvLayer, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_yuv";
-        let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[0];
+        let f = &self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[0];
         l.check(w, h).map_err(|e| refused(what, e))?;
-        let Some((dst, _)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
+        // ★ D-03: the frame the kernel writes, checked against the staging ALLOCATION
+        let dst = frame_for(self.staging.as_ref(), w, h, 4, what)?;
         self.launch_yuv(f, dst, l, w, h, what)
     }
 
@@ -952,21 +1058,16 @@ impl DisplayGpu {
     /// As [`Self::compose_yuv`].
     pub fn color_yuv(&self, l: &YuvLayer, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::color_yuv";
-        let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[1];
+        let f = &self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[1];
         l.check(w, h).map_err(|e| refused(what, e))?;
-        let (dst, len) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        if u64::from(w) * u64::from(h) * 16 > len as u64 {
-            return Err(refused(what, "colour frame is too small".into()));
-        }
+        let dst = frame_for(self.color_frame.as_ref(), w, h, 16, what)?;
         self.launch_yuv(f, dst, l, w, h, what)
     }
 
     fn launch_yuv(
         &self,
-        f: Func,
-        dst: CUdeviceptr,
+        f: &Func,
+        dst: DevSpan<'_>,
         l: &YuvLayer,
         w: u32,
         h: u32,
@@ -977,11 +1078,11 @@ impl DisplayGpu {
         let ys = self.at(l.y_src, ny, what)?;
         let cs = self.at(l.c_src, nc, what)?;
         let u = |x: u32| x.to_le_bytes().to_vec();
-        // ★ 2026-10-14: `dst` first, then `KF_YUV_PARAMS` (`cuda/display/kf_yuv.cu`)
+        // `dst` first, then `KF_YUV_PARAMS` (`cuda/display/kf_yuv.cu`)
         let mut params = vec![
-            dst.to_le_bytes().to_vec(),
-            ys.to_le_bytes().to_vec(),
-            cs.to_le_bytes().to_vec(),
+            dst.kernel_arg(),
+            ys.kernel_arg(),
+            cs.kernel_arg(),
             u(u32::from(l.block_linear)),
             u(l.y_pitch),
             u(l.c_pitch),
@@ -1006,7 +1107,7 @@ impl DisplayGpu {
         // only the rows the frame shows (the kernel guards the columns)
         let rows = l.dh.min(h.saturating_sub(l.oy));
         self.cu
-            .launch_args(self.stream, f, rows, 256, 0, &mut params, what)
+            .launch_args(&self.stream, f, rows, 256, 0, &mut params, what)
     }
 
     /// Begin a colour composition, retaining FP16 values in an FP32 container until output.
@@ -1023,12 +1124,12 @@ impl DisplayGpu {
         self.color.as_ref().map_err(|e| refused(what, e.clone()))?;
         self.compose_begin(w, h)?;
         let n = w as usize * h as usize * 16;
-        if self.color_frame.is_none_or(|(_, len)| len < n) {
-            if let Some((p, _)) = self.color_frame.take() {
+        if self.color_frame.as_ref().is_none_or(|b| b.len() < n) {
+            if let Some(p) = self.color_frame.take() {
                 self.cu.ctx_synchronize()?;
                 self.cu.mem_free(p);
             }
-            self.color_frame = Some((self.cu.mem_alloc_zeroed(n, what)?, n));
+            self.color_frame = Some(self.cu.mem_alloc_zeroed(n, what)?);
         }
         if self.color_luts.is_none() {
             self.color_luts = Some(self.cu.mem_alloc_zeroed(65 * COLOR_LUT_BYTES, what)?);
@@ -1046,15 +1147,18 @@ impl DisplayGpu {
                 }
             }
         }
-        let (frame, _) = self
+        let frame = self
             .color_frame
+            .as_ref()
             .ok_or_else(|| refused(what, "missing colour frame".into()))?;
         let (status, _) = self
             .color_status
             .as_ref()
             .ok_or_else(|| refused(what, "missing colour status".into()))?;
-        self.cu.memset_d8_async(self.stream, *status, 0, 4, what)?;
-        self.cu.memset_d8_async(self.stream, frame, 0, n, what)
+        self.cu
+            .memset_d8_async(&self.stream, status.span(0, 4), 0, what)?;
+        self.cu
+            .memset_d8_async(&self.stream, frame.span(0, n), 0, what)
     }
 
     fn color_snapshot(
@@ -1062,7 +1166,7 @@ impl DisplayGpu {
         slot: u32,
         lut: Option<ColorLut>,
         input: bool,
-    ) -> Result<CUdeviceptr, CudaError> {
+    ) -> Result<u64, CudaError> {
         let what = "DisplayGpu::color_snapshot";
         let Some(lut) = lut else {
             return Ok(0);
@@ -1079,35 +1183,38 @@ impl DisplayGpu {
             ));
         }
         let bytes = (lut.entries as usize + 4) * 8;
-        let src = self.at(lut.src, bytes, what)?;
-        let base = self
-            .color_luts
-            .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
-        let dst = base + u64::from(slot) * COLOR_LUT_BYTES as u64;
         let key = (lut.src, lut.interpolate, lut.token, lut.entries);
-        if self.color_snapshots[slot as usize]
-            .is_none_or(|old| (old.src, old.interpolate, old.token, old.entries) != key)
-        {
-            self.cu
-                .memcpy_d2d_async(self.stream, dst, src, bytes, what)?;
-            self.color_snapshots[slot as usize] = Some(lut);
+        let stale = self.color_snapshots[slot as usize]
+            .is_none_or(|old| (old.src, old.interpolate, old.token, old.entries) != key);
+        let src = self.at(lut.src, bytes, what)?;
+        let luts = self
+            .color_luts
+            .as_ref()
+            .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
+        let dst = luts.span(u64::from(slot) * COLOR_LUT_BYTES as u64, COLOR_LUT_BYTES);
+        if stale {
+            self.cu.memcpy_d2d_async(&self.stream, dst, src, what)?;
         }
         if input {
-            let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2];
-            let status = self
+            let f = &self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2];
+            let status = &self
                 .color_status
                 .as_ref()
                 .ok_or_else(|| refused(what, "no validation status".into()))?
                 .0;
             let mut args = vec![
-                dst.to_le_bytes().to_vec(),
+                dst.kernel_arg(),
                 lut.entries.to_le_bytes().to_vec(),
-                status.to_le_bytes().to_vec(),
+                status.whole().kernel_arg(),
             ];
             self.cu
-                .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
+                .launch_args(&self.stream, f, 5, 256, 0, &mut args, what)?;
         }
-        Ok(dst)
+        let addr = dst.kernel_addr();
+        if stale {
+            self.color_snapshots[slot as usize] = Some(lut);
+        }
+        Ok(addr)
     }
 
     /// Snapshot and compose one RGB8888 window using its FP16 input table.
@@ -1144,52 +1251,50 @@ impl DisplayGpu {
                 "window slot or XOR outside SDR subset".into(),
             ));
         }
-        let src = self.at(
-            l.src,
-            usize::try_from(l.extent).map_err(|_| refused(what, "layer extent".into()))?,
-            what,
-        )?;
-        let bytes = u64::from(w) * u64::from(h) * 16;
-        let (dst, len) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        if bytes > len as u64 {
-            return Err(refused(what, "colour frame is too small".into()));
-        }
+        let n = usize::try_from(l.extent).map_err(|_| refused(what, "layer extent".into()))?;
+        // validated before any snapshot is queued (as before): source, frame
+        self.at(l.src, n, what)?;
+        frame_for(self.color_frame.as_ref(), w, h, 16, what)?;
         let p = self.color_snapshot(slot, lut, true)?;
         let tone = self.color_snapshot(32 + slot, tmo, false)?;
+        let src = self.at(l.src, n, what)?;
+        let dst = frame_for(self.color_frame.as_ref(), w, h, 16, what)?;
+        let status = &self
+            .color_status
+            .as_ref()
+            .ok_or_else(|| refused(what, "missing status".into()))?
+            .0;
         if let Some(tmo) = tmo {
-            let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[3];
-            let status = self
-                .color_status
-                .as_ref()
-                .ok_or_else(|| refused(what, "missing status".into()))?
-                .0;
+            let f = &self.color.as_ref().map_err(|e| refused(what, e.clone()))?[3];
             let mut args = vec![
                 tone.to_le_bytes().to_vec(),
                 tmo.entries.to_le_bytes().to_vec(),
-                status.to_le_bytes().to_vec(),
+                status.whole().kernel_arg(),
             ];
             self.cu
-                .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
+                .launch_args(&self.stream, f, 5, 256, 0, &mut args, what)?;
         }
         let program = if let Some(pipeline) = pipeline {
             let bytes = pipeline.bytes().map_err(|e| refused(what, e))?;
-            let address = self
+            let at = self
                 .color_pipelines
+                .as_ref()
                 .ok_or_else(|| refused(what, "missing pipeline allocation".into()))?
-                + u64::from(slot) * COLOR_PIPELINE_BYTES as u64;
-            self.cu.memcpy_h2d(address, &bytes, what)?;
-            address
+                .span(
+                    u64::from(slot) * COLOR_PIPELINE_BYTES as u64,
+                    COLOR_PIPELINE_BYTES,
+                );
+            self.cu.memcpy_h2d(at, &bytes, what)?;
+            at.kernel_addr()
         } else {
             0
         };
-        let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[0];
+        let f = &self.color.as_ref().map_err(|e| refused(what, e.clone()))?[0];
         let u = |v: u32| v.to_le_bytes().to_vec();
         let i = |v: i32| v.to_le_bytes().to_vec();
         let mut args = vec![
-            src.to_le_bytes().to_vec(),
-            dst.to_le_bytes().to_vec(),
+            src.kernel_arg(),
+            dst.kernel_arg(),
             u(u32::from(l.block_linear)),
             u(l.pitch),
             u(l.block_height_log2),
@@ -1212,15 +1317,10 @@ impl DisplayGpu {
             u(u32::from(tmo.is_some_and(|v| v.interpolate))),
             u(tmo.map_or(0, |v| v.entries)),
             program.to_le_bytes().to_vec(),
-            self.color_status
-                .as_ref()
-                .ok_or_else(|| refused(what, "missing status".into()))?
-                .0
-                .to_le_bytes()
-                .to_vec(),
+            status.whole().kernel_arg(),
         ];
         self.cu
-            .launch_args(self.stream, f, l.rows, 256, 0, &mut args, what)
+            .launch_args(&self.stream, f, l.rows, 256, 0, &mut args, what)
     }
 
     /// Apply the authored CSC coefficients and the fixed-point output table to the full head.
@@ -1233,21 +1333,15 @@ impl DisplayGpu {
         matrix: &[i32; 12],
     ) -> Result<(), CudaError> {
         let what = "DisplayGpu::color_output";
-        let (src, slen) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        let (dst, dlen) = self
-            .staging
-            .ok_or_else(|| refused(what, "no output frame".into()))?;
-        let pixels = u64::from(w) * u64::from(h);
-        if w == 0 || h == 0 || pixels * 16 > slen as u64 || pixels * 4 > dlen as u64 {
-            return Err(refused(what, "colour output exceeds frame".into()));
-        }
+        frame_for(self.color_frame.as_ref(), w, h, 16, what)?;
+        frame_for(self.staging.as_ref(), w, h, 4, what)?;
         let p = self.color_snapshot(64, lut, false)?;
-        let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[1];
+        let src = frame_for(self.color_frame.as_ref(), w, h, 16, what)?;
+        let dst = frame_for(self.staging.as_ref(), w, h, 4, what)?;
+        let f = &self.color.as_ref().map_err(|e| refused(what, e.clone()))?[1];
         let mut args = vec![
-            src.to_le_bytes().to_vec(),
-            dst.to_le_bytes().to_vec(),
+            src.kernel_arg(),
+            dst.kernel_arg(),
             w.to_le_bytes().to_vec(),
             p.to_le_bytes().to_vec(),
             u32::from(lut.is_some_and(|v| v.interpolate))
@@ -1257,14 +1351,14 @@ impl DisplayGpu {
             lut.map_or(0, |v| v.entries).to_le_bytes().to_vec(),
         ];
         self.cu
-            .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
+            .launch_args(&self.stream, f, h, 256, 0, &mut args, what)?;
         let (dev, host) = self
             .color_status
             .as_ref()
             .ok_or_else(|| refused(what, "no validation status".into()))?;
         self.cu
-            .memcpy_d2h_async(self.stream, host, 0, *dev, 4, what)?;
-        self.cu.event_record(self.color_event, self.stream)?;
+            .memcpy_d2h_async(&self.stream, host, 0, dev.span(0, 4), what)?;
+        self.cu.event_record(&self.color_event, &self.stream)?;
         self.color_recorded = true;
         Ok(())
     }
@@ -1274,7 +1368,7 @@ impl DisplayGpu {
         if !self.color_recorded
             || !self
                 .cu
-                .event_query(self.color_event)
+                .event_query(&self.color_event)
                 .map_err(|e| e.to_string())?
         {
             return Err("colour validation has not completed on the GPU".into());
@@ -1314,11 +1408,11 @@ impl DisplayGpu {
     /// # Errors
     /// The CUDA error.
     pub fn compose_signal(&self) -> Result<(), CudaError> {
-        self.cu.event_record(self.signal_event, self.stream)?;
-        self.cu.launch_host_signal(self.stream, &self.done)
+        self.cu.event_record(&self.signal_event, &self.stream)?;
+        self.cu.launch_host_signal(&self.stream, &self.done)
     }
 
-    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): the state of the work before the last
+    /// The state of the work before the last
     /// [`Self::compose_signal`] — **never blocks**. `Ok(false)`: still queued (the GPU, or the host
     /// RM in front of it, has not run it yet); `Ok(true)`: done, its signal is on its way; `Err`:
     /// the stream failed, by name — the only answer that means the completion will never come.
@@ -1326,7 +1420,7 @@ impl DisplayGpu {
     /// # Errors
     /// The CUDA error the stream reports.
     pub fn signal_state(&self) -> Result<bool, CudaError> {
-        self.cu.event_query(self.signal_event)
+        self.cu.event_query(&self.signal_event)
     }
 
     /// ★ The staging frame's D2H copy into `dst` (tight, `w * 4` bytes a row), without the signal
@@ -1336,20 +1430,15 @@ impl DisplayGpu {
     /// Refused by name when the frame is smaller than the composition; the CUDA error otherwise.
     pub fn compose_to_host(&self, w: u32, h: u32, dst: &Frame) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_to_host";
-        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
-            .map_err(|_| refused(what, format!("{w}x{h}")))?;
-        let Some((p, len)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
-        if n > len || n > dst.len() {
-            return Err(refused(what, format!("{n:#x} bytes do not fit")));
+        let src = frame_for(self.staging.as_ref(), w, h, 4, what)?;
+        if src.len() > dst.len() {
+            return Err(refused(what, format!("{:#x} bytes do not fit", src.len())));
         }
         self.cu.memcpy_d2h_async(
-            self.stream,
+            &self.stream,
             &dst.buf,
             0,
-            p,
-            n,
+            src,
             "cuMemcpyDtoHAsync(display frame)",
         )
     }
@@ -1362,32 +1451,32 @@ impl DisplayGpu {
     /// Refused by name: no pack kernel, an unknown slot, no composition, a bound; the CUDA error.
     pub fn compose_to_slot(&self, slot: SlotId, pack: &BlPack) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_to_slot";
-        let Some((src, staging_bytes)) = self.staging else {
+        let Some(src) = self.staging.as_ref() else {
             return Err(refused(what, "no composition was begun".into()));
         };
-        self.launch_pack(src, staging_bytes as u64, slot, pack, what)
+        self.launch_pack(src.whole(), slot, pack, what)
     }
 
     /// The pack launch: [`BlPack::check`] first, then `ceil(gobs / 8)` CTAs of 256 threads.
     fn launch_pack(
         &self,
-        src: CUdeviceptr,
-        src_bytes: u64,
+        src: DevSpan<'_>,
         slot: SlotId,
         pack: &BlPack,
         what: &'static str,
     ) -> Result<(), CudaError> {
-        let f = *self.pack.as_ref().map_err(|e| refused(what, e.clone()))?;
-        let Some(&(dst, bytes)) = self.slots.get(slot.0) else {
+        let f = self.pack.as_ref().map_err(|e| refused(what, e.clone()))?;
+        let Some(dst) = self.slots.get(slot.0) else {
             return Err(refused(what, format!("{slot:?} was never imported")));
         };
-        pack.check(bytes, src_bytes).map_err(|e| refused(what, e))?;
+        pack.check(dst.len() as u64, src.len() as u64)
+            .map_err(|e| refused(what, e))?;
         let grid = u32::try_from(pack.gobs.div_ceil(u64::from(PACK_THREADS / 32)))
             .map_err(|_| refused(what, format!("{pack:?}: too many GOBs")))?;
         let u = |x: u32| x.to_le_bytes().to_vec();
         let mut params = vec![
-            src.to_le_bytes().to_vec(),
-            dst.to_le_bytes().to_vec(),
+            src.kernel_arg(),
+            dst.whole().kernel_arg(),
             u(pack.width),
             u(pack.height),
             u(pack.gobs_per_row),
@@ -1400,7 +1489,7 @@ impl DisplayGpu {
             u(pack.bits[4]),
         ];
         self.cu
-            .launch_args(self.stream, f, grid, PACK_THREADS, 0, &mut params, what)
+            .launch_args(&self.stream, f, grid, PACK_THREADS, 0, &mut params, what)
     }
 
     /// ★ Import a display slot — the RM object `fd` (an `/dev/nvidiactl` descriptor RM exported it
@@ -1411,11 +1500,8 @@ impl DisplayGpu {
     /// Refused by name for a bad size; the import step that refused.
     pub fn import_slot(&mut self, fd: i32, bytes: u64) -> Result<SlotId, CudaError> {
         let what = "DisplayGpu::import_slot";
-        if bytes == 0 || !bytes.is_multiple_of(2 << 20) || bytes > 64 << 20 {
-            return Err(refused(what, format!("a {bytes:#x}-byte slot")));
-        }
+        let n = slot_request(self.slots.len(), bytes).map_err(|e| refused(what, e))?;
         self.make_current()?;
-        let n = usize::try_from(bytes).map_err(|_| refused(what, format!("{bytes:#x}")))?;
         let p = self
             .cu
             .import_and_map(self.device, fd, n)
@@ -1424,7 +1510,7 @@ impl DisplayGpu {
                 code: 0,
                 name,
             })?;
-        self.slots.push((p, bytes));
+        self.slots.push(p);
         Ok(SlotId(self.slots.len() - 1))
     }
 
@@ -1435,18 +1521,17 @@ impl DisplayGpu {
     /// Refused for an unknown slot; the CUDA error.
     pub fn zero_slot(&self, slot: SlotId) -> Result<(), CudaError> {
         let what = "DisplayGpu::zero_slot";
-        let Some(&(p, bytes)) = self.slots.get(slot.0) else {
+        let Some(p) = self.slots.get(slot.0) else {
             return Err(refused(what, format!("{slot:?} was never imported")));
         };
-        let n = usize::try_from(bytes).map_err(|_| refused(what, format!("{bytes:#x}")))?;
         self.make_current()?;
-        self.cu.memset_d8(p, 0, n, "cuMemsetD8(display slot)")
+        self.cu.memset_d8(p.whole(), 0, "cuMemsetD8(display slot)")
     }
 
     /// The bytes of slot `slot`.
     #[must_use]
     pub fn slot_bytes(&self, slot: SlotId) -> Option<u64> {
-        self.slots.get(slot.0).map(|s| s.1)
+        self.slots.get(slot.0).map(|s| s.len() as u64)
     }
 
     /// ★ Bring-up self-test of the pack kernel on SYNTHETIC data, into a slot that has NOT been
@@ -1464,7 +1549,7 @@ impl DisplayGpu {
     ) -> Result<Vec<u8>, CudaError> {
         let what = "DisplayGpu::selftest_bl_pack";
         self.make_current()?;
-        let Some(&(p, bytes)) = self.slots.get(slot.0) else {
+        let Some(bytes) = self.slot_bytes(slot) else {
             return Err(refused(what, format!("{slot:?} was never imported")));
         };
         pack.check(bytes, staging.len() as u64)
@@ -1475,12 +1560,16 @@ impl DisplayGpu {
             .mem_alloc_zeroed(staging.len(), "cuMemAlloc(pack selftest)")?;
         let out = (|| {
             self.cu
-                .memcpy_h2d(scratch, staging, "cuMemcpyHtoD(pack selftest)")?;
-            self.launch_pack(scratch, staging.len() as u64, slot, pack, what)?;
+                .memcpy_h2d(scratch.whole(), staging, "cuMemcpyHtoD(pack selftest)")?;
+            self.launch_pack(scratch.whole(), slot, pack, what)?;
             self.cu.ctx_synchronize()?;
             let mut back = vec![0u8; ext];
+            let p = self
+                .slots
+                .get(slot.0)
+                .ok_or_else(|| refused(what, format!("{slot:?} was never imported")))?;
             self.cu
-                .memcpy_d2h(&mut back, p, "cuMemcpyDtoH(pack selftest)")?;
+                .memcpy_d2h(&mut back, p.span(0, ext), "cuMemcpyDtoH(pack selftest)")?;
             Ok(back)
         })();
         self.cu.mem_free(scratch);
@@ -1493,24 +1582,24 @@ impl DisplayGpu {
     /// The compose kernel launch (one CTA per row, 256 threads striding the row).
     fn launch_compose(
         &self,
-        src: CUdeviceptr,
+        src: DevSpan<'_>,
         l: &ComposeLayer,
         w: u32,
         h: u32,
         what: &'static str,
     ) -> Result<(), CudaError> {
-        let f = *self
+        let f = self
             .compose
             .as_ref()
             .map_err(|e| refused(what, e.clone()))?;
-        let Some((dst, _)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
+        // ★★★ D-03: `l.check(w, h)` bounds the kernel's writes by the CALLER's `w x h`; this
+        // bounds that frame by the staging ALLOCATION (the length used to be discarded here).
+        let dst = frame_for(self.staging.as_ref(), w, h, 4, what)?;
         let u = |x: u32| x.to_le_bytes().to_vec();
         let i = |x: i32| x.to_le_bytes().to_vec();
         let mut params = vec![
-            src.to_le_bytes().to_vec(),
-            dst.to_le_bytes().to_vec(),
+            src.kernel_arg(),
+            dst.kernel_arg(),
             u(u32::from(l.block_linear)),
             u(l.pitch),
             u(l.block_height_log2),
@@ -1529,7 +1618,7 @@ impl DisplayGpu {
             i(l.b_d),
         ];
         self.cu
-            .launch_args(self.stream, f, l.rows, 256, 0, &mut params, what)
+            .launch_args(&self.stream, f, l.rows, 256, 0, &mut params, what)
     }
 
     /// ★ Bring-up self-test of the compose kernel on SYNTHETIC data (never guest memory): upload
@@ -1556,24 +1645,15 @@ impl DisplayGpu {
         let scratch = self
             .cu
             .mem_alloc_zeroed(surface.len(), "cuMemAlloc(compose selftest)")?;
+        let n = usize::try_from(l.extent).map_err(|_| refused(what, format!("{l:?}")))?;
         let out = (|| {
             self.cu
-                .memcpy_h2d(scratch, surface, "cuMemcpyHtoD(compose selftest)")?;
+                .memcpy_h2d(scratch.whole(), surface, "cuMemcpyHtoD(compose selftest)")?;
             let frame = self.frame(len)?;
             let run = self
                 .compose_begin(w, h)
-                .and_then(|()| self.launch_compose(scratch, l, w, h, what))
-                .and_then(|()| {
-                    let (p, _) = self.staging.unwrap_or((0, 0));
-                    self.cu.memcpy_d2h_async(
-                        self.stream,
-                        &frame.buf,
-                        0,
-                        p,
-                        len,
-                        "cuMemcpyDtoHAsync(compose selftest)",
-                    )
-                })
+                .and_then(|()| self.launch_compose(scratch.span(0, n), l, w, h, what))
+                .and_then(|()| self.compose_to_host(w, h, &frame))
                 .and_then(|()| self.cu.ctx_synchronize());
             let bytes = run.map(|()| frame.read(0, len));
             let freed = self.release_frame(frame);
@@ -1624,10 +1704,11 @@ impl DisplayGpu {
             image.extend_from_slice(tone.table);
         }
         let scratch = self.cu.mem_alloc_zeroed(image.len(), what)?;
-        let keep = self.store.replace((scratch, image.len() as u64));
+        // the synthetic image stands in for the store while the fixture runs
+        let keep = self.store.replace(scratch);
         self.color_snapshots.fill(None);
         let run = (|| {
-            self.cu.memcpy_h2d(scratch, &image, what)?;
+            self.write_store(0, &image)?;
             self.color_begin(w, h)?;
             let mut l = *layer;
             l.src = 0;
@@ -1656,7 +1737,7 @@ impl DisplayGpu {
                 && let Some(new) = tone.mutate
             {
                 self.cu.ctx_synchronize()?;
-                self.cu.memcpy_h2d(scratch + tone_src, new, what)?;
+                self.write_store(tone_src, new)?;
                 self.color_begin(w, h)?;
                 self.color_pipeline_layer(
                     0,
@@ -1675,8 +1756,7 @@ impl DisplayGpu {
             }
             if let Some(new) = fixture.mutate_input {
                 self.cu.ctx_synchronize()?;
-                self.cu
-                    .memcpy_h2d(scratch + surface.len() as u64, new, what)?;
+                self.write_store(surface.len() as u64, new)?;
                 self.color_begin(w, h)?;
                 self.color_layer(
                     0,
@@ -1721,10 +1801,12 @@ impl DisplayGpu {
             Ok(bytes)
         })();
         let drained = self.cu.ctx_synchronize();
-        self.store = keep;
+        let scratch = core::mem::replace(&mut self.store, keep);
         self.color_snapshots.fill(None);
         // On a CUDA fault retain the scratch allocation until context destruction.
-        if drained.is_ok() {
+        if drained.is_ok()
+            && let Some(scratch) = scratch
+        {
             self.cu.mem_free(scratch);
         }
         let bytes = run?;
@@ -1737,7 +1819,7 @@ impl DisplayGpu {
     /// # Errors
     /// [`CudaError`].
     pub fn make_current(&self) -> Result<(), CudaError> {
-        self.cu.ctx_set_current(self.ctx)
+        self.cu.ctx_set_current(&self.ctx)
     }
 
     /// Import the RM-exported store (`fd` on `/dev/nvidiactl`, `bytes` long) into this context.
@@ -1766,22 +1848,24 @@ impl DisplayGpu {
                 code: 0,
                 name,
             })?;
-        self.store = Some((p, bytes));
+        self.store = Some(p);
         Ok(())
     }
 
     /// The store address of `[off, off+len)`, refused by name unless wholly inside the store.
-    fn at(&self, off: u64, len: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
-        let Some((base, bytes)) = self.store else {
+    fn at(&self, off: u64, len: usize, what: &'static str) -> Result<DevSpan<'_>, CudaError> {
+        let Some(store) = self.store.as_ref() else {
             return Err(refused(what, "no store imported".into()));
         };
-        if off.checked_add(len as u64).is_none_or(|e| e > bytes) {
-            return Err(refused(
+        store.try_span(off, len).ok_or_else(|| {
+            refused(
                 what,
-                format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store"),
-            ));
-        }
-        Ok(base + off)
+                format!(
+                    "[{off:#x}, +{len:#x}) leaves the {:#x}-byte store",
+                    store.len()
+                ),
+            )
+        })
     }
 
     /// ★ Read `buf.len()` bytes of the store at `off` — the GPU copies them to host memory (the
@@ -1814,25 +1898,27 @@ impl DisplayGpu {
         let n = usize::try_from(len)
             .map_err(|_| refused("DisplayGpu::zero_store", format!("{len:#x}")))?;
         let dst = self.at(off, n, "DisplayGpu::zero_store")?;
-        self.cu
-            .memset_d8(dst, 0, n, "cuMemsetD8(display zero_store)")
+        self.cu.memset_d8(dst, 0, "cuMemsetD8(display zero_store)")
     }
 }
 
 impl Drop for DisplayGpu {
     fn drop(&mut self) {
         // the stream drains (every queued host signal with it) before the context goes
-        self.cu.stream_destroy(self.stream);
-        self.cu.event_destroy(self.color_event);
-        self.cu.event_destroy(self.signal_event);
-        if let Some((p, _)) = self.staging.take() {
+        let stream = core::mem::replace(&mut self.stream, StreamHandle::null());
+        self.cu.stream_destroy(stream);
+        let ev = core::mem::replace(&mut self.color_event, EventHandle::null());
+        self.cu.event_destroy(ev);
+        let ev = core::mem::replace(&mut self.signal_event, EventHandle::null());
+        self.cu.event_destroy(ev);
+        if let Some(p) = self.staging.take() {
             self.cu.mem_free(p);
         }
         // the checksum's page-locked half is the context's, reclaimed with it
         if let Some((p, _, _)) = self.sums.take() {
             self.cu.mem_free(p);
         }
-        if let Some((p, _)) = self.color_frame.take() {
+        if let Some(p) = self.color_frame.take() {
             self.cu.mem_free(p);
         }
         if let Some(p) = self.color_luts.take() {
@@ -1848,13 +1934,173 @@ impl Drop for DisplayGpu {
             self.cu.mem_free(a);
             self.cu.mem_free(b);
         }
-        self.cu.ctx_destroy(self.ctx);
+        let ctx = core::mem::replace(&mut self.ctx, CtxHandle::null());
+        self.cu.ctx_destroy(ctx);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ═══ D-03 / D-11 (security review 2, 2026-11-13): hostile arguments are refused ═══
+
+    /// The review's scenario: a 64 x 64 staging frame (16 KiB) and a layer composed into a frame the
+    /// caller says is 16384 x 16384. The kernel would write ~1 GiB past the allocation.
+    #[test]
+    fn d03_a_frame_larger_than_the_staging_allocation_is_refused() {
+        let buf = DevBuf::fake(64 * 64 * 4);
+        let staging = Some(&buf);
+        let len = |r: Result<DevSpan<'_>, CudaError>| r.ok().map(|s| s.len());
+        assert!(frame_for(staging, 16384, 16384, 4, "t").is_err());
+        assert!(
+            frame_for(staging, 64, 65, 4, "t").is_err(),
+            "one row too many"
+        );
+        assert!(
+            frame_for(staging, 65, 64, 4, "t").is_err(),
+            "one column too many"
+        );
+        assert!(
+            frame_for(staging, 64, 64, 16, "t").is_err(),
+            "the FP32 colour frame's 16 bytes per pixel counted, not 4"
+        );
+        assert_eq!(len(frame_for(staging, 64, 64, 4, "t")), Some(64 * 64 * 4));
+        assert_eq!(len(frame_for(staging, 32, 128, 4, "t")), Some(32 * 128 * 4));
+        assert_eq!(
+            len(frame_for(staging, 8, 8, 4, "t")),
+            Some(256),
+            "the span is exactly the frame, not the allocation"
+        );
+        assert!(frame_for(staging, 0, 0, 4, "t").is_err(), "an empty frame");
+        // a product that wraps to a small number (3 x 1 x bpp = 2^64 + 2) must not pass as 2 bytes
+        assert!(frame_for(staging, 3, 1, 6_148_914_691_236_517_206, "t").is_err());
+    }
+
+    /// The same bound counted from the other side: exactly the launch sites that write a frame
+    /// take it from [`frame_for`] (validations before a snapshot, and the spans the launches use).
+    #[test]
+    fn d03_frame_for_guards_every_frame_argument() {
+        let src = include_str!("display.rs");
+        let needle = ["frame_for(", "self."].concat();
+        assert_eq!(
+            src.matches(&needle).count(),
+            12,
+            "a frame-writing launch lost (or gained an unreviewed) frame_for check"
+        );
+    }
+
+    #[test]
+    fn d03_no_frame_an_empty_frame_and_overflow_are_refused() {
+        assert!(frame_for(None, 1, 1, 4, "t").is_err());
+        let huge = DevBuf::fake(usize::MAX);
+        let big = Some(&huge);
+        assert!(frame_for(big, 0, 64, 4, "t").is_err());
+        assert!(frame_for(big, 64, 0, 4, "t").is_err());
+        // u32::MAX^2 * 16 overflows u64: refused, never wrapped into a small length
+        assert!(frame_for(big, u32::MAX, u32::MAX, 16, "t").is_err());
+        assert!(frame_for(big, u32::MAX, u32::MAX, 4, "t").is_err());
+        assert!(
+            frame_for(big, 65536, 65536, 16, "t").is_ok(),
+            "no false overflow"
+        );
+        let four = DevBuf::fake(4);
+        assert!(frame_for(Some(&four), 3, 1, 6_148_914_691_236_517_206, "t").is_err());
+        let b15 = DevBuf::fake(15);
+        assert!(
+            frame_for(Some(&b15), 2, 2, 4, "t").is_err(),
+            "one byte short"
+        );
+        let b16 = DevBuf::fake(16);
+        assert!(
+            frame_for(Some(&b16), 2, 2, 4, "t").is_ok(),
+            "exactly the frame"
+        );
+    }
+
+    /// ★ The check is reached: every launch that writes a staging or colour frame takes its
+    /// destination from [`frame_for`], and no launch path discards the allocation's length again.
+    /// (A source test, the repo's pattern for "this call must be on this path"; the GPU-free fake
+    /// driver of the driver perimeter PR runs the real path.)
+    #[test]
+    fn d03_every_frame_writing_launch_checks_the_allocation() {
+        let src = include_str!("display.rs");
+        let body = |name: &str| -> &str {
+            let at = src
+                .find(&format!("fn {name}("))
+                .unwrap_or_else(|| panic!("NON-VACUITY: fn {name} is gone"));
+            let rest = &src[at..];
+            &rest[..rest.find("\n    }\n").expect("end of fn")]
+        };
+        let guard = ["frame_for(", "self."].concat();
+        for f in [
+            "launch_compose",
+            "compose_yuv",
+            "color_yuv",
+            "color_pipeline_layer",
+            "color_output",
+        ] {
+            assert!(
+                body(f).contains(&guard),
+                "{f} launches a frame-writing kernel without frame_for (D-03)"
+            );
+        }
+        // built from two pieces so this test's own text does not contain it
+        let discard = ["let Some((dst, _)) ", "= self.staging"].concat();
+        assert!(
+            !src.contains(&discard),
+            "a launch path discards the staging allocation's length again (D-03)"
+        );
+    }
+
+    #[test]
+    fn d11_the_staging_frame_is_capped_at_4k() {
+        assert_eq!(staging_request(3840, 2160), Ok(3840 * 2160 * 4));
+        assert_eq!(staging_request(2160, 3840), Ok(3840 * 2160 * 4));
+        assert!(staging_request(3840, 2161).is_err());
+        assert!(staging_request(16384, 16384).is_err(), "the 1 GiB request");
+        assert!(staging_request(16385, 1).is_err());
+        assert!(staging_request(0, 1).is_err());
+        assert!(staging_request(1, 0).is_err());
+        assert_eq!(staging_request(1, 1), Ok(4));
+    }
+
+    #[test]
+    fn d11_no_request_above_the_pixel_cap_passes() {
+        for w in [1u32, 2, 1920, 3840, 4096, 7680, 16384] {
+            let h_max = u32::try_from(MAX_STAGING_PIXELS / u64::from(w)).unwrap_or(u32::MAX);
+            for h in [h_max, h_max + 1, h_max.saturating_mul(2)] {
+                let ok = h > 0 && h <= 16384 && u64::from(w) * u64::from(h) <= MAX_STAGING_PIXELS;
+                assert_eq!(staging_request(w, h).is_ok(), ok, "{w}x{h}");
+            }
+        }
+    }
+
+    #[test]
+    fn d11_the_import_cap_counts_imports() {
+        for imported in 0..=MAX_IMPORTED_SLOTS + 4 {
+            assert_eq!(
+                slot_request(imported, 2 << 20).is_ok(),
+                imported < MAX_IMPORTED_SLOTS,
+                "{imported} already imported"
+            );
+        }
+    }
+
+    #[test]
+    fn d11_slot_imports_are_capped() {
+        let mib = 1u64 << 20;
+        assert_eq!(slot_request(0, 2 * mib), Ok(2 << 20));
+        assert_eq!(slot_request(MAX_IMPORTED_SLOTS - 1, 64 * mib), Ok(64 << 20));
+        assert!(
+            slot_request(MAX_IMPORTED_SLOTS, 2 * mib).is_err(),
+            "the 17th import"
+        );
+        assert!(slot_request(usize::MAX, 2 * mib).is_err());
+        assert!(slot_request(0, 66 * mib).is_err());
+        assert!(slot_request(0, 3 * mib).is_err());
+        assert!(slot_request(0, 0).is_err());
+    }
 
     #[test]
     fn color_ptx_matches_its_source_and_launch_abi() {
@@ -2102,6 +2348,69 @@ mod tests {
         }
     }
 
+    /// A packed 4:2:2 window with an ODD right
+    /// edge reads the last pixel's chroma 2 bytes past `x_end * 2` (the second half of its 4-byte
+    /// macropixel). The launch check counts whole macropixels: an extent that ends at `x_end * 2`
+    /// is refused, one that ends at `x_end.div_ceil(2) * 4` is accepted; an even edge is unchanged.
+    #[test]
+    fn a_packed_yuv_launch_with_an_odd_right_edge_is_bounded_in_whole_macropixels() {
+        for layout in [2, 3] {
+            // the review's model example: x 37, width 32 (x_end 69), y 11, height 4, pitch 256
+            let odd = YuvLayer {
+                y_src: 0,
+                y_extent: 14 * 256 + 140,
+                c_src: 0,
+                c_extent: 14 * 256 + 140,
+                block_linear: false,
+                y_pitch: 256,
+                c_pitch: 256,
+                block_height_log2: 0,
+                sx0: 37,
+                sy0: 11,
+                sw: 32,
+                sh: 4,
+                ox: 0,
+                oy: 0,
+                dw: 32,
+                dh: 4,
+                sub_x_log2: 1,
+                sub_y_log2: 0,
+                vu_first: false,
+                layout,
+                filter: 0,
+                fmt: [0; 12],
+            };
+            assert_eq!(
+                odd.check(64, 8),
+                Ok(()),
+                "layout {layout}: whole macropixels"
+            );
+            for short in [14 * 256 + 138, 14 * 256 + 139] {
+                assert!(
+                    YuvLayer {
+                        y_extent: short,
+                        c_extent: short,
+                        ..odd
+                    }
+                    .check(64, 8)
+                    .is_err(),
+                    "layout {layout}: extent {short:#x} stops inside the last macropixel"
+                );
+            }
+            // an even right edge (x_end 68) needs exactly x_end * 2 bytes, as before
+            let even = YuvLayer {
+                sw: 31,
+                dw: 31,
+                y_extent: 14 * 256 + 136,
+                c_extent: 14 * 256 + 136,
+                ..odd
+            };
+            assert_eq!(even.check(64, 8), Ok(()), "layout {layout}: even edge");
+            // ⊘ block-linear is unaffected: its extent is whole GOB rows, and with a GOB a
+            // multiple of 4 bytes an odd `x_end * 2` and its macropixel end share a GOB column
+        }
+    }
+
     /// The YUV launch is bounded before it is queued, independently of the planner.
     #[test]
     fn a_yuv_launch_is_bounded_before_it_is_queued() {
@@ -2135,7 +2444,7 @@ mod tests {
             ..ok
         };
         assert_eq!(ok.check(120, 90), Ok(()));
-        // ⊘ 2026-10-14: a destination past the frame edge is drawn clipped (the kernel guards the
+        // A destination past the frame edge is drawn clipped (the kernel guards the
         // writes); one that STARTS outside the frame is refused
         assert_eq!(ok.check(109, 69), Ok(()), "right and bottom edges cut");
         assert!(ok.check(10, 90).is_err(), "starts right of the frame");
@@ -2293,5 +2602,343 @@ mod tests {
             ComposeLayer { flags: 16, ..p }.check(1920, 1080).is_err(),
             "an unknown flag"
         );
+    }
+}
+
+/// ★★★ Security review 2 (2026-11-13): the display worker's GPU calls over the fake driver — every
+/// launch's parameter list checked against the committed PTX (D-01), every frame against its
+/// allocation (D-03), with no GPU.
+#[cfg(test)]
+mod fake_driver_tests {
+    use super::*;
+    use crate::driver_unsafe::fake;
+
+    fn gpu() -> DisplayGpu {
+        let mut g = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").expect("fake");
+        g.import_store(3, 1 << 20).unwrap();
+        let _ = fake::calls();
+        g
+    }
+
+    fn layer(w: u32, h: u32) -> ComposeLayer {
+        ComposeLayer {
+            src: 0,
+            extent: u64::from(w) * u64::from(h) * 4,
+            block_linear: false,
+            pitch: w * 4,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: 0,
+            width: w,
+            rows: h,
+            ox: 0,
+            oy: 0,
+            flags: 0,
+            a_s: 0,
+            b_s: 0,
+            a_d: 0,
+            b_d: 0,
+        }
+    }
+
+    fn yuv(w: u32, h: u32) -> YuvLayer {
+        YuvLayer {
+            y_src: 0,
+            y_extent: u64::from(w) * u64::from(h),
+            c_src: 1 << 19,
+            c_extent: u64::from(w) * u64::from(h) / 2,
+            block_linear: false,
+            y_pitch: w,
+            c_pitch: w,
+            block_height_log2: 0,
+            sx0: 0,
+            sy0: 0,
+            sw: w,
+            sh: h,
+            ox: 0,
+            oy: 0,
+            dw: w,
+            dh: h,
+            sub_x_log2: 1,
+            sub_y_log2: 1,
+            vu_first: false,
+            layout: 0,
+            filter: 0,
+            fmt: [0; 12],
+        }
+    }
+
+    #[test]
+    fn every_display_launch_matches_its_ptx_signature() {
+        let mut g = gpu();
+        g.compose_begin(64, 64).unwrap();
+        g.compose_layer(&layer(64, 64), 64, 64).unwrap();
+        g.cursor_upload(&[0u8; 32 * 32 * 4]).unwrap();
+        g.compose_cursor(&layer(32, 32), 64, 64).unwrap();
+        g.compose_yuv(&yuv(64, 64), 64, 64).unwrap();
+        g.compose_checksum(64, 64).unwrap();
+        let slot = g.import_slot(3, 2 << 20).unwrap();
+        let pack = BlPack {
+            width: 64,
+            height: 64,
+            gobs_per_row: 4,
+            h_log2: 0,
+            gobs: 32,
+            bits: [4, 5, 6, 7, 8],
+        };
+        g.compose_to_slot(slot, &pack).unwrap();
+        g.color_begin(64, 64).unwrap();
+        g.color_layer(0, &layer(64, 64), None, 64, 64).unwrap();
+        g.color_yuv(&yuv(64, 64), 64, 64).unwrap();
+        g.color_output(64, 64, None, &[0; 12]).unwrap();
+        // compose, cursor, yuv, sum, pack, colour compose, colour yuv, colour output
+        assert_eq!(fake::launches(), 8);
+    }
+
+    /// The review's D-03 scenario through the real paths: a 64 x 64 staging frame, every
+    /// frame-writing launch asked for a 16384 x 16384 frame. Refused; no launch reaches the driver.
+    #[test]
+    fn d03_no_frame_writing_launch_exceeds_the_staging_allocation() {
+        let mut g = gpu();
+        g.compose_begin(64, 64).unwrap();
+        g.cursor_upload(&[0u8; 64 * 64 * 4]).unwrap();
+        let _ = fake::calls();
+        let far = ComposeLayer {
+            oy: 16000,
+            rows: 1,
+            ..layer(64, 1)
+        };
+        assert!(g.compose_layer(&far, 16384, 16384).is_err());
+        assert!(g.compose_cursor(&far, 16384, 16384).is_err());
+        let yfar = YuvLayer {
+            oy: 16000,
+            ..yuv(64, 64)
+        };
+        assert!(g.compose_yuv(&yfar, 16384, 16384).is_err());
+        assert!(g.compose_checksum(16384, 16384).is_err());
+        assert_eq!(fake::launches(), 0, "{:?}", fake::calls());
+        g.color_begin(64, 64).unwrap();
+        let _ = fake::calls();
+        assert!(g.color_layer(0, &far, None, 16384, 16384).is_err());
+        assert!(g.color_yuv(&yfar, 16384, 16384).is_err());
+        assert!(g.color_output(128, 128, None, &[0; 12]).is_err());
+        assert_eq!(fake::launches(), 0, "{:?}", fake::calls());
+    }
+
+    /// ★★ D-15 (2026-11-14): a display bring-up that fails after its context exists (the driver
+    /// refuses an event) destroys the context once; a successful one keeps it.
+    #[test]
+    fn d15_a_failed_display_bring_up_destroys_its_context() {
+        let _ = fake::calls();
+        fake::fail("cuEventCreate");
+        let r = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0");
+        fake::succeed_all();
+        assert!(r.is_err());
+        let calls = fake::calls();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        let g = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+        assert!(!fake::calls().contains(&fake::Call::CtxDestroy));
+        drop(g);
+    }
+
+    /// ★★ D-15 through the display's real import paths (a slot, the store): each half-done
+    /// import is unwound in reverse, and the refused slot is not counted against the cap.
+    #[test]
+    fn d15_a_failed_display_import_is_unwound() {
+        let mut g = gpu();
+        let undo = || -> Vec<fake::Call> {
+            fake::calls()
+                .into_iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        fake::Call::Unmap | fake::Call::AddressFree | fake::Call::Release
+                    )
+                })
+                .collect()
+        };
+        for (step, want) in [
+            ("cuMemAddressReserve", vec![fake::Call::Release]),
+            (
+                "cuMemMap",
+                vec![fake::Call::AddressFree, fake::Call::Release],
+            ),
+            (
+                "cuMemSetAccess",
+                vec![
+                    fake::Call::Unmap,
+                    fake::Call::AddressFree,
+                    fake::Call::Release,
+                ],
+            ),
+        ] {
+            let mut fresh = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+            let _ = fake::calls();
+            fake::fail(step);
+            assert!(g.import_slot(3, 2 << 20).is_err(), "{step}");
+            assert_eq!(undo(), want, "slot, {step}");
+            assert!(fresh.import_store(3, 1 << 20).is_err(), "{step}");
+            assert_eq!(undo(), want, "store, {step}");
+            fake::succeed_all();
+        }
+        g.import_slot(3, 2 << 20).unwrap();
+        assert_eq!(undo(), vec![]);
+    }
+
+    /// ★★ D-05(b) through the display's real paths: a frame whose scanout copy
+    /// (`compose_to_host`) has not completed is not released — neither a page-locked frame
+    /// (`cuMemFreeHost`) nor a broker frame (`cuMemHostUnregister`, its mapping then kept) — and is
+    /// released once the copy completed.
+    #[test]
+    fn d05b_a_frame_under_a_queued_copy_is_not_released() {
+        let mut g = gpu();
+        g.compose_begin(16, 16).unwrap();
+        let gone = |c: &[fake::Call]| {
+            c.iter()
+                .filter(|c| matches!(c, fake::Call::FreeHost | fake::Call::HostUnregister))
+                .count()
+        };
+        // page-locked frame
+        let f = g.frame(16 * 16 * 4).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        fake::fail("cuEventQuery");
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0);
+        fake::succeed_all();
+        let f = g.frame(16 * 16 * 4).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        let _ = fake::calls();
+        g.release_frame(f).unwrap();
+        assert_eq!(gone(&fake::calls()), 1);
+        // a copy whose fence could not be recorded: the frame is never released alone
+        let f = g.frame(16 * 16 * 4).unwrap();
+        fake::fail("cuEventRecord");
+        assert!(g.compose_to_host(16, 16, &f).is_err());
+        fake::succeed_all();
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0);
+        // a frame no copy targeted is released
+        let f = g.frame(64).unwrap();
+        g.release_frame(f).unwrap();
+        // a broker frame (a mapping page-locked by registration): not unregistered under a copy
+        let page = kf_linux_raw::HostPageSize::query();
+        let map = || {
+            kf_linux_raw::MappedRegion::map(
+                kf_linux_raw::Backing::PrivateAnonymous,
+                page.bytes(),
+                kf_linux_raw::HostProt::ReadWrite,
+                kf_linux_raw::CachePolicy::WriteBack,
+                page,
+            )
+            .unwrap()
+        };
+        let f = g.frame_over(map()).map_err(|(e, _)| e).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        fake::fail("cuEventQuery");
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0, "registration and mapping kept");
+        fake::succeed_all();
+        let f = g.frame_over(map()).map_err(|(e, _)| e).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        let _ = fake::calls();
+        g.release_frame(f).unwrap();
+        assert_eq!(gone(&fake::calls()), 1);
+        // checksum buffers: a queued checksum's host half is freed only after the stream drained
+        g.compose_checksum(16, 16).unwrap();
+        g.compose_begin(16, 32).unwrap();
+        fake::fail("cuEventQuery");
+        assert!(
+            g.compose_checksum(16, 32).is_err(),
+            "the old row buffer is still a copy target"
+        );
+        fake::succeed_all();
+    }
+
+    /// ★ F-7 / S1-05: the display context records the driver's pageable-memory answer at
+    /// bring-up; a refused question is "unknown", never "no".
+    #[test]
+    fn f7_the_display_records_whether_kernels_reach_pageable_memory() {
+        assert_eq!(gpu().pageable_memory_access(), Some(false));
+        fake::fail("cuDeviceGetAttribute");
+        let g = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+        fake::succeed_all();
+        assert_eq!(g.pageable_memory_access(), None);
+    }
+
+    /// ★ F-6 / D-09 through the real launch path: an odd-edged packed window whose extent stops at
+    /// `x_end * 2` is refused before anything is queued (compose and colour); the whole-macropixel
+    /// extent launches.
+    #[test]
+    fn f6_an_odd_packed_window_is_refused_before_the_launch_unless_whole_macropixels_fit() {
+        let mut g = gpu();
+        g.compose_begin(64, 8).unwrap();
+        g.color_begin(64, 8).unwrap();
+        for layout in [2, 3] {
+            let odd = YuvLayer {
+                y_extent: 14 * 256 + 140,
+                c_extent: 14 * 256 + 140,
+                y_pitch: 256,
+                c_pitch: 256,
+                c_src: 0,
+                sx0: 37,
+                sy0: 11,
+                sw: 32,
+                sh: 4,
+                dw: 32,
+                dh: 4,
+                sub_y_log2: 0,
+                layout,
+                ..yuv(64, 8)
+            };
+            let short = YuvLayer {
+                y_extent: 14 * 256 + 138,
+                c_extent: 14 * 256 + 138,
+                ..odd
+            };
+            let _ = fake::calls();
+            assert!(g.compose_yuv(&short, 64, 8).is_err(), "layout {layout}");
+            assert!(g.color_yuv(&short, 64, 8).is_err(), "layout {layout}");
+            assert_eq!(fake::launches(), 0, "{:?}", fake::calls());
+            g.compose_yuv(&odd, 64, 8).unwrap();
+            g.color_yuv(&odd, 64, 8).unwrap();
+            assert_eq!(fake::launches(), 2, "layout {layout}");
+        }
+    }
+
+    #[test]
+    fn d11_the_caps_hold_through_the_real_paths() {
+        let mut g = gpu();
+        assert!(
+            g.compose_begin(16384, 16384).is_err(),
+            "the 1 GiB staging request"
+        );
+        for _ in 0..MAX_IMPORTED_SLOTS {
+            g.import_slot(3, 2 << 20).unwrap();
+        }
+        assert!(g.import_slot(3, 2 << 20).is_err(), "the 17th slot");
+    }
+
+    #[test]
+    fn d05a_a_frame_read_after_its_context_died_is_refused() {
+        let g = gpu();
+        let f = g.frame(4096).unwrap();
+        assert_eq!(f.read(0, 16).len(), 16);
+        drop(g);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f.read(0, 16)));
+        assert!(
+            r.is_err(),
+            "a read of a frame whose context was destroyed is refused"
+        );
+        std::mem::forget(f);
     }
 }

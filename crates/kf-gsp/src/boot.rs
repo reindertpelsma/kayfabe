@@ -134,7 +134,7 @@ pub struct GspAbi {
     pub init_args: InitArgsLayout,
     /// The wire-layout table for the detected driver version. Keyed on the **full**
     /// `major.minor.patch`, with `NoTableForVersion` below the floor — never a
-    /// nearest-neighbour fallback (`rs: crates/kayfabe-abi/src/versions.rs`).
+    /// nearest-neighbour fallback (`rs: crates/kf-abi/src/versions.rs`).
     pub driver: DriverAbiTable,
 }
 
@@ -174,7 +174,7 @@ pub struct QueueBinding {
     /// `ogkm-610: :1436`, `ogkm-580: :1479`). The allowlist it guards has eight entries at
     /// 610 and six at 580 — see the crate-level note above.
     peer_read_at_bind: u32,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
+    /// (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
     /// ([`Transition::E15`]) — the peer's status-queue read pointer when the saved binding was
     /// restored. A resume does not re-link (the guest's `rxReadPtr` continues where it stopped,
     /// `ogkm-580: kernel_gsp_tu102.c:563-570`), so "the guest consumed `GSP_INIT_DONE`" is "the
@@ -262,12 +262,12 @@ pub enum Transition {
     E10,
     /// `device_reset` → `Cold`, unbound, every counter zero.
     E11,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
+    /// (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
     /// life a PM-transition suspend ended ([`GspFsm::wake_reset`]): every register back to
     /// power-on (`Cold`), and the saved GSP-RM state — the queue binding, both cursors and both
     /// sequence numbers — kept, as Booter Unload's suspend/resume data keeps it on silicon.
     E14,
-    /// ★ 2026-10-14 — the resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
+    /// The resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
     /// saved binding restored **without a publish** (no header write, no re-link, sequence numbers
     /// continue), `GSP_INIT_DONE` posted into it.
     E15,
@@ -388,6 +388,43 @@ struct HeldReply {
     detail: Option<u32>,
 }
 
+/// ★ Security review 1, F-09 (2026-11-13): the replies a command earned whose post the status
+/// queue refused ([`GspFault::QueueFull`]). The command stays unconsumed (answer-then-commit), so
+/// the next doorbell re-reads it; it is then answered from HERE, not by asking the policy again.
+/// Before, every doorbell against a full status queue re-ran `CommandPolicy::respond` (with its
+/// side effects on the object graph, the channel plane and the host) for the same command.
+///
+/// Keyed by the command's function code, sequence and payload: a different command at that queue
+/// position (a guest that rewrote its own ring) is answered afresh and the entry is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OwedReply {
+    code: u32,
+    sequence: u32,
+    payload: Vec<u8>,
+    /// Posted in order, all or none.
+    replies: Vec<OutgoingRpc>,
+    /// The reply whose status the refusal ledger records (the last one the guest reads).
+    ledger: OutgoingRpc,
+    /// What the command carried, for the ledger.
+    detail: Option<u32>,
+    /// The policy had no answer: reported as unserviced once, when the reply is posted.
+    unserviced: Option<Unserviced>,
+}
+
+impl OwedReply {
+    fn answers(&self, cmd: &RpcCommand) -> bool {
+        self.code == cmd.code && self.sequence == cmd.sequence && self.payload == cmd.payload
+    }
+}
+
+/// ★ Security review 1, F-10 (2026-11-13): the most replies [`GspFsm`] holds for a refresh or a
+/// host act. A GSP client's RPCs are synchronous (one in flight per client thread), so a real
+/// guest holds a handful; past this the drain stops consuming commands (back-pressure: they stay
+/// in the guest's own ring, unanswered and unconsumed, counted in [`GspFsm::held_full_stalls`])
+/// until [`GspFsm::release_held`] frees room. Nothing is dropped: a dropped reply is a guest
+/// hang, and a guest that fills this hangs only itself.
+pub const MAX_HELD: usize = 1024;
+
 /// ★★★ **A reply whose STATUS is the outcome of a host act still in progress** (P5b).
 ///
 /// The answer to a channel's allocation IS its birth (`THE_ARCHITECTURE_v3.md` §7), and a birth
@@ -410,21 +447,6 @@ struct HeldReply {
 pub struct Deferred {
     outcome: std::sync::Arc<core::sync::atomic::AtomicU64>,
     undo: std::sync::Arc<std::sync::Mutex<Option<OrphanUndo>>>,
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the HOST's reply bytes, written into the held reply when the
-    /// act succeeded ([`Self::set_reply_patch`]). `None` for every other act.
-    patch: std::sync::Arc<std::sync::Mutex<Option<ReplyPatch>>>,
-}
-
-/// ★ EXPERIMENT `KF3_GSS_NATIVE`: bytes an act wants in its held reply's payload, at `at`. Applied by
-/// [`GspFsm::release_held`] only when the act resolved `NV_OK` and only inside the payload the reply
-/// already has (the reply is clamped to the request's own size, `RpcCommand::reply`): a patch never
-/// grows a reply.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplyPatch {
-    /// Offset into the reply payload.
-    pub at: usize,
-    /// The bytes.
-    pub bytes: Vec<u8>,
 }
 
 /// What undoes a deferred act whose command another link refused ([`Deferred::on_orphaned`]).
@@ -441,23 +463,7 @@ impl Deferred {
         Deferred {
             outcome: std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)),
             undo: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            patch: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the bytes the held reply carries when the act succeeds. Set
-    /// BEFORE [`Self::resolve`] (the reply may be posted the moment the cell resolves). A second
-    /// call replaces the first.
-    pub fn set_reply_patch(&self, at: usize, bytes: Vec<u8>) {
-        if let Ok(mut p) = self.patch.lock() {
-            *p = Some(ReplyPatch { at, bytes });
-        }
-    }
-
-    /// The reply patch, if one was set (a copy: a post that fails is retried).
-    #[must_use]
-    pub fn reply_patch(&self) -> Option<ReplyPatch> {
-        self.patch.lock().ok().and_then(|p| p.clone())
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
@@ -529,7 +535,7 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
         None => false,
         Some(0) if rpc.rpc_result != 0 => {
             let undone = d.run_orphan_undo();
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — {}",
                 rpc.function,
                 rpc.sequence,
@@ -542,16 +548,9 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
             );
             true
         }
-        Some(0) => {
-            // ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes, only inside the payload the reply has.
-            if let Some(p) = d.reply_patch()
-                && let Some(end) = p.at.checked_add(p.bytes.len())
-                && let Some(dst) = rpc.payload.get_mut(p.at..end)
-            {
-                dst.copy_from_slice(&p.bytes);
-            }
-            true
-        }
+        // A succeeded act posts the reply exactly as the link built it. The removed
+        // `KF3_GSS_NATIVE` experiment's reply patch (host bytes into the guest's reply) is gone.
+        Some(0) => true,
         Some(status) => {
             rpc.rpc_result = status;
             rpc.rpc_result_private = status;
@@ -693,7 +692,7 @@ impl core::fmt::Debug for Observing {
 ///
 /// ★★ **CORRECTED 2026-07-29 by the trace differential — this is NOT a faithful model of
 /// the C, and the doc used to claim it was.** Replaying `cap1` against this policy
-/// (`kayfabe-crec`) produced two replies that agree with the C on every field a guest
+/// (`kf-crec`) produced two replies that agree with the C on every field a guest
 /// matches on — slot, `seqNum`, `function`, `sequence`, `rpc_result` **and `rpc.length`** —
 /// and differ in the **body**. The C special-cases at least `GET_GSP_STATIC_INFO` (fn 65),
 /// splicing a captured GA106 `GspStaticConfigInfo` blob into the reply
@@ -897,15 +896,20 @@ pub struct GspFsm {
     /// than inside one held store.
     pending_command_doorbells: u32,
     /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
-    /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
-    /// and the order replies are posted in is the order the guest asked for them.
-    held: Vec<HeldReply>,
+    /// ⊘ A queue and not a map: it is ordered, and the order replies are posted in is the
+    /// order the guest asked for them.
+    /// ★ Bounded by [`MAX_HELD`] (security review 1, F-10).
+    held: std::collections::VecDeque<HeldReply>,
+    /// ★ Security review 1, F-10: drain passes that stopped because [`MAX_HELD`] replies were held.
+    held_full_stalls: u64,
+    /// ★ Security review 1, F-09: the replies of the command whose post found the status queue full.
+    owed: Option<OwedReply>,
     /// ★★★ v3-refusals: every non-`NV_OK` reply posted, keyed by what it answered
     /// ([`crate::refusal`]). Written at the two posting sites only; answers nothing.
     refusals: crate::refusal::RefusalLedger,
     /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
     bcr_ctrl: Option<u32>,
-    /// ★ 2026-10-14: the guest's last `NV_PGSP_FALCON_ENGINE` write ([`GspReg::GspFalconEngine`]).
+    /// The guest's last `NV_PGSP_FALCON_ENGINE` write ([`GspReg::GspFalconEngine`]).
     falcon_engine: Option<u32>,
     /// ★ w828: how the life that is running now STOPS after fn-47 — latched from the regime that
     /// STARTED the processor ([`BootStep::StartProcessor`]), because the FSM holds no model
@@ -1012,14 +1016,14 @@ pub struct GspFsm {
     /// Found by B4's drain-on-publish: before it, the first *doorbell* after a re-acquire
     /// hit exactly the same wall, but no test rang one.
     cmd_read_ptr: u32,
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
+    /// (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
     /// **inert** when the life entered `Halted` from `Suspending` (E2/E4/E13): nothing reads guest
     /// RAM through it (a doorbell while `Halted` is still [`Transition::E8`], zero reads). Only a
     /// resume ([`Transition::E15`]) of a life whose fn 47 was a PM transition
     /// ([`GspFsm::note_pm_suspend`]) brings it back; a cold boot (E1), a publish (E6) or a reset
     /// (E11) discards it.
     suspended: Option<QueueBinding>,
-    /// ★ 2026-10-14 — the fn 47 that ended this life said `bInPMTransition` (and not GC6): the
+    /// The fn 47 that ended this life said `bInPMTransition` (and not GC6): the
     /// device decodes the body and tells the FSM ([`GspFsm::note_pm_suspend`]).
     pm_suspend: bool,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
@@ -1110,7 +1114,9 @@ impl GspFsm {
         GspFsm {
             reply_body_trace: crate::replytrace::ReplyBodyTrace::from_host_env(),
             pending_command_doorbells: 0,
-            held: Vec::new(),
+            held: std::collections::VecDeque::new(),
+            held_full_stalls: 0,
+            owed: None,
             refusals: crate::refusal::RefusalLedger::new(),
             bcr_ctrl: None,
             falcon_engine: None,
@@ -1240,7 +1246,7 @@ impl GspFsm {
         Transition::E11
     }
 
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
+    /// (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
     /// transition** (`bInPMTransition`, not GC6), decoded by the device from the body. Recorded
     /// only while that fn 47's suspend is current: `Suspending` (the falcon regime, before its
     /// teardown STARTCPU) or `Halted` with the binding already saved (a regime whose firmware
@@ -1254,7 +1260,7 @@ impl GspFsm {
         current
     }
 
-    /// ★ 2026-10-14 — a saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
+    /// A saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
     /// its binding is kept ([`GspFsm::note_pm_suspend`]).
     #[must_use]
     pub fn resumable(&self) -> bool {
@@ -1417,7 +1423,7 @@ impl GspFsm {
         if w.reg == Some(kf_arch::gsp::GspReg::GspRiscvBcrCtrl) {
             self.bcr_ctrl = Some(val as u32);
         }
-        // ★ 2026-10-14: likewise the GSP reset FSM's register (`GspReg::GspFalconEngine`).
+        // Likewise the GSP reset FSM's register (`GspReg::GspFalconEngine`).
         if w.reg == Some(kf_arch::gsp::GspReg::GspFalconEngine) {
             self.falcon_engine = Some(val as u32);
         }
@@ -1493,7 +1499,7 @@ impl GspFsm {
             BootStep::BootArgsLo(v) => {
                 self.mailbox_lo = v;
                 self.boot_args_seen.0 = true;
-                // ★ 2026-10-24 (B1n, GB205 + Windows 580.88): the suspend sentinel lives in MAILBOX0,
+                // The suspend sentinel lives in MAILBOX0,
                 // and this write replaced it — a register holds what was last written. Left set until
                 // the start, the FMC-direct route's lockdown poll (`_kgspLockdownReleasedOrFmcError`,
                 // `ogkm-580.65.06: kernel_gsp_gh100.c:491-535, 944-948`), which runs before the drainer has
@@ -1557,7 +1563,7 @@ impl GspFsm {
                 //
                 // ⊘ **The oracle covers this line NOT AT ALL**, and that is stated rather
                 // than discovered: `cap1` contains **zero** `IRQSCLR` writes across 359 062
-                // records (`crates/kayfabe-crec/tests/cap1_differential.rs` F-3), because
+                // records (`crates/kf-crec/tests/cap1_differential.rs` F-3), because
                 // the guest never received an interrupt to clear. A green `cap1` diff says
                 // nothing here; only a live boot exercises it. If it never fires, the gate
                 // latches shut after one batch — which is the SAFE direction (no ring
@@ -1578,7 +1584,7 @@ impl GspFsm {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
-                // ★ 2026-10-14: FWSEC runs only on a NORMAL boot (`ogkm-580:
+                // FWSEC runs only on a NORMAL boot (`ogkm-580:
                 // kernel_gsp_tu102.c:514-532`) — the guest is not resuming the saved life.
                 self.suspended = None;
                 self.pm_suspend = false;
@@ -1600,7 +1606,7 @@ impl GspFsm {
     /// Enter `Halted`: WPR2 down and — the load-bearing half — **the binding dropped by
     /// value**.
     fn enter_halted(&mut self) {
-        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
+        // (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
         // INERT, for a resume; nothing reads through it until [`Transition::E15`]. Entering from
         // any other phase saves nothing new and leaves a saved life as it is (a Booter Unload
         // after the teardown STARTCPU already halted it changes nothing about it).
@@ -1621,6 +1627,7 @@ impl GspFsm {
         self.fwsec_image = None;
         self.queue = QueueState::Unbound;
         self.large.reset();
+        self.owed = None;
         self.init_done_posted = false;
         self.swgen0_pending = false;
         // ★ The batch died with the binding: the queue it was posted into is gone, so the
@@ -1679,7 +1686,17 @@ impl GspFsm {
         let mut args_pa = None;
         let mut entry = vec![0u8; layout.entry_stride];
         for i in 0..layout.max_entries {
-            let gpa = boot_args_gpa + (i as u64) * (layout.entry_stride as u64);
+            // ★ Security review 1, F-23 (2026-11-13): `boot_args_gpa` is guest-written; an entry
+            // past the top of the address space is a named refusal, not an overflow panic.
+            let gpa = u64::try_from(i)
+                .ok()
+                .and_then(|i| i.checked_mul(layout.entry_stride as u64))
+                .and_then(|off| boot_args_gpa.checked_add(off))
+                .ok_or(crate::fault::RamRefused {
+                    gpa: boot_args_gpa,
+                    len: layout.entry_stride,
+                    why: "region-array entry past the top of the guest address space",
+                })?;
             ram.read(gpa, &mut entry)?;
             let id = read_u64(&entry, layout.id_offset)?;
             let pa = read_u64(&entry, layout.pa_offset)?;
@@ -1896,7 +1913,7 @@ impl GspFsm {
         // page; `gpa_same=false seq_same=true` would mean a live queue moved, which nothing
         // in 580 does and which we would want to hear about immediately.
         let gpa_same = self.region_identity == Some(shared_mem_pa);
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-PUBLISH gpa=0x{shared_mem_pa:x} gpa_same={gpa_same} seq_last={seq_evidence:?} \
              cmd_seq={} ⇒ same_instance={same_instance}{}",
             self.cmd_seq,
@@ -1913,6 +1930,8 @@ impl GspFsm {
             self.cmd_read_ptr = 0;
         }
         self.region_identity = Some(shared_mem_pa);
+        // A new binding: nothing owed into the old queue carries over.
+        self.owed = None;
         let count = geom.msg_count();
         let peer_read_at_bind = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
         self.queue = QueueState::Bound(QueueBinding {
@@ -1927,7 +1946,7 @@ impl GspFsm {
             peer_read_at_bind,
             resume_mark: None,
         });
-        // ★ 2026-10-14: a publish is a new queue instance — a suspended life is not resumed.
+        // A publish is a new queue instance — a suspended life is not resumed.
         self.suspended = None;
         self.pm_suspend = false;
         self.init_done_posted = false;
@@ -2003,9 +2022,11 @@ impl GspFsm {
         self.phase = BootPhase::Booted;
         self.events_outstanding = false;
         self.init_done_posted = false;
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq={} cmd_seq={} cmd_read_ptr={} peer_stat_read={mark}",
-            self.stat_seq, self.cmd_seq, self.cmd_read_ptr
+            self.stat_seq,
+            self.cmd_seq,
+            self.cmd_read_ptr
         );
         let init_done = OutgoingRpc {
             function: self.abi.rpc.codes.gsp_init_done,
@@ -2221,6 +2242,19 @@ impl GspFsm {
             // retry.
             // ★ Ruling 2: a large control is joined first ([`crate::large`]); the assembler's
             // step is committed only once the command is consumed, so a retried pass rebuilds it.
+            // ★ Security review 1, F-10: no room to hold another reply ⇒ leave this command (and
+            // every later one) unconsumed and unanswered: the policy is not asked, nothing moves.
+            if self.held.len() >= MAX_HELD {
+                self.held_full_stalls = self.held_full_stalls.saturating_add(1);
+                kf_arch::rate_eprintln!(
+                    "kayfabe: HELD-REPLY FULL: {MAX_HELD} replies held; command fn {} seq {} waits \
+                     unconsumed (stall {})",
+                    cmd.code,
+                    cmd.sequence,
+                    self.held_full_stalls
+                );
+                break;
+            }
             let declared = self.large_head_declared(&cmd);
             let consumed = match self.large.step(&cmd, declared) {
                 crate::large::Step::NotLarge => {
@@ -2233,9 +2267,10 @@ impl GspFsm {
                     Some(whole)
                 }
                 crate::large::Step::Refused(why) => {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}",
-                        cmd.code, cmd.sequence
+                        cmd.code,
+                        cmd.sequence
                     );
                     if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
                         self.answer(ram, policy, &cmd, report)?;
@@ -2352,7 +2387,7 @@ impl GspFsm {
             let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
             w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize
         } else {
-            // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
+            // (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
             // outgrew one message — the suspend buffer GSP-RM's heap is saved into
             // (`_fbsrInitGsp`, `ogkm-580: fbsr_gm107.c:104-138`). The layout is the version's
             // generated MemoryList contract; no contract, no join.
@@ -2379,32 +2414,55 @@ impl GspFsm {
         fragments: &[crate::large::Fragment],
         report: &mut ServiceReport,
     ) -> Result<(), GspFault> {
-        let full = match policy.respond(whole) {
-            Some(r) => r.on_wire(whole),
+        // ★ Security review 1, F-09: a retry after `QueueFull` posts what was owed; the policy is
+        // asked once per command.
+        let owed = match self.owed.take().filter(|o| o.answers(whole)) {
+            Some(o) => o,
             None => {
-                report.unserviced.push(Unserviced {
+                let mut unserviced = None;
+                let full = match policy.respond(whole) {
+                    Some(r) => r.on_wire(whole),
+                    None => {
+                        unserviced = Some(Unserviced {
+                            code: whole.code,
+                            sequence: whole.sequence,
+                        });
+                        whole.reply(NV_ERR_NOT_SUPPORTED, &[])
+                    }
+                };
+                let replies = if crate::large::bidirectional(whole.function) {
+                    crate::large::split_reply(
+                        &full,
+                        fragments,
+                        self.abi.rpc.codes.continuation_record,
+                    )
+                } else {
+                    // One reply, at the head, carrying only the status the guest reads.
+                    vec![OutgoingRpc {
+                        payload: Vec::new(),
+                        ..full.clone()
+                    }]
+                };
+                OwedReply {
                     code: whole.code,
                     sequence: whole.sequence,
-                });
-                whole.reply(NV_ERR_NOT_SUPPORTED, &[])
+                    payload: whole.payload.clone(),
+                    replies,
+                    detail: self.refusal_detail(whole),
+                    ledger: full,
+                    unserviced,
+                }
             }
         };
-        let replies = if crate::large::bidirectional(whole.function) {
-            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record)
-        } else {
-            // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
-            vec![OutgoingRpc {
-                payload: Vec::new(),
-                ..full.clone()
-            }]
-        };
+        let replies = &owed.replies;
+        let full = owed.ledger.clone();
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
         let geom = binding.geom.clone();
         let element_size = geom.element_size();
         let mut needed = 0u32;
-        for r in &replies {
+        for r in replies {
             let run = encode_message(
                 &self.abi.element,
                 self.abi.rpc.header_version,
@@ -2420,19 +2478,23 @@ impl GspFsm {
             let peer_read = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
             let free = free_elements(peer_read, cursor.write_ptr, geom.msg_count())?;
             if needed > free {
+                self.owed = Some(owed);
                 return Err(GspFault::QueueFull { needed, free });
             }
         }
+        let replies = owed.replies.clone();
         for r in &replies {
             self.post(ram, r)?;
         }
+        if let Some(u) = owed.unserviced {
+            report.unserviced.push(u);
+        }
         // ★ v3-refusals: the guest reads the status from the last reply — one ledger row for the command.
         if full.rpc_result != 0 {
-            let detail = self.refusal_detail(whole);
             self.refusals
-                .note(full.function, detail, full.rpc_result, full.sequence);
+                .note(full.function, owed.detail, full.rpc_result, full.sequence);
         }
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
             whole.code,
             whole.sequence,
@@ -2491,16 +2553,23 @@ impl GspFsm {
         // `memset` of libcuda's stack — with no status anywhere to see it. The whole
         // derivation, the clamps and the ⚠ that this is a RESTORE and not a FILL live on
         // `RpcCommand::reply_alloc`; ⊘ `RpcCommand::reply` is unchanged.
+        // ★ Security review 1, F-09: the retry of a command whose reply found the status queue
+        // full posts what it was owed, without asking the policy (and so without re-running
+        // `respond`'s side effects) a second time.
+        if let Some(o) = self.owed.take().filter(|o| o.answers(cmd)) {
+            return self.post_owed(ram, o, cmd, report);
+        }
         let payload_max = (self.abi.element_size_max as usize)
             .saturating_sub(self.abi.element.hdr_size())
             .saturating_sub(RpcEnvelope::SIZE);
+        let mut unserviced = None;
         let out = match policy.respond(cmd) {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
             }
             Some(r) => r.on_wire(cmd),
             None => {
-                report.unserviced.push(Unserviced {
+                unserviced = Some(Unserviced {
                     code: cmd.code,
                     sequence: cmd.sequence,
                 });
@@ -2531,6 +2600,9 @@ impl GspFsm {
         // deliberately not reachable through it: a teardown reply must never wait on a
         // publication, and it changes no address space, so it never sets the flag.
         if held_this_command {
+            if let Some(u) = unserviced {
+                report.unserviced.push(u);
+            }
             // ⊘⊘ `[measured w425]` this push was SILENT, and the silence read as absence: a
             // whole boot's log carried no held-reply line and I concluded the mechanism never
             // fired. That is the ledger's *"no counter fired is NOT no record exists"* one
@@ -2542,27 +2614,68 @@ impl GspFsm {
             // range completed in the SAME SECOND as the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`
             // that hit it. So "did the hold run" must be legible FROM the artefact, never
             // inferred from the absence of some other line.
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows",
                 cmd.function,
                 self.held.len() + 1
             );
-            self.held.push(HeldReply {
+            self.held.push_back(HeldReply {
                 rpc: out,
                 deferred,
                 alloc: cmd.function == RpcFunction::RmAlloc,
                 detail: self.refusal_detail(cmd),
             });
         } else {
-            self.post(ram, &out)?;
-            // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
-            if out.rpc_result != 0 {
-                let detail = self.refusal_detail(cmd);
-                self.refusals
-                    .note(out.function, detail, out.rpc_result, out.sequence);
+            let owed = OwedReply {
+                code: cmd.code,
+                sequence: cmd.sequence,
+                payload: cmd.payload.clone(),
+                replies: vec![out.clone()],
+                ledger: out,
+                detail: self.refusal_detail(cmd),
+                unserviced,
+            };
+            return self.post_owed(ram, owed, cmd, report);
+        }
+        self.after_answer(cmd, report);
+        Ok(())
+    }
+
+    /// Post `owed`'s reply; on [`GspFault::QueueFull`] keep it for the retry (F-09) and refuse.
+    /// After a successful post: the ledger row, the unserviced report, and fn 47's suspend.
+    fn post_owed(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        owed: OwedReply,
+        cmd: &RpcCommand,
+        report: &mut ServiceReport,
+    ) -> Result<(), GspFault> {
+        // `answer` builds exactly one reply per command; the large path posts its own.
+        for r in &owed.replies {
+            match self.post(ram, r) {
+                Ok(()) => {}
+                Err(e @ GspFault::QueueFull { .. }) => {
+                    self.owed = Some(owed);
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
             }
         }
+        if let Some(u) = owed.unserviced {
+            report.unserviced.push(u);
+        }
+        // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
+        let out = &owed.ledger;
+        if out.rpc_result != 0 {
+            self.refusals
+                .note(out.function, owed.detail, out.rpc_result, out.sequence);
+        }
+        self.after_answer(cmd, report);
+        Ok(())
+    }
 
+    /// What follows a command's answer whatever path it took.
+    fn after_answer(&mut self, cmd: &RpcCommand, report: &mut ServiceReport) {
         if cmd.function == RpcFunction::UnloadingGuestDriver {
             // ★ E9 — reply first, **then** suspend. `MAILBOX0` must report the suspend
             // sentinel afterwards or the guest's close poll spins
@@ -2581,7 +2694,6 @@ impl GspFsm {
             // (`C:2465-2472` records what zeroing them cost).
             self.suspend(report);
         }
-        Ok(())
     }
 
     /// ★ E9 (and, on a regime whose firmware stops itself, E13) — fn-47 has been answered.
@@ -2679,7 +2791,7 @@ impl GspFsm {
             b.stat.free_cache = free - elements;
         }
         self.swgen0_pending = true;
-        // AFTER successful queue publication and any held-reply patch. Never
+        // AFTER successful queue publication. Never
         // records a failed/full-queue attempt; it cannot alter the posted RPC.
         if let Some(record) =
             self.reply_body_trace
@@ -2796,9 +2908,11 @@ impl GspFsm {
         self.pending_command_doorbells = self.pending_command_doorbells.saturating_add(n);
     }
 
+    /// Post every held reply, oldest first, and return how many were posted. A reply stays held
+    /// until its post succeeds.
     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
         let mut posted = 0usize;
-        while let Some(h) = self.held.first() {
+        while let Some(h) = self.held.front() {
             // ⊘ Cloned before the post and removed only AFTER it succeeds. `post` can refuse
             // (an unbound queue, a full ring), and a reply removed by a FAILED post is a
             // reply nobody will ever send — which is a guest hang, not a dropped message.
@@ -2815,7 +2929,7 @@ impl GspFsm {
             }
             let detail = h.detail;
             self.post(ram, &rpc)?;
-            self.held.remove(0);
+            self.held.pop_front();
             // ★ v3-refusals: the FINAL status (after the deferred act resolved it).
             self.refusals
                 .note(rpc.function, detail, rpc.rpc_result, rpc.sequence);
@@ -2825,7 +2939,9 @@ impl GspFsm {
             // ★ The pair of the HELD-REPLY line. Two counters that must be read together:
             // a boot with holds and no releases is a PARKED GUEST, and a boot with neither
             // is a guest that never waited for its rows at all. Neither is visible from one.
-            eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
+            kf_arch::rate_eprintln!(
+                "kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now"
+            );
         }
         Ok(posted)
     }
@@ -2866,6 +2982,13 @@ impl GspFsm {
     #[must_use]
     pub fn held_len(&self) -> usize {
         self.held.len()
+    }
+
+    /// ★ Security review 1, F-10: drain passes that left a command unconsumed because
+    /// [`MAX_HELD`] replies were held (a guest that never lets its refreshes finish).
+    #[must_use]
+    pub const fn held_full_stalls(&self) -> u64 {
+        self.held_full_stalls
     }
 
     /// ★ P5c: post one `RC_TRIGGERED` event (`NV_VGPU_MSG_EVENT_RC_TRIGGERED`) whose body is
@@ -2914,6 +3037,8 @@ impl GspFsm {
         self.post_event(ram, &rpc)
     }
 
+    /// Post one RPC to the guest. Outside the bootup window it is refused with
+    /// [`GspFault::NotRunning`] until the GSP phase is `Running`.
     pub fn post_event(
         &mut self,
         ram: &mut dyn GuestRam,
@@ -3041,7 +3166,7 @@ impl GspFsm {
         // waiting for it would keep the FSM out of `Running` for exactly as long as it
         // keeps answering.
         let drained = match b.resume_mark {
-            // ★ 2026-10-14: a resumed binding was never re-linked — the pointer continues from
+            // A resumed binding was never re-linked — the pointer continues from
             // where the suspend left it, so moving off that value is consuming `GSP_INIT_DONE`.
             Some(mark) => peer_read != mark,
             None => linked && peer_read != 0,
@@ -3054,6 +3179,8 @@ impl GspFsm {
     }
 
     fn commit_command_cursor(&mut self, read_ptr: u32, seq_num: u32) {
+        // The command at the old cursor is consumed: whatever was owed for it has been posted.
+        self.owed = None;
         self.cmd_seq = seq_num;
         self.cmd_read_ptr = read_ptr;
         if let QueueState::Bound(b) = &mut self.queue {
@@ -3303,50 +3430,6 @@ mod a_reply_whose_status_is_a_host_act {
         let mut refused = held(0x19);
         assert!(settle_deferred(&mut refused, &twin, true));
         assert!(!bare.run_orphan_undo());
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes land in the held reply when the act succeeded,
-    /// only inside the payload the reply has, and never when the act failed or the reply is a refusal.
-    #[test]
-    fn a_reply_patch_lands_only_on_success_and_only_inside_the_reply() {
-        let bytes = vec![0xAB, 0xCD, 0xEF];
-        // Success: written at `at`, nothing else moves.
-        let d = Deferred::new();
-        d.set_reply_patch(10, bytes.clone());
-        d.resolve(0);
-        let mut rpc = held(0);
-        assert!(settle_deferred(&mut rpc, &d, false));
-        assert_eq!(&rpc.payload[10..13], &bytes[..]);
-        assert_eq!(rpc.payload.len(), 40);
-        assert!(rpc.payload[..10].iter().all(|b| *b == 0));
-        assert!(rpc.payload[13..].iter().all(|b| *b == 0));
-        // A retried post settles again from a fresh clone: the patch is still there.
-        let mut again = held(0);
-        assert!(settle_deferred(&mut again, &d, false));
-        assert_eq!(again.payload, rpc.payload);
-        // Failure: the status is the reply's and the bytes are NOT written.
-        let bad = Deferred::new();
-        bad.set_reply_patch(10, bytes.clone());
-        bad.resolve(0x56);
-        let mut r = held(0);
-        assert!(settle_deferred(&mut r, &bad, false));
-        assert_eq!(r.rpc_result, 0x56);
-        assert!(r.payload.iter().all(|b| *b == 0));
-        // A patch that does not fit the reply is dropped whole (the reply never grows).
-        let big = Deferred::new();
-        big.set_reply_patch(38, bytes);
-        big.resolve(0);
-        let mut r = held(0);
-        assert!(settle_deferred(&mut r, &big, false));
-        assert_eq!(r.payload.len(), 40);
-        assert!(r.payload.iter().all(|b| *b == 0));
-        // A refused reply (another link) is not patched.
-        let refused = Deferred::new();
-        refused.set_reply_patch(0, vec![1]);
-        refused.resolve(0);
-        let mut r = held(0x19);
-        assert!(settle_deferred(&mut r, &refused, false));
-        assert!(r.payload.iter().all(|b| *b == 0));
     }
 
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it
@@ -3882,7 +3965,7 @@ mod device_reset_from_every_phase {
     const OFF_START: u64 = 0x10;
     const OFF_FWSEC: u64 = 0x18;
     const OFF_FW_LOADED: u64 = 0x20;
-    /// ★ 2026-10-14: the resume's Booter Load ([`BootStep::FirmwareResume`]).
+    /// The resume's Booter Load ([`BootStep::FirmwareResume`]).
     const OFF_FW_RESUME: u64 = 0x28;
     const OFF_TEARDOWN: u64 = 0x30;
     const OFF_ARGS_LO: u64 = 0x40;
@@ -4028,10 +4111,15 @@ mod device_reset_from_every_phase {
     // ---- the policy: the three outcomes a reset must be able to interrupt ---------------------
 
     /// `GSP_RM_CONTROL` is unmodelled (a refusal, recorded), `GSP_RM_ALLOC` is held for its
-    /// refresh (a held reply), everything else is echoed.
-    struct Live;
+    /// refresh (a held reply), everything else is echoed. `responds` counts the policy's answers
+    /// (security review 1, F-09: a command must be answered by the policy once).
+    #[derive(Default)]
+    struct Live {
+        responds: u32,
+    }
     impl CommandPolicy for Live {
         fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+            self.responds += 1;
             match cmd.function {
                 RpcFunction::RmControl => None,
                 _ => Some(Reply {
@@ -4307,7 +4395,7 @@ mod device_reset_from_every_phase {
                 fsm,
                 ram,
                 model: Mini { seq: Seq { after } },
-                policy: Live,
+                policy: Live::default(),
                 guest_seq: 0,
                 guest_wp: 0,
                 sent_sysinfo: false,
@@ -4720,6 +4808,8 @@ mod device_reset_from_every_phase {
             reply_body_trace,
             pending_command_doorbells,
             held,
+            held_full_stalls,
+            owed,
             refusals,
             bcr_ctrl,
             falcon_engine,
@@ -4753,6 +4843,8 @@ mod device_reset_from_every_phase {
             reply_body_trace: bt0,
             pending_command_doorbells: p0,
             held: h0,
+            held_full_stalls: hs0,
+            owed: ow0,
             refusals: r0,
             bcr_ctrl: b0,
             falcon_engine: fe0,
@@ -4787,6 +4879,8 @@ mod device_reset_from_every_phase {
         assert_eq!(reply_body_trace, bt0);
         assert_eq!(pending_command_doorbells, p0);
         assert_eq!(held, h0);
+        assert_eq!(held_full_stalls, hs0);
+        assert_eq!(owed, ow0);
         assert_eq!(refusals, r0);
         assert_eq!(bcr_ctrl, b0);
         assert_eq!(falcon_engine, fe0);
@@ -4966,7 +5060,7 @@ mod device_reset_from_every_phase {
         second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, false);
     }
 
-    /// ★ 2026-10-24 (B1n, GB205 + Windows 580.88; the composed replay is
+    /// (B1n, GB205 + Windows 580.88; the composed replay is
     /// `kf-chip/tests/fsp_second_life.rs`) — the suspend sentinel lives in `MAILBOX0`, and the NEXT life's
     /// own `MAILBOX0` write (the FMC-args low half, `_kgspBootstrapGspFmc_GH100`) replaces it, as a register
     /// holds what was last written. Before this, only the start cleared it, and the guest's lockdown poll —
@@ -5317,7 +5411,7 @@ mod device_reset_from_every_phase {
             let mut f = fresh(None);
             let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
             let r = f
-                .mmio_write_with(&mut ram, &model, &mut Live, 0, OFF_FW_RESUME, 1)
+                .mmio_write_with(&mut ram, &model, &mut Live::default(), 0, OFF_FW_RESUME, 1)
                 .expect("no refusal");
             assert!(r.transitions.is_empty());
             assert_eq!(f, fresh(None));
@@ -5331,7 +5425,7 @@ mod device_reset_from_every_phase {
             f.note_command_doorbells(1);
             let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
             assert_eq!(
-                f.service_one_deferred_command(&mut ram, &mut Live)
+                f.service_one_deferred_command(&mut ram, &mut Live::default())
                     .unwrap_err(),
                 GspFault::QueueNotBound,
                 "E8, zero guest-RAM reads"
@@ -5339,7 +5433,8 @@ mod device_reset_from_every_phase {
             assert_eq!(f.wake_reset(), Some(Transition::E14));
             f.note_command_doorbells(1);
             assert!(
-                f.service_one_deferred_command(&mut ram, &mut Live).is_ok(),
+                f.service_one_deferred_command(&mut ram, &mut Live::default())
+                    .is_ok(),
                 "Cold after the wake: E12, zero reads"
             );
         }
@@ -5432,7 +5527,278 @@ mod device_reset_from_every_phase {
         }
     }
 
-    /// ★ 2026-10-31 — **the SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
+    /// ★ Security review 1 (2026-11-13), F-09 and F-10: a guest that stops reading its status
+    /// queue, or never lets its refreshes finish, gets back-pressure — never a policy that runs
+    /// twice for one command, and never an unbounded queue of held replies.
+    mod held_and_owed_bounds {
+        use super::*;
+
+        fn running() -> Dev {
+            let mut d = drive(BootPhase::Running, false, None);
+            d.guest_drains_status();
+            d
+        }
+
+        fn control(d: &mut Dev) {
+            let code = d.fsm.abi.rpc.codes.gsp_rm_control;
+            d.send(code, vec![0; 40]);
+        }
+
+        /// Fill the status ring with refusals the guest never reads; return the ring output that
+        /// first refused.
+        fn fill_status(d: &mut Dev) -> String {
+            for _ in 0..(2 * COUNT) {
+                control(d);
+                let out = d.ring();
+                if out.contains("QueueFull") {
+                    return out;
+                }
+            }
+            panic!("the status ring never filled");
+        }
+
+        #[test]
+        fn a_full_status_queue_does_not_rerun_the_policy_on_every_doorbell() {
+            let mut d = running();
+            fill_status(&mut d);
+            let after_first = d.policy.responds;
+            let read_ptr = d.fsm.cmd_read_ptr;
+            for _ in 0..5 {
+                let out = d.ring();
+                assert!(out.contains("QueueFull"), "still full: {out}");
+            }
+            assert_eq!(
+                d.policy.responds, after_first,
+                "each doorbell re-ran `respond` for the same command"
+            );
+            assert_eq!(d.fsm.cmd_read_ptr, read_ptr, "the command is not consumed");
+            assert!(d.fsm.owed.is_some(), "its reply is owed");
+        }
+
+        #[test]
+        fn the_owed_reply_is_posted_once_when_the_guest_reads_its_queue() {
+            let mut d = running();
+            fill_status(&mut d);
+            let responds = d.policy.responds;
+            let seq_before = d.fsm.stat_seq;
+            let refusals_before = d.fsm.refusals().total();
+            d.ring();
+            d.ring();
+            d.guest_drains_status();
+            let out = d.ring();
+            assert!(!out.contains("Err"), "posted: {out}");
+            assert!(
+                out.contains("Unserviced {"),
+                "reported unserviced with the post: {out}"
+            );
+            assert_eq!(
+                d.policy.responds, responds,
+                "posted from the stash, not re-asked"
+            );
+            assert_eq!(
+                d.fsm.stat_seq,
+                seq_before + 1,
+                "exactly one reply for the command"
+            );
+            assert_eq!(
+                d.fsm.refusals().total(),
+                refusals_before + 1,
+                "one ledger row, recorded at the post"
+            );
+            assert!(d.fsm.owed.is_none());
+            // The next command is answered by the policy as usual.
+            control(&mut d);
+            d.ring();
+            assert_eq!(d.policy.responds, responds + 1);
+        }
+
+        #[test]
+        fn a_rewritten_command_at_the_owed_position_is_answered_afresh() {
+            let mut d = running();
+            fill_status(&mut d);
+            let owed = d.fsm.owed.clone().expect("owed");
+            // A hostile guest puts a different command at the same ring position.
+            let mut other = owed.clone();
+            other.payload.push(1);
+            d.fsm.owed = Some(other);
+            let responds = d.policy.responds;
+            d.ring();
+            assert_eq!(
+                d.policy.responds,
+                responds + 1,
+                "a stash that does not answer this command is never posted for it"
+            );
+            let stash = d.fsm.owed.clone().expect("re-stashed for the real command");
+            assert_eq!(stash.payload, owed.payload);
+        }
+
+        #[test]
+        fn an_owed_reply_answers_only_the_identical_command() {
+            let cmd = RpcCommand {
+                function: RpcFunction::RmControl,
+                code: 76,
+                sequence: 9,
+                payload: vec![1, 2, 3],
+                elements: 1,
+                delivered: Vec::new(),
+            };
+            let owed = OwedReply {
+                code: 76,
+                sequence: 9,
+                payload: vec![1, 2, 3],
+                replies: Vec::new(),
+                ledger: cmd.reply(0, &[]),
+                detail: None,
+                unserviced: None,
+            };
+            assert!(owed.answers(&cmd));
+            let mut c = cmd.clone();
+            c.payload[2] = 4;
+            assert!(!owed.answers(&c), "payload");
+            let mut c = cmd.clone();
+            c.sequence = 10;
+            assert!(!owed.answers(&c), "sequence");
+            let mut c = cmd.clone();
+            c.code = 77;
+            assert!(!owed.answers(&c), "code");
+        }
+
+        #[test]
+        fn one_doorbell_with_many_commands_stops_exactly_at_the_cap() {
+            let mut d = running();
+            let alloc = d.fsm.abi.rpc.codes.gsp_rm_alloc;
+            while d.fsm.held_len() < MAX_HELD - 10 {
+                let room = (MAX_HELD - 10 - d.fsm.held_len()).min(COUNT as usize - 2);
+                for _ in 0..room {
+                    d.send(alloc, vec![0; 64]);
+                }
+                d.ring();
+            }
+            let responds = d.policy.responds;
+            for _ in 0..40 {
+                d.send(alloc, vec![0; 64]);
+            }
+            d.ring();
+            assert_eq!(d.fsm.held_len(), MAX_HELD);
+            assert_eq!(
+                d.policy.responds,
+                responds + 10,
+                "exactly the room was served"
+            );
+            assert_eq!(d.fsm.held_full_stalls(), 1);
+        }
+
+        #[test]
+        fn a_stash_for_another_sequence_is_not_posted() {
+            let mut d = running();
+            fill_status(&mut d);
+            let mut other = d.fsm.owed.clone().expect("owed");
+            other.sequence = other.sequence.wrapping_add(1);
+            d.fsm.owed = Some(other);
+            let responds = d.policy.responds;
+            d.ring();
+            assert_eq!(d.policy.responds, responds + 1, "answered afresh");
+        }
+
+        #[test]
+        fn an_unserviced_command_is_reported_once_across_its_retries() {
+            let mut d = running();
+            let first = fill_status(&mut d);
+            let mut outs = vec![first];
+            outs.push(d.ring());
+            outs.push(d.ring());
+            d.guest_drains_status();
+            outs.push(d.ring());
+            let seq = d.fsm.owed.as_ref().map(|o| o.sequence);
+            assert!(seq.is_none(), "posted");
+            let reported: usize = outs.iter().map(|o| o.matches("Unserviced {").count()).sum();
+            assert_eq!(reported, 1, "once, at the post: {outs:?}");
+        }
+
+        #[test]
+        fn held_replies_are_capped_and_the_drain_stops_without_asking_the_policy() {
+            let mut d = running();
+            let alloc = d.fsm.abi.rpc.codes.gsp_rm_alloc;
+            // Allocs are held for their refresh; nothing releases them.
+            while d.fsm.held_len() < MAX_HELD {
+                let room = (MAX_HELD - d.fsm.held_len()).min(COUNT as usize - 2);
+                for _ in 0..room {
+                    d.send(alloc, vec![0; 64]);
+                }
+                d.ring();
+            }
+            assert_eq!(d.fsm.held_len(), MAX_HELD);
+            let responds = d.policy.responds;
+            let read_ptr = d.fsm.cmd_read_ptr;
+            d.send(alloc, vec![0; 64]);
+            d.ring();
+            d.ring();
+            assert_eq!(d.fsm.held_len(), MAX_HELD, "never past the cap");
+            assert_eq!(d.policy.responds, responds, "the policy was not asked");
+            assert_eq!(d.fsm.cmd_read_ptr, read_ptr, "the command waits unconsumed");
+            assert!(d.fsm.held_full_stalls() >= 2);
+            // Room again: the guest reads its status queue and some refreshes land.
+            d.guest_drains_status();
+            // The ring takes fewer than the 1024 held, so the release ends in back-pressure.
+            let _ = d.fsm.release_held(&mut d.ram);
+            assert!(d.fsm.held_len() < MAX_HELD, "some held replies were posted");
+            d.ring();
+            assert_eq!(
+                d.policy.responds,
+                responds + 1,
+                "the waiting command is now served"
+            );
+            assert_ne!(d.fsm.cmd_read_ptr, read_ptr);
+        }
+    }
+
+    /// ★ Security review 1, F-23 (2026-11-13): the region array's address is guest-written. With
+    /// guest RAM that answers every read, an array at the top of the address space must end in a
+    /// named refusal, never an arithmetic-overflow panic on the service thread.
+    mod region_array_address_bounds {
+        use super::*;
+
+        struct AllZero;
+        impl GuestRam for AllZero {
+            fn read(&mut self, _gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+                buf.fill(0);
+                Ok(())
+            }
+            fn write(&mut self, _gpa: u64, _b: &[u8]) -> Result<(), crate::fault::RamRefused> {
+                Ok(())
+            }
+        }
+
+        fn publish_at(gpa: u64) -> Result<ServiceReport, GspFault> {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.fsm.publish(&mut AllZero, &d.model, &mut d.policy, gpa)
+        }
+
+        fn refused_past_the_top(r: &Result<ServiceReport, GspFault>) -> bool {
+            matches!(r, Err(GspFault::GuestRam(e)) if e.why.contains("past the top"))
+        }
+
+        #[test]
+        fn an_array_whose_second_entry_wraps_is_refused() {
+            let stride = Mini {
+                seq: Seq {
+                    after: AfterSuspend::AwaitsTeardownUcode,
+                },
+            }
+            .libos_region_layout()
+            .entry_stride as u64;
+            let r = publish_at(u64::MAX - stride + 1);
+            assert!(refused_past_the_top(&r), "{r:?}");
+        }
+
+        #[test]
+        fn an_array_at_the_last_byte_is_refused() {
+            let r = publish_at(u64::MAX);
+            assert!(refused_past_the_top(&r), "{r:?}");
+        }
+    }
+
+    /// **The SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
     ///
     /// Ported from the retired `kayfabe-completion` `DeliveryPlane` tests
     /// (`drain_gate_batches_across_procs_without_serializing`,
@@ -5605,6 +5971,227 @@ mod device_reset_from_every_phase {
             assert!(d.fsm.events_outstanding);
             d.fsm.device_reset();
             assert!(!d.fsm.events_outstanding);
+        }
+    }
+
+    /// (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`): the command queue is
+    /// guest memory, so every byte the drain reads is the guest kernel's to choose. A running device,
+    /// then a hostile guest: well-formed messages with any function and payload (multi-element and
+    /// large ones included), the same with bytes flipped and the checksum made good again (so the
+    /// mutation reaches the decoders behind it), raw garbage in elements, a `writePtr` anywhere, a
+    /// status ring the guest never drains, and the odd reset. Properties: nothing panics, every call
+    /// returns within a bound, the held set stays within `MAX_HELD`, and a replay of the same
+    /// script is byte-identical (RAM and observable state).
+    ///
+    /// Campaign: `KF_FUZZ_GSP_ROUNDS=200000 cargo test --release -p kf-gsp hostile_queue -- --ignored --nocapture`.
+    mod hostile_queue {
+        use super::*;
+
+        struct Rng(u64);
+        impl Rng {
+            fn next(&mut self) -> u64 {
+                let mut x = self.0;
+                x ^= x >> 12;
+                x ^= x << 25;
+                x ^= x >> 27;
+                self.0 = x;
+                x.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            }
+            fn below(&mut self, n: u64) -> u64 {
+                if n == 0 { 0 } else { self.next() % n }
+            }
+        }
+
+        /// Re-seal the message at ring slot `slot` after a mutation: zero the checksum, fold, store.
+        fn reseal(d: &mut Dev, slot: u64) {
+            let abi = d.fsm.abi;
+            let base = REGION + CMD_OFF + ELEM + slot * ELEM;
+            // a page the guest never wrote reads as zeros here (the fake refuses it; the test's own
+            // bookkeeping must not)
+            let mut first = vec![0u8; ELEM as usize];
+            let _ = d.ram.read(base, &mut first);
+            let len_at = abi.element.hdr_size() + 8;
+            let rpc_len = u32::from_le_bytes(first[len_at..len_at + 4].try_into().unwrap());
+            let msg_len = abi.element.hdr_size() + rpc_len as usize;
+            let n = msg_len.div_ceil(ELEM as usize).clamp(1, COUNT as usize);
+            let mut run = vec![0u8; n * ELEM as usize];
+            for i in 0..n as u64 {
+                let at = REGION + CMD_OFF + ELEM + ((slot + i) % COUNT) * ELEM;
+                let from = (i * ELEM) as usize;
+                let _ = d.ram.read(at, &mut run[from..from + ELEM as usize]);
+            }
+            let c = abi.element.checksum_off();
+            run[c..c + 4].fill(0);
+            let sum = crate::element::checksum32(&run, msg_len.min(run.len()));
+            d.ram.put32(base + c as u64, sum);
+        }
+
+        /// One script: `rounds` guest actions against a running device. Returns everything an outside
+        /// reader can see afterwards.
+        fn script(seed: u64, rounds: u32) -> (String, u64) {
+            let mut r = Rng(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1);
+            let mut d = drive(BootPhase::Running, false, None);
+            let codes = d.fsm.abi.rpc.codes;
+            let code_pool = [
+                codes.gsp_rm_control,
+                codes.gsp_rm_alloc,
+                codes.free,
+                codes.dup_object,
+                codes.continuation_record,
+                codes.gsp_set_system_info,
+                codes.set_registry,
+                codes.update_bar_pde,
+                codes.get_gsp_static_info,
+                codes.unloading_guest_driver,
+            ];
+            let max_payload = d.fsm.abi.element_size_max as usize
+                - d.fsm.abi.element.hdr_size()
+                - crate::large::RPC_HEADER;
+            let mut slowest = 0u64;
+            for _ in 0..rounds {
+                let t = std::time::Instant::now();
+                match r.below(16) {
+                    0..=5 => {
+                        let code = if r.below(4) == 0 {
+                            r.below(128) as u32
+                        } else {
+                            code_pool[r.below(code_pool.len() as u64) as usize]
+                        };
+                        let len = match r.below(4) {
+                            0 => r.below(64),
+                            1 => r.below(4096),
+                            2 => max_payload as u64 - r.below(64).min(max_payload as u64),
+                            _ => r.below(max_payload as u64 + 1),
+                        } as usize;
+                        let mut payload: Vec<u8> = (0..len).map(|_| r.next() as u8).collect();
+                        // a large control's head: paramsSize past what one message carries
+                        if code == codes.gsp_rm_control && r.below(4) == 0 {
+                            let w = d.fsm.abi.driver.rm_control_wire();
+                            if payload.len() >= w.params_size_off + 4 {
+                                let ps = [1u32 << 16, u32::MAX, (len as u32) * 3, r.next() as u32]
+                                    [r.below(4) as usize];
+                                payload[w.params_size_off..w.params_size_off + 4]
+                                    .copy_from_slice(&ps.to_le_bytes());
+                            }
+                        }
+                        let slot = u64::from(d.guest_wp);
+                        d.send(code, payload);
+                        if r.below(3) == 0 {
+                            // flip bytes anywhere in the first element (header included), reseal
+                            for _ in 0..1 + r.below(8) {
+                                let off = r.below(ELEM);
+                                let b = r.next() as u8;
+                                d.ram.put(REGION + CMD_OFF + ELEM + slot * ELEM + off, &[b]);
+                            }
+                            if r.below(4) != 0 {
+                                reseal(&mut d, slot);
+                            }
+                        }
+                    }
+                    6 => {
+                        // raw garbage in a random element
+                        let slot = r.below(COUNT);
+                        let bytes: Vec<u8> = (0..ELEM).map(|_| r.next() as u8).collect();
+                        d.ram.put(REGION + CMD_OFF + ELEM + slot * ELEM, &bytes);
+                    }
+                    7 => {
+                        let wp = [
+                            r.next() as u32,
+                            r.below(COUNT) as u32,
+                            COUNT as u32,
+                            u32::MAX,
+                        ][r.below(4) as usize];
+                        d.ram.put32(REGION + CMD_OFF + 16, wp);
+                        if wp < COUNT as u32 {
+                            d.guest_wp = wp;
+                        }
+                    }
+                    8 => {
+                        // the guest's own command-queue header fields, rewritten after bind
+                        let off = 4 * r.below(8);
+                        d.ram.put32(REGION + CMD_OFF + off, r.next() as u32);
+                    }
+                    9 => {
+                        // the guest's status-ring readPtr: anywhere
+                        d.ram.put32(REGION + CMD_OFF + RX_HDR_OFF, r.next() as u32);
+                    }
+                    10 | 11 => d.guest_drains_status(),
+                    12 => {
+                        let _ = d.fsm.release_held(&mut d.ram);
+                    }
+                    13 if r.below(64) == 0 => {
+                        d.fsm.device_reset();
+                        d = drive(BootPhase::Running, false, None);
+                    }
+                    _ => {
+                        d.ring();
+                    }
+                }
+                d.ring();
+                assert!(
+                    d.fsm.held_len() <= MAX_HELD,
+                    "seed {seed}: held {}",
+                    d.fsm.held_len()
+                );
+                slowest = slowest.max(t.elapsed().as_micros() as u64);
+            }
+            (format!("{} ram={}", d.snapshot(), d.ram.0.len()), slowest)
+        }
+
+        fn campaign(seeds: std::ops::Range<u64>, rounds: u32) {
+            for seed in seeds {
+                let got = std::panic::catch_unwind(|| script(seed, rounds));
+                let (state, slowest) = match got {
+                    Ok(v) => v,
+                    Err(e) => panic!(
+                        "seed {seed}: PANIC {:?}",
+                        e.downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    ),
+                };
+                assert!(
+                    slowest < 2_000_000,
+                    "seed {seed}: one action took {slowest} us"
+                );
+                if seed % 8 == 0 {
+                    assert_eq!(script(seed, rounds).0, state, "seed {seed}: replay differs");
+                }
+            }
+        }
+
+        #[test]
+        fn a_hostile_guest_cannot_break_the_drain() {
+            campaign(0..8, 80);
+        }
+
+        #[test]
+        #[ignore = "campaign: KF_FUZZ_GSP_ROUNDS=<n> KF_FUZZ_GSP_SEEDS=<n> [KF_FUZZ_SECONDS=<s>] cargo test --release -p kf-gsp hostile_queue -- --ignored --nocapture"]
+        fn campaign_hostile_queue() {
+            let env = |k: &str, d: u64| {
+                std::env::var(k)
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(d)
+            };
+            let seeds = env("KF_FUZZ_GSP_SEEDS", 2000);
+            let rounds = env("KF_FUZZ_GSP_ROUNDS", 400) as u32;
+            let base = env("KF_FUZZ_BASE", 1000);
+            // ★ Time mode: KF_FUZZ_SECONDS=<s> keeps running batches of `seeds` until the deadline.
+            let deadline = std::time::Instant::now()
+                + std::time::Duration::from_secs(env("KF_FUZZ_SECONDS", 0));
+            let mut next = base;
+            loop {
+                campaign(next..next + seeds, rounds);
+                next += seeds;
+                if std::time::Instant::now() >= deadline {
+                    break;
+                }
+            }
+            eprintln!(
+                "campaign: {} scripts x {rounds} actions, no finding",
+                next - base
+            );
         }
     }
 }

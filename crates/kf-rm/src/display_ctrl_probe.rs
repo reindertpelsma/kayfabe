@@ -1,6 +1,10 @@
-//! ⚠⚠ **PROBE — default off (`KF3_DISPLAY_CTRL_PROBE=1`), never a shipped behaviour.**
+//! ⚠⚠ **FABRICATED ANSWER, now PRODUCT behaviour for a declared Windows guest (2026-11-15).** Was the
+//! default-off `KF3_DISPLAY_CTRL_PROBE` ([`DisplayCtrlProbe`] only; the private/HDMI/XBAR probes below are
+//! still opt-in diagnostics). Part of the Windows support profile ([`crate::winprofile`]): the
+//! chain seats it behind [`crate::winprofile::WindowsOnly`], so it answers nothing for a
+//! Linux guest, for no declaration, or with `windows-support=off`. The text below is the 2026-10-08 probe's.
 //!
-//! 2026-10-08 (Windows 580.88, H-modeset): `[measured, run53 at 80169b57 and run55 at a88764b3,
+//! `[measured, run53 at 80169b57 and run55 at a88764b3,
 //! 2026-10-08]` nvlddmkm never commits a mode on kf3 (the core channel gets setup and LUT methods,
 //! no `UPDATE`; no `NVC372 IS_MODE_POSSIBLE` is ever sent), and six `NV04_DISPLAY_COMMON` controls
 //! that vfio-10's real GSP answers status 0 are refused by kayfabe. This probe answers those six
@@ -22,9 +26,6 @@ use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 const NV_OK: u32 = 0;
 const LOG_CAP: u64 = 32;
 
-/// The flag.
-pub const FLAG: &str = "KF3_DISPLAY_CTRL_PROBE";
-
 /// `(command, params size)` — sizes as vfio-10 carries them at 580.88.
 pub const ECHOED: [(u32, usize); 6] = [
     (0x0073_013d, 8),
@@ -34,12 +35,6 @@ pub const ECHOED: [(u32, usize); 6] = [
     (0x0073_0109, 24),
     (0x0073_1369, 60),
 ];
-
-/// Whether the flag is on (`=1`).
-#[must_use]
-pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
-}
 
 /// The probe link.
 #[derive(Debug, Clone)]
@@ -80,7 +75,7 @@ impl CommandPolicy for DisplayCtrlProbe {
         self.answered += 1;
         if self.answered <= LOG_CAP {
             eprintln!(
-                "kf-rm: PROBE {FLAG} {:#010x} client={:#x} object={:#x}: NV_OK, request echoed — a probe, not a shipped behaviour #{}",
+                "kf-rm: WINDOWS PROFILE NV0073 {:#010x} client={:#x} object={:#x}: NV_OK, request echoed — FABRICATED answer (Windows profile) #{}",
                 req.cmd, req.client, req.object, self.answered
             );
         }
@@ -96,7 +91,7 @@ kf_util::assert_send_sync!(DisplayCtrlProbe);
 
 /// ⚠⚠ **PROBE — default off (`KF3_DISPLAY_PRIVATE_PROBE=1`), never a shipped behaviour.**
 ///
-/// 2026-10-08 (H-commit, `traces/display_reply_diff_20261008/`): inside the modeset commit
+/// Inside the modeset commit
 /// (`[measured, VFIO DVI reference boots 1-3, RTX 4070 / 580.88, 2026-10-08]`, boot3 12.4946-12.4965 s)
 /// Windows sends `GET_HDCP_STATE`, then two NV04_DISPLAY_COMMON controls that ogkm-595.84 does not
 /// name, `0x00730122` (8 bytes) and `0x00730128` (20 bytes). The real GSP answers both `NV_OK`;
@@ -216,7 +211,7 @@ pub const HDMI_FLAG: &str = "KF3_DISPLAY_HDMI_PROBE";
 
 /// ⚠⚠ **PROBE — default off (`KF3_DISPLAY_XBAR_PROBE=1`), never a shipped behaviour.**
 ///
-/// 2026-10-09 (H-xbar, §0 rows P6, P22, P26, P30): `[measured, VFIO DVI reference boot3, RTX 4070,
+/// `[measured, VFIO DVI reference boot3, RTX 4070,
 /// 2026-10-08]` the real GPU answers `SYSTEM_GET_CAPS_V2` with `capsTbl {0x81, 0x2f}` (CROSS_BAR and
 /// GLITCHLESS_MODESET among them) and the guest then routes each display through `DFP_ASSIGN_SOR`
 /// (8 calls, one inside the commit). This probe answers the caps with the measured bytes, and

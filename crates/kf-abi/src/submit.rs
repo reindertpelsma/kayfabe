@@ -40,7 +40,7 @@
 use crate::wire::{AbiError, u32_at};
 
 // =====================================================================================
-// Escapes this module adds to the frontend set kayfabe-abi::bringup opened
+// Escapes this module adds to the frontend set kf-abi::bringup opened
 // =====================================================================================
 
 /// `NV_ESC_RM_MAP_MEMORY` —
@@ -788,7 +788,7 @@ pub enum GpfifoScheduleError {
     /// both.
     ///
     /// [`ExecPlane`-side]: this is `kayfabe_core::gpu::ExecPlane`; named in prose because
-    /// `kayfabe-abi` does not depend on the core.
+    /// `kf-abi` does not depend on the core.
     UnmodelledSkip {
         /// `bSkipSubmit` as it arrived.
         b_skip_submit: u8,
@@ -865,7 +865,7 @@ pub fn decode_gpfifo_schedule(params: &[u8]) -> Result<GpfifoScheduleParams, Gpf
 /// ⊘ **Not** taken from the C artifact's captured table, whose row for this id is
 /// `{0xa06f0103u, 0x0u, 3u, 0u, ctl_a06f0103}` — `dlen = 0`, an **empty body**
 /// (`C: src/qemu/mode2_initctrl_ga106.h:6234 = 0xa06f0103`). That row is one of the 11/56 the FIFTH
-/// LIMIT contradicts (`crates/kayfabe-abi/src/oracle.rs:39`), and an empty capture is
+/// LIMIT contradicts (`crates/kf-abi/src/oracle.rs:39`), and an empty capture is
 /// evidence of nothing. The C's *status* is corroborated by hardware; its *body* is not,
 /// and only the hardware trace is cited for the bytes.
 ///
@@ -926,7 +926,7 @@ pub fn encode_gpfifo_schedule(req: &GpfifoScheduleParams) -> Vec<u8> {
 /// third copy engine, not the first.
 ///
 /// ⚠ And the C's captured row for this id is one of the **11 empty ones**
-/// (`crates/kayfabe-abi/src/oracle.rs`, `psize 4, dlen 0`): the C would have decoded it as
+/// (`crates/kf-abi/src/oracle.rs`, `psize 4, dlen 0`): the C would have decoded it as
 /// `engineType = 0`, which is `NV2080_ENGINE_TYPE_NULL`. Nine of those eleven rows are
 /// contradicted by hardware and this is one of them.
 pub const NVA06F_CTRL_CMD_BIND: u32 = 0xa06f_0104;

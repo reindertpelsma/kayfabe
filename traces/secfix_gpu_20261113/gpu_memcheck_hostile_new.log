@@ -1,0 +1,37 @@
+========= COMPUTE-SANITIZER
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=392 pdb=32 run=32
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/leaf_past_end
+pass hostile/leaf_straddles_end
+pass hostile/leaf_at_exact_end
+pass hostile/leaf_oob_no_neighbour_extend
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/refusal_samples_parallel
+pass hostile/refusal_samples_serial
+pass hostile/refusal_samples_other_kinds
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/budget_fails_only_its_space
+      [fan-in] refresh 30.1 ms, entries_visited 659728, flags 0x84, refuse_mask 0x1000
+pass hostile/frontier_fan_in
+pass hostile/short_shared_memory_launch
+pass hostile/npdb_past_kernel_arrays
+pass hostile/commit_bound_before_write
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+
+==== 30 passed, 0 failed ====
+========= ERROR SUMMARY: 0 errors

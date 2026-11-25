@@ -1,0 +1,8 @@
+[2026-11-24T20:06:04Z] OVERLAY_CREATED disk/fp_doff.qcow2 over gate_fp2.qcow2
+[2026-11-24T20:06:04Z] KF_CLOCK image=kfwin net=offline using=recorded base=2026-11-24T19:44:11Z recorded=2026-11-24T19:44:11Z floor_input=- inputs=0
+[2026-11-24T20:06:04Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 7200s)
+[2026-11-24T20:06:04Z] WINVM_RUN_START tag=fp_doff repo_rev=213c5853 kf3=on qemu=/workspace/bench/kf3-bins/731c88b5/qemu-system-x86_64 host_driver=595.84 overlay=fp_doff arm=B guest_driver=580.65.06 gop_efi=none sha256(gop_efi)=-
+[2026-11-24T20:06:04Z] kf3 device: kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+[2026-11-24T20:06:04Z] VM_IDENTITY uuid=<vm-uuid> serial=<serial> mac=<mac>
+[2026-11-24T20:06:04Z] KF3_ENV KF3_RPC_TRACE=1 
+[2026-11-24T20:06:05Z] QEMU_START tag=fp_doff boot=1 pid=86402 log=logs/fp_doff_b1_qemu.log

@@ -1,0 +1,17 @@
+{
+  "app": "gpudiag",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "sniffer_premiere.txt: the application's own GPU sniffer finds no compute device",
+  "class": "app",
+  "limited": false,
+  "secs": 2,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}

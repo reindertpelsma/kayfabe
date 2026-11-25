@@ -1,0 +1,43 @@
+# STATUS: LIVE, 2026-11-23. Case table of the nvbandwidth row (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md).
+# One test case of the pinned nvbandwidth (pins.env OPENROWS_NVB_COMMIT, `nvbandwidth -l`) per line, tab separated: id, class, min_gpus.
+#   class     ce = copy engine (cuMemcpyAsync), sm = copy kernel on the SMs, latency = pointer-chase kernel (ns, lower is better), local = device-local copy
+#   min_gpus  the number of GPUs the test needs: nvbandwidth waives a test that needs accessible peer pairs on a machine without them (source:
+#             Testcase::filterHasAccessiblePeerPairs). The machine's own answer decides the expectation; no die, family or driver is named here.
+# A test that needs one GPU and is waived is a FAIL (unexpected_waive); a test that needs two and passed on one is a MISMATCH.
+# test_open_lanes.py pins this table to the 35 non-multinode testcases of the pinned source.
+id	class	min_gpus
+host_to_device_memcpy_ce	ce	1
+device_to_host_memcpy_ce	ce	1
+host_to_device_bidirectional_memcpy_ce	ce	1
+device_to_host_bidirectional_memcpy_ce	ce	1
+device_to_device_memcpy_read_ce	ce	2
+device_to_device_memcpy_write_ce	ce	2
+device_to_device_bidirectional_memcpy_read_ce	ce	2
+device_to_device_bidirectional_memcpy_write_ce	ce	2
+device_local_copy	local	1
+all_to_host_memcpy_ce	ce	1
+all_to_host_bidirectional_memcpy_ce	ce	1
+host_to_all_memcpy_ce	ce	1
+host_to_all_bidirectional_memcpy_ce	ce	1
+all_to_one_write_ce	ce	2
+all_to_one_read_ce	ce	2
+one_to_all_write_ce	ce	2
+one_to_all_read_ce	ce	2
+host_to_device_memcpy_sm	sm	1
+device_to_host_memcpy_sm	sm	1
+host_to_device_bidirectional_memcpy_sm	sm	1
+device_to_host_bidirectional_memcpy_sm	sm	1
+device_to_device_memcpy_read_sm	sm	2
+device_to_device_memcpy_write_sm	sm	2
+device_to_device_bidirectional_memcpy_read_sm	sm	2
+device_to_device_bidirectional_memcpy_write_sm	sm	2
+all_to_host_memcpy_sm	sm	1
+all_to_host_bidirectional_memcpy_sm	sm	1
+host_to_all_memcpy_sm	sm	1
+host_to_all_bidirectional_memcpy_sm	sm	1
+all_to_one_write_sm	sm	2
+all_to_one_read_sm	sm	2
+one_to_all_write_sm	sm	2
+one_to_all_read_sm	sm	2
+host_device_latency_sm	latency	1
+device_to_device_latency_sm	latency	2

@@ -435,6 +435,11 @@ class Daemon(Tmp):
             self.tmp / n for n in ("out.log", "done", "result.json")
         )
         self.log.write_text(log_text)
+        # A marker or result left by an earlier start() in the same test would be read by the new
+        # daemon at once, possibly while the test is still rewriting result.json (a torn read
+        # becomes result_invalid, a FAIL verdict and exit 1: seen on CI 2026-11-14).
+        for stale in (self.done, self.result):
+            stale.unlink(missing_ok=True)
         env = good_env(broker.url)
         env.update(env_extra or {})
         args = ["--log", str(self.log), "--done", str(self.done), "--result", str(self.result)]
@@ -459,6 +464,17 @@ class Daemon(Tmp):
 
 
 class Reporter(Daemon):
+    def test_a_second_start_in_one_test_sees_no_marker_or_result_of_the_first(self):
+        b = self.broker()
+        self.start(b, log_text="line\n")
+        result_file(self.result)
+        self.assertEqual(self.finish()[0], 0)
+        self.start(self.broker(), log_text="line\n")
+        self.assertFalse(self.done.exists(), "stale done marker")
+        self.assertFalse(self.result.exists(), "stale result file")
+        result_file(self.result)
+        self.assertEqual(self.finish()[0], 0)
+
     def test_progress_logs_result_are_numbered_and_authorised(self):
         b = self.broker()
         self.start(b, log_text="first line\n")
@@ -851,7 +867,7 @@ class FinalResult(Tmp):
             ).encode(),
             "too many rows": json.dumps(
                 self.good(
-                    suites=[{"name": "s%d" % i, "pass": 1, "fail": 0, "skip": 0} for i in range(20)]
+                    suites=[{"name": "s%d" % i, "pass": 1, "fail": 0, "skip": 0} for i in range(33)]   # one more than MAX_SUITE_ROWS (32; one full run reports up to 25 rows)
                 )
             ).encode(),
             "oversize": b" " * 70000 + json.dumps(self.good()).encode(),

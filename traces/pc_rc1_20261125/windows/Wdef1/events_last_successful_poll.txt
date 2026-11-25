@@ -1,0 +1,12 @@
+UP 2026-11-25T04:31:32.5000000+00:00 NOW 2026-11-25T04:36:17.2916814+00:00
+EV 153 0
+EV 141 0
+EV 41 0
+EV 1074 0
+EV 6008 0
+EV 1001 0
+EV 4101 0
+EV 153KernelBoot 1
+EV nvlddmkm_any 0
+EVL 04:31:32 153 Microsoft-Windows-Kernel-Boot Virtualization-based security (policies: 0) is disabled.
+EVL 04:31:40 14 Microsoft-Windows-Wininit Credential Guard configuration: Registry Configuration: 0x0 Test Configuration: 0 Auto Enablement: 0

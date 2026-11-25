@@ -35,11 +35,15 @@ pub struct GuestRamBlock {
 /// A bounded slice of a registered block. The only thing a host mapping call may be given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostSlice {
+    /// The registered block the slice lies in.
     pub block: u32,
+    /// Offset of the slice in the block.
     pub offset: u64,
+    /// Length of the slice in bytes.
     pub len: u64,
 }
 
+/// Why a guest-physical range was not turned into a [`HostSlice`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeafRefusal {
     /// The guest named a guest-physical address in no registered block.
@@ -81,6 +85,7 @@ impl GuestRamBlock {
         })
     }
 
+    /// Does the block contain guest-physical address `gpa`?
     #[inline]
     pub fn contains_gpa(&self, gpa: u64) -> bool {
         gpa >= self.gpa_base && gpa < self.gpa_base + self.len
@@ -101,9 +106,11 @@ pub struct GuestRamLayout {
 }
 
 impl GuestRamLayout {
+    /// A layout with no blocks registered.
     pub fn new() -> GuestRamLayout {
         GuestRamLayout::default()
     }
+    /// Register one block of guest RAM.
     pub fn register(&mut self, b: GuestRamBlock) {
         self.blocks.push(b);
     }

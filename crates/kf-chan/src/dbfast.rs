@@ -501,7 +501,7 @@ impl DbFast {
         }
         let _ = c
             .live_placed
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
     }
 
     /// ★ **Act thread — a channel was born** with token index `idx`, whose guest writes `value`

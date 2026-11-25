@@ -235,8 +235,8 @@ pub fn client_root_alloc_body(h_class: u32, h_client: u32, process_id: u32) -> V
 /// (`ogkm-610: rpc.h:55,70,75`, `ogkm-580: rpc.h:55,70,75` — identical at both, same
 /// lines). ★ Not the only two it writes: `:76` also stores `pOsPidInfo` from
 /// `pClient->pOsPidInfo`, a **kernel pointer** with no wire meaning, on the non-kernel
-/// arm. The tail (`processName[100]`, `pOsPidInfo`) has **no second oracle** — neither
-/// nvproxy nor the C artifact models this struct at all — so this builder emits the
+/// arm. The tail (`processName[100]`, `pOsPidInfo`) has **no second oracle** —
+/// the C artifact does not model this struct at all — so this builder emits the
 /// prefix followed by
 /// zeroed filler and lets the caller say how long the whole thing is. A guest sends
 /// `sizeof`; we decode 8 bytes and never look at the rest.

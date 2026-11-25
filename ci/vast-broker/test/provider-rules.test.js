@@ -361,6 +361,48 @@ async function reservationFixture() {
   return { cfg, ledger, prior, record };
 }
 for (const v of [1, 2]) {
+  test('rules reservation refuses deadlines moved without the extension ' + v, async () => {
+    const { cfg, ledger, record, prior } = await reservationFixture();
+    record.hardDeadline = prior.hardDeadline + v * 1000;
+    record.softDeadline = prior.softDeadline + v * 1000;
+    await assert.rejects(
+      ledger.reserve(record, {
+        cfg,
+        now: record.started,
+        cost: 0.01,
+        credit: 100,
+        retryNonce: prior.nonce,
+      }),
+    );
+  });
+  test('rules reservation refuses an extension larger than the time lost ' + v, async () => {
+    const { cfg, ledger, record, prior } = await reservationFixture();
+    record.deadlineExtension = record.started - prior.started + v;
+    record.hardDeadline = prior.hardDeadline + record.deadlineExtension;
+    record.softDeadline = prior.softDeadline + record.deadlineExtension;
+    await assert.rejects(
+      ledger.reserve(record, {
+        cfg,
+        now: record.started,
+        cost: 0.01,
+        credit: 100,
+        retryNonce: prior.nonce,
+      }),
+    );
+  });
+  test('rules reservation accepts the extension of the time lost ' + v, async () => {
+    const { cfg, ledger, record, prior } = await reservationFixture();
+    record.deadlineExtension = record.started - prior.started;
+    record.hardDeadline = prior.hardDeadline + record.deadlineExtension;
+    record.softDeadline = prior.softDeadline + record.deadlineExtension;
+    await ledger.reserve(record, {
+      cfg,
+      now: record.started,
+      cost: 0.01,
+      credit: 100,
+      retryNonce: prior.nonce,
+    });
+  });
   test('rules cumulative cap is transactional ' + v, async () => {
     const { cfg, ledger, record } = await reservationFixture();
     await assert.rejects(

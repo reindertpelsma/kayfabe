@@ -1,0 +1,18 @@
+MEASURE session driver 595.84
+MEASURE fb_used_mib start 1
+MEASURE store 0x100000000 contiguous_aligned=true
+MEASURE fb_used_mib after_store 4097
+MEASURE guest_range [0x120000000, 0xf000000000) reserved=true
+MEASURE guest_range [0x0, 0x0) reserved=false
+MEASURE guest_range [0x10000, 0x100000) reserved=true
+MEASURE fb_used_mib after_spaces 6135
+MEASURE alias_map 0x120000000+0x40000000: OK va=0x120000000
+MEASURE fb_used_mib after_alias_map 6135
+MEASURE fb_used_mib after_alias_unmap 6135
+MEASURE fb_used_mib after_free_spaces 4097
+MEASURE fb_used_mib after_free_store 1
+FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0x40000000 churn=0x0 extra_spaces=0 alias_map=OK va=0x120000000
+
+--- stderr ---
+kf-host: host tier: stock
+kf-host: space 0xcafe0005: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]

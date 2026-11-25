@@ -1,0 +1,835 @@
+## A-stock
+
+`QEMU emulator version 10.2.4 (wakemsr-stock)`, cpu `host,-vmx`, seeded=True, boot ssh 21 s
+
+### cycle 1: status suspended, ssh back 6.2624828815460205 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | HYPERCALL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | REFERENCE_TSC | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | TIME_REF_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.52 s, BOOTTIME +9.25 s, REALTIME +9.25 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.82 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 16
+    vcpu_id 0 timer 0 config 0x0 host 1
+    vcpu_id 0 timer 1 config 0x0 host 1
+    vcpu_id 0 timer 2 config 0x0 host 1
+    vcpu_id 0 timer 3 config 0x0 host 1
+    vcpu_id 0 timer 0 count 0 host 1
+    vcpu_id 0 timer 1 count 0 host 1
+    vcpu_id 0 timer 2 count 0 host 1
+    vcpu_id 0 timer 3 count 0 host 1
+    vcpu_id 1 timer 0 config 0x0 host 1
+    vcpu_id 1 timer 1 config 0x0 host 1
+    vcpu_id 1 timer 2 config 0x0 host 1
+    vcpu_id 1 timer 3 config 0x0 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -100955767293), (1, -100955767293)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.2707037925720215 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | HYPERCALL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | REFERENCE_TSC | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | TIME_REF_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.42 s, BOOTTIME +9.53 s, REALTIME +9.53 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.79 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 16
+    vcpu_id 0 timer 0 config 0x0 host 1
+    vcpu_id 0 timer 1 config 0x0 host 1
+    vcpu_id 0 timer 2 config 0x0 host 1
+    vcpu_id 0 timer 3 config 0x0 host 1
+    vcpu_id 0 timer 0 count 0 host 1
+    vcpu_id 0 timer 1 count 0 host 1
+    vcpu_id 0 timer 2 count 0 host 1
+    vcpu_id 0 timer 3 count 0 host 1
+    vcpu_id 1 timer 0 config 0x0 host 1
+    vcpu_id 1 timer 1 config 0x0 host 1
+    vcpu_id 1 timer 2 config 0x0 host 1
+    vcpu_id 1 timer 3 config 0x0 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60908412576), (1, -60908412576)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.270771026611328 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | HYPERCALL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | REFERENCE_TSC | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | TIME_REF_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu0 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SCONTROL | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIEFP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SIMP | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | SINT2 | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_CONFIG | ERR:Input/output error | ERR:Input/output error |
+| cpu1 | STIMER0_COUNT | ERR:Input/output error | ERR:Input/output error |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.40 s, BOOTTIME +9.52 s, REALTIME +9.52 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.81 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 16
+    vcpu_id 0 timer 0 config 0x0 host 1
+    vcpu_id 0 timer 1 config 0x0 host 1
+    vcpu_id 0 timer 2 config 0x0 host 1
+    vcpu_id 0 timer 3 config 0x0 host 1
+    vcpu_id 0 timer 0 count 0 host 1
+    vcpu_id 0 timer 1 count 0 host 1
+    vcpu_id 0 timer 2 count 0 host 1
+    vcpu_id 0 timer 3 count 0 host 1
+    vcpu_id 1 timer 0 config 0x0 host 1
+    vcpu_id 1 timer 1 config 0x0 host 1
+    vcpu_id 1 timer 2 config 0x0 host 1
+    vcpu_id 1 timer 3 config 0x0 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60753879354), (1, -60753879354)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+## H-patch
+
+`QEMU emulator version 10.2.4 (wakemsr-patched)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash,kvm=off`, seeded=False, boot ssh 20 s
+
+### cycle 1: status suspended, ssh back 6.270200490951538 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x81800006080c0000 | 0x81800006080c0000 |
+| cpu0 | HYPERCALL | 0x51a6001 | 0x51a6001 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0xccb6148 | 0x1279f6a7 |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.55 s, BOOTTIME +9.14 s, REALTIME +9.14 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.90 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffaf2c9
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffaf2c9
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 236): 4
+    vcpu0 40000073=0x51a5001
+    vcpu0 HYPERCALL=0x51a6001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x5835001
+TSC offset steps after the wake (vcpu, cycles): [(0, -98195778282), (1, -98195778282)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.265311241149902 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x81800006080c0000 | 0x81800006080c0000 |
+| cpu0 | HYPERCALL | 0x51a6001 | 0x51a6001 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0x16b0c796 | 0x1c5e0f32 |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.40 s, BOOTTIME +9.93 s, REALTIME +9.93 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 4.30 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x00000000103d1610
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 272): 4
+    vcpu0 40000073=0x51a5001
+    vcpu0 HYPERCALL=0x51a6001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x5835001
+TSC offset steps after the wake (vcpu, cycles): [(0, -59678483170), (1, -59678483170)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.277785778045654 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x81800006080c0000 | 0x81800006080c0000 |
+| cpu0 | HYPERCALL | 0x51a6001 | 0x51a6001 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0x2099d0e9 | 0x264ba6d5 |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.42 s, BOOTTIME +8.90 s, REALTIME +8.90 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.67 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a1ea01c
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000004 0x00b60c0668f5c28f 0000000004a04010: 0x000000002408aa83
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 259): 4
+    vcpu0 40000073=0x51a5001
+    vcpu0 HYPERCALL=0x51a6001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x5835001
+TSC offset steps after the wake (vcpu, cycles): [(0, -59879052879), (1, -59879052879)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+## H-stock
+
+`QEMU emulator version 10.2.4 (wakemsr-stock)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash,kvm=off`, seeded=False, boot ssh 20 s
+
+### cycle 1: status suspended, ssh back 6.267138481140137 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x81800006080c0000 | 0x0 |
+| cpu0 | HYPERCALL | 0x51a3001 | 0x51a3000 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0xcd66cc7 | 0x1287eebe |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.56 s, BOOTTIME +8.88 s, REALTIME +8.88 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 1.98 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffb40dc
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000001 0x00b60c0668f5c28f 0000000004a04010: 0xfffffffffffb40dc
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x0000000010464237
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 237): 4
+    vcpu0 40000073=0x51a2001
+    vcpu0 HYPERCALL=0x51a3001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x53f7001
+TSC offset steps after the wake (vcpu, cycles): [(0, -98404985526), (1, -98404985526)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.280484199523926 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x51a3000 | 0x51a3000 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0x16c4b1de | 0x1c71271a |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.40 s, BOOTTIME +9.89 s, REALTIME +9.89 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 2.32 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x0000000010464237
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000002 0x00b60c0668f5c28f 0000000004a04010: 0x0000000010464237
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a305f24
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 385): 4
+    vcpu0 40000073=0x51a2001
+    vcpu0 HYPERCALL=0x51a3001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x53f7001
+TSC offset steps after the wake (vcpu, cycles): [(0, -59880760254), (1, -59880760254)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.2739527225494385 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x51a3000 | 0x51a3000 |
+| cpu0 | REFERENCE_TSC | 0x4a04001 | 0x4a04001 |
+| cpu0 | TIME_REF_COUNT | 0x20b0c3c6 | 0x2660744d |
+| cpu0 | SCONTROL | 0x0 | 0x0 |
+| cpu0 | SIEFP | 0x0 | 0x0 |
+| cpu0 | SIMP | 0x0 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x0 | 0x0 |
+| cpu1 | SCONTROL | 0x0 | 0x0 |
+| cpu1 | SIEFP | 0x0 | 0x0 |
+| cpu1 | SIMP | 0x0 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x0 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x0 | 0x0 |
+
+clocksource hyperv_clocksource_tsc_page -> hyperv_clocksource_tsc_page; guest MONOTONIC +0.42 s, BOOTTIME +9.42 s, REALTIME +9.42 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.68 s; suspend_error None
+host xp of the TSC page, before: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a305f24
+host xp of the TSC page, suspended: 0000000004a04000: 0x0000000000000003 0x00b60c0668f5c28f 0000000004a04010: 0x000000001a305f24
+host xp of the TSC page, after: 0000000004a04000: 0x0000000000000004 0x00b60c0668f5c28f 0000000004a04010: 0x00000000241bbb58
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 244): 4
+    vcpu0 40000073=0x51a2001
+    vcpu0 HYPERCALL=0x51a3001
+    vcpu0 REFERENCE_TSC=0x4a04001
+    vcpu1 40000073=0x53f7001
+TSC offset steps after the wake (vcpu, cycles): [(0, -59910184047), (1, -59910184047)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+## K-patch
+
+`QEMU emulator version 10.2.4 (wakemsr-patched)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash`, seeded=True, boot ssh 21 s
+
+### cycle 1: status suspended, ssh back None s
+(no pre/post JSON)
+
+### cycle 2: status running, ssh back None s
+(no pre/post JSON)
+
+### cycle 3: status running, ssh back None s
+(no pre/post JSON)
+
+## K-stock
+
+`QEMU emulator version 10.2.4 (wakemsr-stock)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash`, seeded=True, boot ssh 20 s
+
+### cycle 1: status suspended, ssh back 6.27183985710144 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x8100000000000001 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0xca75cc0 | 0x1254da2f |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.52 s, BOOTTIME +9.96 s, REALTIME +9.96 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.81 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -97318117245), (1, -97318117245)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.2700676918029785 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x8100000000000001 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0x16c505e4 | 0x1c6f908f |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.42 s, BOOTTIME +9.51 s, REALTIME +9.51 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.79 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -61022407823), (1, -61022407823)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.26883339881897 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x8100000000000001 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0x20d91772 | 0x26863d66 |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.38 s, BOOTTIME +9.53 s, REALTIME +9.53 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.79 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60919208999), (1, -60919208999)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+## K2-patch
+
+`QEMU emulator version 10.2.4 (wakemsr-patched)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash`, seeded=True, boot ssh 21 s
+
+### cycle 1: status suspended, ssh back 6.278120517730713 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x3d001001 |
+| cpu0 | TIME_REF_COUNT | 0xd2dcd32 | 0x12dde593 |
+| cpu0 | SCONTROL | 0x1 | 0x1 |
+| cpu0 | SIEFP | 0x3d002001 | 0x3d002001 |
+| cpu0 | SIMP | 0x3d003001 | 0x3d003001 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x12345678 |
+| cpu1 | SCONTROL | 0x1 | 0x1 |
+| cpu1 | SIEFP | 0x3d004001 | 0x3d004001 |
+| cpu1 | SIMP | 0x3d005001 | 0x3d005001 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x12345679 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.54 s, BOOTTIME +9.35 s, REALTIME +9.35 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.83 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x1 host 1
+    vcpu_id 0 msr 0x40000082 data 0x3d002001 host 1
+    vcpu_id 0 msr 0x40000083 data 0x3d003001 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -100483293698), (1, -100483293698)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.247179269790649 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x3d001001 |
+| cpu0 | TIME_REF_COUNT | 0x1741a237 | 0x1cec8531 |
+| cpu0 | SCONTROL | 0x1 | 0x1 |
+| cpu0 | SIEFP | 0x3d002001 | 0x3d002001 |
+| cpu0 | SIMP | 0x3d003001 | 0x3d003001 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x12345678 |
+| cpu1 | SCONTROL | 0x1 | 0x1 |
+| cpu1 | SIEFP | 0x3d004001 | 0x3d004001 |
+| cpu1 | SIMP | 0x3d005001 | 0x3d005001 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x12345679 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.39 s, BOOTTIME +9.51 s, REALTIME +9.51 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.78 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x1 host 1
+    vcpu_id 0 msr 0x40000082 data 0x3d002001 host 1
+    vcpu_id 0 msr 0x40000083 data 0x3d003001 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60821239981), (1, -60821239981)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.268798112869263 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x3d001001 |
+| cpu0 | TIME_REF_COUNT | 0x2150d5ce | 0x26fd2c6e |
+| cpu0 | SCONTROL | 0x1 | 0x1 |
+| cpu0 | SIEFP | 0x3d002001 | 0x3d002001 |
+| cpu0 | SIMP | 0x3d003001 | 0x3d003001 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x12345678 |
+| cpu1 | SCONTROL | 0x1 | 0x1 |
+| cpu1 | SIEFP | 0x3d004001 | 0x3d004001 |
+| cpu1 | SIMP | 0x3d005001 | 0x3d005001 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x20000 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x12345679 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.39 s, BOOTTIME +9.53 s, REALTIME +9.53 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.78 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x1 host 1
+    vcpu_id 0 msr 0x40000082 data 0x3d002001 host 1
+    vcpu_id 0 msr 0x40000083 data 0x3d003001 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60758390490), (1, -60758390490)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+## K2-stock
+
+`QEMU emulator version 10.2.4 (wakemsr-stock)`, cpu `host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash`, seeded=True, boot ssh 21 s
+
+### cycle 1: status suspended, ssh back 6.271526575088501 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0xd450e32 | 0x12fda9ed |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.54 s, BOOTTIME +9.86 s, REALTIME +9.86 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.89 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -101012096129), (1, -101012096129)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 2: status suspended, ssh back 6.2782816886901855 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0x1763c7e2 | 0x1d1c3b89 |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.40 s, BOOTTIME +9.59 s, REALTIME +9.59 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.87 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -61106088290), (1, -61106088290)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+
+### cycle 3: status suspended, ssh back 6.2730560302734375 s
+
+| cpu | MSR | before suspend | after wake |
+|---|---|---|---|
+| cpu0 | GUEST_OS_ID | 0x0 | 0x0 |
+| cpu0 | HYPERCALL | 0x0 | 0x0 |
+| cpu0 | REFERENCE_TSC | 0x3d001001 | 0x0 |
+| cpu0 | TIME_REF_COUNT | 0x217a60f4 | 0x272aa3ac |
+| cpu0 | SCONTROL | 0x1 | 0x0 |
+| cpu0 | SIEFP | 0x3d002001 | 0x0 |
+| cpu0 | SIMP | 0x3d003001 | 0x0 |
+| cpu0 | SINT2 | 0x10000 | 0x10000 |
+| cpu0 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu0 | STIMER0_COUNT | 0x12345678 | 0x0 |
+| cpu1 | SCONTROL | 0x1 | 0x0 |
+| cpu1 | SIEFP | 0x3d004001 | 0x0 |
+| cpu1 | SIMP | 0x3d005001 | 0x0 |
+| cpu1 | SINT2 | 0x10000 | 0x10000 |
+| cpu1 | STIMER0_CONFIG | 0x20000 | 0x0 |
+| cpu1 | STIMER0_COUNT | 0x12345679 | 0x0 |
+
+clocksource kvm-clock -> kvm-clock; guest MONOTONIC +0.40 s, BOOTTIME +9.55 s, REALTIME +9.55 s across the cycle (REALTIME - BOOTTIME advance -0.00 s); guest REALTIME at the post read - host time of system_wakeup = 3.82 s; suspend_error None
+host xp of the TSC page, before: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, suspended: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+host xp of the TSC page, after: 000000003d001000: 0xffffffffffffffff 0xffffffffffffffff 000000003d001010: 0xffffffffffffffff
+guest kernel log symptom lines: 0
+host (QEMU) Hyper-V writes after the system_wakeup marker: 56
+    vcpu_id 0 msr 0x40000081 data 0x1 host 1
+    vcpu_id 0 msr 0x40000080 data 0x0 host 1
+    vcpu_id 0 msr 0x40000082 data 0x0 host 1
+    vcpu_id 0 msr 0x40000083 data 0x0 host 1
+    vcpu_id 0 msr 0x40000090 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000091 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000092 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000093 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000094 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000095 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000096 data 0x10000 host 1
+    vcpu_id 0 msr 0x40000097 data 0x10000 host 1
+guest Hyper-V MSR writes after the wake (APIC EOI/ICR/TPR 0x40000070-72 only counted: 0): 0
+TSC offset steps after the wake (vcpu, cycles): [(0, -60914897877), (1, -60914897877)]
+stimer one-shots after the wake: 0, peak 0 per 1 s
+

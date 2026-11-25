@@ -50,7 +50,7 @@
 //! `commands decoded` block names each `fn 76` command's control id and sequence.
 //!
 //! ★★ And that is a gate rather than a convention:
-//! `crates/kayfabe-crec/tests/cap1b_differential.rs::every_control_the_oracle_asks_is_either_served_or_triaged`
+//! `crates/kf-crec/tests/cap1b_differential.rs::every_control_the_oracle_asks_is_either_served_or_triaged`
 //! derives the universe from the capture and demands that each control be in
 //! [`crate::inittables::WantedTable::ALL`] or in [`SWEEP_TRIAGE`]. ⊘ An untriaged control
 //! reached from the sweep is exactly `t134a`'s defect, and it is now a red test rather than
@@ -164,7 +164,7 @@ pub struct SweepControl {
 /// ⊘ Quantified over by `tests/sweep_triage.rs`, so shortening it weakens the gate — the
 /// failure mode `docs/design/…` calls *"a smaller universe is a smaller true statement"*.
 /// The test pins the length as well as the contents, and
-/// `crates/kayfabe-crec/tests/cap1b_differential.rs` demands that every control the oracle
+/// `crates/kf-crec/tests/cap1b_differential.rs` demands that every control the oracle
 /// is *observed* to ask be either here or served.
 ///
 /// ★ In `rpc.sequence` order as the oracle asks them, so the table reads as the boot does.
@@ -274,7 +274,11 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         // text; the variant is left in place because no existing variant fits (see the last
         // paragraph) and inventing one is an owner decision, not a drive-by edit.
         disposition: SweepDisposition::RefusalHalts,
-        why: "⊘⊘ THIS ROW USED TO SAY the status `propagates to gpushareddataConstruct_IMPL \
+        why: "⊘ SUPERSEDED 2026-11-17 for a guest at a layout `kf_abi::utilization` derived, with the \
+              `report-utilization` property on (default): `crate::utilization` serves this control and \
+              publishes the utilisation record of the page (OWNER_RULINGS §AV), so \"no RUSD publisher\" no \
+              longer holds there; everywhere else the argument below stands. \
+              ⊘⊘ THIS ROW USED TO SAY the status `propagates to gpushareddataConstruct_IMPL \
               and the RM_USER_SHARED_DATA class allocation fails, which is loud and \
               attributable`. MEASURED FALSE, three boots, real GA106: the refusal is present \
               at IDENTICAL COUNTS in w333s11/w333s41 (green, cup8 bit-exact at 2048²) and in \
@@ -300,7 +304,8 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         cmd: 0x2080_0aff,
         engine: "GpuUserSharedData",
         disposition: SweepDisposition::RefusalHalts,
-        why: "the polling half of the same subsystem, issued by _gpushareddataSendDataPollRpc \
+        why: "⊘ SUPERSEDED 2026-11-17 together with `0x20800afe` above (`crate::utilization`, OWNER_RULINGS §AV). \
+              the polling half of the same subsystem, issued by _gpushareddataSendDataPollRpc \
               under NV_ASSERT_OK_OR_RETURN (ogkm-580: gpu_user_shared_data.c:265-274). ⊘ Same \
               argument as 0x20800afe — INCLUDING THAT ROW'S 2026-08-20 CORRECTION: this does \
               NOT halt either (measured on the same three boots; its assert fires at :373 and \

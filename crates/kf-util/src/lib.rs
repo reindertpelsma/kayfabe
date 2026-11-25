@@ -1,4 +1,4 @@
-//! # kayfabe-util — purely generic utilities
+//! # kf-util — purely generic utilities
 //!
 //! Design decision #2: *"Util lib = purely generic, no GPU concepts."* Nothing in this
 //! crate may name a GPU, NVIDIA, VMM, or driver concept; it is the bottom of the

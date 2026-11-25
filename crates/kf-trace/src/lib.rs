@@ -1,4 +1,4 @@
-//! ★ **v3 `kf-trace` — the WIRE-PLANE record vocabulary and its differential.** ORACLE-ONLY.
+//! **v3 `kf-trace` — the WIRE-PLANE record vocabulary and its differential.** ORACLE-ONLY.
 //!
 //! What a device looks like from outside: MMIO reads/writes, guest-RAM reads/writes, interrupt
 //! raises, clock reads. It is the vocabulary the C artifact's §6 captures decode into

@@ -1,0 +1,29 @@
+{
+ "driver_cuda": [
+  13,
+  0
+ ],
+ "flavour": "cu12",
+ "lock_sha256": "c53ea99692a10563c601eaa7738f8fb9193e43d4d3a2cfa409b7aac69708623c",
+ "model": null,
+ "pip_seconds": 233.1,
+ "python": "3.12.3",
+ "row": "jax",
+ "status": "ok",
+ "venv_bytes": 5747490120
+}
+{
+ "driver_cuda": [
+  13,
+  0
+ ],
+ "flavour": "cu12",
+ "lock_sha256": "5130616440fe9cb4b06a4507e0d85c88a572edcdddca372d96f875559f499f2e",
+ "model": null,
+ "pip_seconds": 294.4,
+ "python": "3.12.3",
+ "row": "tensorrt",
+ "status": "ok",
+ "venv_bytes": 7001966531
+}
+1 MiB

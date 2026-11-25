@@ -1,0 +1,20 @@
+MEASURE session driver 595.84
+MEASURE fb_used_mib start 1
+MEASURE store 0x100000000 contiguous_aligned=true
+MEASURE fb_used_mib after_store 4097
+MEASURE guest_range [0x120000000, 0xf000000000) reserved=true
+MEASURE guest_range [0x10000000000, 0x800000000000) reserved=true
+MEASURE guest_range [0x10000, 0x100000) reserved=true
+MEASURE fb_used_mib after_spaces 4097
+MEASURE fb_used_mib after_churn_round_0 pairs=160000 4098
+MEASURE fb_used_mib after_churn_round_1 pairs=320000 4098
+MEASURE fb_used_mib after_churn_round_2 pairs=480000 4098
+MEASURE alias_map 0x120000000+0xefa00000: OK va=0x120000000
+MEASURE fb_used_mib after_alias_map 4105
+MEASURE fb_used_mib after_alias_unmap 4098
+MEASURE fb_used_mib after_free_spaces 4097
+MEASURE fb_used_mib after_free_store 1
+FILL_PROBE_RESULT fill=Fault start=GuestFloor alias_len=0xefa00000 churn=160000x3 extra_spaces=0 alias_map=OK va=0x120000000
+
+--- stderr ---
+kf-host: host tier: stock

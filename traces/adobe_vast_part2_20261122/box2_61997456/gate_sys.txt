@@ -1,0 +1,23 @@
+utc_now=2026-11-22T03:03:20Z
+tz=UTC
+boot_time_utc=2026-11-22T02:44:05Z
+os=Microsoft Windows 11 Pro 10.0.26200
+user=kfimage
+session= USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME /  kfimage               console             1  Active      none   11/22/2026 2:46 AM
+nvsmi_L=GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-<uuid>)
+nvsmi=NVIDIA GeForce RTX 4090, 580.88, 8192 MiB, [N/A], 0 %
+display=NVIDIA GeForce RTX 4090 1920x1080 status=OK
+gpu_pnp=Microsoft Basic Display Adapter Unknown ; NVIDIA GeForce RTX 4070 Unknown ; NVIDIA GeForce RTX 4090 OK
+routes=
+adapters=Ethernet 2 Up
+fw_profiles=Domain enabled=True out=NotConfigured ; Private enabled=True out=NotConfigured ; Public enabled=True out=NotConfigured
+fw_block_out_rules=kayfabe-block-internet
+tcp_1.1.1.1_443=blocked_or_timeout
+tcp_8.8.8.8_53=blocked_or_timeout
+tcp_example.com_443=blocked_or_timeout
+dns_example.com=FAILED: example.com : This operation returned because the timeout pe
+https_example.com=FAILED
+ram_mb=16316
+disk_free_gb=89
+kfdata=F:
+  rc 0

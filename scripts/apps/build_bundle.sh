@@ -105,7 +105,7 @@ pin_git_checkout "$S/gpu-burn" "$PIN_GPU_BURN_URL" "" "$PIN_GPU_BURN_COMMIT"; ok
 # pinned to the revision of the first matrix (V3_APP_MATRIX.md §1) so reruns are comparable; no environment override
 pin_git_checkout "$S/llama.cpp" "$PIN_LLAMA_URL" "" "$PIN_LLAMA_COMMIT"; ok src_llama_cpp $?
 ( cd "$S/llama.cpp" && cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DLLAMA_CURL=OFF \
-    -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
+    -DLLAMA_USE_PREBUILT_UI=OFF -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
 rm -f "$B"/llama/lib*.so*
 cp -u "$S/llama.cpp/build/bin/"llama-* "$B/llama/" 2>/dev/null
 find "$S/llama.cpp/build" -name '*.so*' -exec cp -P -u {} "$B/llama/" \; 2>/dev/null
@@ -128,6 +128,14 @@ if [ ! -x "$B/bin/vkpeak" ]; then
 fi
 [ -x "$B/bin/vkpeak" ]; ok vkpeak $?
 
+# ---- the open FFmpeg/DCGM discovery rows (non-gating; docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md) ------------------------------
+# provision.sh prints OPENROWS_<step>=ok|FAIL lines (a prefix the stage's BUILD_/SETUP_ checks do not read): a failed step makes the row
+# report NOT_RUN with its reason, and can never turn a gate bundle into a failed one. It fills $B/bin/nvcodec_probe and $B/dcgm_root.tar.
+bash "$HERE/open_rows/provision.sh" "$B" || say "open rows: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
+# the nvbandwidth and llama.cpp Vulkan lanes (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): same rule, builds $B/bin/nvbandwidth and $B/llama_vk/
+bash "$HERE/open_rows/provision_lanes.sh" "$B" || say "open lanes: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
+rm -rf "$B/src" "$B/nvcodec_probe.log" "$B/ffmpeg.log" "$B/dcgm.log" "$B/nvidia.key" "$B/dcgm_files.txt" 2>/dev/null
+mkdir -p "$B/share" && cp -r "$HERE/open_rows" "$B/share/"
 cp -u "$HERE/src/ai_bench.py" "$HERE"/src/*.py "$B/share/" 2>/dev/null
 cp -u "$HERE/run_apps.sh" "$B/"
 # A bundle with any failed step is never written: the stage must see "not built", not 66 apps of which some fail.

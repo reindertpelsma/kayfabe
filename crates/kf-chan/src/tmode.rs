@@ -242,7 +242,7 @@ pub struct HostSem {
     pub form: HostSemForm,
 }
 
-/// ★ 2026-10-14 — one video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
+/// One video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
 /// is resolved at bind through the placement rows and emitted by the perimeter
 /// ([`crate::tspace_unsafe::put_video_semaphore`]); the payloads are data, re-emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,19 +282,19 @@ pub enum Ir {
         /// The bytes the engine may write there.
         bytes: u64,
     },
-    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
+    /// The VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
     VideoSem(VideoSem),
     /// The guest invalidated a VA space here (a split; `None` = `PDB_ALL`).
     Invalidate {
         /// The named root.
         pdb: Option<u64>,
     },
-    /// ★ OWNER_RULINGS §U: a method on a software subchannel bound to one of the channel's own
+    /// A method on a software subchannel bound to one of the channel's own
     /// software objects (a split: the runner resolves it, nothing is bound or emitted for it).
     SwMethod(SwCall),
 }
 
-/// ★ OWNER_RULINGS §U — one software method, as the guest wrote it: on bare metal a PBDMA
+/// One software method, as the guest wrote it. On bare metal a PBDMA
 /// software-method interrupt that the GSP serves for the object `SET_OBJECT` bound by number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwCall {
@@ -336,7 +336,7 @@ pub struct TState {
     mem_op_a: u32,
     mem_op_b: u32,
     mem_op_c: u32,
-    /// ★ The kernel-GR tier and the software-subchannel rule (owner rulings 2026-10-07): which
+    /// The kernel-GR and software-subchannel configuration selects which
     /// extensions this channel's decoder applies. Both off by default ([`GrConfig::default`]).
     pub gr: GrConfig,
     /// ★ GR tier: the graphics class each hardware subchannel 0-3 is bound to (0 = none; such a
@@ -351,7 +351,7 @@ pub struct TState {
     pub inert_binds: u64,
     /// GR-tier methods re-authored over the channel's life (for the log).
     pub gr_methods: u64,
-    /// ★ OWNER_RULINGS §U: software subchannels bound to a value that names one of the channel's
+    /// Software subchannels bound to a value that names one of the channel's
     /// own software objects (resolved by the runner at the method; the value is in
     /// [`TState::inert_value`]). Only with [`GrConfig::deferred_api`].
     pub swobj_subch: u8,
@@ -365,7 +365,7 @@ pub struct TState {
     video_payload64: Option<(u32, u32)>,
     /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
     pub video_methods: u64,
-    /// ★ 2026-10-19 — the CE-IMPLICIT binding of a guest-KERNEL copy-engine ring: the CE class the
+    /// The CE-IMPLICIT binding of a guest-KERNEL copy-engine ring: the CE class the
     /// ring's own HOST channel holds from birth (`0` = none: a user-tier or unconfigured ring, or
     /// a class that is not a known copy-engine class). Hardware subchannels 0-4 are fixed to the
     /// channel's engine and `SET_OBJECT` is not required by any engine (public `dev_ram.ref`, as
@@ -387,7 +387,7 @@ impl TState {
     }
 }
 
-/// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
+/// What a Translated channel's
 /// T-mode decoder may do beyond copy-engine work. Default: nothing.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct GrConfig {
@@ -398,12 +398,12 @@ pub struct GrConfig {
     /// A `SET_OBJECT` on a software subchannel (5-7) of a value no family lists as a class is
     /// accepted silently (inferred hardware behaviour: stored, later methods trap to RM).
     pub inert_sw_subch: bool,
-    /// ★ OWNER_RULINGS §U (`KF3_DEFERRED_API`): such a value is the channel's software classID of
+    /// With `KF3_DEFERRED_API`, such a value is the channel's software classID of
     /// one of its own software objects (`kchannelGetClassEngineID_GM107`, `kernel_channel_gm107.c:
     /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
     /// refuses by name. Takes precedence over `inert_sw_subch`.
     pub deferred_api: bool,
-    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
+    /// The VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
     /// runlist and its host channel holds an object of this video class (0 = not a video ring).
     /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
     /// derived table instead of the copy engine's.
@@ -528,7 +528,7 @@ fn one(
             SubKind::Ce
         };
         c.method(st.ce_tier().map_or(0, tier_class), kind, m);
-        // ★ 2026-10-08 (owner question, run64): the T-mode path never recorded the LAUNCH_DMA words,
+        // The T-mode path never recorded the LAUNCH_DMA words,
         // so a census could not say whether a channel named a PHYSICAL operand (`SRC_TYPE` bit 12,
         // `DST_TYPE` bit 13). Count-only, as every census entry.
         if kind == SubKind::Ce && m == ce::LAUNCH_DMA {
@@ -656,7 +656,7 @@ fn one(
     Ok(())
 }
 
-/// ★ 2026-10-14 — the VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
+/// The VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
 /// decoded against the channel's video class's DERIVED table ([`crate::vtables`]). Only the
 /// semaphore rows are admitted; every other method the header names is refused by name, an offset
 /// it does not name is unclassified.

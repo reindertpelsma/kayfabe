@@ -48,7 +48,7 @@ redaction, storage bounds and API-outage limits. This source change does not dep
   of someone else's run.
   There is no attempt-3 ceiling. Admission does not cache this read; the latest-run resource
   can describe a previous attempt during a rerun. A 401 logs a fixed `github:run:<field>` code,
-  without the field value. See [rerun diagnosis](../../docs/howto/vast-rerun-auth.md).
+  without the field value. See [rerun diagnosis](../../docs/howto/ops/vast-rerun-auth.md).
 - **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
   OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
   `github/docs` `pull_request_target` runs, PR #46406): the
@@ -66,7 +66,9 @@ redaction, storage bounds and API-outage limits. This source change does not dep
   newer run supersede the older runs of its branch and the caps answer BUSY. None of these
   refusals closes another run.
 - Commit gap, exactly: the commit row lives 30 days from the start of the rental (or
-  `SHA_GAP_HOURS` if that is longer) and is removed when the create failed. So a first-attempt
+  `SHA_GAP_HOURS` if that is longer) and is removed when the create failed or when the run ended
+  as an unusable rental (see "gpu-vast hardening" at the end: a provider fault with no box report
+  and no replacement left). So a first-attempt
   run key (`run_attempt` 1) of a commit tested in the last 30 days is refused, whatever
   `SHA_GAP_HOURS` says. The 24 h gap applies only to a re-run of the same commit (`run_attempt`
   above 1). The spent-key refusal lasts while the spend row exists: the row is pruned 30 days
@@ -101,7 +103,7 @@ leaves the box to the Worker's timers (paid work survives a Worker outage).
 ## Build and test
 
 [CODE READ: package.json, package-lock.json] Install first: `npm ci --ignore-scripts` in
-`ci/vast-broker` (tests alone need `npm ci --omit=dev --ignore-scripts`: only `jose`). In
+`ci/vast-broker` (the tests need the dev dependency `wrangler` too, or `test/bundle.test.js` skips; CI installs it). In
 `ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
 (the CI form). Both run the same suite.
 `--ignore-scripts` skips the install scripts of esbuild and workerd; their platform binaries
@@ -111,9 +113,10 @@ arrive as optional dependencies, and `npm ci` checks every tarball against the l
 output: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` writes `<dir>/index.js`
 (byte-identical across runs and checkout paths), and its SHA-256 is `bundle_sha256` in
 `deployment.json` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` (vars are not part of the
-module). `test/bundle.test.js` re-checks this when the dev dependencies are installed; GitHub CI
-installs only `--omit=dev` and skips it, so a `src/` change without a hash update is caught by the
-deploy helper at deploy time, not by CI (final review C1). After any
+module). `test/bundle.test.js` re-checks this when the dev dependencies are installed. Until 2026-11-23
+GitHub CI installed only `--omit=dev` and skipped it, so a stale pin reached `next` (see "Bundle pin
+regenerated 2026-11-23" at the end). CI now installs the dev dependencies in `worker-tests` and runs
+`scripts/check-bundle-pin.mjs`, which fails instead of skipping, and `scripts/bundle-pin-mutants.mjs`. After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
@@ -404,13 +407,26 @@ The Worker uses no R2 binding and has no write capability to the bucket. The box
 captured with `-w '%{redirect_url}'` and handed to the download on stdin, so neither the token
 nor the presigned URL reaches a command line or a log).
 
+#### Private objects (`GET /bench-data/<run>-<attempt>/private/<prefix>/<path>`, 2026-11-17, NOT deployed)
+
+[CODE READ: src/privatedata.js, src/trust.js, private-objects.json, trust.json] A second namespace of the route above, for the licence-restricted
+objects (the proprietary images; private is not sensitive). It needs no new secret or var: it uses the same read-only key pair and `R2_ACCOUNT_ID` /
+`R2_BUCKET`. It answers only a run token that carries the `private` scope, decided when the token was issued; a run that was admitted before this
+Worker was deployed has a token without the claim and is refused `TRUST_SCOPE_MISSING`. The one new public var, `PROPIMAGES_ENABLED` (exactly `true`
+or `false`, default off), makes release legs build and serve their instruction (`GET /instruction/<run>-<attempt>`); leave it unset until the
+payload accepts a release leg. The change alters the bundle, and the pin (`deployment.json`, `DEPLOYED_BUNDLE_SHA256`) is NOT regenerated in it: a dry run on the coordinator box did not reproduce the committed pin even for unmodified source, so regenerate it in the reviewed deployment environment before deploying (the deploy helper refuses a mismatch). Details: `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`.
+
 [CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
 public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH, and optional
 runner token A secrets (VAST_BROKER_ACCESS_ID and
 VAST_BROKER_ACCESS_SECRET), bound only in the sole trusted BASE broker step and passed to the
 controller as CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET. Keep the environment's deployment-branch
-policy master-only with a required reviewer (review V8); the Worker no longer honours branch
-copies, so widening it buys nothing and exposes the environment secrets to branch workflows.
+policy master-only (review V8); the Worker no longer honours branch copies, so widening it buys
+nothing and exposes the environment secrets to branch workflows.
+[MEASURED 2026-11-13, review 4 F7; owner ACCEPTED the state] The environment has NO required
+reviewer, and its deployment policy allows `v*` tags besides master. Only repo writers (the owner
+and the coordinator) can reach it, and an untrusted PR cannot get a run without approval. This is an
+accepted risk, not a safeguard (docs/design/V3_SECURITY_MODEL.md section 10).
 
 ## Cloudflare Access is dashboard-only
 
@@ -490,7 +506,8 @@ Reaper cron schedule: `*/5 * * * *`
 reaper has no other trigger. Until the secret is set each tick logs `reaper_unavailable` and
 deletes nothing.
 
-[CODE READ: ../vast-reaper/worker.js] Default hard=180 minutes, margin=15. It deletes only
+[CODE READ: ../vast-reaper/worker.js] Default hard=300 minutes (2026-11-13: the code default was 180,
+below the main Worker's hard limit), margin=15. It deletes only
 strictly older exact kf-ci-<run>-<attempt> labels with a valid numeric provider start_date, after
 matching ID/label/start_date in two list snapshots; anything uncertain fails closed. Each sweep
 deletes at most 20 and confirms absence. A failed DELETE no longer aborts the sweep (V9): the
@@ -501,6 +518,10 @@ tick retries. A failed list still aborts the whole sweep. Logs carry fixed event
 `invalid_json` (UTF-8/JSON decoding), `incomplete_list` (success/shape/pagination/row-cap check),
 or `malformed_list` (null document or invalid/duplicate ID). These name the failed check, not a
 provider root cause. No exception text, provider body, key, header, label, ID or URL is reported.
+
+**NOT APPLIED, 2026-11-24:** the reaper's optional `REAPER_SEEN` KV binding (the memory of ids seen under a
+`kf-ci-` label, so that a relabelled box is still reaped) is commented out in `ci/vast-reaper/wrangler.toml`,
+so the reaper decides by label alone. The steps are in "Worker hardening", "Owner checklist" (steps 1 and 2).
 
 [INFERRED: independent scheduler and account quotas] Put the reaper in a separate Cloudflare
 account if request-quota independence is required. Provider outages and inaccurate
@@ -758,7 +779,7 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 
 ## Same-tree gate reuse
 
-CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/ops/gpu-gate-reuse.md).
 
 ## Result store (D1)
 
@@ -1024,7 +1045,7 @@ Known follow-ups (review of #282, not done in this change): the guest password i
 Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
 the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s in the reviewer's probe,
 bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
-sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
+sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev` (NOT APPLIED, see "Worker hardening", owner checklist); D1 calls in the publisher have no
 timeout; the 0004 tables have no retention.
 
 
@@ -1137,3 +1158,159 @@ and a PHYSICAL `node_modules` inside the checkout (a symlinked one gives a diffe
 Bundle pin (2026-11-12, release resilience, `claude/release-resilience-20261113`). Regenerated ONCE at the end of that branch because `src/index.js` and `src/release.js` changed (a failed rental is replaced alone; design in `docs/design/V3_RELEASE_RESILIENCE.md`). Old pin `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`, new pin `bf98dfcda3729cee7de0ee13e6bea46e2eaadbb20bfa4d0a5ff8caa01385a9e3` (the review round of the same branch moved it once more from `51ae370c7ae3df4189186745d0cf07110953fe17de348d636aa2e94345b920ac`), in all three places (`deployment.json`, `wrangler.toml`, this file). MEASURED 2026-11-12 with wrangler 4.152.0 and a physical `node_modules` in the checkout: two `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` runs gave identical SHA-256 of `<dir>/index.js`. Local dry-runs only: no upload, no deploy, no Worker call.
 Order after merge: master must carry this pin before the coordinator deploys; set `RELEASE_ENABLED=false` before any rollback.
 
+
+## Worker hardening (review 4 of 2026-11-13: F4, F5, F6, F8, F10)
+
+STATUS: LIVE as source on `next` (merged), 2026-11-24; the Worker change is NOT DEPLOYED and two
+configuration items are NOT APPLIED (checklist at the end of this section). Every item below is
+[CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
+
+**NOT APPLIED, 2026-11-24 (nothing was changed on Cloudflare by this document):**
+
+1. `REAPER_SEEN` KV binding. The block is commented out at `ci/vast-reaper/wrangler.toml` lines 14-18,
+   so the reaper still decides by label alone and a box that relabels itself is not reaped.
+2. The `nosniff` / CSP response-header rule on `logs.kayfabe.dev` (a Cloudflare Transform Rule). Public
+   log objects are served without those two headers until it exists.
+
+- **F4, teardown by the proven id.** `Vast.destroy` verifies the instance id, the ledger's own
+  `kf-ci-` label prefix and the onstart proof, but no longer the current label (a box-writable
+  field). The reaper has no ledger: it deletes an instance whose label matches
+  `kf-ci-<n>-<n>`, or an id it has itself seen under such a label (first-seen `start_date` must
+  match). That memory is an optional KV binding `REAPER_SEEN`. **[NOT APPLIED]** The binding is
+  commented out in ci/vast-reaper/wrangler.toml, so the deployed reaper decides by the label alone, as
+  before the change; steps 1-2 of the owner checklist below apply it. Ids never seen under the label
+  are never touched. Residual:
+  a box that relabels before the first 5-minute tick sees it still escapes the reaper (the broker's
+  own destroy covers it); an onstart rewritten through an instance key would still stop the broker's
+  destroy (UNVERIFIED whether Vast allows either).
+- **F5.** A host's heartbeat state change is stored at most once per 5 s (`HB_CHANGE_MIN_MS`); a
+  held change is flushed by the next heartbeat, the liveness alarm or the socket close.
+- **F6.** Every gateway response carries `X-Content-Type-Options: nosniff`; non-JSON ones also a
+  deny-all CSP and an attachment disposition. R2 objects of the public log get a fixed inline
+  filename. R2 cannot set `nosniff` or a CSP per object, so those two headers need a Cloudflare
+  Transform Rule on `logs.kayfabe.dev` (response headers `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox`). **[NOT APPLIED]** It is a dashboard setting
+  that no repository change or deploy step creates; step 3 of the owner checklist below applies it.
+- **F8.** `deploy.mjs` refuses any file beside the hashed bundle other than wrangler's own
+  `README.md` and `index.js.map`, re-hashes the file just before the upload, and sets
+  `DEPLOYED_BUNDLE_SHA256` from the uploaded bytes (not from wrangler.toml). NOT done: the runner
+  comparing the reported hash with the deploy log (needs a deploy log store and a `runner.py`
+  change; `deployment.json` keeps its three fields because master's runner requires exactly them).
+- **F10.** A box-reported PASS no longer decays a host's fault history (there is no attestation
+  notion; the verdict is the box's word). The owner path is the internal `POST /admin/provider-success`
+  `{machine_id, host_id}` (vast-admin does not forward it yet). `/internal/seed` serves nothing for
+  a disabled box or seeder. The host-upgrade limiter keys IPv6 by /64 and evicts the oldest entry
+  when full instead of refusing new addresses. The reaper default is 300 minutes.
+- **Box Access pair and secret path (owner ruling 2026-10-24, restated 2026-11-13).** Both are
+  treated as SECRETS toward everyone but the boxes: the Worker redacts them (and the path prefix,
+  the full URL) in every private and public log, report and evidence path it writes, including the
+  values the box held at rent time. Boxes receive them by design; they are not capabilities beyond
+  reaching the Worker's edge, because every route still needs a run token.
+
+### Owner checklist: configuration this section needs and that is NOT APPLIED
+
+Only the owner (or a deploy step run by the owner) applies these. No coding lane, test or CI job does.
+[CODE READ] for the commands, [UNVERIFIED] for their live effect: none has been run.
+
+1. **Create the KV namespace for the reaper** (once; Cloudflare account of the reaper):
+   ```sh
+   cd ci/vast-reaper
+   ../vast-broker/node_modules/.bin/wrangler kv namespace create REAPER_SEEN
+   ```
+   It prints a namespace id.
+2. **Bind it and deploy the reaper.** In `ci/vast-reaper/wrangler.toml` uncomment the four lines of the
+   `[[kv_namespaces]]` block (`binding = "REAPER_SEEN"`) and put the id from step 1 in `id`; land that
+   change through a PR to `next`; then, from `ci/vast-reaper`:
+   ```sh
+   ../vast-broker/node_modules/.bin/wrangler deploy --dry-run
+   ../vast-broker/node_modules/.bin/wrangler deploy
+   ```
+   The dry run must list `REAPER_SEEN` as a KV binding. Check after a tick that listed a `kf-ci-` box:
+   `../vast-broker/node_modules/.bin/wrangler kv key get seen --binding REAPER_SEEN --remote` prints a JSON
+   object of instance id to `start_date`. The reaper's cron, `REAPER_VAST_API_KEY` and vars do not change.
+3. **Add the response-header rule for the public logs.** Cloudflare dashboard, zone `kayfabe.dev`, Rules,
+   Transform Rules, Modify Response Header, new rule: expression `http.host eq "logs.kayfabe.dev"`;
+   set static header `X-Content-Type-Options` to `nosniff`; set static header `Content-Security-Policy`
+   to `default-src 'none'; sandbox`. Check with
+   `curl -sI https://logs.kayfabe.dev/<run id>/log.txt`: both headers must appear on the response.
+4. Until steps 1-3 are done, keep reading F4 and F6 above as source only: the reaper is label-only and the
+   log domain serves without `nosniff` or a CSP.
+
+## Bundle pin regenerated 2026-11-23
+
+STATUS: LIVE, 2026-11-23 as source; NOT DEPLOYED. Local dry-runs only: no upload, no Worker call, no rental.
+
+[MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`] The pin on `next` was `afdcfe985b901192210da35ad661bc13ec96df189583d3cc22c3e8e98d88d369`
+(set at `cbf74eb81`, which a dry-run of that commit reproduces). `next` at `90a658c31` bundles to
+`6df4c71856b6ca53feeb773c04b78a186fa88939b6821a69d036398799ceb57b` (two dry-runs, identical), which is the new pin in `deployment.json`
+and `wrangler.toml`. The source changed after the old pin without a regeneration: #375, #447, #446, #455, #459, #521, #483, #526, #528, #539
+(`src/`, `defaults.json` and the new JSON tables the bundle imports changed; `package-lock.json` and `wrangler.toml` vars did not). Why CI missed it:
+`worker-tests` installed with `--omit=dev`, so `test/bundle.test.js` skipped (INFERRED from the workflow; CI was green).
+
+CI check (`worker-tests`): the install includes the dev dependencies, `node ci/vast-broker/scripts/check-bundle-pin.mjs` fails when either pin differs from a fresh
+dry-run bundle or when wrangler is missing, and `node ci/vast-broker/scripts/bundle-pin-mutants.mjs` shows it killing a one-byte change of `src/index.js`, a
+one-byte change of `defaults.json`, and a pin edited in one of the two files. [MEASURED 2026-11-23] On `next` before the pin change the check exits 1.
+
+Order: master must carry the new pin before the coordinator deploys the Worker (rule above); set `RELEASE_ENABLED=false` before any rollback.
+
+## gpu-vast hardening (2026-11-23)
+
+STATUS: LIVE, 2026-11-23 as source; NOT DEPLOYED. Four causes of the four attempts of the last batch PR gate
+(run 43348729279, 2026-11-13; analysis in `docs/CI_V3.md`, "gpu-vast failure causes"), each with a test that fails
+without the change. Local tests only: no rental, no Worker call, no upload.
+
+1. **A boot stuck on the `/dev/kvm` device error is a fatal provider signature.** `defaults.json`
+   `providerPolicy.fatalSignatures` has a second rule, reason `KVM_DEVICE_ERROR`, source `status`, matching both
+   `error gathering device information while adding custom device` and `/dev/kvm` in the provider's status message
+   (case-insensitive, as every rule). It is confirmed like the others (two observations, `confirmationSeconds` 90 apart), so the box is
+   destroyed as a PROVIDER_FAULT a few minutes after the first sighting and the bounded replacement starts, instead of
+   waiting for the 75 minute boot timeout. `test/provider-kvm-device.test.js`.
+2. **A replacement gets back the time the unusable legs took.** The payload's stage budget (`KF_SOFT_DEADLINE`) counts
+   from the first rental, and `apps` starts only with 245 minutes left (`scripts/ci/vast_payload.py`). A replacement exists only
+   because the earlier legs never posted (`retryEligible`), so its hard and soft deadlines move by the time since the
+   first rental, at most `providerPolicy.replacementExtensionMinutes` (25) in all, and never beyond the runner's remaining wait
+   budget less `admissionMarginMinutes` (a larger extension would be refused as `RUNNER_TIME`; a sweep runner, with a 200 minute
+   budget against a 180 minute limit, gets at most 15). The session deadline (90 minutes) and the money bound
+   (`runBudgetUsd`) do not change, so the extension adds no spend beyond the bound already admitted. The reservation re-checks the rule
+   (`validExtension`). A leg's token expires with its deadline, so a replacement keeps the earlier legs' expiries (`priorReportExpiries`, parallel to
+   `priorNonces`) and the publisher redacts each earlier token with its own expiry; a chain whose list is shorter than its nonces (it began on a Worker without the list) is redacted under every expiry the run is known to have used. `test/replacement-deadline.test.js`.
+3. **The commit gap is released only by an unusable rental.** The marker `sha:<commit>` (one rental per commit, `SHA_GAP_HOURS`)
+   is deleted when a run ends with verdict PROVIDER_FAULT, no box report ever (`firstReportAt` unset) and its replacement
+   chain spent (`replacementExhausted`), by the same call that clears it when the create failed (`clearFailedSha`, which deletes
+   the marker only if it names this run key, and only for the run's current leg: `Ledger.releaseUnusedMarker` compares the leg's nonce with the stored record's, so an overlapping request that still holds an earlier leg cannot drop the marker of the leg another request has reserved). Nothing else changes: a run whose box reported, a run with a replacement still
+   allowed, a stopped or timed-out run and a PASS keep the gap. The spend rows (`cost:*`) are not touched, so the daily rental count, the daily and
+   rolling USD caps and the credit reserve still apply to the re-run; at most `DAILY_RENTALS` (4) such re-runs fit in a day. Narrowed in
+   `provider-policy.js` `unusedRental`; `test/sha-gap-provider-fault.test.js`; `sha-gap-mutants.mjs` shows that dropping any one condition fails
+   a test. To restore the old rule, make `unusedRental` return false.
+4. **`gate_reuse.py` replays any complete PASS, not only four stages.** The post-merge push run of master reuses the
+   same-tree PR PASS instead of renting; the replay accepted only `stages=4`, and the pull-request gate plans more (the 2026-11-13
+   PASS had seven; kfml makes it eight). It now takes the stage count from the frame, requires one PASS line per
+   stage, no repeats, at most 16, and the base stages first in the order every tier plans them; a run that replaced an unusable box (up to
+   `maxAttempts` rentals) is accepted too. The base list is the one list this file keeps (it is fetched alone, so it cannot
+   import the payload); `scripts/ci/test_gate_reuse_stages.py` feeds the payload's own plan for every tier through the replay and fails when the
+   payload's plan stops starting with it. For the push run the workflow and `gate_reuse.py` come from the merge commit, so this takes
+   effect on the first push after the batch lands.
+
+What the post-merge push run needs (2026-11-13: run 43389562598): its first attempt rented a box and the runner refused the Worker's answer at
+`runner.py` line 862 (the manifest compare, INFERRED to be the bundle hash: master pinned `bf98dfcd...`), which left a commit marker, so the re-run
+two minutes later got `BUDGET:sha-gap`. So it needs (a) a replayable PR PASS (item 4) so that it never rents, and (b) the deployed Worker bundle equal
+to master's pin at that moment: deploy the new bundle only after the merge, as in "Coordinator order".
+
+Pin: the Worker bundle changed (items 1 to 3 are in `src/` and `defaults.json`), so `deployment.json` `bundle_sha256` and
+`wrangler.toml` `DEPLOYED_BUNDLE_SHA256` were regenerated with `scripts/check-bundle-pin.mjs` (the procedure of "Bundle pin
+regenerated 2026-11-23"). [MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`, two identical dry-runs] The new pin is
+`2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
+
+
+## Bundle pin regenerated 2026-11-25 (tiers)
+
+STATUS: LIVE as code on the RC1 integration branch, 2026-11-25 (`claude/rc1-worker-tiers-pin-20261125`); nothing deployed.
+Owner rulings of 2026-11-18 (section AZ) and 2026-11-24 (section BE): `src/tier.js` no longer lists `specviewperf` in the large tier's
+required `additionalStages` (it is `invokedStages`, which an operator adds with `RELEASE_STAGES`, off by default), and the `specviewperf` slot in
+`defaults.json` carries `"required": false`. What the `gpu-vast` middle run requests is unchanged. Details: `docs/CI_V3.md`, "What a PR runs".
+
+[MEASURED 2026-11-25, wrangler 4.152.0, clean `npm ci --ignore-scripts` with the dev dependencies, two identical dry-runs] The pin moved from
+`2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab` (the RC1 base) to
+`5b7b95a7cf03003b4920be2f2f63389360d57df68a80b76aff7c2e1938904806`, in `deployment.json` and `wrangler.toml`. master pins `bf98dfcd...`. The DEPLOYED
+Worker is unchanged: deploy it only after master carries this pin. **The Worker source is frozen after this change: any further change under `src/` or
+`defaults.json` changes the bundle, so re-measure the pin.**

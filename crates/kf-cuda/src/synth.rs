@@ -342,7 +342,7 @@ pub fn contiguous_small_pages_at(
 mod tests {
     use super::*;
 
-    /// ⊘ 2026-10-07: the fixture's dual PDE leaves its big half INVALID — `big_pde(0)` would be a
+    /// The fixture's dual PDE leaves its big half INVALID — `big_pde(0)` would be a
     /// present big-page table at FB 0 to the hardware and to the walk kernel.
     #[test]
     fn the_fixture_big_half_is_invalid_not_a_table_at_zero() {

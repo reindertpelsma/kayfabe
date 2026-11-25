@@ -106,8 +106,17 @@ pub const KFWR_HF_TRUNCATED: u16 = 1 << 0;
 pub const KFWR_HF_RESYNC: u16 = 1 << 1;
 /// ★ Report header flag: the runs are each entry's DIFF against its slot's committed placements.
 pub const KFWR_HF_DIFF: u16 = 1 << 7;
+/// The diff was larger than the report's run capacity, so the report carries a
+/// WINDOW of it (every run that starts below a VA boundary no run straddles). NOT truncated: the
+/// commit applies it like any report; each entry that is not whole carries [`KFWR_V_CUT`].
+pub const KFWR_HF_CUT: u16 = 1 << 8;
 /// `KFWR_OP_MAP`.
 pub const KFWR_OP_MAP: u16 = 1;
+/// `KFWR_OP_REMAP` (`kf_walk.h`): a placement whose target moved. ★ 2026-11-14: named here so
+/// [`crate::walk::Report::validate`] accepts exactly the three ops the header defines (S1-69).
+pub const KFWR_OP_REMAP: u16 = 3;
+/// `KFWR_VERSION` (`kf_walk.h`): the report format version the header carries.
+pub const KFWR_VERSION: u16 = 1;
 /// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
 /// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
 pub const KFWR_RF_HELD: u32 = 1 << 31;
@@ -139,12 +148,30 @@ pub const KFWR_R_BUDGET: u32 = 1 << 5;
 pub const KFWR_R_PDB_CAP: u32 = 1 << 6;
 /// `KFWR_R_FRONTIER_CAP`: the parallel walk's frontier/stage ran out.
 pub const KFWR_R_FRONTIER_CAP: u32 = 1 << 12;
+/// `KF_WALK_SPACES_AT_BUDGET` (`cuda/walk/kf_walk.cu`): the shared frontier and run stage are split
+/// into this many per-space shares.
+pub const KF_WALK_SPACES_AT_BUDGET: u32 = 4;
+/// `KF_ENTRY_FRONTIER_SHARE`: the most frontier entries (tables or passed-through leaves) one
+/// space may hold at one level of the parallel walk (`KF_MAX_FRONTIER / KF_WALK_SPACES_AT_BUDGET`).
+pub const KF_ENTRY_FRONTIER_SHARE: u32 = 131_072 / KF_WALK_SPACES_AT_BUDGET;
+/// `KF_ENTRY_RUN_SHARE`: the most runs one space may stage in the leaf phase
+/// (`KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET`).
+pub const KF_ENTRY_RUN_SHARE: u32 = (4 << 20) / KF_WALK_SPACES_AT_BUDGET;
+/// `KF_ENTRY_CUT`: the per-space limits that CUT a space's walk. The kernel then withholds that
+/// space's whole diff (unmaps included); exceeding either share sets `KFWR_R_FRONTIER_CAP`, so the
+/// bit alone does not say which share ran out.
+pub const KF_ENTRY_CUT: u32 = KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP;
 /// Per-entry flag: the entry's MAPs were withheld (slot capacity); re-walk after its UNMAPs.
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
 pub const KFWR_V_OVERFLOW: u32 = 1 << 4;
+/// Per-entry flag: only part of the entry's diff is in the report (the window
+/// below a VA boundary no run straddles, or nothing of it while an earlier entry fills the report);
+/// the rest is re-emitted by the next walk. The host walks again at once and completes the split or
+/// invalidate only on a walk whose diff is empty.
+pub const KFWR_V_CUT: u32 = 1 << 6;
 /// ★ Per-entry flag: the entry's walk refused something (`KfPdbEntry::reserved2` = the
-/// `KFWR_R_*` bits); its refused leaves are absent from the walk (owner ruling 2026-09-25).
+/// `KFWR_R_*` bits); its refused leaves are absent from the walk.
 pub const KFWR_V_REFUSED: u32 = 1 << 5;
 
 /// `value = ((raw >> lo) & ((1 << bits) - 1)) << shift`.
@@ -247,8 +274,18 @@ pub struct KfFormat {
     pub pcf: KfField,
     /// The PCF value meaning SPARSE (VER3).
     pub pcf_sparse: u8,
+    /// VER3's big-PTE PCF value meaning "no
+    /// valid 4 KiB PTE below me" (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE` = 0x3). Carried in the
+    /// descriptor, as the format's other moved values are; it took one of `pad1`'s bytes (no
+    /// offset moved). 0 on VER2. `WalkKernel::bring_up_on` refuses a descriptor whose value
+    /// differs from the one the committed kernel compiles (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`).
+    pub pte_pcf_no_valid_4k: u8,
+    /// VER3's PDE PCF bit meaning SPARSE for either ATS setting (0x1: SPARSE_ATS_
+    /// ALLOWED 1 and _NOT_ALLOWED 3 both have it, the INVALID values 0 and 2 do not). 0 on VER2.
+    /// Checked at bring-up like [`Self::pte_pcf_no_valid_4k`].
+    pub pde_pcf_sparse_bit: u8,
     /// Explicit padding.
-    pub pad1: [u8; 3],
+    pub pad1: [u8; 1],
     /// ★★★ **The PTE's KIND, which joins RUN IDENTITY** — added to the `.cu` by §w725b
     /// (*"run identity must include KIND — don't coalesce across a field you don't
     /// propagate"*). VER2 spells it 63:56, VER3 spells it 11:8; a **moved field**, so the
@@ -998,7 +1035,9 @@ pub fn kf_format_ver2() -> KfFormat {
     f.bit_atomic_disable = 7;
     f.pcf = KfField::default();
     f.pcf_sparse = 0;
-    f.pad1 = [0; 3];
+    f.pte_pcf_no_valid_4k = 0;
+    f.pde_pcf_sparse_bit = 0;
+    f.pad1 = [0; 1];
     // ★ VER2's KIND is 63:56, shift 0 — read from the `.cu`'s own `kf_format_ver2`, and
     // pinned byte-for-byte by the descriptor differential.
     f.kind = KfField {
@@ -1118,6 +1157,11 @@ pub fn kf_format_ver3() -> KfFormat {
         pad: 0,
     };
     f.pcf_sparse = 1;
+    // The two VER3 PCF enumerants that are not a moved bit, as the `.cu` assigns
+    // them in `kf_format_ver3` (pinned by the descriptor differential); tied to ogkm's
+    // `hopper/gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py` through the kernel's defines.
+    f.pte_pcf_no_valid_4k = 0x3;
+    f.pde_pcf_sparse_bit = 0x1;
     f.kind = KfField {
         lo: 8,
         bits: 4,
@@ -1160,6 +1204,42 @@ pub const PS_512M: u8 = 3;
 
 #[cfg(test)]
 mod tests {
+    /// The per-space limits mirror the kernel's defines (`cuda/walk/kf_walk.cu`).
+    #[test]
+    fn per_space_limits_match_the_kernel() {
+        let cu = include_str!("../../../cuda/walk/kf_walk.cu");
+        let define = |name: &str| -> String {
+            cu.lines()
+                .find_map(|l| {
+                    let l = l.trim();
+                    l.strip_prefix("#define ")
+                        .and_then(|r| r.strip_prefix(name))
+                        .filter(|r| r.starts_with(' '))
+                        .map(|r| r.split("/*").next().unwrap_or("").trim().to_string())
+                })
+                .unwrap_or_else(|| panic!("{name} not defined in kf_walk.cu"))
+        };
+        assert_eq!(define("KF_WALK_SPACES_AT_BUDGET"), "4u");
+        assert_eq!(define("KF_MAX_FRONTIER"), "131072u");
+        assert_eq!(define("KF_MAX_SCRATCH"), "(4u << 20)");
+        assert_eq!(
+            define("KF_ENTRY_FRONTIER_SHARE"),
+            "(KF_MAX_FRONTIER / KF_WALK_SPACES_AT_BUDGET)"
+        );
+        assert_eq!(
+            define("KF_ENTRY_RUN_SHARE"),
+            "(KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET)"
+        );
+        assert_eq!(
+            define("KF_ENTRY_CUT"),
+            "(KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP)"
+        );
+        assert_eq!(KF_ENTRY_FRONTIER_SHARE, 32_768);
+        assert_eq!(KF_ENTRY_RUN_SHARE, 1_048_576);
+        assert_eq!(KF_ENTRY_CUT, KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP);
+        assert_eq!(KF_ENTRY_CUT, 0x1020);
+    }
+
     use super::*;
     use core::mem::{offset_of, size_of};
 
@@ -1254,7 +1334,7 @@ mod tests {
 
     /// ★★★ **EACH DECODER READS THE DOCUMENTED BYTES AS THE DOCUMENTED VALUES** — little-endian,
     /// every field at its offset — and round-trips through the struct's own layout: the bytes the
-    /// compiler lays the value out in (`view_bytes`, what the device writes) decode back to the
+    /// compiler lays the value out in (`abi_bytes`, field by field at `offset_of!`; what the device writes) decode back to the
     /// value, `encode` produces exactly those bytes, and `encode ∘ decode` is the identity on any
     /// buffer (the fields tile the struct, so no byte is skipped or left stale).
     #[test]
@@ -1314,7 +1394,7 @@ mod tests {
                 assert_eq!(&v.encode()[..], &doc[..], "{}: encode is decode's inverse", stringify!($t));
                 // The struct's own layout — the bytes the device writes — on a little-endian host.
                 if cfg!(target_endian = "little") {
-                    let laid_out = crate::driver_unsafe::view_bytes(&v);
+                    let laid_out = &crate::driver_unsafe::abi_bytes(&v)[..];
                     assert_eq!(laid_out, &doc[..], "{}: the compiler lays it out as documented", stringify!($t));
                     assert_eq!($t::decode(laid_out), v, "{}: layout → decode → equal", stringify!($t));
                 }

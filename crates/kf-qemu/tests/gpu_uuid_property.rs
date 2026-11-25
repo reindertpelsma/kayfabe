@@ -25,6 +25,9 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
         gpu_uuid: gpu_uuid.map(str::to_owned),
         vm_id: vm_id.map(str::to_owned),
         pci_devfn: devfn,
+        windows_support: true,
+        report_utilization: true,
+        unmapped_reads_zero: kf_qemu::device::UNMAPPED_READS_ZERO_DEFAULT,
         channel_budget: 0,
     }
 }

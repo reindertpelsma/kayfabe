@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "values": {
+    "sleep": {
+      "ac": 0,
+      "dc": 0
+    },
+    "hibernate_after": {
+      "ac": 0,
+      "dc": 0
+    },
+    "unattended_sleep": {
+      "ac": 0,
+      "dc": 0
+    },
+    "hybrid_sleep": {
+      "ac": 0,
+      "dc": 0
+    },
+    "monitor": {
+      "ac": 0,
+      "dc": 0
+    },
+    "disk": {
+      "ac": 0,
+      "dc": 0
+    },
+    "wake_signin": {
+      "ac": 0,
+      "dc": 0
+    },
+    "hibernate_enabled": 0,
+    "fast_startup": 0,
+    "lock_screen": 1,
+    "inactivity": 0,
+    "desktop_active": "0",
+    "desktop_secure": "0",
+    "desktop_timeout": "0",
+    "policy_active": "0",
+    "policy_secure": "0",
+    "policy_timeout": "0",
+    "hiberfile_exists": false,
+    "restart_required": false,
+    "screen_active": false,
+    "screen_secure": false,
+    "screen_timeout": 0
+  },
+  "errors": [],
+  "readback": {
+    "registry": {
+      "fast_startup": 0,
+      "desktop_secure": "0",
+      "policy_timeout": "0",
+      "policy_active": "0",
+      "inactivity": 0,
+      "hibernate_enabled": 0,
+      "desktop_active": "0",
+      "desktop_timeout": "0",
+      "policy_secure": "0",
+      "lock_screen": 1
+    },
+    "sid": "S-1-5-21-3888671043-1713102152-3543330453-1000",
+    "hiberfile_exists": false,
+    "queries": {
+      "hybrid_sleep": "AC 0x00000000 DC 0x00000000",
+      "sleep": "AC 0x00000000 DC 0x00000000",
+      "unattended_sleep": "AC 0x00000000 DC 0x00000000",
+      "monitor": "AC 0x00000000 DC 0x00000000",
+      "hibernate_after": "AC 0x00000000 DC 0x00000000",
+      "disk": "AC 0x00000000 DC 0x00000000",
+      "wake_signin": "AC 0x00000000 DC 0x00000000"
+    },
+    "errors": [],
+    "raw_query": "Power Scheme GUID: <uuid>  (Balanced)\r\n  GUID Alias: SCHEME_BALANCED\r\n  Subgroup GUID: <uuid>  (Hard disk)\r\n    GUID Alias: SUB_DISK\r\n    Power Setting GUID: <uuid>  (Turn off hard disk after)\r\n      GUID Alias: DISKIDLE\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0xffffffff\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: Seconds\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n  Subgroup GUID: <uuid>  (Internet Explorer)\r\n    Power Setting GUID: <uuid>  (JavaScript Timer Frequency)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Maximum Power Savings\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Maximum Performance\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n  Subgroup GUID: <uuid>  (Desktop background settings)\r\n    Power Setting GUID: <uuid>  (Slide show)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Available\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Paused\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n  Subgroup GUID: <uuid>  (Wireless Adapter Settings)\r\n    Power Setting GUID: <uuid>  (Power Saving Mode)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Maximum Performance\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Low Power Saving\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Medium Power Saving\r\n      Possible Setting Index: 003\r\n      Possible Setting Friendly Name: Maximum Power Saving\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000002\r\n\r\n  Subgroup GUID: <uuid>  (Sleep)\r\n    GUID Alias: SUB_SLEEP\r\n    Power Setting GUID: <uuid>  (Sleep after)\r\n      GUID Alias: STANDBYIDLE\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0xffffffff\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: Seconds\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Allow hybrid sleep)\r\n      GUID Alias: HYBRIDSLEEP\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Off\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: On\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Hibernate after)\r\n      GUID Alias: HIBERNATEIDLE\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0xffffffff\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: Seconds\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Allow wake timers)\r\n      GUID Alias: RTCWAKE\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Disable\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Enable\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Important Wake Timers Only\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n  Subgroup GUID: <uuid>  (USB settings)\r\n    Power Setting GUID: <uuid>  (USB selective suspend setting)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Disabled\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Enabled\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n  Subgroup GUID: <uuid>  (Power buttons and lid)\r\n    GUID Alias: SUB_BUTTONS\r\n    Power Setting GUID: <uuid>  (Start menu power button)\r\n      GUID Alias: UIBUTTON_ACTION\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Sleep\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Hibernate\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Shut down\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n  Subgroup GUID: <uuid>  (PCI Express)\r\n    GUID Alias: SUB_PCIEXPRESS\r\n    Power Setting GUID: <uuid>  (Link State Power Management)\r\n      GUID Alias: ASPM\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Off\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Moderate power savings\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Maximum power savings\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000002\r\n\r\n  Subgroup GUID: <uuid>  (Processor power management)\r\n    GUID Alias: SUB_PROCESSOR\r\n    Power Setting GUID: <uuid>  (Minimum processor state)\r\n      GUID Alias: PROCTHROTTLEMIN\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x00000005\r\n    Current DC Power Setting Index: 0x00000005\r\n\r\n    Power Setting GUID: <uuid>  (Maximum processor state)\r\n      GUID Alias: PROCTHROTTLEMAX\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x00000064\r\n    Current DC Power Setting Index: 0x00000064\r\n\r\n  Subgroup GUID: <uuid>  (Display)\r\n    GUID Alias: SUB_VIDEO\r\n    Power Setting GUID: <uuid>  (Turn off display after)\r\n      GUID Alias: VIDEOIDLE\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0xffffffff\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: Seconds\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Display brightness)\r\n      GUID Alias: VIDEONORMALLEVEL\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x0000004b\r\n    Current DC Power Setting Index: 0x0000004b\r\n\r\n    Power Setting GUID: <uuid>  (Dimmed display brightness)\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x00000032\r\n    Current DC Power Setting Index: 0x00000032\r\n\r\n    Power Setting GUID: <uuid>  (Enable adaptive brightness)\r\n      GUID Alias: ADAPTBRIGHT\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Off\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: On\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n  Subgroup GUID: <uuid>  (Multimedia settings)\r\n    Power Setting GUID: <uuid>  (When sharing media)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Allow the computer to sleep\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Prevent idling to sleep\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Allow the computer to enter Away Mode\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Video playback quality bias)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Video playback power-saving bias\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Video playback performance bias\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (When playing video)\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Optimize video quality\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Balanced\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Optimize power savings\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n  Subgroup GUID: <uuid>  (Battery)\r\n    GUID Alias: SUB_BATTERY\r\n    Power Setting GUID: <uuid>  (Critical battery notification)\r\n      GUID Alias: BATFLAGSCRIT\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Off\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: On\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n    Power Setting GUID: <uuid>  (Critical battery action)\r\n      GUID Alias: BATACTIONCRIT\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Do nothing\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Sleep\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Hibernate\r\n      Possible Setting Index: 003\r\n      Possible Setting Friendly Name: Shut down\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Low battery level)\r\n      GUID Alias: BATLEVELLOW\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x0000000a\r\n    Current DC Power Setting Index: 0x0000000a\r\n\r\n    Power Setting GUID: <uuid>  (Critical battery level)\r\n      GUID Alias: BATLEVELCRIT\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x00000005\r\n    Current DC Power Setting Index: 0x00000005\r\n\r\n    Power Setting GUID: <uuid>  (Low battery notification)\r\n      GUID Alias: BATFLAGSLOW\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Off\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: On\r\n    Current AC Power Setting Index: 0x00000001\r\n    Current DC Power Setting Index: 0x00000001\r\n\r\n    Power Setting GUID: <uuid>  (Low battery action)\r\n      GUID Alias: BATACTIONLOW\r\n      Possible Setting Index: 000\r\n      Possible Setting Friendly Name: Do nothing\r\n      Possible Setting Index: 001\r\n      Possible Setting Friendly Name: Sleep\r\n      Possible Setting Index: 002\r\n      Possible Setting Friendly Name: Hibernate\r\n      Possible Setting Index: 003\r\n      Possible Setting Friendly Name: Shut down\r\n    Current AC Power Setting Index: 0x00000000\r\n    Current DC Power Setting Index: 0x00000000\r\n\r\n    Power Setting GUID: <uuid>  (Reserve battery level)\r\n      Minimum Possible Setting: 0x00000000\r\n      Maximum Possible Setting: 0x00000064\r\n      Possible Settings increment: 0x00000001\r\n      Possible Settings units: %\r\n    Current AC Power Setting Index: 0x00000007\r\n    Current DC Power Setting Index: 0x00000007\r\n\r\n",
+    "restart_required": false,
+    "sources": {
+      "hybrid_sleep": "active-scheme registry; powercfg /q retained in raw_query",
+      "sleep": "active-scheme registry; powercfg /q retained in raw_query",
+      "unattended_sleep": "active-scheme registry; powercfg /q retained in raw_query",
+      "monitor": "active-scheme registry; powercfg /q retained in raw_query",
+      "hibernate_after": "active-scheme registry; powercfg /q retained in raw_query",
+      "disk": "active-scheme registry; powercfg /q retained in raw_query",
+      "wake_signin": "active-scheme registry; powercfg /q retained in raw_query"
+    },
+    "screen": {
+      "secure": false,
+      "active": false,
+      "timeout": 0,
+      "sid": "S-1-5-21-3888671043-1713102152-3543330453-1000"
+    }
+  }
+}

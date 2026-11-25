@@ -1,4 +1,4 @@
-//! # `kayfabe-linux-raw` — the one audited raw-OS adapter
+//! # `kf-linux-raw` — the one audited raw-OS adapter
 //!
 //! `l1_os_shell.md` §4 (decision 9). This is the **only** crate in the workspace where
 //! the `unsafe_code` lint is not `forbid`, and its API shape — not its implementation —
@@ -92,7 +92,7 @@
 //! ## The audit surface, enumerable with `ls`
 //!
 //! ```text
-//! $ ls crates/kayfabe-linux-raw/src/*_unsafe.rs
+//! $ ls crates/kf-linux-raw/src/*_unsafe.rs
 //! chardev_unsafe.rs   epoll_unsafe.rs   host_fd_unsafe.rs   kvm_unsafe.rs
 //! mapping_unsafe.rs   sandbox_unsafe.rs scm_unsafe.rs       signal_unsafe.rs
 //! spawn_unsafe.rs     sysconf_unsafe.rs vcpu_unsafe.rs      window_unsafe.rs
@@ -275,6 +275,7 @@ pub mod capability;
 mod capability_unsafe;
 pub mod census;
 mod chardev_unsafe;
+mod companion;
 pub mod drm;
 mod drm_unsafe;
 mod epoll_unsafe;

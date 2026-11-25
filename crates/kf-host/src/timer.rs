@@ -30,7 +30,7 @@ impl TimerWindow<'_> {
         self.layout
     }
     /// The owned read-only mapping, valid while this timer window lives.
-    pub fn view(&self) -> HostSpan {
+    pub fn view(&self) -> HostSpan<'_> {
         self.region
             .as_ref()
             .expect("live timer mapping")

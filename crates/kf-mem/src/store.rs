@@ -10,18 +10,24 @@
 
 use crate::addr::{HostToken, StoreOffset};
 
+/// Why a range of the store was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoreRefusal {
     /// The range `[offset, offset+len)` is not wholly inside the object. Refused by name.
     OutOfObject {
+        /// First byte of the refused range.
         offset: u64,
+        /// Length of the refused range.
         len: u64,
+        /// Length of the object.
         object: u64,
     },
+    /// A range of zero bytes.
     ZeroLength,
 }
 
 impl StoreRefusal {
+    /// The refusal's stable name, as logged.
     pub fn name(&self) -> &'static str {
         match self {
             StoreRefusal::OutOfObject { .. } => "out_of_object",
@@ -38,15 +44,19 @@ pub struct Store {
 }
 
 impl Store {
+    /// A store of `len` bytes, named by the host token of its one object.
     pub fn new(token: HostToken, len: u64) -> Store {
         Store { token, len }
     }
+    /// The host token of the object.
     pub fn token(&self) -> HostToken {
         self.token
     }
+    /// The object's length in bytes.
     pub fn len(&self) -> u64 {
         self.len
     }
+    /// Is the object zero bytes long?
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }

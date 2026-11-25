@@ -1,3 +1,5 @@
+//! Tests of `kf_chan::user_progress`: a channel driven through `user_batch` plans.
+
 use kf_chan::tmode::SwCall;
 use kf_chan::user_batch::{self, Action};
 use kf_chan::user_consumption::ConsumedSource;

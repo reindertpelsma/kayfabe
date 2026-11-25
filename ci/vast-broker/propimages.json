@@ -1,0 +1,212 @@
+{
+  "schema": "kayfabe.worker-propimages/1",
+  "status": "STATUS: DESIGN-ONLY, 2026-11-16. Not read by the deployed Worker (nothing imports src/propimages.js yet). Owner decisions 2026-11-16: the Worker knows image A and image B from this file, with the applications on them; the Worker and CI run is STRICT (everything listed for the leg must run, zero skips); gate lane and discovery lane; a release rents two dies per family and the images are split across the two boxes (slot 1 runs image A, slot 2 runs image B; `swap` exchanges them; a family with one die gets both); images are for the release run only. Design: docs/design/V3_WORKER_PROPIMAGES.md. 2026-11-17: `linux_images` carries the MATLAB Linux image (object `imgc`, role `linux_image`): every row in the discovery lane, no per-family list (it has run on no die), scheduled outside the slot rotation (docs/design/V3_PROPIMAGE_LINUX.md section 14).",
+  "strict": true,
+  "swap": false,
+  "unmeasured_note": "not yet measured on this family",
+  "objects": [
+    {
+      "id": "imga",
+      "role": "image",
+      "ref": "propimage-kfimg-20261112.zip",
+      "object": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3"
+    },
+    {
+      "id": "imgb",
+      "role": "image",
+      "ref": "propimage-kfimg-20261116.zip",
+      "object": "windows-proprietary/kfimg-20261116/image.zip",
+      "size": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a"
+    },
+    {
+      "id": "gop",
+      "role": "gop",
+      "ref": "propimage-kf-gop.signed.efi",
+      "object": "windows-proprietary/kfimg-20261112/kf-gop.signed.efi",
+      "size": 11224,
+      "sha256": "423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e"
+    },
+    {
+      "id": "imgc",
+      "role": "linux_image",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "object": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size": 8147790579,
+      "sha256": "81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc"
+    }
+  ],
+  "images": [
+    {
+      "label": "imga",
+      "object": "imga",
+      "slot": 1,
+      "measured_families": [
+        "ampere",
+        "ada"
+      ],
+      "measured_basis": "image ran on GA102 and on AD102/AD104/AD106 dies; turing and blackwell never measured, so on any other family every application of this image is emitted in the discovery lane until a measured pass is recorded and the family is added here",
+      "apps": {
+        "solidworks": {
+          "lane": "gate",
+          "basis": "PASS on the pc and on Vast boxes"
+        },
+        "edrawings": {
+          "lane": "gate",
+          "basis": "PASS on the pc and on Vast boxes"
+        },
+        "3dmark": {
+          "lane": "discovery",
+          "basis": "PASS on the pc; failed twice on a Vast box (no RUN link found); unsure, so discovery"
+        },
+        "superposition": {
+          "lane": "discovery",
+          "basis": "PASS on the pc; no Vast-box result; unsure, so discovery"
+        },
+        "resolve": {
+          "lane": "discovery",
+          "basis": "application crashed 3 of 3 times on an RTX 4090 Vast box; passed on a 3090 box; unsure, so discovery"
+        }
+      },
+      "excluded": {
+        "wukong": "no verdict driver yet (grades INCONCLUSIVE); a strict list that names it fails the leg"
+      }
+    },
+    {
+      "label": "imgb",
+      "object": "imgb",
+      "slot": 2,
+      "measured_families": [
+        "ada"
+      ],
+      "measured_basis": "image ran on one RTX 4090 (AD102) Vast box only; every other family is unmeasured",
+      "apps": {
+        "gpudiag": {
+          "lane": "gate",
+          "basis": "PASS on a Vast box (AD102)"
+        },
+        "illustrator": {
+          "lane": "gate",
+          "basis": "PASS on a Vast box (AD102)"
+        },
+        "acrobat": {
+          "lane": "gate",
+          "basis": "PASS on a Vast box (AD102)"
+        },
+        "premiere": {
+          "lane": "gate",
+          "basis": "PASS_LIMITED (launch only) on a Vast box (AD102): the row's best verdict by design"
+        },
+        "lightroomlaunch": {
+          "lane": "gate",
+          "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)"
+        },
+        "dimension": {
+          "lane": "gate",
+          "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)"
+        },
+        "uxp": {
+          "lane": "gate",
+          "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)"
+        },
+        "photoshop": {
+          "lane": "discovery",
+          "basis": "heavy workload; FAIL on exit only; discovery row"
+        },
+        "photoshopsample": {
+          "lane": "discovery",
+          "basis": "discovery row, PASS on a Vast box (AD102)"
+        },
+        "photoshopprojects": {
+          "lane": "discovery",
+          "basis": "discovery row, PASS on a Vast box (AD102)"
+        },
+        "aftereffects": {
+          "lane": "discovery",
+          "basis": "discovery row, FAIL on a Vast box (AD102)"
+        },
+        "aeparallel": {
+          "lane": "discovery",
+          "basis": "discovery row, FAIL on a Vast box (AD102)"
+        },
+        "aeprojects": {
+          "lane": "discovery",
+          "basis": "discovery row, no valid result yet"
+        },
+        "aetoggle": {
+          "lane": "discovery",
+          "basis": "discovery row, no valid result yet"
+        },
+        "mediaencoder": {
+          "lane": "discovery",
+          "basis": "discovery row, no valid result yet"
+        },
+        "indesign": {
+          "lane": "discovery",
+          "basis": "gate-tagged in the harness; no passing result (application crash); unsure, so discovery"
+        },
+        "indesignsample": {
+          "lane": "discovery",
+          "basis": "gate-tagged in the harness; FAIL on a Vast box (AD102); discovery until it passes"
+        },
+        "illustratorsample": {
+          "lane": "discovery",
+          "basis": "gate-tagged in the harness; FAIL on a Vast box (AD102); discovery until it passes"
+        }
+      },
+      "excluded": {
+        "animate": "no working offline script entry (disabled in the harness)",
+        "animatesample": "same as animate",
+        "animateprojects": "same as animate",
+        "lightroom": "plugin not loaded by the application at start (disabled in the harness); lightroomlaunch covers it",
+        "indesignprojects": "no result of a final driver yet",
+        "pugetbench": "package not pinned and not redistributable"
+      }
+    }
+  ],
+  "linux_images": [
+    {
+      "label": "matlab",
+      "object": "imgc",
+      "families": "generic",
+      "isolation": "row",
+      "scheduling": "one run per release box that has a KVM host and a GPU; not part of the A/B slot rotation",
+      "rows": {
+        "gpu_info": {
+          "lane": "discovery",
+          "basis": "preamble: the device facts MATLAB reports against the host's"
+        },
+        "gpu_matmul": {
+          "lane": "discovery",
+          "basis": "first run on any die: discovery"
+        },
+        "gpu_fft": {
+          "lane": "discovery",
+          "basis": "first run on any die: discovery"
+        },
+        "gpu_solve": {
+          "lane": "discovery",
+          "basis": "first run on any die: discovery"
+        },
+        "dl_train": {
+          "lane": "discovery",
+          "basis": "first run on any die: discovery"
+        },
+        "parpool_gpu": {
+          "lane": "discovery",
+          "basis": "several CUDA contexts on one die: discovery"
+        },
+        "cuda_kernel": {
+          "lane": "discovery",
+          "basis": "driver JIT of a committed PTX: discovery"
+        },
+        "mem_oversub": {
+          "lane": "discovery",
+          "basis": "allocates to 85 percent of the free memory: discovery"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+KIT_WAKE_HUNK applied /root/w/src-patched/hw/i386/pc.c
+BUILD_OK stock
+BUILD_OK patched
+noble-server-cloudimg-amd64.img: OK
+SETUP_DONE
+EXIT rc=0

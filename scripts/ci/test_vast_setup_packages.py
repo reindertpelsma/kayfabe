@@ -1,6 +1,7 @@
 """Package-list contracts; source only the side-effect-free policy preamble."""
 
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -67,6 +68,41 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
 
     def test_missing_guest_ssh_client_does_not_skip_apt(self):
         self.missing_ssh_tool_triggers_install("ssh")
+
+    def test_the_apt_probe_the_tests_run_makes_no_network_call_and_no_clone(self):
+        """The two tests above execute the text from `NEED=""` to the first `if ! command -v cargo`. That span is the apt probe and must stay
+        free of any transfer: moving the rustup install (anchored by scripts/ci/kf_trust.py, 2026-11-17) after the clone once made the span
+        include the clone, which hung CI on a real `git clone` (PR #473)."""
+        source = PROVISION.read_text()
+        probe = source[source.index('NEED=""') : source.index("if ! command -v cargo")]
+        code = "\n".join(l for l in probe.splitlines() if not l.lstrip().startswith("#"))
+        transfer = re.search(r"\bcurl\s+[-\"'$h]|\bwget\s|\bgit\s+(?:clone|fetch|-C|checkout)|kf_trust|rustup-init|\bpip3?\s+install|\bmktemp\b|~/kayfabe", code)
+        self.assertIsNone(transfer, transfer.group(0) if transfer else "")
+        self.assertLess(len(probe.splitlines()), 60, "the probe grew into something else: the tests execute it with a 5 s limit")
+
+    def test_rustup_is_installed_only_after_the_clone_through_kf_trust_and_never_curl_to_sh(self):
+        source = PROVISION.read_text()
+        code = "\n".join(l for l in source.splitlines() if not l.lstrip().startswith("#"))
+        self.assertNotIn("sh.rustup.rs", code)
+        self.assertEqual(code.count("if ! command -v cargo"), 1, "the first occurrence is where the tests cut the probe: keep exactly one")
+        self.assertLess(code.index("if ! command -v cargo"), code.index("git clone"), "the probe cut stays before the clone")
+        install = code.index("kf_trust.py\" fetch rustup-init") if 'kf_trust.py" fetch rustup-init' in code else code.index("kf_trust.py fetch rustup-init")
+        self.assertGreater(install, code.index("git clone"), "kf_trust.py comes with the tree, so rustup is installed after the clone")
+
+    def test_pybuild_is_exactly_what_a_cpython_312_source_build_needs_for_the_ml_venvs(self):
+        """The private Python of the open ML rows (scripts/apps/mlrows/private_python.py, 2026-11-20) builds from the python.org source: the compiler and the headers of
+        the modules the venvs use (TLS for pip, zlib, ctypes, bz2, lzma, sqlite3). Nothing interactive, nothing from a PPA."""
+        self.assertEqual(
+            sorted(self.plan("pybuild")),
+            ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"],
+        )
+
+    def test_nvcodec_control_is_exactly_the_distribution_ffmpeg_and_no_other_profile_holds_it(self):
+        """The host control of nvcodec_matrix (apps_discovery_stage.py, 2026-11-20) installs ffmpeg through provision.sh of the open rows. The cross-file contracts (the
+        cache policy, provision.sh) are in test_package_profiles.py."""
+        self.assertEqual(self.plan("nvcodec_control"), ["ffmpeg"])
+        for profile in ("ci", "full", "bench", "windows", "apps", "pybuild"):
+            self.assertNotIn("ffmpeg", self.plan(profile), profile)
 
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(

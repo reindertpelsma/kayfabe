@@ -1,0 +1,139 @@
+== now 2026-11-24T06:35:31Z
+== Premiere SentryIO records written since 2026-11-24T06:01:26Z
+-- 2026-11-24T06:02:39Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:04:25Z        347 \cache\1795501196485-01-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:05:30Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:06:06Z        346 \cache\1795501347003-01-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:08:15Z        392 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:09:57Z        345 \cache\1795501498957-01-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:11:02Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:11:18Z        346 \cache\1795501951911-01-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:12:23Z        390 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:12:36Z        346 \cache\1795500756953-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:13:41Z        399 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:14:05Z        355 \cache\1795500845566-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:15:10Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:15:37Z        346 \cache\1795500937715-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:16:42Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:17:05Z        346 \cache\1795501025739-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:18:10Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:18:38Z        355 \cache\1795501118128-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:18:56Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:19:06Z        346 \cache\1795501146287-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:19:23Z        391 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:19:56Z        345 \cache\1795501196398-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:22:05Z        383 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:22:26Z        334 \cache\1795501346925-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:24:35Z        382 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:24:58Z        336 \cache\1795501498871-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:29:15Z        383 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:32:31Z          0 \<uuid>.run\__sentry-breadcrumb2
+-- 2026-11-24T06:32:31Z         40 \settings.dat
+-- 2026-11-24T06:32:31Z          0 \<uuid>.run.lock
+-- 2026-11-24T06:32:31Z        212 \<uuid>.run\session.json
+-- 2026-11-24T06:32:31Z        334 \cache\1795501951820-00-<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:32:35Z        481 \<uuid>.run\__sentry-breadcrumb1
+-- 2026-11-24T06:34:40Z        383 \external\<uuid>.envelope
+   kv "type":"session"
+-- 2026-11-24T06:34:40Z       1386 \<uuid>.run\__sentry-event
+== Application 1000/1001/1002 since
+2026-11-24T06:14:33Z 1001 Fault bucket , type 0 Event Name: StoreAgentScanForUpdatesFailure0 Response: Not available Cab Id: 0 Problem signature: P1: Update; P2: 8024402c P3: 26200 P4: 8037 P5: Windows.Desktop P6: P7: P8: P9: P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\NonCritical_Update;<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:33Z 1001 Fault bucket , type 0 Event Name: StoreAgentScanForUpdatesFailure0 Response: Not available Cab Id: 0 Problem signature: P1: Update; P2: 8024402c P3: 26200 P4: 8037 P5: Windows.Desktop P6: P7: P8: P9: P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\NonCritical_Update;<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:32Z 1001 Fault bucket , type 0 Event Name: MoAppCrash Response: Not available Cab Id: 0 Problem signature: P1: Microsoft.YourPhone_0.26101.118.0_x64__8wekyb3d8bbwe P2: praid:App P3: 10.0.26100.1 P4: 5bc61463 P5: combase.dll P6: 10.0.26100.7920 P7: 62a4dab7 P8: c0000005 P9: 0000000000117474 P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\AppCrash_Microsoft.<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:32Z 1001 Fault bucket , type 0 Event Name: StoreAgentScanForUpdatesFailure0 Response: Not available Cab Id: 0 Problem signature: P1: Update; P2: 8024402c P3: 26200 P4: 8037 P5: Windows.Desktop P6: P7: P8: P9: P10: Attached files: These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\NonCritical_Update;<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 4 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:32Z 1001 Fault bucket , type 0 Event Name: StoreAgentScanForUpdatesFailure0 Response: Not available Cab Id: 0 Problem signature: P1: Update; P2: 8024402c P3: 26200 P4: 8037 P5: Windows.Desktop P6: P7: P8: P9: P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\NonCritical_Update;<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:31Z 1001 Fault bucket , type 0 Event Name: MoAppCrash Response: Not available Cab Id: 0 Problem signature: P1: Microsoft.YourPhone_0.26101.118.0_x64__8wekyb3d8bbwe P2: praid:App P3: 10.0.26100.1 P4: 5bc61463 P5: combase.dll P6: 10.0.26100.7920 P7: 62a4dab7 P8: c0000005 P9: 0000000000117474 P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\AppCrash_Microsoft.<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:14:31Z 1001 Fault bucket , type 0 Event Name: StoreAgentScanForUpdatesFailure0 Response: Not available Cab Id: 0 Problem signature: P1: Update; P2: 8024402c P3: 26200 P4: 8037 P5: Windows.Desktop P6: P7: P8: P9: P10: Attached files: These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\NonCritical_Update;<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 4 Hashed bucket: Cab Guid: 0
+2026-11-24T06:07:02Z 1001 Fault bucket , type 0 Event Name: MoAppCrash Response: Not available Cab Id: 0 Problem signature: P1: Microsoft.YourPhone_0.26101.118.0_x64__8wekyb3d8bbwe P2: praid:App P3: 10.0.26100.1 P4: 5bc61463 P5: combase.dll P6: 10.0.26100.7920 P7: 62a4dab7 P8: c0000005 P9: 0000000000117474 P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\AppCrash_Microsoft.<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+2026-11-24T06:02:28Z 1001 Fault bucket , type 0 Event Name: MoAppCrash Response: Not available Cab Id: 0 Problem signature: P1: Microsoft.YourPhone_0.26101.118.0_x64__8wekyb3d8bbwe P2: praid:App P3: 10.0.26100.1 P4: 5bc61463 P5: combase.dll P6: 10.0.26100.7920 P7: 62a4dab7 P8: c0000005 P9: 0000000000117474 P10: Attached files: \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.<uuid>.tmp.WERInternalMetadata.xml These files may be available here: \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\AppCrash_Microsoft.<long> Analysis symbol: Rechecking for solution: 0 Report Id: <uuid> Report Status: 100 Hashed bucket: Cab Guid: 0
+== WER reports since
+-- AppCrash_Microsoft.<long>
+   EventType=MoAppCrash
+   EventTime=134399735729230545
+   Sig[0].Name=Package Full Name
+   Sig[0].Value=Microsoft.YourPhone_0.26101.118.0_x64__8wekyb3d8bbwe
+   Sig[1].Name=Application Name
+   Sig[1].Value=praid:App
+   Sig[2].Name=Application Version
+   Sig[2].Value=10.0.26100.1
+   Sig[3].Name=Application Timestamp
+   Sig[3].Value=5bc61463
+   Sig[4].Name=Fault Module Name
+   Sig[4].Value=combase.dll
+   Sig[5].Name=Fault Module Version
+   Sig[5].Value=10.0.26100.7920
+   Sig[6].Name=Fault Module Timestamp
+   Sig[6].Value=62a4dab7
+   Sig[7].Name=Exception Code
+   Sig[7].Value=c0000005
+   Sig[8].Name=Exception Offset
+   Sig[8].Value=0000000000117474
+   FriendlyEventName=Stopped working
+   AppName=Background Task Host
+   file Report.wer 40220
+-- NonCritical_Update;<long>
+   EventType=StoreAgentScanForUpdatesFailure0
+   EventTime=134399744716328469
+   Sig[0].Name=ClientAppId
+   Sig[0].Value=Update;
+   Sig[1].Name=HResult
+   Sig[1].Value=8024402c
+   Sig[2].Name=OSVersion
+   Sig[2].Value=26200
+   Sig[3].Name=OSRevision
+   Sig[3].Value=8037
+   Sig[4].Name=DeviceClass
+   Sig[4].Value=Windows.Desktop
+   <long>
+   AppName=Host Process for Windows Services
+   file Report.wer 17440
+-- NonCritical_Update;<long>
+   EventType=StoreAgentScanForUpdatesFailure0
+   EventTime=134399744727006151
+   Sig[0].Name=ClientAppId
+   Sig[0].Value=Update;
+   Sig[1].Name=HResult
+   Sig[1].Value=8024402c
+   Sig[2].Name=OSVersion
+   Sig[2].Value=26200
+   Sig[3].Name=OSRevision
+   Sig[3].Value=8037
+   Sig[4].Name=DeviceClass
+   Sig[4].Value=Windows.Desktop
+   <long>
+   AppName=Host Process for Windows Services
+   file Report.wer 17440
+== LocalDumps since (size only; the dumps stay in the guest)
+== System display-driver events since
+== LiveKernelReports since
+== guest GPU
+NVIDIA GeForce RTX 4070 driver 32.0.15.8088 status OK
+

@@ -1,0 +1,26 @@
+[   47.696758] traps: python3[2167] trap invalid opcode ip:79bef1f88de2 sp:7ffdf4101d38 error:0 in libc.so.6[79bef1e28000+189000]
+[   47.887246] PM: suspend entry (deep)
+[   47.889046] Filesystems sync: 0.001 seconds
+[   47.891421] Freezing user space processes
+[   47.892709] Freezing user space processes completed (elapsed 0.001 seconds)
+[   47.892714] OOM killer disabled.
+[   47.892717] Freezing remaining freezable tasks
+[   47.893954] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[   47.900692] ata3.00: Check power mode failed (err_mask=0x1)
+[   47.919061] ACPI: PM: Preparing to enter system sleep state S3
+[   47.919393] ACPI: PM: Saving platform NVS memory
+[   47.919576] Disabling non-boot CPUs ...
+[   47.922510] smpboot: CPU 1 is now offline
+[   57.050113] ACPI: PM: Low-level resume complete
+[   57.050536] ACPI: PM: Restoring platform NVS memory
+[   57.055875] Enabling non-boot CPUs ...
+[   57.056451] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   57.064028] CPU1 is up
+[   57.065282] ACPI: PM: Waking up from system sleep state S3
+[   57.085486] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   57.085672] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   57.100061] OOM killer enabled.
+[   57.100067] Restarting tasks ... done.
+[   57.100873] random: crng reseeded on system resumption
+[   57.170307] PM: suspend exit
+[   57.224255] traps: python3[2172] trap invalid opcode ip:7c47dd988de2 sp:7ffde93f1578 error:0 in libc.so.6[7c47dd828000+189000]

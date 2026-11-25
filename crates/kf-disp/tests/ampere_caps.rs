@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-03 — the Ampere (C673) display caps page, derived per die (`traces/ampere_hw_20261103/README.md`).
+//! The Ampere (C673) display caps page, derived per die (`traces/ampere_hw_20261103/README.md`).
 //! Before this lane no Ampere die had a tier-3 row, so kf3 served every GA10x the clean authored page and
 //! warned at realize that a Windows guest's display may not come up (the Turing storm and GB203 bwhw1 show what
 //! that page costs). `[measured, Vast lease 58969637, GA102 RTX 3090 10de:2204, 2026-11-03]` the die's own
 //! `0x00c` read with `tools/read_display_caps_page.py` (read-only BAR0, root) under the host driver 580.159.04.
 //! These tests pin: GA102 is fully derived (nothing unmeasured), its word is its own, and the other Ampere dies
-//! still get the clean page and the notice — never a neighbour's row (OWNER_RULINGS §AH).
+//! still get the clean page and the notice — never a neighbour's row.
 
 use kf_disp::capsderive::{Die, HostFacts, derive, shipped_measured, shipped_rows};
 

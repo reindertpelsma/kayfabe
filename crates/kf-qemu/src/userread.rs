@@ -181,7 +181,7 @@ pub(crate) fn mapped<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let fd = blocks.iter().find_map(|b| b.fd);
+    let fd = ram.primary_fd(&blocks);
     let mut pieces = 0;
     for span in &spans {
         let end = span.off.checked_add(span.len).ok_or(Refusal::Bounds)?;
@@ -199,7 +199,7 @@ pub(crate) fn mapped<'a>(
             }
             pieces = pieces.saturating_add(1); // bounded by the `== RING_PIECES` refusal just above
             let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
-                b.fd == Some(fd)
+                b.fd.as_ref() == Some(fd)
                     && at >= b.fd_off
                     && b.fd_off
                         .checked_add(b.mem.len() as u64)
@@ -216,7 +216,7 @@ pub(crate) fn mapped<'a>(
                 .min(end);
             if blocks.iter().enumerate().any(|(i, other)| {
                 i != index
-                    && other.fd == Some(fd)
+                    && other.fd.as_ref() == Some(fd)
                     && other.fd_off < until
                     && other
                         .fd_off
@@ -333,7 +333,7 @@ pub(crate) fn snapshot<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let first_fd = blocks.iter().find_map(|b| b.fd);
+    let first_fd = ram.primary_fd(&blocks);
     let mut done = 0usize;
     let mut ram_pieces = 0usize;
     for span in &spans {
@@ -353,7 +353,7 @@ pub(crate) fn snapshot<'a>(
                 ram_pieces = ram_pieces.saturating_add(1); // bounded by the `== PIECES` refusal just above
                 let off = span.off.checked_add(copied as u64).ok_or(Refusal::Bounds)?;
                 let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
-                    b.fd == Some(fd)
+                    b.fd.as_ref() == Some(fd)
                         && off >= b.fd_off
                         && b.fd_off
                             .checked_add(b.mem.len() as u64)
@@ -378,7 +378,7 @@ pub(crate) fn snapshot<'a>(
                 let end = off.checked_add(n as u64).ok_or(Refusal::Bounds)?;
                 if blocks.iter().enumerate().any(|(i, other)| {
                     i != index
-                        && other.fd == Some(fd)
+                        && other.fd.as_ref() == Some(fd)
                         && other.fd_off < end
                         && other
                             .fd_off
@@ -424,7 +424,7 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
         ram.add(super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         });
@@ -644,17 +644,49 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x8000);
         let block = super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         };
-        ram.add(block);
+        ram.add(block.test_alias());
         let rows = PlacedRows::default();
         rows.write()
             .unwrap()
             .insert(0x10000, (0x8000, 0, true, MapPerm::READ_WRITE));
         let generation = ram.generation.load(Ordering::Relaxed);
         (ram, block, rows, RowsLog::default(), generation)
+    }
+    /// The block at the same address showing other bytes of the file: a changed translation,
+    /// which revokes (an identical re-registration does not, `RamMap`'s docs).
+    fn moved(block: &super::super::RamBlock) -> super::super::RamBlock {
+        super::super::RamBlock {
+            fd_off: block.fd_off + 0x1000,
+            ..block.test_alias()
+        }
+    }
+    /// The S3 wake's flat-view re-split (`traces/win11_s3_tdr_20261123/`): the same file bytes
+    /// at the same addresses, registered as one longer block, keep a relay's birth generation, so
+    /// its source snapshots and their publication still admit. Before the fix the re-split
+    /// revoked it and every relay born before the wake refused `Topology` for good.
+    #[test]
+    fn a_wake_resplit_of_the_same_ram_keeps_the_birth_generation() {
+        let (ram, block, rows, log, generation) = fixture();
+        block.mem.write_from(0, &[7, 8, 9, 10]);
+        let before = snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).unwrap();
+        // one section removed, the same bytes added back as two (a window toggled in between)
+        ram.del(block.gpa);
+        for at in [0, 0x4000] {
+            ram.add(super::super::RamBlock {
+                gpa: block.gpa + at,
+                mem: block.mem.test_sub(at as usize, 0x4000),
+                fd: block.fd.clone(),
+                fd_off: block.fd_off + at,
+            });
+        }
+        assert_eq!(before.admit(|| 7), Ok(7));
+        let after = snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).unwrap();
+        assert_eq!(after.bytes, [7, 8, 9, 10]);
+        assert!(mapped(&rows, &log, &ram, generation, 0x10000, 8, 0).is_ok());
     }
     #[test]
     fn snapshots_are_owned_bounded_and_never_expose_partial_hole_reads() {
@@ -687,7 +719,7 @@ mod tests {
         );
         drop(guard);
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(moved(&block));
         assert_eq!(
             snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).err(),
             Some(Refusal::Topology)
@@ -768,7 +800,7 @@ mod tests {
             .unwrap()
             .insert(0x10000, (0x8000, 0, true, MapPerm::READ_WRITE));
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(moved(&block));
         assert_eq!(s.admit(|| panic!("old topology")), Err(Refusal::Topology));
         drop(rows);
         assert_eq!(s.admit(|| panic!("gone source")), Err(Refusal::Changed));
@@ -913,7 +945,7 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(MAX_BYTES + 4096);
         ram.add(super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         });
@@ -1131,7 +1163,7 @@ mod tests {
         let (ram, block, rows, log, generation) = fixture();
         let receipts = stream_receipts(&ram, &rows, &log, generation);
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(moved(&block));
         assert_eq!(
             admit_all(&receipts, || panic!("revoked topology")),
             Err(Refusal::Topology)

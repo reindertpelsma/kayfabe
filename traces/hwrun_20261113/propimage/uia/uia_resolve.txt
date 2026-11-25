@@ -1,0 +1,57 @@
+procs: Resolve:6496
+toplevel windows: 4
+  TOP name='' class=Shell_TrayWnd pid=5664
+  TOP name='Project Manager' class=ProjectManager::UiProjectManagerDialogImp pid=6496
+  TOP name='Administrator: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe' class=ConsoleWindowClass pid=10672
+  TOP name='Program Manager' class=Progman pid=5664
+WINDOW name='Project Manager' class=ProjectManager::UiProjectManagerDialogImp pid=6496 rect=240,135,1440,810
+  descendants: 48
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder' class=QFrame pat=InvokePattern/ValuePattern
+  Group name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView' class=ProjectManager::UiProjectManagerViewImp pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft' class=QFrame pat=InvokePattern/ValuePattern
+  Button name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft.btnClose' class=QPushButton pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft.frameDbTypeTabBar' class=QFrame pat=InvokePattern/ValuePattern
+  CheckBox name='Local' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft.frameDbTypeTabBar.btnLocal' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  CheckBox name='Network' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft.frameDbTypeTabBar.btnNetwork' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  CheckBox name='Cloud' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameProjectManagerTitleLeft.frameDbTypeTabBar.btnCloud' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameDaVinciLogo' class=QFrame pat=InvokePattern/ValuePattern
+  Text name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameDaVinciLogo.lblDaVinci' class=QLabel pat=InvokePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerHeaderFrame.frameProjectManagerTitle.frameRight' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects' class=BmdDavUI::UiSplitter pat=InvokePattern/ValuePattern
+  Group name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects' class=QWidget pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar' class=QFrame pat=InvokePattern/ValuePattern
+  CheckBox name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.m_BtnSidePanel' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.navigatorBreadCrumb' class=UiBreadcrumbWidget pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_7' class=QFrame pat=InvokePattern/ValuePattern
+  Button name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_7.btnAddFolder' class=QPushButton pat=InvokePattern/ValuePattern
+  Button name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_7.btnCopyProjectTo' class=QPushButton pat=InvokePattern/ValuePattern
+  Slider name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.zoomSlider' class=QSlider pat=InvokePattern/ValuePattern/RangeValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_10' class=QFrame pat=InvokePattern/ValuePattern
+  Button name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_10.btnFilter' class=BmdDavUI::UiMenuButton pat=InvokePattern/ValuePattern
+  CheckBox name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_10.btnInfo' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_6' class=QFrame pat=InvokePattern/ValuePattern
+  CheckBox name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_6.btnThumbView' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  CheckBox name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.frame_6.btnListView' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  CheckBox name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frameTopContainer.frameToolbar.frameTopToolbar.btnSearch' class=QPushButton pat=InvokePattern/ValuePattern/TogglePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frame_8' class=QFrame pat=InvokePattern/ValuePattern
+  Group name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.frame_8.m_ProjectsWidget' class=ProjectManager::UiProjectManagerBinView pat=InvokePattern/ValuePattern
+  Group name='' id='' class=QWidget pat=InvokePattern/ValuePattern
+  Custom name='' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.projActionBottomFrame' class=QFrame pat=InvokePattern/ValuePattern
+  Button name='Export' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.projActionBottomFrame.btnExport' class=QPushButton pat=InvokePattern/ValuePattern
+  Button name='Import' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.projActionBottomFrame.btnImport' class=QPushButton pat=InvokePattern/ValuePattern
+  Button name='New Project' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.projActionBottomFrame.btnAddProject' class=QPushButton pat=InvokePattern/ValuePattern
+  Button name='Open' id='UiProjectManagerDialog.frameProjectManagerBorder.m_ProjectManagerView.projManagerContents.splitterProjects.m_ViewProjects.projActionBottomFrame.btnLoad' class=QPushButton pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+  Custom name='' id='' class=QFrame pat=InvokePattern/ValuePattern
+done

@@ -1,0 +1,125 @@
+=== enc_h264_10bit_1080p
+$ /usr/bin/ffmpeg -hide_banner -nostdin -y -f lavfi -i testsrc2=size=1920x1080:rate=30,noise=alls=12:allf=t:all_seed=1234 -frames:v 30 -pix_fmt p010le -c:v h264_nvenc -preset p4 -rc constqp -qp 24 /root/out_nvc3/work/enc_h264_10bit_1080p.mkv
+rc=1 secs=0.6
+Input #0, lavfi, from 'testsrc2=size=1920x1080:rate=30,noise=alls=12:allf=t:all_seed=1234':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: rawvideo (I420 / 0x30323449), yuv420p, 1920x1080 [SAR 1:1 DAR 16:9], 30 tbr, 30 tbn, 30 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (h264_nvenc))
+[h264_nvenc @ 0x569de19fd500] 10 bit encode not supported
+[h264_nvenc @ 0x569de19fd500] No capable devices found
+Error initializing output stream 0:0 -- Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+Conversion failed!
+
+
+=== enc_h264_above4096
+$ /usr/bin/ffmpeg -hide_banner -nostdin -y -f lavfi -i testsrc2=size=4224x2176:rate=30,noise=alls=12:allf=t:all_seed=1234 -frames:v 20 -pix_fmt yuv420p -c:v h264_nvenc -profile:v high -preset p4 -rc constqp -qp 24 /root/out_nvc3/work/enc_h264_above4096.mkv
+rc=1 secs=0.6
+Input #0, lavfi, from 'testsrc2=size=4224x2176:rate=30,noise=alls=12:allf=t:all_seed=1234':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: rawvideo (I420 / 0x30323449), yuv420p, 4224x2176 [SAR 1:1 DAR 33:17], 30 tbr, 30 tbn, 30 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (h264_nvenc))
+[h264_nvenc @ 0x5c3249bae800] Width 4224 exceeds 4096
+[h264_nvenc @ 0x5c3249bae800] No capable devices found
+Error initializing output stream 0:0 -- Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+Conversion failed!
+
+
+=== sess_h264_n09
+$ /usr/bin/ffmpeg -hide_banner -nostdin -y -f lavfi -i testsrc2=size=1280x720:rate=60:duration=3 -c:v h264_nvenc -preset p4 -f null -
+rc=n_ok=8/9 secs=3.5
+Input #0, lavfi, from 'testsrc2=size=1280x720:rate=60:duration=3':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: rawvideo (I420 / 0x30323449), yuv420p, 1280x720 [SAR 1:1 DAR 16:9], 60 tbr, 60 tbn, 60 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (h264_nvenc))
+[h264_nvenc @ 0x593c457ea640] OpenEncodeSessionEx failed: incompatible client key (21): (no details)
+[h264_nvenc @ 0x593c457ea640] No capable devices found
+Error initializing output stream 0:0 -- Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+Conversion failed!
+
+--
+Input #0, lavfi, from 'testsrc2=size=1280x720:rate=60:duration=3':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: rawvideo (I420 / 0x30323449), yuv420p, 1280x720 [SAR 1:1 DAR 16:9], 60 tbr, 60 tbn, 60 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (h264_nvenc))
+Output #0, null, to 'pipe:':
+  Metadata:
+    encoder         : Lavf58.76.100
+  Stream #0:0: Video: h264 (Main), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 60 fps, 60 tbn
+    Metadata:
+      encoder         : Lavc58.134.100 h264_nvenc
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=N/A time=00:00:00.00 bitrate=N/A speed=N/A    
+frame=    2 fps=1.5 q=0.0 size=N/A time=00:00:00.00 bitrate=N/A speed=   0x    
+frame=   76 fps= 41 q=32.0 size=N/A time=00:00:00.98 bitrate=N/A speed=0.532x    
+frame=  136 fps= 58 q=33.0 size=N/A time=00:00:01.98 bitrate=N/A speed=0.842x    
+frame=  180 fps=
+=== dec_h264_420_10_hw
+$ /usr/bin/ffmpeg -hide_banner -nostdin -i /root/out_nvc3/work/src_h264_yuv420p10le_1280x720.mkv -hwaccel cuda -hwaccel_output_format cuda -i /root/out_nvc3/work/src_h264_yuv420p10le_1280x720.mkv -filter_complex '[0:v]format=yuv420p10le[a];[1:v]hwdownload,format=p010le,format=yuv420p10le[b];[a][b]psnr' -frames:v 30 -f null -
+rc=1 secs=0.7
+[matroska,webm @ 0x638098b8a440] decoding for stream 0 failed
+Input #0, matroska,webm, from '/root/out_nvc3/work/src_h264_yuv420p10le_1280x720.mkv':
+  Metadata:
+    ENCODER         : Lavf58.76.100
+  Duration: 00:00:01.00, bitrate: 205671 kb/s
+  Stream #0:0: Video: h264 (High 10), yuv420p10le(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 1k tbn, 60 tbc (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 libx264
+      DURATION        : 00:00:01.000000000
+[matroska,webm @ 0x638099353bc0] decoding for stream 0 failed
+Input #1, matroska,webm, from '/root/out_nvc3/work/src_h264_yuv420p10le_1280x720.mkv':
+  Metadata:
+    ENCODER         : Lavf58.76.100
+  Duration: 00:00:01.00, bitrate: 205671 kb/s
+  Stream #1:0: Video: h264 (High 10), yuv420p10le(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 1k tbn, 60 tbc (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 libx264
+      DURATION        : 00:00:01.000000000
+Stream mapping:
+  Stream #0:0 (h264) -> format
+  Stream #1:0 (h264) -> hwdownload
+  psnr -> Stream #0:0 (wrapped_avframe)
+Impossible to convert between the formats supported by the filter 'graph 0 input from stream 1:0' and the filter 'auto_scaler_0'
+Error reinitializing filters!
+Failed to inject frame into filter network: Function not implemented
+Error while processing the decoded data for stream #1:0
+Conversion failed!
+
+
+=== dec_av1_420_8_hw
+$ /usr/bin/ffmpeg -hide_banner -nostdin -i /root/out_nvc3/work/src_av1_yuv420p_1280x720.mkv -c:v av1 -hwaccel cuda -hwaccel_output_format cuda -i /root/out_nvc3/work/src_av1_yuv420p_1280x720.mkv -filter_complex '[0:v]format=yuv420p[a];[1:v]hwdownload,format=nv12,format=yuv420p[b];[a][b]psnr' -frames:v 30 -f null -
+rc=0 secs=0.7
+[libdav1d @ 0x63933f43f580] libdav1d 0.9.2
+Input #0, matroska,webm, from '/root/out_nvc3/work/src_av1_yuv420p_1280x720.mkv':
+  Metadata:
+    ENCODER         : Lavf58.76.100
+  Duration: 00:00:01.00, start: 0.000000, bitrate: 3455 kb/s
+  Stream #0:0: Video: av1 (Main), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 1k tbn, 1k tbc (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 libaom-av1
+      DURATION        : 00:00:01.000000000
+[libdav1d @ 0x63933f479740] libdav1d 0.9.2
+Input #1, matroska,webm, from '/root/out_nvc3/work/src_av1_yuv420p_1280x720.mkv':
+  Metadata:
+    ENCODER         : Lavf58.76.100
+  Duration: 00:00:01.00, start: 0.000000, bitrate: 3455 kb/s
+  Stream #1:0: Video: av1 (Main), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 1k tbn, 1k tbc (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 libaom-av1
+      DURATION        : 00:00:01.000000000
+[libdav1d @ 0x63933f442480] libdav1d 0.9.2
+Stream mapping:
+  Stream #0:0 (libdav1d) -> format
+  Stream #1:0 (av1) -> hwdownload
+  psnr -> Stream #0:0 (wrapped_avframe)
+Output #0, null, to 'pipe:':
+  Metadata:
+    encoder         : Lavf58.76.100
+  Stream #0:0: Video: wrapped_avframe, yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 200 kb/s, 30 fps, 30 tbn (default)
+    Metadata:
+      encoder         : Lavc58.134.100 wrapped_avframe
+frame=    1 fps=0.0 q=-0.0 size=N/A time=00:00:00.03 bitrate=N/A speed=1.39x 

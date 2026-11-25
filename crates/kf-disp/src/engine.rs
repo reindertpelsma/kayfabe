@@ -402,7 +402,7 @@ pub struct Vocab {
     k_interlock: u32,
     k_ilk_core: Option<(u8, u8)>,
     k_window_interlock: u32,
-    /// ★ 2026-11-03: each DMA class's own pushbuffer format (`pushbuf::Format`; 64 KiB on GB20x).
+    /// Each DMA class's own pushbuffer format (`pushbuf::Format`; 64 KiB on GB20x).
     f_core: pushbuf::Format,
     f_window: pushbuf::Format,
     f_imm: pushbuf::Format,
@@ -770,7 +770,7 @@ pub struct PaceCounts {
     /// Latches that completed a window of this (active) head — counted once per latch, on every
     /// path: at a tick, at once, and with the core.
     pub presents: u64,
-    /// Of those, latches holding a TEARING (immediate) flip. ★ 2026-10-17 (`OWNER_RULINGS.md` §AK):
+    /// Of those, latches holding a TEARING (immediate) flip. ★ 2026-10-17:
     /// they latch and complete at once; the tick bounds the COPIES, not these.
     pub tearing: u64,
     /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
@@ -1345,7 +1345,7 @@ impl Engine {
             .filter(|n| self.chans[*n as usize].is_some())
             .fold(0, |m, n| m | bit(n));
         // ⊘ SUPERSEDED 2026-10-14 (Linux plane oracle, `V3_DISPLAY_PLANES_ORACLE.md`): the rule of
-        // 2026-10-10 (runs 400/403) — "a channel whose UPDATE is already parked for its vblank or acquire
+        // "a channel whose UPDATE is already parked for its vblank or acquire
         // (Stage::Latch) is still a PENDING update; a later UPDATE that names it joins its latch" — is
         // removed. Its premise ("window 0's UPDATE names nothing") was an inference; the measured
         // engine ring of run 411 shows window 0's UPDATE naming window 4. And it MISPAIRS a stock
@@ -1366,7 +1366,7 @@ impl Engine {
             }
             // the closure of `start` over interlock edges IN BOTH DIRECTIONS, among pending channels:
             // what a member waits for, and every pending update that waits for a member.
-            // ★ 2026-10-10 (Windows TDR hunt, run 293, measured): an overlay window's UPDATE interlocked
+            // An overlay window's UPDATE interlocked
             // with window 0 and its immediate channel, while window 0's own UPDATEs named nothing; with
             // forward edges only, window 0 latched alone at every vblank (54 times) and the overlay
             // update starved until the TDR. An interlocked UPDATE waits for an UPDATE on each channel
@@ -1434,7 +1434,7 @@ impl Engine {
             else {
                 continue;
             };
-            // ★ 2026-10-11 (overlay stall H1, runs 408-416): a window that scans no surface before the update AND
+            // A window that scans no surface before the update AND
             // names none in it has nothing to tear — its UPDATE is not a flip and has no vblank to wait for.
             // Windows' enable sequence for the overlay plane kicks such an UPDATE (window 4 owned by the head,
             // no surface yet) microseconds before the UPDATEs of window 0 and window 4's immediate channel that
@@ -1688,7 +1688,7 @@ impl Engine {
             return;
         };
         let Stage::Latch { .. } = c.stage else { return };
-        // ★ 2026-10-10 (Windows TDR hunt, `traces/windows_tdr_hunt_20261010/README.md`): what a window latch writes for
+        // (Windows TDR hunt, `traces/windows_tdr_hunt_20261010/README.md`): what a window latch writes for
         // the entry it FLIPS AWAY (the outgoing ARMED state, read before the arm below): its release semaphore and its
         // notifier FINISHED. The display writes a release when its entry is flipped away (`ogkm-595.84:
         // nvidia-modeset/src/nvkms-displayless.c:272-280`, `include/nvkms-headsurface-priv.h:236-244`), and a window
@@ -2572,6 +2572,8 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
     s
 }
 
+#[cfg(test)]
+mod boundary_fuzz;
 #[cfg(test)]
 mod lockstep_exhaustive;
 #[cfg(test)]

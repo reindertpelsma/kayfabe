@@ -27,6 +27,7 @@ pub enum Action {
     OwnInvalidate,
 }
 
+/// Why a plan could not be built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     /// Trusted snapshot/action budget exceeded.

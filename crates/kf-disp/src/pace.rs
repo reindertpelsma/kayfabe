@@ -7,7 +7,7 @@
 //! follows the tick, so it follows the cap. Nothing here waits: the worker sleeps until the earliest
 //! deadline this module computes, and no vCPU path is touched.
 //!
-//! ★ 2026-10-17 (`docs/design/V3_DISPLAY_PACING_20261017.md`, `OWNER_RULINGS.md` §AK): the guest's
+//! The guest's
 //! flips are NEVER parked to bound the rate. An immediate flip latches and completes at once; the
 //! rate is bounded where it costs the guest nothing, by the COPIES — [`Mailbox`]: the newest latched
 //! frame is copied at most once per tick. Who ticks is [`crate::tick::TickSource`]'s question.

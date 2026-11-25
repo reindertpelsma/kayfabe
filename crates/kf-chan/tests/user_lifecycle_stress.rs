@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 — **Real-thread stress of the USER-ring lifecycle with a hostile writer**
+//! **Real-thread stress of the USER-ring lifecycle with a hostile writer**
 //! (brief section 3 item 5; pattern of the existing `userstore` stress: seeded, bounded seconds by default,
 //! `KF3_STRESS_SECS` longer).
 //!
@@ -244,7 +244,7 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     well_behaved(8, kf_chan::user_lazy::LazyConfig::OFF, 7);
 }
 
-/// ★ 2026-10-17: the same, with lazy observe ON (cache + lazy look) on a private ring big enough for the credit floor to
+/// The same, with lazy observe ON (cache + lazy look) on a private ring big enough for the credit floor to
 /// allow skipping. SYNC_WAIT entries are not in this stream; the gate ordering with stale `REFERENCE`s is covered by the
 /// model (`lazy_a_registration_after_a_forwarded_sync_wait_...`) and `user_lazy_model.rs`.
 #[test]
@@ -453,7 +453,7 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
     hostile(8, kf_chan::user_lazy::LazyConfig::OFF);
 }
 
-/// ★ 2026-10-17: the hostile writer against a relay with lazy observe ON. A cached `GP_PUT` is a value the guest once
+/// The hostile writer against a relay with lazy observe ON. A cached `GP_PUT` is a value the guest once
 /// wrote; the guest rewrites `GP_PUT` backwards and beyond the ring while the cache is warm: the relay still reads only the
 /// slot at its cursor below some `GP_PUT` it loaded, stores only a consistent pair of dwords the guest wrote that passes
 /// the entry validation (I7), reads no pushbuffer in Pointer mode (I1), and refuses a value outside the ring by name.

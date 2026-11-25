@@ -2,7 +2,7 @@
 //! (`l1_concurrency.md` §3.3, decision #37).
 //!
 //! The design promotes the lock discipline from prose to mechanism: every L1 lock
-//! ⊘ **This module lives in `kayfabe-util`, at the BOTTOM of the crate graph, and that is
+//! ⊘ **This module lives in `kf-util`, at the BOTTOM of the crate graph, and that is
 //! forced rather than tidy.** `kayfabe-device` owns the rank-0 plane mutex and `kayfabe-rt`
 //! owns ranks 1-3; rt depends on device, so the vocabulary cannot live in rt without a
 //! cycle. ★ Exactly the argument this file already made for the held-mask counter — *"those
@@ -752,8 +752,8 @@ mod tests {
 }
 
 // =====================================================================================
-// ★★★★★ THREAD CLASS — owner, 2026-09-09: "a VCPU block is worse than a block in a reader
-// thread. Reader threads can sleep to wait for an operation, vcpu threads not."
+// Thread classes: reader threads may park for coordination. vCPU threads must
+// remain runnable.
 // =====================================================================================
 
 /// What kind of thread this is, which is what decides how bad a blocking call on it is.
@@ -868,8 +868,8 @@ pub enum WaitKind {
 }
 
 /// A COMMITTED section that ran longer than this on a [`ThreadClass::Coordinator`] is a
-/// violation: the owner's rule is that a reader thread may park to coordinate but must not sit
-/// in *"the long waiting blocking calls (the milliseconds one)"*, because everything it
+/// violation. A reader thread may park to coordinate, but a millisecond-scale
+/// blocking call stalls it because everything it
 /// coordinates queues behind it.
 pub const COORDINATOR_SLOW_US: u64 = 1_000;
 
@@ -1147,6 +1147,7 @@ pub mod lockcost {
         (rank as usize).min(RANKS - 1)
     }
 
+    /// Record that a lock of `rank` was waited for `d`; keeps the worst per rank.
     pub fn note_wait(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         WORST_WAIT[slot(rank)].fetch_max(us, Ordering::Relaxed);
@@ -1256,11 +1257,12 @@ pub mod lockcost {
 
     /// ★★★★★ **w517 — THE CONTRACT, CHECKED RATHER THAN AUDITED.**
     ///
-    /// The owner's rule is that a vCPU's MMIO trap touches at most a small queue lock, never
+    /// A vCPU's MMIO trap touches at most a small queue lock, never
     /// the structures behind it: *"the data structures like the VA tables and other data is
     /// just a separate lock vcpu doesn't touch."* Two violations of it were found this
     /// session, each costing a boot and a backtrace to locate:
-    /// `[measured w510]` `ce_session_with_root` (rank 0, 8.2 ms) and
+    /// `[measured w510]` (see `docs/design/THE_COMMENT_AUDIT_APPENDIX.md`):
+    /// `ce_session_with_root` (rank 0, 8.2 ms) and
     /// `[measured w516]` `take_table_changes` (rank 2, via every `Proc` cell).
     ///
     /// ⊘ Both were found by a stall alarm firing on the ONE trap that happened to be slowest.
@@ -1429,6 +1431,7 @@ pub mod lockcost {
         format!("HAMMER(rank{want}) {body} overflow={over}")
     }
 
+    /// Record that a lock of `rank` was held for `d`; keeps the worst per rank.
     pub fn note_hold(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         WORST_HOLD[slot(rank)].fetch_max(us, Ordering::Relaxed);
@@ -1535,10 +1538,8 @@ mod lock_cost_separates_wait_from_hold {
 
 #[cfg(test)]
 mod blocking_severity_is_per_thread_class {
-    //! ★★★★★ **OWNER, 2026-09-09:** *"a reader thread is fine to coordinate, as long as the
-    //! long waiting blocking calls (the milliseconds one) aren't on that one. you have
-    //! separate worker threads for that. In fact a VCPU block is worse than a block in a
-    //! reader thread. Reader threads can sleep to wait for an operation, vcpu threads not."*
+    //! Reader threads may park to coordinate. Delegate long blocking calls to separate
+    //! worker threads. A vCPU thread must remain runnable.
     //!
     //! ⇒ Severity is not flat, and a flat rule was the wrong shape: it would have flagged the
     //! very worker threads we created in order to obey it.
@@ -1562,7 +1563,7 @@ mod blocking_severity_is_per_thread_class {
     }
 
     #[test]
-    fn a_coordinator_is_judged_on_DURATION_not_on_blocking_at_all() {
+    fn a_coordinator_is_judged_on_duration_not_on_blocking_at_all() {
         std::thread::spawn(|| {
             declare_thread_class(ThreadClass::Coordinator);
             // Short: parking to coordinate is explicitly allowed.
@@ -2017,9 +2018,9 @@ mod the_contract_is_checked_not_audited {
 
     /// ★★★★★ **A TRAP THAT TAKES A LOCK ABOVE THE PLANE'S IS NAMED, CONTENDED OR NOT.**
     ///
-    /// Two violations of the owner's rule — *"the data structures like the VA tables and
-    /// other data is just a separate lock vcpu doesn't touch"* — were found this session, and
-    /// each cost a boot and a backtrace: `[measured w510]` `ce_session_with_root` holding
+    /// Two violations of the rule that a vCPU stays off locks protecting data structures
+    /// such as VA tables appear in `docs/design/THE_COMMENT_AUDIT_APPENDIX.md`:
+    /// `[measured w510]` `ce_session_with_root` holding
     /// rank 0 for 8.2 ms, and `[measured w516]` `take_table_changes` taking every `Proc`
     /// cell's rank-2 lock to read a counter.
     ///

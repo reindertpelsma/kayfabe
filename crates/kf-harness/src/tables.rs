@@ -39,7 +39,7 @@ impl Tree {
         }
         let c = self.img.alloc(bytes, 4096);
         if dual {
-            // ⊘ 2026-10-07: the big half is INVALID, not `big_pde(0)` (a present table at FB 0;
+            // The big half is INVALID, not `big_pde(0)` (a present table at FB 0;
             // `kf_cuda::synth::DUAL_HALF_ABSENT`).
             self.img.put64(parent + entry, DUAL_HALF_ABSENT);
             self.img.put64(parent + entry + 8, pde(c));
@@ -70,7 +70,7 @@ impl Tree {
         self.leaf4k(va, 0);
     }
 
-    /// ★ 2026-10-07 — the replay of Windows run43's directory-level move: the shift-29 level
+    /// The replay of Windows run43's directory-level move: the shift-29 level
     /// (PD1) on `va`'s path moves to a new instance at store offset `new_at`. The parent entry in
     /// this image is repointed and the old instance zeroed; the returned bytes are the level's
     /// contents, which the CALLER writes at `new_at` (it may lie outside this image — FB offset 0
@@ -254,7 +254,7 @@ mod tests {
         );
     }
 
-    /// ⊘ 2026-10-07: a dual PDE's unused big half is INVALID, never `big_pde(0)` (a present
+    /// A dual PDE's unused big half is INVALID, never `big_pde(0)` (a present
     /// big-page table at FB 0 to the hardware and, now, to the walk kernel).
     #[test]
     fn the_unused_big_half_is_invalid() {

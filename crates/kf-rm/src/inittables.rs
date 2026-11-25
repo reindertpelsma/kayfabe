@@ -517,7 +517,7 @@ pub enum WantedTable {
     /// have the answer. The name `WantedTable` fits it badly and that is a cost worth
     /// paying, because this enum is not merely a taxonomy — it is the universe every
     /// coverage gate quantifies over
-    /// (`crates/kayfabe-crec/tests/cap1b_differential.rs::every_control_this_port_serves_is_exercised_by_the_replay`,
+    /// (`crates/kf-crec/tests/cap1b_differential.rs::every_control_this_port_serves_is_exercised_by_the_replay`,
     /// and [`WantedTable::ALL`]'s own docs on why *"in `ALL`"* and *"served"* are one
     /// fact). A control served through a policy of its own would be a served control no
     /// differential could regress, which is the defect shape `ALL` exists to close.
@@ -1119,7 +1119,7 @@ impl WantedTable {
     /// iterates `ALL`, so a variant absent from `ALL` is never visited by it; a new variant
     /// with a `cmd_id` arm and a `from_cmd` arm but no row here compiled, served, and left
     /// every gate quantified over `ALL` — the sticky-answer property below, and
-    /// `kayfabe-crec`'s reply-plane differential — silently one control short. That is the
+    /// `kf-crec`'s reply-plane differential — silently one control short. That is the
     /// same defect shape as PC-D6: a load-bearing rationale that is false.
     ///
     /// The two lists are now **one**. `from_cmd` is a lookup *through this array*, so
@@ -1460,7 +1460,7 @@ impl WantedTable {
     /// second `match` listing the same seven ids a second time, which made *"the set we
     /// serve"* and *"the set our gates quantify over"* two lists that happened to agree.
     /// A lookup through `ALL` collapses them: the serve decision now reads the same array
-    /// the sticky-answer property and `kayfabe-crec`'s reply-plane differential read, so a
+    /// the sticky-answer property and `kf-crec`'s reply-plane differential read, so a
     /// control cannot be served without being covered. See [`WantedTable::ALL`].
     ///
     /// ⊘ A linear scan of twelve, not a `match` — this runs once per RM control command,
@@ -1573,7 +1573,7 @@ fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
     refuse()
 }
 
-/// ★ 2026-10-08 (run51 follow-up, diagnostic only): the indices an info-list request names, for the
+/// The indices an info-list request names, for the
 /// refusal log. The owner's decision to answer the Windows `FB_GET_INFO_V2` / `BUS_GET_INFO_V2` needs the
 /// WHOLE list before any exposure table can be written (`UnmeasuredIndex` names only the first). The
 /// decode is the bounded one the answerers use (count <= the ogkm list size, fixed-size buffer); a
@@ -1857,7 +1857,7 @@ impl CommandPolicy for InitTablePolicy {
         // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`): libcudart issues `0x20809009`,
         // `0x20809001` and `0x20809064` at the end of its lazy device enumeration; **the
         // driver API never issues them**, which is exactly the asymmetry we measured. They
-        // are serviced entirely by GSP firmware — no kernel `#define`, absent from nvproxy —
+        // are serviced entirely by GSP firmware — no kernel `#define` —
         // so the C's zero-echo *"returned all-zeros, so cudart read 0 where it expects real
         // data and aborted with cudaErrorInitializationError(3) — silently (the reject is in
         // the reply PAYLOAD, not an errno/dmesg line)"*.
@@ -1876,8 +1876,8 @@ impl CommandPolicy for InitTablePolicy {
         // of every boot unchanged.
         //
         // ⚠ **Why it is not the fix, stated so nobody ships it.** (1) A replayed constant is
-        // not READ-NATIVE and would rot on the next driver or chip — the exact thing the
-        // owner's ruling forbids. (2) `0x20809064`'s capture is **incomplete**: the C records
+        // not READ-NATIVE and would rot on the next driver or chip.
+        // (2) `0x20809064`'s capture is **incomplete**: the C records
         // only *"520B, leading 10 u32s"*, so this arm zero-fills a 480-byte tail it has never
         // measured — precisely the truncated-row hazard `kf_abi::oracle` was written for.
         // ⇒ A GREEN result justifies building the forward. A RED result on `…064` alone would
@@ -2037,7 +2037,7 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
-        // ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`, answered with
+        // `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`, answered with
         // the HOST's own reply for the guest's engine (asked at realize, `kf_abi::fifoctl`), the
         // command id and layout at the GUEST's measured version. An engine the host gave no row for
         // is refused with INVALID_ARGUMENT, as the `_VF` body refuses one its table lacks
@@ -2477,7 +2477,7 @@ impl CommandPolicy for InitTablePolicy {
                     // ★ 2026-10-07, owner ruling §S: stub / absent-on-virtual-display / posted
                     // by the display plane (`RULED_NOTIFIERS`, every row with its argument).
                     && !eventnotify::is_ruled_notifier(self.driver.driver_version(), reg.event)
-                    // ★ 2026-10-08: an engine's non-stall notifier — the guest's own CPU-RM
+                    // An engine's non-stall notifier — the guest's own CPU-RM
                     // delivers it from the vector this device raises (`ENGINE_NONSTALL_NOTIFIERS`).
                     && !eventnotify::is_engine_nonstall_notifier(
                         self.driver.driver_version(),
@@ -3110,7 +3110,7 @@ impl CommandPolicy for InitTablePolicy {
             // site exists — a synchronous host verb from `respond` trips R1. This table is
             // what makes the runtime work in the meantime, and it carries its own expiry
             // conditions in `kf_abi::cudartinit`.
-            // ★ 2026-11-01 (Blackwell-into-next merge): `0x20802209` is RM SOFTWARE STATE (watchdog
+            // `0x20802209` is RM SOFTWARE STATE (watchdog
             // INITIALIZED | DISABLED, `ogkm-595.84: kernel_rc_watchdog_ctrl.c:30-60`), not a die fact, so
             // the published table holds no row for it (next's `tests/consttab_data.rs`: "software-state rule
             // is separate"). It is answered here by the rule in `kf_abi::cudartinit`, for every die, as
@@ -3125,7 +3125,7 @@ impl CommandPolicy for InitTablePolicy {
             | WantedTable::CudartInit9001
             | WantedTable::CudartInit9064
             | WantedTable::CudartInit9A001 => {
-                // ★★ Lane C 2026-10-14: no longer one GA106 capture served to every die. The
+                // No longer one GA106 capture served to every die. The
                 // host's own answer to the identical request was tried above (`gssreplay`,
                 // tier 2); only when the host did not answer does the PUBLISHED table answer,
                 // and only with a row measured on THIS die at THIS guest branch (or a row whose
@@ -3153,7 +3153,7 @@ impl CommandPolicy for InitTablePolicy {
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
             // a real GA106 overwrites. A constant body here would clobber content the guest
             // sent — the `#203` zero-fill defect pointing the other way.
-            // ★ 2026-09-26: the words are the HOST's reply to the same question, asked once at
+            // The words are the HOST's reply to the same question, asked once at
             // realize (`HostFacts::perf_level_info_v2`) — never the GA106 clock table
             // (`kf_abi::cudartinit::SPLICED`, now the test oracle). A host that refused it, or a
             // guest asking a different question, is refused.
@@ -3193,7 +3193,7 @@ impl CommandPolicy for InitTablePolicy {
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
-            // ★ Lane C 2026-10-14: `0x20808162` writes a byte the guest did not send, and that byte
+            // `0x20808162` writes a byte the guest did not send, and that byte
             // differs per die (GA106/580: 1, AD104/595: 0 [measured]). The host's answer was tried
             // above (`gssreplay` exact row); otherwise the published table, per die; else refused.
             WantedTable::GssLegacy8162 => {
@@ -3281,7 +3281,7 @@ impl CommandPolicy for InitTablePolicy {
         // the cache is closed by `crate::sticky::StickyAnswerGuard` zeroing both flag words on
         // every accepted reply (its `Guarded` row in `POLICY_DISPOSITIONS`, executed by
         // `tests/tests/sticky_answer.rs`), which is a property of the CHAIN. This policy is
-        // composable and can be seated without that link — `kayfabe-crec`'s replay does
+        // composable and can be seated without that link — `kf-crec`'s replay does
         // exactly that. So the obligation is named here and discharged there, and the one
         // served id records that its answer is safe to cache anyway: it is the identity on the
         // guest's own buffer, so a cache that replayed it would replay what the guest sent.

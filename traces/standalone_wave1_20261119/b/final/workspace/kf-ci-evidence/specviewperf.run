@@ -1,0 +1,27 @@
+[xid-watch] tag=ci453fda76a6191b5e_specviewperf  host=ubuntu  utc=2026-11-19T23:59:35Z
+[xid-watch] command: env -u KF_SPEC_TABLE KF_SPEC_LANE=both KF_SPEC_DEADLINE_EPOCH=1795154366 KF_SPEC_NET=online bash /workspace/kf-ci-src/scripts/ci/vast_stage_specviewperf.sh ci453fda76a6191b5e /root/prov
+[xid-watch] host_dmesg_lines=795  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 595.91.07
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+SPEC_STAGE_START lane=both
+SPEC_STAGE_LIST lane=both n=9
+SPEC_COPY_DELETED removed=overlay
+SPEC_ROW name=energy-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=creo-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=blender-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=enscape-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=medical-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=maya-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=catia-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=solidworks-08 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_STAGE_COUNTS pass=0 fail=0 not_run=9 of=9
+SPECVIEWPERF_STAGE_RETRY class=TIME
+SPECVIEWPERF_STAGE_EXIT rc=3
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (795 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci453fda76a6191b5e_specviewperf.log

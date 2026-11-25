@@ -1,0 +1,83 @@
+{
+ "variant": "dbg-A-seabios",
+ "cpu": "host,-vmx",
+ "seeded": false,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "status_before_wake": "suspended",
+   "qmp_events_before_wake": [
+    [
+     1795481323.144387,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481324.151811,
+     "SUSPEND"
+    ]
+   ],
+   "host_mono_suspended": 1310.678956798,
+   "host_realtime_wake": 1795481329.1578012,
+   "host_mono_wake": 1315.684280818,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.2777886390686035,
+   "host_realtime_after": 1795481335.7222252,
+   "host_mono_after": 1322.248703633,
+   "trace_counts": {
+    "kvm_msr": 40,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   },
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io"
+   ],
+   "qmp_events": [
+    [
+     1795481323.144387,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481324.151811,
+     "SUSPEND"
+    ],
+    [
+     1795481329.1987996,
+     "WAKEUP"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io"
+   ],
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [
+    [
+     1795481349.8214352,
+     "RTC_CHANGE"
+    ]
+   ],
+   "verdict": "no suspend",
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io"
+   ]
+  }
+ ],
+ "boot_ssh_s": 19.103065967559814,
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

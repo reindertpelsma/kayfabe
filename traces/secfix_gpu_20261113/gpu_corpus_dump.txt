@@ -1,0 +1,132 @@
+dumpimg differential single_4k flags=0x80 refuse=0 refusals=0 sparse=0 visited=1796 runs=1
+dumprun 80c0e0a00000 30000 1000 0 1
+dumpimg differential long_run_1024 flags=0x80 refuse=0 refusals=0 sparse=0 visited=2308 runs=1
+dumprun 80c0e0a00000 40000 400000 0 1
+dumpimg differential split_runs flags=0x80 refuse=0 refusals=0 sparse=0 visited=1796 runs=3
+dumprun 80c0e0a00000 40000 20000 0 1
+dumprun 80c0e0a20000 70000 20000 0 1
+dumprun 80c0e0a40000 90000 20000 8 1
+dumpimg differential all_page_sizes flags=0x80 refuse=0 refusals=0 sparse=0 visited=1316 runs=3
+dumprun 80c0e0a00000 40000 10000 100 1
+dumprun 80c0e0e00000 200000 200000 200 1
+dumprun 80c100000000 20000000 20000000 300 1
+dumpimg differential dual_pde_both_halves flags=0x80 refuse=0 refusals=0 sparse=0 visited=1828 runs=2
+dumprun 80c0e0a00000 300000 20000 0 1
+dumprun 80c0e0a20000 100000 80000 100 1
+dumpimg differential sparse_holes flags=0x80 refuse=0 refusals=0 sparse=2 visited=1796 runs=3
+dumprun 80c0e0a00000 30000 1000 0 1
+dumprun 80c0e0a05000 31000 1000 0 1
+dumprun 80c0e0a0a000 32000 1000 8 1
+dumpimg differential shared_page_table flags=0x80 refuse=0 refusals=0 sparse=0 visited=2308 runs=2
+dumprun 80c0e0a00000 30000 2000 0 1
+dumprun 80c0e1200000 30000 2000 0 1
+dumpimg differential apertures flags=0x84 refuse=0x2000 refusals=1 sparse=0 visited=1796 runs=3
+dumprun 80c0e0a00000 30000 1000 0 1
+dumprun 80c0e0a01000 31000 1000 2 1
+dumprun 80c0e0a02000 32000 1000 3 1
+dumpimg differential spread_across_levels flags=0x80 refuse=0 refusals=0 sparse=0 visited=6148 runs=5
+dumprun 80c0e0a00000 30000 1000 0 1
+dumprun 80c0e0c00000 70000 1000 0 1
+dumprun 80c100a00000 60000 1000 0 1
+dumprun 8100e0a00000 40000 1000 0 1
+dumprun 100c0e0a00000 50000 1000 0 1
+dumpimg differential full_big_table flags=0x80 refuse=0 refusals=0 sparse=0 visited=1316 runs=1
+dumprun 80c0e0a00000 100000 200000 100 1
+dumpimg differential hostile_self_cycle flags=0x80 refuse=0 refusals=0 sparse=0 visited=1796 runs=0
+dumpimg differential hostile_ptr_past_end flags=0x84 refuse=0x1 refusals=1 sparse=0 visited=4 runs=0
+dumpimg differential hostile_all_ones flags=0x84 refuse=0x404 refusals=4 sparse=0 visited=1796 runs=2
+dumprun 80c0e0a00000 30000 1000 0 1
+dumprun 80c0e0a01000 3fffffffffff000 1000 ff007b 1
+dumpimg differential hostile_type_confusion flags=0x84 refuse=0x400 refusals=64 sparse=0 visited=1028 runs=0
+dumpimg differential hostile_two_cycle flags=0x80 refuse=0 refusals=0 sparse=0 visited=1796 runs=0
+dumpimg real-driver real_ga106_vas_2efa4c000 flags=0x80 refuse=0 refusals=0 sparse=0 visited=2116 runs=8
+dumprun 120000000 10402f000 1000 60022 1
+dumprun 120001000 2efa41000 4000 60000 1
+dumprun 120005000 2ef943000 3000 60040 1
+dumprun 120020000 2eec96000 ea000 60040 1
+dumprun 120010000 1275c0000 10000 162 1
+dumprun 120110000 2eed80000 80000 60108 1
+dumprun 120190000 2ef8a0000 70000 60140 1
+dumprun 121000000 2eee00000 a00000 60240 1
+dumpimg real-driver real_ga106_vas_2efa6c000 flags=0x80 refuse=0 refusals=0 sparse=0 visited=8228 runs=8
+dumprun 420000000 10a4f9000 7000 60022 1
+dumprun 420007000 104900000 30000 60022 1
+dumprun 420037000 1275d0000 10000 60022 1
+dumprun 420047000 104000000 26000 60022 1
+dumprun 420070000 104028000 1000 60022 1
+dumprun 120000000 0 3200000 60200 1
+dumprun 123200000 3200000 2f0200000 90200 1
+dumprun 413400000 2f3400000 cc00000 60200 1
+dumpimg real-driver real_ga106_vas_2efba5000 flags=0x80 refuse=0 refusals=0 sparse=0 visited=2084 runs=2
+dumprun 120000000 10a482000 6d000 60022 1
+dumprun 120070000 10a4f1000 1000 60022 1
+dumpimg real-driver real_ga106_vas_2efbc2000 flags=0x80 refuse=0 refusals=0 sparse=8072 visited=9476 runs=65
+dumprun 0 2efb90000 8000 60000 1
+dumprun 8000 2efb80000 8000 60000 1
+dumprun 10000 2efb70000 8000 60000 1
+dumprun 18000 2efbae000 1000 60000 1
+dumprun 19000 2efbad000 1000 60000 1
+dumprun 1a000 2efbac000 1000 60000 1
+dumprun 1b000 2efbab000 1000 60000 1
+dumprun 1c000 2efbaa000 1000 60000 1
+dumprun 1d000 2efba9000 1000 60000 1
+dumprun 1e000 2efba8000 1000 60000 1
+dumprun 1f000 2efba7000 1000 60000 1
+dumprun 20000 2f1cac000 1000 0 1
+dumprun 21000 2efba5000 1000 60000 1
+dumprun 22000 2efba4000 1000 60000 1
+dumprun 23000 2efba3000 1000 60000 1
+dumprun 24000 2efba2000 1000 60000 1
+dumprun 25000 2efba1000 1000 60000 1
+dumprun 26000 2efba0000 1000 60000 1
+dumprun 27000 2efa6f000 1000 60000 1
+dumprun 28000 2efa6e000 1000 60000 1
+dumprun 29000 2efa6d000 1000 60000 1
+dumprun 2a000 2efa6c000 1000 60000 1
+dumprun 2b000 2efa6b000 1000 60000 1
+dumprun 2c000 2efa6a000 1000 60000 1
+dumprun 2d000 2efa69000 1000 60000 1
+dumprun 2e000 2efa68000 1000 60000 1
+dumprun 2f000 2efa67000 1000 60000 1
+dumprun 30000 2efa66000 1000 60000 1
+dumprun 31000 2efa65000 1000 60000 1
+dumprun 32000 2efa64000 1000 60000 1
+dumprun 33000 2efa63000 1000 60000 1
+dumprun 34000 2efa62000 1000 60000 1
+dumprun 35000 2efa61000 1000 60000 1
+dumprun 36000 2efa60000 1000 60000 1
+dumprun 37000 2efa5f000 1000 60000 1
+dumprun 38000 2efa5e000 1000 60000 1
+dumprun 39000 2efa5d000 1000 60000 1
+dumprun 3a000 2efa5c000 1000 60000 1
+dumprun 3b000 2efa5b000 1000 60000 1
+dumprun 3c000 2efa5a000 1000 60000 1
+dumprun 3d000 2efa59000 1000 60000 1
+dumprun 3e000 2efa58000 1000 60000 1
+dumprun 3f000 2efa57000 1000 60000 1
+dumprun 40000 2efa56000 1000 60000 1
+dumprun 41000 2efa55000 1000 60000 1
+dumprun 42000 2efa54000 1000 60000 1
+dumprun 43000 2efa53000 1000 60000 1
+dumprun 44000 2efa52000 1000 60000 1
+dumprun 45000 2efa51000 1000 60000 1
+dumprun 46000 2efa50000 1000 60000 1
+dumprun 47000 2efa4f000 1000 60000 1
+dumprun 48000 2efa4e000 1000 60000 1
+dumprun 49000 2efa4d000 1000 60000 1
+dumprun 4a000 2eb6f0000 10000 60000 1
+dumprun 5a000 2efa4c000 1000 60000 1
+dumprun 5b000 2efa4b000 1000 60000 1
+dumprun 5c000 2efa4a000 1000 60000 1
+dumprun 5d000 2efa49000 1000 60000 1
+dumprun 5e000 2efa48000 1000 60000 1
+dumprun 5f000 2efa47000 1000 60000 1
+dumprun 60000 2efa46000 1000 60000 1
+dumprun 61000 2efa45000 1000 60000 1
+dumprun 62000 2efa45000 1000 60000 1
+dumprun fea000 2efbaf000 1000 60000 1
+dumprun feb000 2efbc2000 14000 0 1
+dumpimg real-driver real_ga106_vas_2f1cac000 flags=0x80 refuse=0 refusals=0 sparse=412 visited=1828 runs=3
+dumprun fef0000 2efa70000 100000 60000 1
+dumprun 80000 2eb6e0000 10000 60100 1
+dumprun 90000 2ef950000 10000 60100 1

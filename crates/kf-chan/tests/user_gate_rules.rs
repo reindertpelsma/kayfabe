@@ -1,4 +1,4 @@
-//! ★ 2026-10-14 — GPU-free rules for the USER-ring relay's GATE (`kf_chan::user_gate`), derived
+//! GPU-free rules for the USER-ring relay's GATE (`kf_chan::user_gate`), derived
 //! from the public hardware text and the owner's rules, NOT from what the code does today
 //! (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, sections 2 and 5):
 //!

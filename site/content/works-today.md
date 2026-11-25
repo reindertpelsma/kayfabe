@@ -12,7 +12,7 @@ src = "README.md What runs today; docs/howto/requirements.md GPU table"
 Windows 11 was tested in a matrix on 14 October 2026, at revision `eb9f2aa3`, on the author's RTX 4070 with NVIDIA's 580.88 driver. Seven of nine rows passed: Unigine Heaven in Direct3D 11 and OpenGL, windowed and fullscreen, GravityMark in Direct3D 12 and Vulkan, and Minecraft. A pass means the program finished with no host Xid and no GPU reset. Edge video failed after about 7.3 minutes, and the idle row was not run.
 
 <!-- src: README.md Windows table (CUDA, Blender and Edge rows); docs/howto/windows-guest.md -->
-The README also reports CUDA in the guest, Blender renders with CUDA and OptiX, and one 4K YouTube playback in Edge that ran to the end. Those are separate observations, not part of that matrix. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
+The Windows gate also runs a CUDA probe and a Direct3D 11 probe in the guest. Other Windows results have been reported: Blender with CUDA and OptiX, one 4K YouTube playback in Edge, SolidWorks, OBS, 3DMark, Minecraft editions and Office. They are separate observations, not part of that matrix. They have no committed evidence, and they are claims that wait for an evidence checklist, not promises. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
 
 <!-- src: README.md Linux guest; docs/howto/linux-guest.md -->
 Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. MEASURED on an RTX 4090 at `144557e43`, 2026-11-07: 70/70 runnable apps passed on the host and 66/70 in the guest. Passing apps met their own correctness predicates; the three digest-producing apps matched host digests. The four UVM apps are explicitly unsupported for now, listed in every report. <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
@@ -36,7 +36,7 @@ These are recorded stages, not a promise that every card or application works. A
 | Ada AD104 (RTX 4000 Ada) | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Ada AD106, AD103 | Passed on AD106; AD103 not documented | Desktops with a borrowed display page |
 | Ada AD102 | yes; 30/30 at `0c515b3b3` (580.159.04 guest), 2026-11-04 | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
-| Blackwell GB205 | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Blackwell GB205 | Guest tests passed (before the 2026-11-14 walker fix) | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Blackwell GB202 | On a branch: guest tests and CUDA passed | MEASURED: Windows gate intermittent: FAIL, then two PASS on one box, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Blackwell GB206 | Passed on earlier revisions | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 
@@ -45,7 +45,9 @@ Rows marked "On a branch" come from records on branches that are not merged. Eac
 The GB205 Windows pass used two fixes that are not merged yet. Without them, the driver crashes the guest. GB202 is still open; the different outcomes do not explain the crash.
 
 <!-- src: docs/howto/requirements.md GPU notes; docs/STATUS_DETAIL.md sections 0 and 1 -->
-Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. Cards older than Turing cannot use this design. Hopper and data-centre Blackwell have not been run on hardware. GA100 and GB10B are refused by name.
+Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. GB203 (RTX 5070 Ti) was tested on 2026-11-03, before the walker fix of 2026-11-14, and has not been re-run since. Every Blackwell row above predates that fix; consumer Blackwell stays among the supported GPUs only after one run on a Blackwell box with the fix, which has not happened yet. Cards older than Turing cannot use this design. Hopper and the data-centre Blackwell dies (GB100, GB102, GB110, GB112) are not in the first release claims and have not been run on hardware. GA100 and GB10B are refused by name.
+
+<!-- src: docs/howto/requirements.md GPU notes; tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 (option B) -->
 
 ## What is rough
 
@@ -53,7 +55,7 @@ Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. Cards older t
 Windows is not stable. Sleep and wake do not survive, and Edge can make the driver reset after 7 to 16 minutes of video.
 
 <!-- src: README.md SolidWorks, OBS and 3DMark rows ('evidence not yet committed') -->
-SolidWorks, OBS recording and 3DMark runs are reported in the README. Their result files are not committed yet, so treat them as claims.
+SolidWorks, OBS recording and 3DMark runs have been reported, but their result files are not committed yet, so treat them as claims.
 
 <!-- src: branch claude/rootless-audit-20261016 commit 32d7319b2, traces/rootless_audit_20261016/REPORT.txt; docs/howto/security.md -->
 The launch scripts still use root; a [run without sudo](/@docs/security.html) is recorded on one host.

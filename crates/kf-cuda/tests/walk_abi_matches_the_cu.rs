@@ -806,7 +806,7 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
     let run = Command::new(&bin).output().expect("run the probe");
     let c_hex = String::from_utf8_lossy(&run.stdout).trim().to_string();
 
-    let rust_hex: String = kf_cuda::driver_unsafe::view_bytes(rust)
+    let rust_hex: String = kf_cuda::driver_unsafe::abi_bytes(rust)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
@@ -817,7 +817,7 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
         let cb: Vec<u8> = (0..c_hex.len() / 2)
             .map(|i| u8::from_str_radix(&c_hex[i * 2..i * 2 + 2], 16).unwrap_or(0))
             .collect();
-        let rb = kf_cuda::driver_unsafe::view_bytes(rust);
+        let rb = kf_cuda::driver_unsafe::abi_bytes(rust);
         let at = cb
             .iter()
             .zip(rb.iter())
@@ -933,6 +933,17 @@ fn the_report_constants_match_the_header() {
         u64::from(kf_cuda::abi::KFWR_HF_RESYNC)
     );
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
+    // The validator's op set and format version
+    assert_eq!(parse("KFWR_VERSION"), u64::from(kf_cuda::abi::KFWR_VERSION));
+    assert_eq!(parse("KFWR_OP_MAP"), u64::from(kf_cuda::abi::KFWR_OP_MAP));
+    assert_eq!(
+        parse("KFWR_OP_UNMAP"),
+        u64::from(kf_cuda::abi::KFWR_OP_UNMAP)
+    );
+    assert_eq!(
+        parse("KFWR_OP_REMAP"),
+        u64::from(kf_cuda::abi::KFWR_OP_REMAP)
+    );
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
     assert_eq!(
         parse("KFWR_RF_READ_ONLY"),
@@ -1105,4 +1116,35 @@ fn the_report_constants_match_the_header() {
     ] {
         assert_eq!(parse(n), u64::from(r), "{n} differs");
     }
+}
+
+/// The two VER3 PCF enumerants the host checks a descriptor against
+/// (`kf_cuda::walk::KF_VER3_*`) are the values the kernel COMPILES (`kf_walk.cu`'s defines, which
+/// `scripts/ci/walk_ptx_repro.py` ties to ogkm's `gh100/dev_mmu.h`), and the Rust VER3 descriptor
+/// carries them. A drift on either side fails here, without a GPU.
+#[test]
+fn the_ver3_pcf_enumerants_are_the_kernels() {
+    let cu = std::fs::read_to_string(repo_root().join("cuda/walk/kf_walk.cu")).expect("the .cu");
+    let def = |name: &str| -> u8 {
+        let v = extract_define(&cu, name);
+        let v = v.trim_end_matches(['u', 'U']);
+        u8::from_str_radix(v.trim_start_matches("0x"), 16).expect("a hex byte")
+    };
+    let (no_valid, sparse) = (
+        def("KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE"),
+        def("KF_VER3_PDE_PCF_SPARSE_BIT"),
+    );
+    assert_eq!(no_valid, kf_cuda::walk::KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE);
+    assert_eq!(sparse, kf_cuda::walk::KF_VER3_PDE_PCF_SPARSE_BIT);
+    let f = kf_cuda::abi::kf_format_ver3();
+    assert_eq!(
+        (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit),
+        (no_valid, sparse)
+    );
+    let f = kf_cuda::abi::kf_format_ver2();
+    assert_eq!(
+        (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit),
+        (0, 0),
+        "unused on VER2"
+    );
 }

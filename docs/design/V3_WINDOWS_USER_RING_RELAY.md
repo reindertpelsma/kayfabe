@@ -1,6 +1,12 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
 **STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**Correction, 2026-11-18 (Blackwell decline has a measured failure):** SPEC creo-04 on GB203 / 595.91.07 took
+host Xid 32 `intr 00800000` on a Windows user-work twin that this decline kept on the USERD relay, in the window
+of its one `DEFERRED_API_INTERNAL` registration (root cause and a Blackwell-capable route:
+[V3_BLACKWELL_USER_RING_ROUTE.md](V3_BLACKWELL_USER_RING_ROUTE.md)). Closing the decline is a work item (coordinator,
+2026-11-18), not an open owner decision. INFERRED: B1n's Xid 32 METHOD below may be the marker's `SET_REFERENCE`
+itself, which no public Hopper/Blackwell channel header defines.
 **Correction, 2026-11-01 (admission after the Blackwell merge):** the private ring's birth admission is now
 `userrelay::ring_relay_serves(family, class)` and is the AND of both histories: the family-scope contract
 below (a family whose engine writes no `USERD` word, `engine_writes_userd_gp_get`, is refused by name,

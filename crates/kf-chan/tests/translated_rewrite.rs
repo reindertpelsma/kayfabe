@@ -377,7 +377,7 @@ fn mem_op_l2_is_forwarded_access_counter_clr_is_served_and_the_rest_is_refused()
     }
 }
 
-/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
+/// RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
 /// dst PHYSICAL LOCAL_FB) cannot run virtual — the host CE raised Xid 71 on GB203. It becomes the
 /// equivalent virtual byte zero-fill; the guest's remap registers and offset are restored after.
 #[test]

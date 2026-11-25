@@ -70,7 +70,27 @@
 /* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
  * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
  * 0 = the default, 16) after channel_budget. */
-#define KF3_ABI 30
+/* 32 (2026-11-13, claude/secfix-raw-frame-20261113, security review 2 C-04/D-06 = S1-03): Kf3Frame
+ * gains `len` (bytes readable at `data`) after `serial`; kf3_display_frame refuses a frame whose
+ * geometry does not fit it, and kf3.c checks it again (kf3_frame_fits). 31 is taken by unmerged
+ * branches (claude/guestmem-*-20261031, integration/beta-candidate-1, codex/perf-parity). */
+/* 33 (2026-11-15, claude/flags-stage1-20261115, docs/design/V3_WINDOWS_SUPPORT_PROFILE.md): kf3_realize gains
+ * windows_support (the windows-support property: 1 = on, the default; 0 = a Linux-only VM) after user_view_keep. */
+/* 34 (2026-11-17, claude/util-flag-20261117, docs/design/V3_UTILIZATION_FLAG.md): kf3_realize gains report_utilization
+ * (the report-utilization property: 1 = on, the default; 0 = no GPU utilisation shown to the guest, no host call) after
+ * windows_support. */
+/* 35 (2026-11-18, claude/sparse-zero-fill-20261118, docs/design/V3_SPARSE_RESIDENCY_RCA.md): kf3_realize gains
+ * unmapped_reads_zero (the unmapped-reads-zero property: 0 = off, the default; 1 = unmapped guest VAs read
+ * zero on the host) after windows_support. 34 is taken by an unmerged branch (claude/util-flag-20261117). */
+/* 36 (2026-11-19, merge of claude/util-flag-20261117 into next): both 34 and 35, in that order: kf3_realize takes
+ * report_utilization (34) and then unmapped_reads_zero (35) after windows_support. */
+/* 37 (2026-11-24, claude/sparse-fill-on-20261124, docs/design/V3_SPARSE_RESIDENCY_RCA.md): no signature change. The
+ * unmapped-reads-zero property defaults to ON for every guest (it was off). The default is C text, so the number
+ * moves: a QEMU built from the old kf3.c would otherwise keep the old default against this archive without a word. */
+/* 38: no signature change. unmapped_reads_zero is now QEMU's OnOffAuto word (0 = auto, the default; 1 = on; 2 = off)
+ * instead of a boolean, and the unmapped-reads-zero property defaults to auto: on for a Linux guest, off for a guest
+ * under the Windows support profile. The meaning of the word changed, so the number moves. */
+#define KF3_ABI 38
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -90,11 +110,14 @@ typedef struct Kf3Region {
 } Kf3Region;
 
 /* ★ ABI 10 (v3-display2's 9): one frame of the virtual display (display=on). `data` stays valid and unwritten until
- * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10. */
+ * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10.
+ * ★ ABI 32 (C-04): `len` = bytes readable at `data`; (height-1)*stride + width*bpp <= len, checked by
+ * both sides. */
 typedef struct Kf3Frame {
     uint8_t* data;   /* (spelled for the wire-mirror census) */
     uint32_t width, height, stride, format;
     uint64_t serial;
+    uint64_t len;
 } Kf3Frame;
 
 /* ★ ABI 23 (OWNER_RULINGS.md sec. V, docs/design/V3_DISPLAY.md sec. 8.20): one pointing device the
@@ -173,7 +196,8 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, uint32_t report_utilization,
+                    uint32_t unmapped_reads_zero, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

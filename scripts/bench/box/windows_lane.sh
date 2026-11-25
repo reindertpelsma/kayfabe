@@ -60,11 +60,12 @@ box() { bash /root/provision_box.sh > /root/prov/box.log 2>&1; }
 driver() {
   (cd /root/kayfabe && bash scripts/bench/provision_host_driver.sh > /root/prov/driver.log 2>&1)
 }
-guest_run() { # the bench tree wants the guest's pinned package at a fixed path
-  [ -s "$GUEST_RUN" ] && return 0
-  local base=https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04
-  curl --fail --location --retry 3 --connect-timeout 20 -o "$GUEST_RUN.part" \
-    "$base/$(basename "$GUEST_RUN")" && mv "$GUEST_RUN.part" "$GUEST_RUN"
+guest_run() { # the bench tree wants the guest's pinned package at a fixed path; anchored by kf_trust.py (2026-11-17), never TLS alone
+  if [ -s "$GUEST_RUN" ]; then
+    python3 -I /root/kayfabe/scripts/ci/kf_trust.py verify nvidia-linux-run-580.159.04 "$GUEST_RUN"
+  else
+    python3 -I /root/kayfabe/scripts/ci/kf_trust.py fetch nvidia-linux-run-580.159.04 --out "$GUEST_RUN"
+  fi
 }
 tree() {
   (cd /root/kayfabe && bash scripts/bench/provision_bench_tree.sh > /root/prov/tree.log 2>&1)
@@ -74,6 +75,8 @@ kf3() {
     /workspace/bench/qemu-build-kf3 > /root/prov/kf3.log 2>&1)
 }
 prereqs() {
+  # root: this whole script is box PROVISIONING (host driver, /root paths, apt) and stays root-run; the unprivileged Windows
+  # gate is windows_gate.sh, whose own root steps are `kfroot` lines (docs/design/V3_KFROOT_ROOTLESS.md)
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y -qq \
     ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
     > /root/prov/win_prereq.log 2>&1

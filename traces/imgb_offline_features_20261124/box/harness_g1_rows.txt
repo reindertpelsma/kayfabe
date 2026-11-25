@@ -1,0 +1,24 @@
+# Rows printed by propimage_check.py (through adobe_part2/hold_run.py) for boot g1, copied from the box log /workspace/img/g1.log before the box was destroyed
+# (the full log was not pulled; these are the lines read during the run). Start 2026-11-24T04:01:44Z (after a first attempt at 04:01:09Z that stopped at
+# "No such file or directory: broker/nvkvm-display-broker": the broker had not been built on the box; built with `make` in broker/, then relaunched).
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+DEVIATION: image.qcow2 sha256 taken from the unpack stamp (verified 2026-11-24T04:01:03Z)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+audio PASS NONE virtual HDA sound card, QEMU null backend (no host audio opened)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK (sleep, hibernate, monitor, disk all 0)
+gpu PASS NONE post-fix seed UUID exact match after 16s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True
+verify PASS NONE identity, clock, TPM and seed GPU checked
+hold released NONE guest held for manual iteration
+app:gpudiag NOT_RUN NONE Boot-age warning: check budget would cross 55 minutes; fresh boot required
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+[xid-watch] HOST Xid CLEAN across the command, 0 before, 0 after (ring buffer proved readable)
+EXIT rc=1 2026-11-24T05:43:43Z   (rc 1 because of the NOT_RUN gpudiag row; no FAIL row)
+# <out>/qmp_events.jsonl (PR #578 recorder), the only lifecycle event of the boot:
+{"timestamp": {"seconds": 1795499018, "microseconds": 333477}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}

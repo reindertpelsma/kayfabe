@@ -1,0 +1,70 @@
+
+
+TimeCreated  : 11/12/2026 11:31:53 PM
+Id           : 13
+ProviderName : Microsoft-Windows-Kernel-General
+m            : The operating system is shutting down at system time ?2026?-?11?-?12T23:31:53.617892000Z.
+
+TimeCreated  : 11/12/2026 11:31:51 PM
+Id           : 109
+ProviderName : Microsoft-Windows-Kernel-Power
+m            : The kernel power manager has initiated a shutdown transition.    Action: Power Action Shutdown   Event Code: 0x0   Reason: Kernel API
+
+TimeCreated  : 11/12/2026 11:34:16 PM
+Id           : 6013
+ProviderName : EventLog
+m            : The system uptime is 84 seconds.
+
+TimeCreated  : 11/12/2026 11:31:49 PM
+Id           : 6006
+ProviderName : EventLog
+m            : The Event log service was stopped.
+
+TimeCreated  : 11/12/2026 11:31:29 PM
+Id           : 1074
+ProviderName : User32
+m            : The process C:\WINDOWS\system32\wlms\wlms.exe (KFWIN) has initiated the shutdown of computer KFWIN on behalf of user NT AUTHORITY\SYSTEM for the following reason: Other (Planned)   Reason Code: 0x80000000   Shutdown Type: shutdown   Comment: The license period for this installation 
+               of Windows has expired. The operating system is shutting down.  
+
+TimeCreated  : 11/12/2026 10:29:11 PM
+Id           : 13
+ProviderName : Microsoft-Windows-Kernel-General
+m            : The operating system is shutting down at system time ?2026?-?11?-?12T22:29:11.244498300Z.
+
+TimeCreated  : 11/12/2026 10:29:06 PM
+Id           : 109
+ProviderName : Microsoft-Windows-Kernel-Power
+m            : The kernel power manager has initiated a shutdown transition.    Action: Power Action Shutdown   Event Code: 0x0   Reason: Kernel API
+
+TimeCreated  : 11/12/2026 10:31:22 PM
+Id           : 6013
+ProviderName : EventLog
+m            : The system uptime is 74 seconds.
+
+TimeCreated  : 11/12/2026 10:29:02 PM
+Id           : 6006
+ProviderName : EventLog
+m            : The Event log service was stopped.
+
+TimeCreated  : 11/12/2026 10:28:52 PM
+Id           : 1074
+ProviderName : User32
+m            : The process C:\WINDOWS\system32\shutdown.exe (KFWIN) has initiated the shutdown of computer KFWIN on behalf of user KFWIN\kf for the following reason: No title for this reason could be found   Reason Code: 0x800000ff   Shutdown Type: shutdown   Comment: 
+
+TimeCreated  : 11/12/2026 9:37:43 PM
+Id           : 13
+ProviderName : Microsoft-Windows-Kernel-General
+m            : The operating system is shutting down at system time ?2026?-?11?-?12T21:37:43.160978100Z.
+
+TimeCreated  : 11/12/2026 9:37:39 PM
+Id           : 109
+ProviderName : Microsoft-Windows-Kernel-Power
+m            : The kernel power manager has initiated a shutdown transition.    Action: Power Action Shutdown   Event Code: 0x0   Reason: Kernel API
+
+TimeCreated  : 11/12/2026 9:46:50 PM
+Id           : 6013
+ProviderName : EventLog
+m            : The system uptime is 58 seconds.
+
+TimeCreated  : 11/12/2026 9:37:37 PM
+Id           : 6006

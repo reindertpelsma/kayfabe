@@ -1,0 +1,97 @@
+{
+  "linux_apps": "middle",
+  "propimages": [
+    {
+      "apps": {
+        "acrobat": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "aeparallel": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "aeprojects": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "aetoggle": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "aftereffects": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "dimension": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "gpudiag": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "illustrator": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "illustratorsample": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "indesign": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "indesignsample": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "lightroomlaunch": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "mediaencoder": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "photoshop": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "photoshopprojects": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "photoshopsample": {
+          "lane": "discovery",
+          "mode": "present"
+        },
+        "premiere": {
+          "lane": "gate",
+          "mode": "present"
+        },
+        "uxp": {
+          "lane": "gate",
+          "mode": "present"
+        }
+      },
+      "disk": {
+        "from": "pin",
+        "ref": "propimage-kfimg-20261116.zip",
+        "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a"
+      },
+      "kind": "prebuilt",
+      "label": "imgb"
+    }
+  ],
+  "propimages_strict": true,
+  "rehearsal": false,
+  "schema": "kayfabe.payload-instruction/1",
+  "spec": null,
+  "stages": [],
+  "tier": "middle",
+  "winapps": "mid",
+  "windows": true,
+  "windows_runs": 1
+}

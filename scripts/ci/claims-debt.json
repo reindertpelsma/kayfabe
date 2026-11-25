@@ -1669,7 +1669,6 @@
   "crates/kf-rm/src/chanlink.rs|unattributed|f3399cb55548b2a690f7e3e5f6363abd569ea8462f852ab04e4ca5d2f322e6e0": "[measured, run 113, qemu.log line 63706] the post-TDR restart's copy channel.",
   "crates/kf-rm/src/display.rs|conflated|b134244b60982e5dc17e7e227960d1e6fd80d3065d354594059c6bc2fd9c55cc": "measured \u2014 refused by name rather than decoded blind.",
   "crates/kf-rm/src/display.rs|unattributed|47d257a0c5d2166023b07cb60919c0a5763a6b6e6f29094b1b0589bd160aeac0": "\u2605 Step (1) changes no M0 answer the m0a run measured: through the model, every M0 control's",
-  "crates/kf-rm/src/gssnative.rs|unattributed|5231650d168454d09df3426f4339dae8b4a6a018d09d575f2bc9fc2b6c2dd4c6": "The largest `paramsSize` forwarded (the largest measured is 2188).",
   "crates/kf-rm/src/hostquery.rs|unattributed|117b83e247568c113e34e558d86823c99f0811a495256f759c61e33a37a50997": "\u2605 Does the HOST's driver version have no such control at all \u2014 measured, not inferred from",
   "crates/kf-rm/src/hostquery.rs|unattributed|de6c2f2977478465a1b9083d41b5c8f7d703fbcfc705727fb28425d8e50d92b9": "`sizeof(NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS)`. `[measured]` 64.",
   "crates/kf-rm/src/inittables.rs|unattributed|0faa0bba62274476572d81526d034c72c9d43b71be608e4cf8f6a48213498169": "`0x20809064` \u2014 GSS-legacy, 520 bytes, ten content words then a measured zero tail.",

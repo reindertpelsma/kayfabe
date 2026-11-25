@@ -1,0 +1,1 @@
+kf3: unmapped-reads-zero=auto: ZERO (no fault) for a Linux guest's spaces, FAULT for the spaces of a guest under the Windows support profile (V3_SPARSE_RESIDENCY_RCA.md) [#1, rate-limited]

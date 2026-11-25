@@ -41,7 +41,7 @@ pub fn system_info_max() -> usize {
         .unwrap_or(0)
 }
 
-/// ★ 2026-10-04 (branch `v3-windows`, runbook C3; `docs/design/THE_WINDOWS_AXIS.md` §7): fn 72's
+/// fn 72's
 /// `bGspNocatEnabled`, read at the PROVISIONAL driver's layout and logged — never decided on.
 ///
 /// The only assignment in ogkm is `if (RMCFG_FEATURE_PLATFORM_WINDOWS) rpcInfo->bGspNocatEnabled =
@@ -91,7 +91,7 @@ pub fn nocat_line(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8]) -> 
 
 /// Log [`nocat_line`] for one fn 72.
 pub fn log_nocat(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8], sequence: u32) {
-    eprintln!(
+    kf_arch::rate_eprintln!(
         "kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq={sequence} {} bytes: {}",
         payload.len(),
         nocat_line(driver, payload)
@@ -167,7 +167,7 @@ kf_util::assert_send_sync!(SystemInfoCell);
 mod tests {
     use super::*;
 
-    /// ★ 2026-10-04 (v3-windows, runbook C3): the line reads `bGspNocatEnabled` at the driver's own
+    /// The line reads `bGspNocatEnabled` at the driver's own
     /// layout, and says when the guest's body is not that layout's size.
     #[test]
     fn the_nocat_line_reads_the_flag_at_the_drivers_layout() {

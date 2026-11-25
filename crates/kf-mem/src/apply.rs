@@ -50,7 +50,7 @@ pub struct DiffRun {
     /// so a user twin WITHHOLDS the leaf ([`MapTarget::withholds_privileged`]) rather than map it
     /// where an unprivileged channel could reach it.
     pub privileged: bool,
-    /// ★ 2026-10-09: the guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
+    /// The guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
     /// 2 MiB, 512 MiB), in bytes; 0 = unknown (treated as the family grain). Outside a
     /// VA-reserving `hDma` the host maps ONE mapping per leaf — the smallest unit the guest can
     /// change independently — so every later change is a whole-mapping unmap
@@ -150,7 +150,7 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
-    /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
+    /// Runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
     /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
     pub kept_runs: usize,
     /// The first such fallback's reason.
@@ -160,12 +160,12 @@ pub struct Applied {
     /// leaves) — counted, and refused only with [`ApplyCfg::carve_refuse`].
     pub carve_gpu: usize,
     /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space, counted apart. ⊘ Corrected
-    /// 2026-10-10 (§AB): refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
+    /// Refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
     /// refused") ([`carve_reached`]).
     pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
-    /// ★ 2026-10-10: carve-out bytes left ABSENT from runs that straddle the carve-out base (the
+    /// Carve-out bytes left ABSENT from runs that straddle the carve-out base (the
     /// run's part below it is placed and the run acknowledged — [`prepare_row`]).
     pub carve_clipped_bytes: u64,
     /// ★ Review fix 2026-10-10 (findings 1, 2): runs acknowledged FAILED only because a LINKED run
@@ -274,10 +274,17 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
 
 /// ★ v3-gfx — **the PTE kind a host row carries**: the guest's kind with compression stripped
 /// (`kf_chip::uncompressed_pte_kind`; this device never backs comptags, so a compressible kind would
-/// point the engine at compression state that does not exist). Guest RAM takes only PITCH or
-/// GENERIC (sysmem holds no depth/stencil surface kinds); anything unknown stays PITCH, the
-/// pre-v3-gfx mapping. `[measured vgfx 2026-09-26, gfx9]` a GL depth buffer mapped PITCH raised
-/// host Xid 13 "3D-Z KIND Violation" on every draw.
+/// point the engine at compression state that does not exist). Guest RAM and the store take the
+/// SAME kind; anything unknown stays PITCH, the pre-v3-gfx mapping. `[measured vgfx 2026-09-26,
+/// gfx9]` a GL depth buffer mapped PITCH raised host Xid 13 "3D-Z KIND Violation" on every draw.
+///
+/// ⊘ **CORRECTED 2026-11-17 (vkcts, RTX 3090, host 580.159.04).** This function used to rewrite a
+/// depth/stencil kind on a guest-RAM row to PITCH, on the unmeasured premise that sysmem holds no
+/// Z surface. The host RM maps one (`ogkm-580: src/nvidia/src/kernel/mem_mgr/virtual_mem.c:
+/// 1348-1394` keeps an uncompressed Z `kindOverride` on an `ADDR_SYSMEM` target), and a Vulkan
+/// depth image in a host-heap memory type is such a surface. The vkcts DGC multiview case that
+/// raised host Xid 13 "3D-Z SYSMEM KIND Violation" in the guest only is the candidate symptom
+/// (`[inferred]` until the one-case rerun). `ram` no longer changes the kind.
 ///
 /// ★★ **The host-driver axis (`per_map_kind`, `V3_DRIVER_MATRIX.md` §2.2 H3).** A host below
 /// 580.65.06 has no per-map kind at all: its PTE takes the memory object's own kind. There
@@ -287,14 +294,13 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
 /// equivalent — mapping it as the memory's kind is the Xid 13 above — so it is KEPT, and the host
 /// carry refuses it by name (`HOST_ABI_REFUSED`, `kindOverride`): a loud gap, never a wrong kind.
 #[must_use]
-pub fn host_pte_kind(guest: u8, ram: bool, per_map_kind: bool) -> u8 {
+pub fn host_pte_kind(guest: u8, _ram: bool, per_map_kind: bool) -> u8 {
     match kf_chip::uncompressed_pte_kind(guest) {
         Some(kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC) if !per_map_kind => {
             kf_chip::PTE_KIND_PITCH
         }
-        Some(k) if !ram => k,
-        Some(k @ (kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC)) => k,
-        _ => kf_chip::PTE_KIND_PITCH,
+        Some(k) => k,
+        None => kf_chip::PTE_KIND_PITCH,
     }
 }
 
@@ -365,7 +371,7 @@ impl PermPolicy {
     }
 }
 
-/// ★ 2026-10-09: a walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
+/// A walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
 /// code (the caller then treats the run as made of family-grain leaves).
 #[must_use]
 pub const fn leaf_bytes(code: u8) -> u64 {
@@ -432,11 +438,11 @@ fn carve_reached(
     }
 }
 
-/// ★★★ 2026-10-09 — **a page the diff names but does not change.** The walker unmaps WHOLE
+/// **A page the diff names but does not change.** The walker unmaps WHOLE
 /// committed placements and maps the pieces of the walk in the gaps (`kf_walk.cu`, "THE DIFF
 /// AGAINST THE COMMITTED PLACEMENTS"), and its UNMAP run IS the committed placement (same `at`,
 /// same flags). So a one-page change inside a 16-page row arrives as UNMAP(16 pages) + MAP(5) +
-/// MAP(1, new) + MAP(10): fifteen pages whose guest mapping did not change. The owner's rule
+/// MAP(1, new) + MAP(10): fifteen pages retain their guest mapping. The mapping invariant
 /// (2026-10-09): *every VA whose guest mapping is unchanged stays accessible at all times* — so on
 /// a GPU target those pages get NO host call at all: neither unmapped nor re-mapped.
 ///
@@ -723,7 +729,7 @@ impl Applied {
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
-/// ★★★ 2026-10-09 (GPU targets): only what CHANGED reaches the host. A page an UNMAP and a MAP
+/// Only what CHANGED reaches the host. A page an UNMAP and a MAP
 /// of this entry name with the same mapping ([`same_mapping`]) is neither unmapped nor re-mapped
 /// — never transiently unmapped; the changed sub-ranges are unmapped by exact range over OUR
 /// placements (`crate::batch::BatchedVas::unmap_range`) and only the new pieces are mapped. A
@@ -748,6 +754,10 @@ impl Applied {
 /// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    // The apply's partition — Prep, UnmapPhase,
+    // MapPhase, Takedown, Invalidate — five clock reads and nothing decided by them.
+    use kf_host::phase::{Phase, ns_since, record};
+    let mut t_phase = std::time::Instant::now();
     // ★ Review item 4: one walker entry is one refresh — the target's per-refresh host-call budget.
     target.begin_refresh();
     let n = runs.len();
@@ -808,7 +818,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
             out.priv_mirrored = out.priv_mirrored.saturating_add(1);
         }
-        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
+        // Only the NEW pieces of the run reach the host; the unchanged part is
         // already ours (a kept remnant of the placement this entry unmaps).
         let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
         if new.is_empty() {
@@ -835,6 +845,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     link_fail(&mut out, &mut failed);
+    record(Phase::Prep, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 2. Unmaps: the CHANGED pieces of every UNMAP run. An UNMAP already failed by a link keeps
     // its rigid mappings whole (its placement stays committed), but its changed pieces still go.
@@ -949,6 +961,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         .filter(|&(i, r)| r.unmap && failed[i])
         .map(|(_, r)| (r.va, r.va.saturating_add(r.len)))
         .collect();
+    record(Phase::UnmapPhase, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 3. Usermode views and SKED pages (their own verbs), then the plain rows.
     // Per MAP run: pieces placed (ours), a piece held by the host.
@@ -1064,6 +1078,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     link_fail(&mut out, &mut failed);
+    record(Phase::MapPhase, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 4. Verdicts of the MAP runs. A FAILED run's NEW pieces that were placed go again (the
     // walker re-emits the run; the ledger must hold nothing it does not commit) — never a kept
@@ -1084,6 +1100,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
+    record(Phase::Takedown, ns_since(t_phase));
     if out
         .mapped
         .saturating_add(out.unmapped)
@@ -1092,7 +1109,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         .saturating_add(out.sked_placed)
         > 0
     {
-        match target.invalidate() {
+        match kf_host::phase::timed(Phase::Invalidate, || target.invalidate()) {
             Ok(()) => out.invalidated = true,
             Err(e) => {
                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is
@@ -1122,7 +1139,7 @@ fn prepare_row(
         match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
             // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
             // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-            // ★ 2026-10-09: and its leaf size (one host mapping per leaf outside a reservation).
+            // And its leaf size (one host mapping per leaf outside a reservation).
             Ok(v) if v.len() == 1 => Desired {
                 kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
                 perm: r.perm,
@@ -1151,7 +1168,7 @@ fn prepare_row(
         );
         return None;
     }
-    // ★★★ 2026-10-10 (fix of the 6fafcc6e fast-suite regression; see
+    // (fix of the 6fafcc6e fast-suite regression; see
     // `tests::a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes`): only the carve-out
     // BYTES are refused. A run that starts inside the carve-out is refused whole, as before; a run
     // that STRADDLES its base (the guest RM's flat FB alias, whose last 2 MiB leaf overhangs it) is
@@ -1238,7 +1255,7 @@ fn prepare_row(
     Some((d, carve_clipped))
 }
 
-/// ★ 2026-10-10: a row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
+/// A row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
 /// row (placed by `crate::batch::BatchedVas` through ONE micro reservation, D1 2026-10-10 — ⊘ it
 /// was "one host mapping per leaf, the leaf being the host unit"), and the cut leaf's lower part
 /// becomes its own row with the largest leaf its edges allow — never the 4 KiB fallback over the
@@ -1737,6 +1754,41 @@ mod tests {
         );
     }
 
+    /// ★★ **A depth/stencil kind in guest RAM keeps its layout on the host** (vkcts 2026-11-17,
+    /// RTX 3090, host 580.159.04: `dEQP-VK.dgc.ext.graphics.multiview.view_mask_2.no_ies_gpl.
+    /// indexed_draw_buffer_tokens` raised host Xid 13 "3D-Z SYSMEM KIND Violation" in the guest
+    /// only). The host RM maps a Z kind onto sysmem: `ogkm-580:
+    /// src/nvidia/src/kernel/mem_mgr/virtual_mem.c:1348-1394` takes any supported
+    /// `kindOverride` and, for an `ADDR_SYSMEM` target, strips only compression; Z surfaces in
+    /// sysmem are a configuration RM names (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:4923-4928`). Rewriting the
+    /// guest's Z kind to PITCH on a RAM row is the wrong kind the v3-gfx carry exists to end.
+    #[test]
+    fn a_depth_kind_in_guest_ram_keeps_its_layout_on_the_host() {
+        for (guest, want) in [
+            (0x01, 0x01), // Z16
+            (0x02, 0x02), // S8
+            (0x03, 0x03), // S8Z24
+            (0x04, 0x04), // ZF32_X24S8
+            (0x05, 0x05), // Z24S8
+            (0x0B, 0x01), // Z16 compressible -> Z16
+            (0x0E, 0x05), // Z24S8 compressible -> Z24S8
+        ] {
+            for per_map_kind in [true, false] {
+                assert_eq!(
+                    host_pte_kind(guest, true, per_map_kind),
+                    host_pte_kind(guest, false, per_map_kind),
+                    "kind {guest:#x} per_map_kind={per_map_kind}: RAM and vidmem must agree"
+                );
+                assert_eq!(
+                    host_pte_kind(guest, true, per_map_kind),
+                    want,
+                    "kind {guest:#x} in guest RAM, per_map_kind={per_map_kind}"
+                );
+            }
+        }
+    }
+
     /// ★★ The host-driver axis: on a host with no per-map PTE kind (≤575.64.05) PITCH / GENERIC /
     /// compressible generic map with NO override (the pre-v3-gfx mapping), vidmem or RAM alike,
     /// while a depth/stencil kind is KEPT — so the host carry refuses it by name rather than
@@ -1776,8 +1828,8 @@ mod tests {
         assert_eq!(host_pte_kind(0x01, false, true), 0x01);
         assert_eq!(
             host_pte_kind(0x01, true, true),
-            kf_chip::PTE_KIND_PITCH,
-            "RAM holds no Z surface"
+            0x01,
+            "a Z surface in guest RAM keeps Z16 (see a_depth_kind_in_guest_ram_keeps_its_layout_on_the_host)"
         );
         // Through apply: a GENERIC vidmem leaf on an old host is placed kind 0.
         let t = Rec::default();
@@ -2049,7 +2101,7 @@ mod tests {
                     kind: 1 << (bit - 16),
                     ..plain
                 },
-                // ★ 2026-10-09: the page-size code is the leaf size (bits 8..11).
+                // The page-size code is the leaf size (bits 8..11).
                 8..=11 => DiffRun {
                     leaf: leaf_bytes(1 << (bit - 8)),
                     ..plain

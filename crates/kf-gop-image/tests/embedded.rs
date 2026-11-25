@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! The driver this crate embeds — built from `firmware/kf-gop` by `build.rs`, never a committed file —
 //! is one kf3 serves, for the arch kayfabe is built for, and packs into a ROM whose `EfiMachineType`
-//! is its own (`docs/OWNER_RULINGS.md` §K).
+//! is its own.
 
 use kf_gop_image::{KF_GOP_EFI, SignedPackError, TARGET, pack_kf_gop, pack_kf_gop_signed};
 use kf_oprom::desc::{BootFramebuffer, Descriptor, Geometry};
@@ -69,7 +69,7 @@ fn it_packs_for_a_1080p_display_device_with_its_own_machine_type() {
     assert_eq!(d.edid, &edid[..]);
 }
 
-/// ★ 2026-10-04 (v3-windows): a signed copy of the embedded driver, in the shape `sbsign` writes, is
+/// A signed copy of the embedded driver, in the shape `sbsign` writes, is
 /// packed with the signed PE ending on the ROM's last block, and anything else is refused by name.
 #[test]
 fn a_signed_copy_of_the_embedded_driver_packs_and_a_tampered_one_does_not() {

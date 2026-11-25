@@ -17,7 +17,7 @@
 //! equality, while `ogkm-610: :348` polls `(mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE)
 //! != 0` — a symbol that does not exist at 580. Serving the sentinel *OR-ed into* the
 //! echoed boot-args value satisfies 610 and hangs 580 forever; the encoding is
-//! `kayfabe-arch`'s, and it must replace the whole value). So a `GspFault` is
+//! `kf-arch`'s, and it must replace the whole value). So a `GspFault` is
 //! **per-message**: it aborts one service step, and the register surface keeps answering.
 //! Nothing in this crate can stop the observable surface, which is why
 //! [`GspFault`] is a return type and never a state.
@@ -302,7 +302,7 @@ pub enum GspFault {
         /// The region's declared size.
         region_len: u64,
     },
-    /// The RPC envelope failed `kayfabe-abi`'s validation. Carried as the ABI's own
+    /// The RPC envelope failed `kf-abi`'s validation. Carried as the ABI's own
     /// error so the exact reason survives (bad signature vs impossible length).
     Envelope(kf_abi::wire::AbiError),
     /// An event may not be posted before the boot handshake has completed

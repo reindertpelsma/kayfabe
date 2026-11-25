@@ -1,0 +1,16 @@
+23:57:22 id=1000 Faulting application name: InDesign.exe, version: 22.0.0.104, time stamp: 0x6ae3ef62 Faulting module name: Public.dll, version: 22.0.0.104, time stamp: 0x6ae3eebd Exception code: 0xc0000005 Fault offset: 0x000000000059a123 Faulting process id: 0x16C0 Faulting application start time: 0x1DD755CB8E7B21C Faulting application path: C:\Program Files\Adobe\Adobe InDesign 2027\InDesign.exe Faulting module path: C:\Program Files\Adobe\Adobe InDesign 2027\Public.dll Report Id: 43aff5cd-140d-4a67-ba64-7bcb1302c03a Faulting package full name: Faulting package-relative application ID: 
+23:45:52 id=1001 Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: AfterFX.exe P2: 27.0.0.78 P3: 10.0.26200.2.0.0 P4: P5: P6: P7: P8: P9: P10: 
+23:35:52 id=1001 Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: Photoshop.exe P2: 28.0.0.20 P3: 10.0.26200.2.0.0 P4: P5: P6: P7: P8: P9: P10: 
+23:25:52 id=1001 Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: Adobe Premiere Pro.exe P2: 27.0.0.88 P3: 10.0.26200.2.0.0 P4: P5: P6: P7: P8: P9: P10: 
+23:00:01 id=1001 Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffce8f90351080 P5: 0 P6: 10_0_26200 P7: 0_0 P8: 256_1 P9: P10: 
+23:00:01 id=1001 Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffce8f90351080 P5: 0 P6: 10_0_26200 P7: 0_0 P8: 256_1 P9: P10: 
+--- dumps
+
+--- progress
+1794786899 launch
+1794786950 s1 com ok
+1794786976 s2 done: doc
+1794786979 s3 done: text
+1794786987 s4 done: place
+1794786992 s5 done: pdf
+1794786992 s6 done: jpg

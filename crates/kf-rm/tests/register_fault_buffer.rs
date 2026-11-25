@@ -4,7 +4,7 @@
 //!
 //! ## ⊘ What this file is for, beyond "the control is served"
 //!
-//! Three things no `kayfabe-abi` unit test can say, and one no differential can:
+//! Three things no `kf-abi` unit test can say, and one no differential can:
 //!
 //! 1. That `InitTablePolicy` reads the params from the **right offset** and splices them
 //!    back at the right one, inside the right envelope, with the right inner status.
@@ -12,7 +12,7 @@
 //!    (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1792-1823`), so
 //!    a real GSP writes nothing back and the identity is the byte-accurate reply. This is
 //!    exactly checkable and needs no capture to compare against — which is why
-//!    `kayfabe-crec/tests/cap1b_differential.rs` names this file rather than admitting a gap
+//!    `kf-crec/tests/cap1b_differential.rs` names this file rather than admitting a gap
 //!    it could not close. (`cap1b` is an `nvidia-smi` capture; this control has exactly one
 //!    issuer and it is `nvidia-uvm`.)
 //! 3. That the **hostile** size CPU-RM itself refuses is refused here too, with a status,

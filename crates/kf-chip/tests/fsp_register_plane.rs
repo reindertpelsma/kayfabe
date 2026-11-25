@@ -1,4 +1,4 @@
-//! 2026-10-31 -- the register-plane contracts of the retired `gb20x_doorbell_and_regs.rs`
+//! The register-plane contracts of the retired `gb20x_doorbell_and_regs.rs`
 //! (`archive/crates/kayfabe-chips-modules/tests/`), over v3's `FspGspModel` (Hopper and Blackwell).
 //! Four of its nine tests were register-plane tests; the token half is in
 //! `kf-trap/src/tokenindex.rs`, and the boot-gate value itself is

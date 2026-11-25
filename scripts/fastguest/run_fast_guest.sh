@@ -3,6 +3,8 @@
 #
 # usage: run_fast_guest.sh [tag] [budget-seconds]
 #   KF_ARMS="--timer --engines"   which raw-client arms to run (default: a small set)
+#                                 a boot of --defer-liveness or --missing-page-fault gets the device property
+#                                 `unmapped-reads-zero=off` (see FAULT_ARMS below); no other boot does
 #
 # ## The rule this file exists to enforce: A TIMEOUT IS A CRASH.
 #
@@ -120,6 +122,35 @@ esac
 ARMS_TOK=$(echo "${KF_ARMS:-} ${PROBE_TOK}" | tr -s ' ' ',' | sed 's/^,//; s/,$//')
 [ -n "$ARMS_TOK" ] || ARMS_TOK="--timer,--engines,--doorbell-census"
 case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whitespace after folding: [$ARMS_TOK]" >&2; exit 2 ;; esac
+
+# ★★★ THE FAULT ARMS BOOT WITH `unmapped-reads-zero=off`.
+#
+# `--defer-liveness` and `--missing-page-fault` assert what happens when the guest reads through a VA that
+# nothing maps: the read must FAULT (a real Xid 31, contained and named). The kf3 property `unmapped-reads-zero`
+# is ON by default for every guest, and with it ON an unmapped read
+# returns zeros and never faults, so both arms fail by design under the default (`defer-liveness`: the raw client
+# exits 1; `missing-page-fault`: the channel stops and the notifier never fires). The default stays ON for users;
+# these arms test the OFF behaviour and say so on their device line. Every other arm keeps the default.
+# docs/design/V3_SPARSE_RESIDENCY_RCA.md section 8 has the measurement; scripts/ci/test_fastsuite_fill.py fails when
+# a boot of either arm lacks the property or any other boot has it.
+# ⊘ Derived from the arm names, not from the environment: a boot that runs either arm gets the property whatever else
+# `KF_ARMS` holds. An explicit `unmapped-reads-zero=` in `KF3_DEV_EXTRA` is refused for these arms unless it says
+# `off` (the arm cannot pass under `on`, and a boot that cannot pass should not start).
+FAULT_ARMS=(--defer-liveness --missing-page-fault)
+FILL_ARG=""
+for _a in ${ARMS_TOK//,/ }; do
+    for _f in "${FAULT_ARMS[@]}"; do
+        [ "$_a" = "$_f" ] && FILL_ARG=",unmapped-reads-zero=off"
+    done
+done
+if [ -n "$FILL_ARG" ]; then
+    case ",${KF3_DEV_EXTRA:-}," in
+        *,unmapped-reads-zero=off,*) FILL_ARG="" ;;
+        *,unmapped-reads-zero=*)
+            echo "run_fast_guest: ⊘ KF3_DEV_EXTRA sets unmapped-reads-zero, but an arm of [$ARMS_TOK] tests the fault of an unmapped read and needs unmapped-reads-zero=off" >&2
+            exit 2 ;;
+    esac
+fi
 
 # ★ The client's OWN deadline fires INSIDE the guest, below the harness budget, so it can
 # dump the ioctl ring over the serial console before QEMU is killed from outside. A deadline at
@@ -245,12 +276,12 @@ case "$KF_DEVICE" in
         _profile=$(kf_guest_driver_arg "$FG/initrd.cpio.gz" "${KF3_DEV_EXTRA:-}" "$FG/driver.STAGED") || exit 2
         case ",${KF3_DEV_EXTRA:-}," in *,guest-driver=*,*) _profile= ;; *) _profile=",$_profile" ;; esac
         if [ -z "${KF3_GPUS:-}" ]; then
-            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${_profile}${FILL_ARG}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
         else
             case "$KF3_GPUS" in *[!0-9,]*|,*|*,|*,,*) echo "run_fast_guest: KF3_GPUS must be comma-separated host minors, got [$KF3_GPUS]" >&2; exit 2 ;; esac
             DEVARGS=(); _i=0
             for _m in $(echo "$KF3_GPUS" | tr ',' ' '); do
-                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${_profile}${FILL_ARG}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
                 _i=$((_i+1))
             done
             # ★ The guest's side of the contract, in whitespace-free tokens (see KF_ARMS above).

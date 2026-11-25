@@ -696,7 +696,7 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
 
 /// One row of [`RULED_NOTIFIERS`].
 ///
-/// ★ 2026-10-07 (audit `2026-10-07-code43-gr-derive-compliance.md` S2): a row names its notifier by
+/// (audit `2026-10-07-code43-gr-derive-compliance.md` S2): a row names its notifier by
 /// the GENERATED per-version runs (`crate::generated::matrix`, measured per ogkm tag), not by a
 /// bare index — the indices move across versions (`AUX_POWER_STATE_CHANGE` is `0xb4` at 535.309.01
 /// and `0xb6` from 545.23.08; `GPU_RC_RESET` exists only from 575.51.02).
@@ -815,7 +815,7 @@ pub const NV01_EVENT_NONSTALL_INTR: u32 = 0x0800_0000;
 /// `NV0005_NOTIFY_INDEX_INDEX` = bits `15:0` of `notifyIndex` (`ogkm-595.84: cl0005.h:56`).
 pub const NV0005_NOTIFY_INDEX_INDEX_MASK: u32 = 0xFFFF;
 
-/// ★★★ **Non-stall subscription slots** (2026-10-08, owner ruling §X) — a version-independent name
+/// ★★★ **Non-stall subscription slots** — a version-independent name
 /// for "the guest registered a non-stall event on THIS notifier": slot 0 is
 /// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (RM's host notifier, `RM_ENGINE_TYPE_HOST`), slot `1 + i` is
 /// [`ENGINE_NONSTALL_NOTIFIERS`]`[i]`. The guest's index is resolved to a slot at the guest's own
@@ -943,7 +943,7 @@ pub const PROBE_ARM_MAX: usize = 8;
 /// This switch buys that one measurement.
 ///
 /// ★ **ANSWERED**: it registers and continues. `[measured]` boot `subdev_probe35_925b27b`,
-/// 2026-08-07 (`docs/reference/bench_evidence/run_subdev_probe35_925b27b_dmesg.log`): with
+/// with
 /// both scrubber subdevices' index-35 armings served (per-subdevice `notify_actions`), the
 /// guest did not wait for any delivery — it advanced straight to `memmgrTestCeUtils`' real
 /// CE memset and timed out on the **CE semaphore** (`mem_mgr.c:463`, `NV_ERR_TIMEOUT`),

@@ -1,0 +1,644 @@
+{
+ "schema": "kayfabe.bandwidth/1",
+ "status": "STATUS: DESIGN-ONLY, 2026-11-16. The numbers the Worker's bandwidth estimate (src/bandwidth.js) is made of; edit them here, nowhere else (README section 'Changing the bandwidth numbers'). Checked by scripts/ci/bandwidth_check.py; calibrated from real runs by scripts/ci/bandwidth_calibrate.py.",
+ "margin": {
+  "percent": 15,
+  "basis": "ESTIMATE",
+  "date": "2026-11-16",
+  "source": "owner request 2026-11-16",
+  "note": "applied last, on the sum of downloads and the sum of uploads"
+ },
+ "default_images": [
+  "imga"
+ ],
+ "fixed": [
+  {
+   "id": "fixed.repo_clone",
+   "what": "git clone of the repo at the run's sha (sparse, on the box)",
+   "class": "repo",
+   "down_bytes": 700000000,
+   "url": "https://github.com/reindertpelsma/kayfabe",
+   "basis": "ESTIMATE",
+   "date": "2026-11-16",
+   "source": "coordinator checkout 2026-11-16: .git is 668 MB for a full clone",
+   "note": "upper bound: a full clone; the box clones a sparse tree, so the real value is lower; a size from the GitHub repo API can be passed to the estimator instead",
+   "calibrate": true
+  },
+  {
+   "id": "fixed.setup_cache",
+   "what": "setup assets restored by the box wrapper",
+   "class": "package",
+   "down_bytes": 1000000000,
+   "url": null,
+   "basis": "ESTIMATE",
+   "date": "2026-11-16",
+   "source": "ci/vast-broker/defaults.json payloadStageResources.setup_cache (INFERRED 2026-10-23)",
+   "note": "rounded allowance, not a measured total"
+  }
+ ],
+ "stages": {
+  "provision": {
+   "note": "OS packages, toolchain, CUDA, kf3 build, the host and the Linux guest NVIDIA driver",
+   "entries": [
+    {
+     "id": "provision.host_driver",
+     "what": "NVIDIA host driver .run (the version the box is provisioned with)",
+     "class": "official-url",
+     "size_from": "driver:linux/580.159.04",
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "size is the pinned size of the installer; edit the version here when the pin moves"
+    },
+    {
+     "id": "provision.linux_guest_driver",
+     "what": "NVIDIA Linux guest driver .run",
+     "class": "official-url",
+     "size_from": "driver:linux/580.126.09",
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "pinned size; edit the version when the pin moves"
+    },
+    {
+     "id": "provision.packages",
+     "what": "apt packages, rustup and crates, CUDA toolkit, qemu build dependencies",
+     "class": "package",
+     "down_bytes": 12000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/defaults.json payloadStageResources.provision (INFERRED allowance 20 GB) minus the two drivers",
+     "note": "no measured total; replace with the calibrated value from a run",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "cuda_host": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "merge_bar": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "cuda_guest": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "apps": {
+   "note": "Linux app matrix (middle): the stage builds its own media on the box",
+   "entries": [
+    {
+     "id": "apps.media",
+     "what": "Linux apps media: bundle build and downloads, pinned source fetches, models",
+     "class": "package",
+     "down_bytes": 3000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "RELEASE_SHAKEOUT_20261115.md (coordinator, /root/night): 2.1 GB download measured in the apps provisioning step",
+     "note": "the 2.1 GB measured plus build-time fetches that were not measured separately",
+     "calibrate": true
+    },
+    {
+     "id": "apps.open_rows",
+     "what": "open FFmpeg/DCGM discovery rows: ffmpeg from the distribution, the capability probe's headers (a git fetch), the sparse repo files",
+     "class": "package",
+     "down_bytes": 141000000,
+     "url": null,
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "traces/open_rows_ffdcgm_20261117/README.md: 141.4 MB received by one Ubuntu 22.04 VM after apt update, a sparse clone, the probe build and the ffmpeg install",
+     "note": "DCGM 4.8.0 is NOT counted: under the Worker's cache-only apt shim provision.sh reports apt_shim_cache_only and does not download it (docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md section 3). A standalone machine downloads about 0.92 GB (cuda13 flavour) or 1.10 GB (cuda12 flavour), summed from the Size fields of NVIDIA's package index; add an entry when Worker runs may install it."
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "install_flow": {
+   "note": "manual-only stage (--only): the documented user flow, built and run on the box",
+   "entries": [
+    {
+     "id": "install_flow.packages",
+     "what": "apt packages, toolchain and sources of the install flow",
+     "class": "package",
+     "down_bytes": 2000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "scripts/ci/install_flow.py (not measured)",
+     "note": "no measured value; the stage is manual-only",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_gate": {
+   "note": "Windows 11 install on the box and the Windows gate",
+   "entries": [
+    {
+     "id": "windows_gate.windows_iso",
+     "what": "Windows 11 LTSC 2024 evaluation ISO",
+     "class": "official-url",
+     "down_bytes": 5100000000,
+     "url": "https://www.microsoft.com/evalcenter",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (5.1 GB, RESEARCH 2026-10-31)",
+     "note": "size as documented, not read back from a box"
+    },
+    {
+     "id": "windows_gate.virtio_win",
+     "what": "VirtIO-Win 0.1.302",
+     "class": "official-url",
+     "down_bytes": 877000000,
+     "url": "https://fedorapeople.org/groups/virt/virtio-win/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (877 MB)",
+     "note": "size as documented"
+    },
+    {
+     "id": "windows_gate.windows_guest_driver",
+     "what": "NVIDIA Windows guest driver",
+     "class": "official-url",
+     "size_from": "driver:windows/580.88",
+     "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "pinned size; edit the version when the pin moves"
+    },
+    {
+     "id": "windows_gate.other",
+     "what": "OpenSSH for Windows, tools and anything else the gate fetches",
+     "class": "package",
+     "down_bytes": 1000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (Win32-OpenSSH 7 MB) plus headroom",
+     "note": "replaces the old 35 GB planning ceiling of defaults.json (owner range 15 to 35 GB, never measured); calibrate from a run",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_apps": {
+   "note": "Windows app bundle (open apps) on the same Windows guest",
+   "entries": [
+    {
+     "id": "windows_apps.bundle",
+     "what": "winapps-open app disk",
+     "class": "r2-listed",
+     "down_bytes": 7000000000,
+     "size_from": "r2:winapps-open.iso",
+     "url": "winapps-open.iso",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md (6 to 7 GB bundle estimate); defaults.json payloadStageResources.windows_apps (8 GB ceiling)",
+     "note": "the Worker passes the real size from an R2 list; this is the fallback"
+    },
+    {
+     "id": "windows_apps.open_buildtools",
+     "what": "MSVC v143, MSBuild, Windows SDK and CMake through the Visual Studio 2022 Build Tools bootstrapper (open rows, online guest)",
+     "class": "official-url",
+     "down_bytes": 4500000000,
+     "url": "https://aka.ms/vs/17/release/vs_BuildTools.exe",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "docs/design/V3_WINDOWS_OPEN_ROWS.md section 3 (component list of the VCTools workload)",
+     "note": "INFERRED from the component list, not measured; the bootstrapper itself is 4.47 MB (HEAD, 2026-11-17); the installer downloads the rest from Microsoft and verifies it",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_mingit",
+     "what": "MinGit 64-bit zip of the pinned Git for Windows release",
+     "class": "official-url",
+     "down_bytes": 39849768,
+     "url": "https://github.com/git-for-windows/git/releases/tag/v2.56.1.windows.1",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "GitHub release API asset size of MinGit-2.56.1-64-bit.zip, 2026-11-17",
+     "note": "anchored by the SHA-256 table in the upstream release notes",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_python",
+     "what": "python.org installer 3.12.10 (pip is needed for lxml)",
+     "class": "official-url",
+     "down_bytes": 26964224,
+     "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length of the installer, 2026-11-17",
+     "note": "anchored by its Authenticode signature",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_lxml",
+     "what": "lxml 6.1.3 cp312 win_amd64 wheel (Vulkan CTS gen_framework.py)",
+     "class": "official-url",
+     "down_bytes": 4005999,
+     "url": "https://pypi.org/pypi/lxml/6.1.3/json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "PyPI JSON size of the wheel, 2026-11-17",
+     "note": "pip --require-hashes with the digest of the PyPI JSON",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_nuget_cli",
+     "what": "nuget.exe v7.9.0",
+     "class": "official-url",
+     "down_bytes": 8695632,
+     "url": "https://dist.nuget.org/win-x86-commandline/v7.9.0/nuget.exe",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length, 2026-11-17",
+     "note": "anchored by its Authenticode signature",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_nuget_packages",
+     "what": "Microsoft.Direct3D.D3D12 1.618.3, Microsoft.Direct3D.DXC 1.8.2505.32, WinPixEventRuntime 1.0.240308001",
+     "class": "package",
+     "down_bytes": 82942387,
+     "url": "https://api.nuget.org/v3/index.json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length of the three nupkg files on api.nuget.org flatcontainer, 2026-11-17",
+     "note": "restored with signatureValidationMode=require; each sample project restores its own copy",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_cts_clone",
+     "what": "VK-GL-CTS at the pinned commit, depth 1",
+     "class": "repo",
+     "down_bytes": 65000000,
+     "url": "https://github.com/KhronosGroup/VK-GL-CTS",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "size of .git after a depth-1 clone of vulkan-cts-1.4.7.1, 2026-11-17",
+     "note": "the full repository is 2.2 GB (GitHub API); a depth-1 fetch of the pinned commit is what the row does",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_cts_externals",
+     "what": "external/fetch_sources.py of the pinned CTS: nine git clones (no --depth) and two source archives",
+     "class": "repo",
+     "down_bytes": 176000000,
+     "url": "https://github.com/KhronosGroup/glslang",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "sum of the GitHub API repository sizes of glslang, SPIRV-Tools, SPIRV-Headers, Vulkan-Docs, amber, jsoncpp, VulkanSC-pcutil, Vulkan-Video-Samples and video_generator, plus zlib and libpng archives, 2026-11-17",
+     "note": "an upper bound of what the upstream script transfers; it clones with full history, so this is not reduced by the row",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_dxs_clone",
+     "what": "DirectX-Graphics-Samples at the pinned commit, blobless and sparse (the five sample directories)",
+     "class": "repo",
+     "down_bytes": 1400000,
+     "url": "https://github.com/microsoft/DirectX-Graphics-Samples",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "size of the clone after a depth-1, filter=blob:none, sparse checkout of the pinned commit, 2026-11-17",
+     "note": "a plain depth-1 fetch of the same commit is 685 MB (measured), which is why the row does not do that",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_gate_2": {
+   "note": "second Windows run on the same box; reuses the first install and media (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "propimage_apps": {
+   "note": "proprietary Windows images on the box: one image per box in a two-die release, both on a one-die box",
+   "entries": [
+    {
+     "id": "propimage_apps.image",
+     "what": "the image zip of each selected image",
+     "class": "r2-pinned",
+     "size_from": "propimage:image",
+     "per_image": true,
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/propimages.json objects",
+     "note": "one line per image in the instruction; the size is the pinned size, edit it in propimages.json"
+    },
+    {
+     "id": "propimage_apps.gop",
+     "what": "signed boot display driver",
+     "class": "r2-pinned",
+     "size_from": "propimage:gop",
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/propimages.json objects",
+     "note": "fetched once with the first image"
+    },
+    {
+     "id": "propimage_apps.imgb_test_assets",
+     "what": "open-licence test asset ISO used by image B's rows",
+     "class": "r2-listed",
+     "down_bytes": 171390976,
+     "size_from": "r2:test-assets-20261116b.iso",
+     "url": "https://bundles.kayfabe.dev/test-assets/20261116/test-assets-20261116b.iso",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "IMAGEB_APPS_20261116.md (coordinator, /root/night): test-assets ISO 171,390,976 B",
+     "note": "public bucket object; the Worker may pass the listed size",
+     "when": {
+      "images": [
+       "imgb"
+      ]
+     }
+    },
+    {
+     "id": "propimage_apps.imga_media",
+     "what": "open media of image A's Resolve row (public mirror)",
+     "class": "official-url",
+     "down_bytes": 300000000,
+     "url": "https://bundles.kayfabe.dev/test-assets/20261116/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "RESOLVE_GPU_20261116.md (coordinator, /root/night): four pinned files, sizes in resolve_assets.json on #445",
+     "note": "not measured in total",
+     "when": {
+      "images": [
+       "imga"
+      ]
+     }
+    },
+    {
+     "id": "propimage_apps.other",
+     "what": "swtpm and libtpms sources, the runner's own fetches",
+     "class": "official-url",
+     "down_bytes": 50000000,
+     "url": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "scripts/ci/propimage_apps_pins.json (libtpms 1.4 MB, swtpm 0.4 MB)",
+     "note": "two small tarballs plus headroom",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 5000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess; text evidence of one image run is a few MB"
+   }
+  },
+  "specviewperf": {
+   "note": "SPECviewperf lane: the private archive streamed onto the box",
+   "entries": [
+    {
+     "id": "specviewperf.archive",
+     "what": "SPECviewperf archive (zstd tar)",
+     "class": "r2-pinned",
+     "down_bytes": 42002015727,
+     "url": "specviewperf-15.0.0.tar.zst",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "traces/specviewperf_vast_20261105/README.md (42,002,015,727 B read back)",
+     "note": "same value as defaults.json payloadStageResources.specviewperf.measuredDownloadBytes"
+    }
+   ],
+   "upload": {
+    "up_bytes": 3000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "kfml": {
+   "note": "ML research workloads in the DEFAULT plan of the middle and large tiers (since 2026-11-17; `--skip kfml` leaves it out): the hashed wheel lock of the chosen CUDA flavour, the redist nvcc when the box has no matching nvcc, and the CIFAR-10 archive are downloaded into a venv on the box; the datasets are prefetched in the background at the start of the payload. The kfml guest mode (not in a plan) copies the same files host to guest instead; it adds no internet download in the guest",
+   "entries": [
+    {
+     "id": "kfml.wheels",
+     "what": "torch, triton, CUDA runtime wheels of the LARGEST pinned flavour (cu128, CPython 3.12 wheels) plus its three redist nvcc archives (the nvcc archives only when the box has no matching nvcc)",
+     "class": "package",
+     "down_bytes": 3962328075,
+     "url": null,
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "runs kfml_run_20261117_second_die and kfml_run_20261117_tier_decision (traces/kfml_run_20261117_second_die/wheelhouse/wheelhouse_manifest_summary.txt, traces/kfml_run_20261117_tier_decision/README.md): `kfml wheelhouse --flavor all --guest-python 3.12`, MANIFEST.json file sizes: cu126 wheels 3026998392 + redist 52057232, cu128 wheels 3881029847 + redist 81298228 (both flavours together 7041383699 bytes, 64 files, 112 s); the venv is 10.2 GB on disk (cu128) and 8.8 GB (cu126) after the run",
+     "note": "the host stage downloads one flavour; the largest is charged. CPython 3.10 wheels (the box's own interpreter) differ by a few MB (triton, numpy, pillow), not measured byte for byte",
+     "calibrate": true
+    },
+    {
+     "id": "kfml.datasets",
+     "what": "the pinned CIFAR-10 binary archive and tinyshakespeare",
+     "class": "official-url",
+     "down_bytes": 171167565,
+     "url": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "scripts/kfml/pins.json filenames; runs kfml_run_20261116, kfml_run_20261117_second_die and kfml_run_20261117_tier_decision fetch-data: cifar-10-binary.tar.gz 170052171 bytes + tinyshakespeare-input.txt 1115394 bytes",
+     "note": "the dataset server gives about 45 KB/s per connection and resets 8 or more at once: fetch-data uses 6 ranged connections (about 8 minutes for CIFAR-10, MEASURED on three boxes) and the payload starts it in the background before the first stage; the bytes are small"
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "traces/kfml_run_20261116, traces/kfml_run_20261117_second_die, traces/kfml_run_20261117_tier_decision",
+    "note": "text rows and logs of six workloads, a few MB"
+   }
+  },
+  "propimage_apps_b": {
+   "note": "image B's own rows (propimage_apps_b): the image zip and the test assets are charged to propimage_apps for the same instruction; this stage fetches nothing more than that first stage's downloader does (UNVERIFIED until a box runs both stages: net_bytes of that run settles it)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 5000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/imageb_apps_20261116",
+    "note": "evidence pull-back of the image B rows: text evidence, a few MB (second Adobe pass collect archives 6 to 9 MB)"
+   }
+  },
+  "matlab": {
+   "note": "MATLAB rows of the Linux proprietary image (stage `matlab`): the private image zip and the NVIDIA installer of the lane's guest driver; nothing else is fetched (the row scripts come with the repository clone and are copied into the guest at run time)",
+   "entries": [
+    {
+     "id": "matlab.image",
+     "what": "the MATLAB Linux image zip",
+     "class": "r2-pinned",
+     "size_from": "propimage:imgc",
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,147,790,579 B)",
+     "note": "the size is the pinned size, edit it in propimages.json"
+    },
+    {
+     "id": "matlab.driver",
+     "what": "NVIDIA Linux installer of the lane's guest driver (official URL, pinned by sha256 in release-matrix.json)",
+     "class": "official-url",
+     "down_bytes": 398000000,
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "ci/vast-broker/release-matrix.json driver_installers (396.6 to 398.3 MB for the 580 installers)",
+     "note": "one installer of about 0.4 GB; the version is per die (linux_guest_driver in the release matrix), so the size is an estimate",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "ci/vast-broker/bandwidth.json stage propimage_apps_b",
+    "note": "evidence pull-back: text only (verdicts, host GPU samples, per-row results of a few KB each); the split per stage is a guess"
+   }
+  },
+  "apps_discovery": {
+   "note": "open Linux discovery rows of the standalone full run (stage `apps_discovery`, manual-only: `--full` or `--only apps_discovery`): the Vulkan CTS source and externals, and the three open ML environments built from hashed locks. The FFmpeg and DCGM rows are charged to `apps` (apps.open_rows). The stage is not in a Worker plan, so nothing here is a Worker budget.",
+   "entries": [
+    {
+     "id": "apps_discovery.vkcts_sources",
+     "what": "Vulkan CTS: shallow fetch of the pinned commit and the CTS fetch scripts' externals",
+     "class": "package",
+     "down_bytes": 1800000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "docs/design/V3_VULKAN_CTS_ROW.md section 3: about 1.8 GB checkout, fetch 237 s on a native container (traces/vkcts_host_20261117)",
+     "note": "the checkout size, not the bytes received; the fetch scripts' externals are inside the 1.8 GB figure the design records"
+    },
+    {
+     "id": "apps_discovery.ml_venvs",
+     "what": "open ML rows: the JAX, TensorRT and vLLM venvs from hashed locks (PyPI and NVIDIA's open index) and the 135M model, cu13 flavour",
+     "class": "package",
+     "down_bytes": 21570000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "traces/open_ml_rows_20261117/README.md: venv sizes JAX 4.4 GB, TensorRT 7.3 GB, vLLM 9.6 GB plus a 272 MB model",
+     "note": "installed venv size is an upper bound of the wheels received; the stage's own `net_bytes` settles it on the first box"
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "scripts/ci/apps_discovery_stage.py",
+    "note": "text evidence of six rows and their host-vs-guest comparison, a few hundred KB; not measured"
+   }
+  },
+  "windows_open_rows": {
+   "note": "open Windows rows (stage `windows_open_rows`, manual-only: `--full` or `--only windows_open_rows`): the toolchain and pinned sources the online guest downloads for the VK-GL-CTS and DirectX sample rows are the `windows_apps.open_*` entries (tagged `open_online`, scripts/bench/windows/open_rows, docs/design/V3_WINDOWS_OPEN_ROWS.md); they are not repeated here. The stage is not in a Worker plan, so nothing here is a Worker budget.",
+   "entries": [],
+   "upload": {
+    "up_bytes": 3000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "scripts/bench/box/windows_apps.sh",
+    "note": "text evidence of nine rows and the build receipts, a few MB; not measured"
+   }
+  }
+ }
+}

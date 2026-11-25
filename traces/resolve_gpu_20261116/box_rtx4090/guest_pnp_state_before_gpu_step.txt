@@ -1,0 +1,58 @@
+--- display devices
+Microsoft Basic Display Adapter | PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08 | status=Unknown | problem=CM_PROB_PHANTOM | PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02;PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4;PCI\VEN_1234&DEV_1111&CC_030000;PCI\VEN_1234&DEV_1111&CC_0300
+NVIDIA GeForce RTX 4070 | PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&11583659&0&20 | status=Unknown | problem=CM_PROB_PHANTOM | PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1;PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458;PCI\VEN_10DE&DEV_2786&CC_030000;PCI\VEN_10DE&DEV_2786&CC_0300
+Video Controller (VGA Compatible) | PCI\VEN_10DE&DEV_2684&SUBSYS_16F310DE&REV_A1\3&11583659&0&20 | status=Error | problem=CM_PROB_REINSTALL | PCI\VEN_10DE&DEV_2684&SUBSYS_16F310DE&REV_A1;PCI\VEN_10DE&DEV_2684&SUBSYS_16F310DE;PCI\VEN_10DE&DEV_2684&CC_030000;PCI\VEN_10DE&DEV_2684&CC_0300
+--- pnputil
+Microsoft PnP Utility
+
+Instance ID:                PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+Device Description:         Microsoft Basic Display Adapter
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          (Standard display types)
+Status:                     Disconnected
+Driver Name:                display.inf
+
+Instance ID:                PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&11583659&0&20
+Device Description:         NVIDIA GeForce RTX 4070
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          NVIDIA
+Status:                     Disconnected
+Driver Name:                oem15.inf
+
+Instance ID:                PCI\VEN_10DE&DEV_2684&SUBSYS_16F310DE&REV_A1\3&11583659&0&20
+Device Description:         Video Controller (VGA Compatible)
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          NVIDIA
+Status:                     Problem
+Problem Code:               18 (0x12) [CM_PROB_REINSTALL]
+Problem Status:             0xC0000493
+Driver Name:                oem15.inf
+
+
+--- driver
+
+
+Name                   : Video Controller (VGA Compatible)
+DriverVersion          : 32.0.15.8088
+PNPDeviceID            : PCI\VEN_10DE&DEV_2684&SUBSYS_16F310DE&REV_A1\3&11583659&0&20
+Status                 : Error
+ConfigManagerErrorCode : 18
+
+
+
+
+--- nvlddmkm events
+
+TimeCreated            Id
+-----------            --
+11/12/2026 4:17:56 PM 153
+11/12/2026 4:17:56 PM 153
+11/12/2026 4:17:54 PM 153
+
+
+
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+

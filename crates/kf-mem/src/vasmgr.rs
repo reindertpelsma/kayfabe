@@ -48,14 +48,18 @@
 //! failed. ★ Two exceptions, both because we hold nothing to be stale: a PDB no object carries
 //! ([`VaStats::named_missed`]) and a batch in which no named space has a root. ★ And one retry
 //! that is ours: a diff whose maps were WITHHELD for slot capacity (`KFWR_V_PARTIAL`) is walked
-//! again at once, after its unmaps landed — its invalidate clears on that walk.
+//! again at once, after its unmaps landed — its invalidate clears on that walk. ★ 2026-11-15 (M4) The
+//! same for a diff larger than the REPORT's run capacity (`KFWR_V_CUT`): the report carries a window
+//! of it (`kf_cuda::diffmodel::cut_report`), the window is applied and acknowledged, the next walk
+//! re-emits the rest, and a split or invalidate completes only on a walk whose diff is empty. ⊘ Was:
+//! a report-level truncation was refused and the channel marked dead (`walk report TRUNCATED`).
 
 use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 
-/// ★ Owner ruling 2026-10-09 (`OWNER_RULINGS.md` §AA): an invalidate completes although the guest's
+/// An invalidate completes although the guest's
 /// tables hold leaves we cannot map (hardware completes it too; a bad leaf faults when USED).
 /// ON by default; `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0` restores the 2026-09-25 withheld clear (A/B).
 fn clear_over_absent() -> bool {
@@ -63,6 +67,7 @@ fn clear_over_absent() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").map_or(true, |v| v != "0"))
 }
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::AtomicU64;
 
 /// The most objects one walk may carry — the walk kernel's entries (`KF_MAX_PDB`).
 pub const MAX_SPACES_PER_WALK: usize = 64;
@@ -319,14 +324,23 @@ pub struct EntryDiff {
     pub first: usize,
     /// Its runs: per page-size class, UNMAPs then MAPs.
     pub runs: Vec<DiffRun>,
-    /// ★ Its maps were withheld (slot capacity): walk again once its unmaps land.
+    /// ★ Its maps were withheld (slot capacity), or only a window of its diff is in the report
+    /// ([`EntryDiff::cut`]): walk again once what is here has landed.
     pub partial: bool,
+    /// `KFWR_V_CUT` — the diff was larger than the report, so only a window of it
+    /// (or nothing of it, while an earlier entry fills the report) is here; the rest comes on the next
+    /// walk. Also `partial`. Unlike a capacity-withheld diff it stays partial over a refused MAP
+    /// (absence): the split must not complete while runs remain unreported, and a window in which
+    /// nothing at all applied is refused by name, never retried for ever.
+    pub cut: bool,
     /// Its slot is full and nothing can be retired: no progress is possible.
     pub overflow: bool,
-    /// ★ Owner ruling 2026-09-25: the `KFWR_R_*` bits its WALK refused (0 = none). Its refused
+    /// The `KFWR_R_*` bits its walk refused (0 = none). Its refused
     /// leaves are absent from the walk; the rest of its diff is applied, and the space fails by
     /// name (its invalidate stays armed).
     pub refused: u32,
+    /// The capacity the entry reported it needed (`KfPdbEntry::need`; 0 = not reported).
+    pub need: u32,
 }
 
 /// A finished walk.
@@ -374,6 +388,12 @@ pub trait Walker {
 
     /// How many slots the walker holds.
     fn slots(&self) -> u32;
+
+    /// Hidden capacity re-walks so far
+    /// (cumulative; a walk the walker re-submitted itself before reporting). `0`: it has none.
+    fn capacity_retries(&self) -> u64 {
+        0
+    }
 }
 
 /// ★★★ **The production walker**: [`kf_cuda::WalkKernel`] over its imported store.
@@ -493,36 +513,26 @@ impl Walker for GpuWalker {
                 r.runs.len()
             );
         }
-        let entries = r
-            .pdbs
-            .iter()
-            .map(|p| {
-                // `validate` proved every slice lies inside the run array.
-                let first = p.first_run as usize;
-                // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
-                // runs are then simply absent — beats a panic on the VA thread.)
-                let runs = r
-                    .runs
-                    .get(first..first.saturating_add(p.run_count as usize))
-                    .unwrap_or_default()
+        if r.header.flags & kf_cuda::abi::KFWR_HF_CUT != 0 {
+            // The diff was larger than the report. Not an error: this window is
+            // applied, the rest comes on the next walk (bounded: the first 32 lines).
+            static CUT_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if CUT_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+                let cut: Vec<String> = r
+                    .pdbs
                     .iter()
-                    .map(|m| self.perm.diff_run(m))
+                    .filter(|p| p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0)
+                    .map(|p| format!("pdb {:#x} slot {} {} runs", p.pdb, p.slot(), p.run_count))
                     .collect();
-                EntryDiff {
-                    pdb: p.pdb,
-                    slot: p.slot(),
-                    first,
-                    runs,
-                    partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
-                    overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
-                    refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
-                        p.refused_bits().max(1)
-                    } else {
-                        0
-                    },
-                }
-            })
-            .collect();
+                eprintln!(
+                    "kf3: walk report CUT at its capacity ({} of {}): the rest of the diff is re-emitted by the next walk; the split completes only when it is empty [{}]",
+                    r.runs.len(),
+                    r.header.run_capacity,
+                    cut.join(", ")
+                );
+            }
+        }
+        let entries = entry_diffs(r, &self.perm);
         Ok(Some(WalkDone {
             generation: r.header.generation,
             nrun: r.runs.len(),
@@ -544,6 +554,82 @@ impl Walker for GpuWalker {
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
     }
+
+    fn capacity_retries(&self) -> u64 {
+        self.kernel.capacity_stats().retries
+    }
+}
+
+/// The named per-space ceiling of a space whose walk the kernel cut (`bits` holds a
+/// [`kf_cuda::abi::KF_ENTRY_CUT`] bit). `need` is the entry's reported need (0 = not reported).
+///
+/// The bits do not say which limit cut the space. `KFWR_R_FRONTIER_CAP` is its run share or its
+/// frontier share. `KFWR_R_BUDGET` is its own entry budget or the walk's shared total
+/// (`KF_WALK_SPACES_AT_BUDGET` x entry budget); the shared total can cut a space that stayed
+/// under its own budget, so the line names both and never blames the space alone.
+#[must_use]
+pub fn walk_cut_line(key: VasKey, root: u64, slot: u32, bits: u32, need: u32) -> String {
+    use kf_cuda::abi::{
+        KF_ENTRY_FRONTIER_SHARE, KF_ENTRY_RUN_SHARE, KF_WALK_SPACES_AT_BUDGET, KFWR_R_BUDGET,
+        KFWR_R_FRONTIER_CAP,
+    };
+    let mut limits = Vec::new();
+    if bits & KFWR_R_FRONTIER_CAP != 0 {
+        limits.push(format!(
+            "its run share ({KF_ENTRY_RUN_SHARE} runs) or its frontier share ({KF_ENTRY_FRONTIER_SHARE} entries per level): KFWR_R_FRONTIER_CAP does not say which"
+        ));
+    }
+    if bits & KFWR_R_BUDGET != 0 {
+        limits.push(format!(
+            "its own entry budget (WalkCfg::entry_budget) or the walk's shared total ({KF_WALK_SPACES_AT_BUDGET} x entry_budget), which can cut a space that is under its own budget"
+        ));
+    }
+    format!(
+        "walk per-space CEILING: {key:?} root {root:#x} slot {slot}: the walk was cut at {} (refuse_mask={bits:#x}, reported need {need}); its whole diff is withheld, so its split fails and its invalidate is not completed",
+        limits.join(" and ")
+    )
+}
+
+/// One report's entries as the apply sees them (split out of [`GpuWalker`]'s `poll`
+/// so that the mapping of the report's per-entry flags is testable without a GPU).
+///
+/// A window of a diff larger than the report (`KFWR_V_CUT`) is a PARTIAL diff, like one whose maps
+/// were withheld for slot capacity (`KFWR_V_PARTIAL`): what is in the report is applied, the rest is
+/// re-emitted by the next walk (commit on ack), and the split / invalidate completes only on a walk
+/// whose diff is empty.
+pub(crate) fn entry_diffs(r: &kf_cuda::Report, perm: &crate::apply::PermPolicy) -> Vec<EntryDiff> {
+    r.pdbs
+        .iter()
+        .map(|p| {
+            // `validate` proved every slice lies inside the run array.
+            let first = p.first_run as usize;
+            // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
+            // runs are then simply absent — beats a panic on the VA thread.)
+            let runs = r
+                .runs
+                .get(first..first.saturating_add(p.run_count as usize))
+                .unwrap_or_default()
+                .iter()
+                .map(|m| perm.diff_run(m))
+                .collect();
+            EntryDiff {
+                pdb: p.pdb,
+                slot: p.slot(),
+                first,
+                runs,
+                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)
+                    != 0,
+                cut: p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0,
+                overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
+                refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
+                    p.refused_bits().max(1)
+                } else {
+                    0
+                },
+                need: p.need(),
+            }
+        })
+        .collect()
 }
 
 /// Diagnostics: a walk table slice summarised — per aperture, per page size, per 1 GiB of VA,
@@ -617,7 +703,9 @@ fn maplog_want(w: &Want) -> String {
             r.inval.raw,
             at.elapsed().as_micros()
         ),
-        Want::Split { pdb, ticket, key } => {
+        Want::Split {
+            pdb, ticket, key, ..
+        } => {
             format!("split ticket={ticket} pdb={pdb:x?} space={key:?}")
         }
         Want::Root(k) => format!("root {k:?}"),
@@ -652,6 +740,225 @@ fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
+/// One space's apply longer than this is named (`SLOW-APPLY`).
+pub const SLOW_APPLY_MS: u64 = 500;
+/// A split longer than this, request -> done, is named (`SPLIT-LATE`); the user-ring
+/// counterpart (`USER_RING_SPLIT_WAIT`) uses the same figure.
+pub const SLOW_SPLIT_MS: u64 = 1000;
+/// Lines per boot for each slow-path line; the rest are only counted.
+pub const SLOW_LOG_CAP: u64 = 20;
+
+/// The most walks ONE request (a split ticket or an
+/// invalidate) may spend on a diff larger than the report. A clean drain of the per-space maximum
+/// (1 Mi runs, a staged diff of up to three times that) is about a dozen windows at the report's
+/// 262 144 runs; refused runs re-carried by every window, or a guest that keeps editing its tables
+/// between windows, slow it down. Past this the request fails by name (a split `Err`, an invalidate
+/// left armed) instead of re-walking without bound. ⊘ Was unbounded: with `R` persistently refused
+/// runs at the low end of a diff of `N`, a window advances `capacity - R` runs, so one split could
+/// cost `(N - R) / (capacity - R)` walks (about 7.9e5 at `R = capacity - 1`, `N = 1 Mi`).
+pub const MAX_CUT_WINDOWS_PER_REQUEST: u32 = 64;
+
+/// ★ `true` when `ns` is strictly longer than `ms` milliseconds. Pure; the threshold's one home.
+#[must_use]
+pub fn exceeds_ms(ns: u64, ms: u64) -> bool {
+    ns > ms.saturating_mul(1_000_000)
+}
+
+/// Process-wide host-map call statistics, fed from the two host call sites in
+/// `ledger.rs` (one stitched batch = one call carrying `rows` rows as `pieces` file-contiguous
+/// pieces, i.e. `pieces` `MAP_FIXED` mmaps plus one reservation; one per-run map = one host RM map)
+/// and read by the apply logging. Relaxed atomics, written by the single VA thread; two clock
+/// reads per host call. Log-only: nothing reads these to decide anything.
+#[derive(Debug, Default)]
+pub struct MapStat {
+    scat_calls: AtomicU64,
+    scat_rows: AtomicU64,
+    scat_pieces: AtomicU64,
+    scat_ns: AtomicU64,
+    scat_ns_max: AtomicU64,
+    scat_piece_ns_max: AtomicU64,
+    ram_calls: AtomicU64,
+    ram_ns: AtomicU64,
+    ram_ns_max: AtomicU64,
+    store_calls: AtomicU64,
+    store_ns: AtomicU64,
+    store_ns_max: AtomicU64,
+}
+
+/// The process-wide [`MapStat`].
+pub static MAPSTAT: MapStat = MapStat::new();
+
+/// A copy of [`MapStat`] (cumulative); `since` gives one apply's share. The `*_max` fields are
+/// the process-wide worst (a delta of a max is meaningless), reported as such.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MapStatSnap {
+    /// Stitched-batch host calls.
+    pub scat_calls: u64,
+    /// Rows those batches carried (before coalescing of file-contiguous neighbours).
+    pub scat_rows: u64,
+    /// Pieces after coalescing = `MAP_FIXED` mmaps made.
+    pub scat_pieces: u64,
+    /// Summed wall ns of those calls (stitch + descriptor + RM map + view unmap).
+    pub scat_ns: u64,
+    /// Worst single call, ns.
+    pub scat_ns_max: u64,
+    /// Worst call's ns per piece.
+    pub scat_piece_ns_max: u64,
+    /// Per-run host maps of guest-RAM rows.
+    pub ram_calls: u64,
+    /// Their summed ns.
+    pub ram_ns: u64,
+    /// Worst one, ns.
+    pub ram_ns_max: u64,
+    /// Per-run host maps of store (VRAM) rows.
+    pub store_calls: u64,
+    /// Their summed ns.
+    pub store_ns: u64,
+    /// Worst one, ns.
+    pub store_ns_max: u64,
+}
+
+impl MapStat {
+    const fn new() -> Self {
+        MapStat {
+            scat_calls: AtomicU64::new(0),
+            scat_rows: AtomicU64::new(0),
+            scat_pieces: AtomicU64::new(0),
+            scat_ns: AtomicU64::new(0),
+            scat_ns_max: AtomicU64::new(0),
+            scat_piece_ns_max: AtomicU64::new(0),
+            ram_calls: AtomicU64::new(0),
+            ram_ns: AtomicU64::new(0),
+            ram_ns_max: AtomicU64::new(0),
+            store_calls: AtomicU64::new(0),
+            store_ns: AtomicU64::new(0),
+            store_ns_max: AtomicU64::new(0),
+        }
+    }
+    /// Record one stitched-batch call of `rows` rows coalesced to `pieces`, taking `ns`.
+    pub fn record_scattered(&self, rows: usize, pieces: usize, ns: u64) {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        self.scat_calls.fetch_add(1, o);
+        self.scat_rows.fetch_add(rows as u64, o);
+        self.scat_pieces.fetch_add(pieces as u64, o);
+        self.scat_ns.fetch_add(ns, o);
+        self.scat_ns_max.fetch_max(ns, o);
+        self.scat_piece_ns_max
+            .fetch_max(ns.checked_div((pieces as u64).max(1)).unwrap_or(0), o);
+    }
+    /// Record one per-run host map (`ram` = a guest-RAM row, else a store row) taking `ns`.
+    pub fn record_single(&self, ram: bool, ns: u64) {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        let (c, t, m) = if ram {
+            (&self.ram_calls, &self.ram_ns, &self.ram_ns_max)
+        } else {
+            (&self.store_calls, &self.store_ns, &self.store_ns_max)
+        };
+        c.fetch_add(1, o);
+        t.fetch_add(ns, o);
+        m.fetch_max(ns, o);
+    }
+    /// A copy of the counters.
+    #[must_use]
+    pub fn snapshot(&self) -> MapStatSnap {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        MapStatSnap {
+            scat_calls: self.scat_calls.load(o),
+            scat_rows: self.scat_rows.load(o),
+            scat_pieces: self.scat_pieces.load(o),
+            scat_ns: self.scat_ns.load(o),
+            scat_ns_max: self.scat_ns_max.load(o),
+            scat_piece_ns_max: self.scat_piece_ns_max.load(o),
+            ram_calls: self.ram_calls.load(o),
+            ram_ns: self.ram_ns.load(o),
+            ram_ns_max: self.ram_ns_max.load(o),
+            store_calls: self.store_calls.load(o),
+            store_ns: self.store_ns.load(o),
+            store_ns_max: self.store_ns_max.load(o),
+        }
+    }
+}
+
+impl MapStatSnap {
+    /// The counters accumulated since `prev`; the `*_max` fields are taken from `self`.
+    #[must_use]
+    pub fn since(&self, prev: &MapStatSnap) -> MapStatSnap {
+        let d = |a: u64, b: u64| a.saturating_sub(b);
+        MapStatSnap {
+            scat_calls: d(self.scat_calls, prev.scat_calls),
+            scat_rows: d(self.scat_rows, prev.scat_rows),
+            scat_pieces: d(self.scat_pieces, prev.scat_pieces),
+            scat_ns: d(self.scat_ns, prev.scat_ns),
+            ram_calls: d(self.ram_calls, prev.ram_calls),
+            ram_ns: d(self.ram_ns, prev.ram_ns),
+            store_calls: d(self.store_calls, prev.store_calls),
+            store_ns: d(self.store_ns, prev.store_ns),
+            ..*self
+        }
+    }
+    /// One log fragment: the coalescing (`rows` -> `pieces` = mmaps) and the per-call costs in us.
+    /// Per-piece figures divide the whole batch call (stitch + RM map + view unmap) by its
+    /// pieces; they are an upper bound on the per-mmap cost, not a mmap-only timing.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let avg = |ns: u64, n: u64| ns.checked_div(n).unwrap_or(0).saturating_div(1000);
+        format!(
+            "batch[calls={} rows={} -> pieces(mmaps)={} call_avg_us={} piece_avg_us={} call_max_us={} piece_max_us={}] ram_run_maps[n={} avg_us={} max_us={}] store_run_maps[n={} avg_us={} max_us={}]",
+            self.scat_calls,
+            self.scat_rows,
+            self.scat_pieces,
+            avg(self.scat_ns, self.scat_calls),
+            avg(self.scat_ns, self.scat_pieces),
+            self.scat_ns_max / 1000,
+            self.scat_piece_ns_max / 1000,
+            self.ram_calls,
+            avg(self.ram_ns, self.ram_calls),
+            self.ram_ns_max / 1000,
+            self.store_calls,
+            avg(self.store_ns, self.store_calls),
+            self.store_ns_max / 1000,
+        )
+    }
+}
+
+/// Whether the boot-wide worst apply / split (ns) differs, in whole milliseconds,
+/// from what was last printed `(apply_ms, split_ms)` -- the periodic `VA_WORST` line prints then.
+#[must_use]
+pub fn worst_changed(printed_ms: (u64, u64), apply_ns_max: u64, split_ns_max: u64) -> bool {
+    printed_ms != (apply_ns_max / 1_000_000, split_ns_max / 1_000_000)
+}
+
+/// ★ A per-boot line budget: the first `cap` events are admitted, the rest counted
+/// ([`Self::suppressed`]). A cap on lines, never on counting.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LineBudget {
+    cap: u64,
+    seen: u64,
+}
+
+impl LineBudget {
+    /// A budget of `cap` lines.
+    #[must_use]
+    pub const fn new(cap: u64) -> Self {
+        LineBudget { cap, seen: 0 }
+    }
+    /// Count one event; `true` while it is within the cap (print it).
+    pub fn admit(&mut self) -> bool {
+        self.seen = self.seen.saturating_add(1);
+        self.seen <= self.cap
+    }
+    /// Events seen (printed or not).
+    #[must_use]
+    pub fn seen(&self) -> u64 {
+        self.seen
+    }
+    /// Events counted but not printed.
+    #[must_use]
+    pub fn suppressed(&self) -> u64 {
+        self.seen.saturating_sub(self.cap)
+    }
+}
+
 /// Why a walk is wanted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Want {
@@ -668,9 +975,13 @@ enum Want {
         pdb: Option<u64>,
         /// The caller's ticket.
         ticket: u64,
-        /// ★ OWNER_RULINGS §U.2: walk exactly this space instead (a deferred TLB invalidate names
+        /// Walk exactly this space instead (a deferred TLB invalidate names
         /// the triggering channel's own space; `pdb` is then `None` and ignored).
         key: Option<VasKey>,
+        /// When the channel asked (request -> done is `SPLIT-LATE`'s clock).
+        at: std::time::Instant,
+        /// This ticket's profile across its windows.
+        prof: crate::vaprof::TicketProf,
     },
 }
 
@@ -701,6 +1012,10 @@ struct Batch {
     /// ★ `KF3_MAPLOG`: this walk's number (the n-th submitted), so its runs can be traced to its
     /// wants.
     id: u64,
+    /// The submit call's wall, ns.
+    submit_ns: u64,
+    /// [`Walker::capacity_retries`] at submit.
+    retries0: u64,
 }
 
 /// What the VA manager has done, cumulatively. Every refusal is counted AND named.
@@ -775,8 +1090,11 @@ pub struct VaStats {
     pub partial: u64,
     /// ★ Objects walked with no slot left (refused by name).
     pub no_slot: u64,
-    /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
+    /// Spaces failed because their walk refused leaves.
     pub walk_refused_spaces: u64,
+    /// Spaces whose walk the kernel cut at a per-space limit ([`walk_cut_line`]): their whole diff
+    /// was withheld, so they fail hard (split failed, invalidate held), never as absence.
+    pub walk_cut_spaces: u64,
     /// ★ Review 2 item 5: runs refused for the refresh's host-call budget (absent until the guest's
     /// next walk of the space; no follow-up walk — review 3 item 1).
     pub budget_refused_runs: u64,
@@ -802,7 +1120,7 @@ pub struct VaStats {
     pub carve_kernel: u64,
     /// ★ P1+P2 inc A: the same on the guest kernel's CPU views (BAR1/BAR2) — count-only.
     pub carve_cpu: u64,
-    /// ★ 2026-10-10: carve-out bytes left absent from runs straddling the carve-out base
+    /// Carve-out bytes left absent from runs straddling the carve-out base
     /// ([`crate::apply::Applied::carve_clipped_bytes`]).
     pub carve_clipped_bytes: u64,
     /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
@@ -834,6 +1152,16 @@ pub struct VaTiming {
     pub leaves_last: u64,
     /// Host verbs issued (maps + unmaps + invalidates).
     pub host_calls: u64,
+    /// The longest ONE space's apply of the boot (ns; a max, never windowed).
+    pub apply_ns_max: u64,
+    /// The longest split request -> done of the boot (ns; a max, never windowed).
+    pub split_ns_max: u64,
+    /// ★ Applies over [`SLOW_APPLY_MS`] (all counted; only the first [`SLOW_LOG_CAP`] are printed).
+    pub slow_applies: u64,
+    /// ★ Splits over [`SLOW_SPLIT_MS`] (same rule).
+    pub slow_splits: u64,
+    /// The bounded phase profile (`crate::vaprof`, `V3_VA_PROFILE.md`).
+    pub prof: crate::vaprof::VaProfCounters,
 }
 
 impl VaTiming {
@@ -852,6 +1180,11 @@ impl VaTiming {
             apply_ns: self.apply_ns.saturating_sub(prev.apply_ns),
             leaves_last: self.leaves_last,
             host_calls: self.host_calls.saturating_sub(prev.host_calls),
+            apply_ns_max: self.apply_ns_max,
+            split_ns_max: self.split_ns_max,
+            slow_applies: self.slow_applies,
+            slow_splits: self.slow_splits,
+            prof: self.prof.since(&prev.prof),
         }
     }
 }
@@ -893,10 +1226,18 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     store_bytes: u64,
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
     pending: Vec<Want>,
+    /// Line budgets of `SLOW-APPLY` and `SPLIT-LATE`.
+    slow_apply_lines: LineBudget,
+    slow_split_lines: LineBudget,
+    /// Windows spent so far per request (`(0, ticket)` for a split, `(1, seq)` for an
+    /// invalidate); dropped when the request completes or fails.
+    cut_windows: BTreeMap<(u8, u64), u32>,
+    /// [`MAX_CUT_WINDOWS_PER_REQUEST`] (a test lowers it).
+    pub cut_window_budget: u32,
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
-    /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
+    /// Complete over absent leaves. The value is read at construction and can be set by tests.
     clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
     /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
@@ -912,6 +1253,11 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// refused ([`VaManager::with_carve`]); `store_bytes` (no bound) until set.
     carve: u64,
     carve_refuse: bool,
+    /// The slow-record ring, its print budget, the clock origin of
+    /// both, and the threshold (ns; [`crate::vaprof::SLOW_PROFILE_NS`], a test lowers it).
+    slow: crate::vaprof::SlowSink,
+    /// See above.
+    pub slow_profile_ns: u64,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -931,6 +1277,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             store_bytes,
             ram_offset,
             pending: Vec::new(),
+            slow_apply_lines: LineBudget::new(SLOW_LOG_CAP),
+            slow_split_lines: LineBudget::new(SLOW_LOG_CAP),
+            cut_windows: BTreeMap::new(),
+            cut_window_budget: MAX_CUT_WINDOWS_PER_REQUEST,
             inflight: None,
             splits_done: Vec::new(),
             clear_absent: clear_over_absent(),
@@ -940,6 +1290,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             per_map_kind: true,
             carve: store_bytes,
             carve_refuse: false,
+            slow: crate::vaprof::SlowSink::default(),
+            slow_profile_ns: crate::vaprof::SLOW_PROFILE_NS,
             stats: VaStats::default(),
         }
     }
@@ -989,12 +1341,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         &self.walker
     }
 
-    /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
     /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`, settable (tests, the device).
     pub fn set_clear_over_absent(&mut self, on: bool) {
         self.clear_absent = on;
     }
 
+    /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
     pub fn walker_mut(&mut self) -> &mut W {
         &mut self.walker
     }
@@ -1172,6 +1524,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
+        self.on_split_queued(pdb, ticket, None, trigger);
+    }
+
+    /// [`Self::on_split`] with the worker's enqueue time `queued` (observation only:
+    /// enqueue -> acceptance is profiled; nothing else differs).
+    pub fn on_split_queued(
+        &mut self,
+        pdb: Option<u64>,
+        ticket: u64,
+        queued: Option<std::time::Instant>,
+        trigger: &Trigger,
+    ) {
         if crate::maplog::on() {
             eprintln!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
@@ -1179,7 +1543,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 maplog_want(&Want::Split {
                     pdb,
                     ticket,
-                    key: None
+                    key: None,
+                    at: std::time::Instant::now(),
+                    prof: crate::vaprof::TicketProf::default(),
                 }),
                 self.inflight
                     .as_ref()
@@ -1187,22 +1553,58 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             );
         }
         self.stats.splits = self.stats.splits.saturating_add(1);
+        let at = std::time::Instant::now();
+        let prof = self.accept_prof(queued, at);
         self.pending.push(Want::Split {
             pdb,
             ticket,
             key: None,
+            at,
+            prof,
         });
         self.pump(trigger);
     }
 
-    /// ★★ OWNER_RULINGS §U.2: a deferred TLB invalidate's split — walk and apply exactly `key`
+    /// A ticket accepted at `at` that a worker queued at `queued`.
+    fn accept_prof(
+        &mut self,
+        queued: Option<std::time::Instant>,
+        at: std::time::Instant,
+    ) -> crate::vaprof::TicketProf {
+        let q = queued
+            .map(|q| u64::try_from(at.saturating_duration_since(q).as_nanos()).unwrap_or(u64::MAX));
+        if let Some(ns) = q {
+            self.stats.timing.prof.q_inbox.add(ns);
+        }
+        crate::vaprof::TicketProf {
+            q_inbox_ns: q,
+            ..crate::vaprof::TicketProf::default()
+        }
+    }
+
+    /// For a deferred TLB invalidate split, walk and apply exactly `key`
     /// (the triggering channel's own space), then report `ticket` done through
     /// [`VaManager::take_splits`]. A space with no root has nothing to be stale: done at once.
     pub fn on_split_space(&mut self, key: VasKey, ticket: u64, trigger: &Trigger) {
+        self.on_split_space_queued(key, ticket, None, trigger);
+    }
+
+    /// [`Self::on_split_space`] with the worker's enqueue time (observation only).
+    pub fn on_split_space_queued(
+        &mut self,
+        key: VasKey,
+        ticket: u64,
+        queued: Option<std::time::Instant>,
+        trigger: &Trigger,
+    ) {
+        let at = std::time::Instant::now();
+        let prof = self.accept_prof(queued, at);
         let w = Want::Split {
             pdb: None,
             ticket,
             key: Some(key),
+            at,
+            prof,
         };
         if crate::maplog::on() {
             eprintln!(
@@ -1250,6 +1652,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             walked: BTreeMap::new(),
             submitted: std::time::Instant::now(),
             id: self.stats.walks_submitted.saturating_add(1),
+            submit_ns: 0,
+            retries0: 0,
         };
         let mut vacuous: Vec<u64> = Vec::new();
         let mut no_slot: Vec<VasKey> = Vec::new();
@@ -1297,7 +1701,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let at = match w {
                 Want::Invalidate(_, at) => at,
-                Want::Root(_) | Want::Split { .. } => std::time::Instant::now(),
+                Want::Split { at, .. } => at,
+                Want::Root(_) => std::time::Instant::now(),
             };
             batch.wants.push((w, keys, at));
         }
@@ -1344,9 +1749,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let r = self.walker.submit(&entries);
         let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
+        self.stats.timing.prof.submit.add(ns);
         match r {
             Ok(()) => {
                 self.stats.walks_submitted = self.stats.walks_submitted.saturating_add(1);
+                batch.submit_ns = ns;
+                batch.retries0 = self.walker.capacity_retries();
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
                     eprintln!(
@@ -1363,6 +1771,244 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.refuse_batch(&batch, format!("walk submit: {e}"));
             }
         }
+    }
+
+    /// ★ 2026-11-13: account one space's apply; name it (`SLOW-APPLY`) when it exceeded
+    /// [`SLOW_APPLY_MS`]. Hot path: one compare and a max; nothing is formatted below the threshold.
+    /// Everything printed is host-measured or a host-assigned id/count (nothing guest bytes).
+    fn note_apply(
+        tm: &mut VaTiming,
+        lines: &mut LineBudget,
+        pending: &[Want],
+        batch: &Batch,
+        (key, apply_ns): (VasKey, u64),
+        (maps, unmaps): (u64, u64),
+        hostmaps: &MapStatSnap,
+    ) {
+        tm.apply_ns_max = tm.apply_ns_max.max(apply_ns);
+        if !exceeds_ms(apply_ns, SLOW_APPLY_MS) {
+            return;
+        }
+        tm.slow_applies = tm.slow_applies.saturating_add(1);
+        if !lines.admit() {
+            return;
+        }
+        let age = |at: std::time::Instant| at.elapsed().as_millis();
+        // The wants this walk carried that named this space (bounded: the first 6), with how long
+        // each has waited since it was asked.
+        let mut carried = String::new();
+        let mut n_carried = 0usize;
+        for (w, keys, at) in &batch.wants {
+            if !keys.contains(&key) {
+                continue;
+            }
+            n_carried = n_carried.saturating_add(1);
+            if n_carried > 6 {
+                continue;
+            }
+            if !carried.is_empty() {
+                carried.push(',');
+            }
+            match w {
+                Want::Split { ticket, at, .. } => {
+                    carried.push_str(&format!("Split{{ticket={ticket},age_ms={}}}", age(*at)));
+                }
+                Want::Invalidate(r, _) => {
+                    carried.push_str(&format!("Invalidate{{seq={},age_ms={}}}", r.seq, age(*at)));
+                }
+                Want::Root(_) => carried.push_str("Root"),
+            }
+        }
+        let behind_splits = pending
+            .iter()
+            .filter(|w| matches!(w, Want::Split { .. }))
+            .count();
+        let oldest_behind_ms = pending
+            .iter()
+            .filter_map(|w| match w {
+                Want::Split { at, .. } | Want::Invalidate(_, at) => Some(age(*at)),
+                Want::Root(_) => None,
+            })
+            .max()
+            .unwrap_or(0);
+        eprintln!(
+            "kf3: mem SLOW-APPLY walk#{} {key:?} maps={maps} unmaps={unmaps} ms={} wants=[{carried}] carried_total={n_carried} behind={} behind_splits={behind_splits} oldest_behind_ms={oldest_behind_ms} {} (n={}; per-piece us = whole batch call / pieces, an upper bound on the mmap)",
+            batch.id,
+            apply_ns / 1_000_000,
+            pending.len(),
+            hostmaps.describe(),
+            lines.seen()
+        );
+    }
+
+    /// A split finished; account request -> done and name it (`SPLIT-LATE`) when it
+    /// exceeded [`SLOW_SPLIT_MS`]. Never prints below the threshold.
+    fn note_split_done(
+        &mut self,
+        ticket: u64,
+        pdb: Option<u64>,
+        key: Option<VasKey>,
+        at: std::time::Instant,
+    ) {
+        let ns = ns_since(at);
+        let tm = &mut self.stats.timing;
+        tm.split_ns_max = tm.split_ns_max.max(ns);
+        if !exceeds_ms(ns, SLOW_SPLIT_MS) {
+            return;
+        }
+        tm.slow_splits = tm.slow_splits.saturating_add(1);
+        if self.slow_split_lines.admit() {
+            eprintln!(
+                "kf3: mem SPLIT-LATE ticket={ticket} target={} ms={} (n={}, {} still queued)",
+                match (key, pdb) {
+                    (Some(k), _) => format!("{k:?}"),
+                    (None, Some(p)) => format!("pdb:{p:#x}"),
+                    (None, None) => "all".to_string(),
+                },
+                ns / 1_000_000,
+                self.slow_split_lines.seen(),
+                self.pending.len()
+            );
+        }
+    }
+
+    /// Account one space's apply and its phases;
+    /// keep a detailed record when it is longer than `threshold_ns` ([`Self::slow_profile_ns`]).
+    /// An associated function: the apply loop holds `self.table` and the apply configuration.
+    fn note_apply_prof(
+        (pc, sink): (
+            &mut crate::vaprof::VaProfCounters,
+            &mut crate::vaprof::SlowSink,
+        ),
+        (cut_windows, threshold_ns): (&BTreeMap<(u8, u64), u32>, u64),
+        batch: &Batch,
+        (key, root, slot): (VasKey, u64, u32),
+        apply_ns: u64,
+        (maps, unmaps): (u64, u64),
+        phases: &kf_host::phase::Phases,
+    ) {
+        pc.aps.add(apply_ns);
+        pc.aps_hist.record_ns(apply_ns);
+        pc.phases.merge(phases);
+        if apply_ns <= threshold_ns {
+            return;
+        }
+        pc.slow_aps = pc.slow_aps.saturating_add(1);
+        // The first request of this walk naming the space: its ticket and this window's ordinal.
+        let (ticket, window) = batch
+            .wants
+            .iter()
+            .find(|(_, keys, _)| keys.contains(&key))
+            .map_or((0, 1), |(w, _, _)| match w {
+                Want::Split { ticket, prof, .. } => (*ticket, prof.windows.saturating_add(1)),
+                Want::Invalidate(r, _) => (
+                    0,
+                    cut_windows
+                        .get(&(1, r.seq))
+                        .copied()
+                        .unwrap_or(0)
+                        .saturating_add(1),
+                ),
+                Want::Root(_) => (0, 1),
+            });
+        sink.keep(
+            crate::vaprof::SlowRecord {
+                kind: crate::vaprof::SlowKind::Apply,
+                ticket,
+                walk: batch.id,
+                key: key.0,
+                pdb: root,
+                slot,
+                window,
+                apply_us: apply_ns / 1000,
+                maps,
+                unmaps,
+                phases: *phases,
+                ..crate::vaprof::SlowRecord::default()
+            },
+            pc,
+        );
+    }
+
+    /// A split reached its verdict after an apply walk; account its
+    /// request latency (enqueue, else acceptance, to verdict) and keep a record when it is slow.
+    fn note_ticket_prof(
+        &mut self,
+        ticket: u64,
+        pdb: Option<u64>,
+        key: Option<VasKey>,
+        at: std::time::Instant,
+        p: &crate::vaprof::TicketProf,
+    ) {
+        let mgr_ns = ns_since(at);
+        let req_ns = mgr_ns.saturating_add(p.q_inbox_ns.unwrap_or(0));
+        let pc = &mut self.stats.timing.prof;
+        pc.req.add(req_ns);
+        pc.req_hist.record_ns(req_ns);
+        pc.windows_max = pc.windows_max.max(u64::from(p.windows));
+        if req_ns <= self.slow_profile_ns {
+            return;
+        }
+        pc.slow_reqs = pc.slow_reqs.saturating_add(1);
+        let us = |ns: u64| ns / 1000;
+        self.slow.keep(
+            crate::vaprof::SlowRecord {
+                kind: crate::vaprof::SlowKind::Ticket,
+                ticket,
+                walk: p.last_walk,
+                key: key.map_or(0, |k| k.0),
+                pdb: pdb.unwrap_or(0),
+                windows: p.windows,
+                window: p.windows,
+                q_inbox_us: us(p.q_inbox_ns.unwrap_or(0)),
+                mgr_us: us(mgr_ns),
+                req_us: us(req_ns),
+                submit_us: us(p.submit_ns),
+                walk_us: us(p.walk_ns),
+                collect_us: us(p.collect_ns),
+                apply_own_us: us(p.apply_own_ns),
+                apply_all_us: us(p.apply_all_ns),
+                cap_retries: p.cap_retries,
+                ..crate::vaprof::SlowRecord::default()
+            },
+            &mut self.stats.timing.prof,
+        );
+    }
+
+    /// The slow records held now, oldest first, with their
+    /// sequence number and whether they were printed.
+    #[must_use]
+    pub fn slow_records(&self) -> Vec<(u64, crate::vaprof::SlowRecord, bool)> {
+        self.slow.ring.held()
+    }
+
+    /// At teardown — the held slow records that were NOT printed (oldest first), then
+    /// one summary line. Bounded by the ring ([`crate::vaprof::SLOW_RING`] + 1 lines); the records
+    /// returned are marked printed, so a second call returns only the summary.
+    pub fn slow_ring_dump(&mut self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for (seq, r, printed) in self.slow.ring.held() {
+            if !printed {
+                out.push(format!("{} (at teardown)", r.line(seq)));
+                self.slow.ring.mark_printed(seq);
+            }
+        }
+        let pc = &self.stats.timing.prof;
+        out.push(format!(
+            "kf3: VA_SLOW SUMMARY recorded={} held={} overwritten={} printed_live={} suppressed_live={} dumped_now={} slow_reqs={} slow_aps={} req_max_ms={} aps_max_ms={} windows_max={}",
+            self.slow.ring.pushed(),
+            self.slow.ring.len(),
+            self.slow.ring.overwritten(),
+            self.slow.dump.printed(),
+            self.slow.dump.suppressed(),
+            out.len(),
+            pc.slow_reqs,
+            pc.slow_aps,
+            pc.req.max / 1_000_000,
+            pc.aps.max / 1_000_000,
+            pc.windows_max
+        ));
+        out
     }
 
     /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
@@ -1404,6 +2050,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         if self.inflight.is_none() {
             return out;
         }
+        let t_poll = std::time::Instant::now();
         let done = match self.walker.poll() {
             Ok(None) => return out,
             Ok(Some(d)) => d,
@@ -1433,10 +2080,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 return out;
             }
         };
+        // This window's collect/decode and hidden re-walks.
+        let collect_ns = ns_since(t_poll);
         out.collected = true;
-        let Some(batch) = self.inflight.take() else {
+        let Some(mut batch) = self.inflight.take() else {
             return out;
         };
+        let window_walk_ns = ns_since(batch.submitted);
+        let window_retries = self
+            .walker
+            .capacity_retries()
+            .saturating_sub(batch.retries0);
+        self.stats.timing.prof.collect.add(collect_ns);
+        self.stats.timing.prof.cap_retries = self
+            .stats
+            .timing
+            .prof
+            .cap_retries
+            .saturating_add(window_retries);
+        let mut applied_ns: [(VasKey, u64); MAX_SPACES_PER_WALK] =
+            [(VasKey(0), 0); MAX_SPACES_PER_WALK];
+        let mut n_applied = 0usize;
         self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
         tm.walks = tm.walks.saturating_add(1);
@@ -1454,6 +2118,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
         let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
+        // The spaces whose report was a window of a larger diff.
+        // (space, its entry carries no runs, a run of its own entry applied)
+        let mut cut_keys: Vec<(VasKey, bool, bool)> = Vec::new();
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
             grain: self.page_grain,
@@ -1502,9 +2169,34 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             {
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
+            let m0 = MAPSTAT.snapshot();
+            let _ = kf_host::phase::take();
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
+            let phases = kf_host::phase::take();
+            if let Some(slot) = applied_ns.get_mut(n_applied) {
+                *slot = (key, apply_ns);
+                n_applied = n_applied.saturating_add(1);
+            }
+            Self::note_apply_prof(
+                (&mut self.stats.timing.prof, &mut self.slow),
+                (&self.cut_windows, self.slow_profile_ns),
+                &batch,
+                (key, walked_root, slot),
+                apply_ns,
+                (a.mapped as u64, a.unmapped as u64),
+                &phases,
+            );
+            Self::note_apply(
+                &mut self.stats.timing,
+                &mut self.slow_apply_lines,
+                &self.pending,
+                &batch,
+                (key, apply_ns),
+                (a.mapped as u64, a.unmapped as u64),
+                &MAPSTAT.snapshot().since(&m0),
+            );
             if crate::maplog::on() {
                 // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
                 // so a host fault VA can be matched against what the guest's tables said, when,
@@ -1657,7 +2349,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .budget_refused_runs
                     .saturating_add(a.budget_refused as u64);
             }
-            if a.refused > 0 {
+            if e.refused & kf_cuda::abi::KF_ENTRY_CUT != 0 {
+                // The kernel withheld this space's WHOLE diff, unmaps included: what the guest
+                // dropped may still be mapped on the host and what it added is not. That is not
+                // absence, so neither the split nor the invalidate completes over it.
+                failed.insert(key);
+                self.stats.walk_cut_spaces = self.stats.walk_cut_spaces.saturating_add(1);
+                let line = walk_cut_line(key, walked_root, slot, e.refused, e.need);
+                kf_arch::rate_eprintln!("kf3: {line}");
+                self.stats.refuse(line);
+            } else if a.refused > 0 {
                 failed.insert(key);
                 if a.refusals_are_absence() {
                     absent_only.insert(key);
@@ -1668,8 +2369,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     a.first_refusal.clone().unwrap_or_default()
                 ));
             } else if e.refused != 0 {
-                // ★ Owner ruling 2026-09-25: a walk that refused leaves in this space is NOT the
-                // whole truth of it — what it did describe was applied above; the space fails by
+                // A walk that refused leaves in this space gave a partial result.
+                // What it did describe was applied above. The space fails by
                 // name so its invalidate is not cleared over leaves nobody mapped.
                 failed.insert(key);
                 absent_only.insert(key);
@@ -1684,7 +2385,73 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             } else {
                 self.stats.spaces_reconciled = self.stats.spaces_reconciled.saturating_add(1);
             }
+            if e.cut {
+                // The diff goes on past this window. A refused MAP (absence) must
+                // not complete the split early — runs, UNMAPs among them, are still unreported — so a
+                // cut entry stays partial unless the failure is a hard one. Whether the window did
+                // anything is decided below, over the whole report.
+                let own = a.codes.iter().any(|&c| c != kf_cuda::abi::KFWR_ACK_FAILED);
+                cut_keys.push((key, e.runs.is_empty(), own));
+            }
             out.applied.push((key, a));
+        }
+        // A window of a larger diff continues unless it was a hard failure, and a
+        // window in which NOTHING of ITS OWN space applied is refused by name rather than re-walked for
+        // ever or completed over runs still unreported. (Review of PR #424 F1: this was judged over the
+        // whole report, so a space whose window never applies was re-walked for ever while another
+        // space in the same report kept making progress.) A space withheld with no runs of its own
+        // (an earlier space fills the report) has no window to judge: it waits while the report as a
+        // whole applies something, and the per-request budget below bounds that wait.
+        let mut cut_partial: BTreeSet<VasKey> = BTreeSet::new();
+        if !cut_keys.is_empty() {
+            let any = codes.iter().any(|&c| c != kf_cuda::abi::KFWR_ACK_FAILED);
+            for (key, withheld, own) in cut_keys {
+                let hard = failed.contains(&key) && !absent_only.contains(&key);
+                if hard || rewalk.contains(&key) {
+                    continue;
+                }
+                if if withheld { any } else { own } {
+                    partial.insert(key);
+                    cut_partial.insert(key);
+                } else {
+                    failed.insert(key);
+                    absent_only.remove(&key);
+                    self.stats.refuse(format!(
+                        "{key:?}: the walk report was cut at its capacity and no run of its window applied — refusing rather than completing over runs still unreported"
+                    ));
+                }
+            }
+        }
+        // The walks one request may spend on windows are bounded.
+        for (w, keys, _) in &batch.wants {
+            let id = match w {
+                Want::Split { ticket, .. } => (0u8, *ticket),
+                Want::Invalidate(r, _) => (1u8, r.seq),
+                Want::Root(_) => continue,
+            };
+            let windowed: Vec<VasKey> = keys
+                .iter()
+                .copied()
+                .filter(|k| cut_partial.contains(k))
+                .collect();
+            if windowed.is_empty() {
+                continue;
+            }
+            let n = self.cut_windows.entry(id).or_insert(0);
+            *n = n.saturating_add(1);
+            if *n > self.cut_window_budget {
+                let spent = *n;
+                self.cut_windows.remove(&id);
+                for k in windowed {
+                    partial.remove(&k);
+                    failed.insert(k);
+                    absent_only.remove(&k);
+                }
+                self.stats.refuse(format!(
+                    "request {id:?}: {spent} windows of a diff larger than the walk report (budget {}) and it is still not whole — refusing rather than re-walking without bound",
+                    self.cut_window_budget
+                ));
+            }
         }
         // ★ THE VERDICT, before any clear: the next walk (below, or the next invalidate's)
         // commits exactly what landed.
@@ -1696,13 +2463,41 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 done.generation
             ));
         }
+        // Each split this window carried rides one more window.
+        let applied_ns = applied_ns.get(..n_applied).unwrap_or(&[]);
+        let apply_all_ns = applied_ns
+            .iter()
+            .fold(0u64, |a, &(_, ns)| a.saturating_add(ns));
+        for (w, keys, _) in &mut batch.wants {
+            if let Want::Split { prof, .. } = w {
+                let own = applied_ns
+                    .iter()
+                    .filter(|(k, _)| keys.contains(k))
+                    .fold(0u64, |a, &(_, ns)| a.saturating_add(ns));
+                prof.windows = prof.windows.saturating_add(1);
+                prof.submit_ns = prof.submit_ns.saturating_add(batch.submit_ns);
+                prof.walk_ns = prof.walk_ns.saturating_add(window_walk_ns);
+                prof.collect_ns = prof.collect_ns.saturating_add(collect_ns);
+                prof.apply_own_ns = prof.apply_own_ns.saturating_add(own);
+                prof.apply_all_ns = prof.apply_all_ns.saturating_add(apply_all_ns);
+                prof.cap_retries = prof.cap_retries.saturating_add(window_retries);
+                prof.last_walk = batch.id;
+            }
+        }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
         let mut settled: BTreeMap<VasKey, Settle> = BTreeMap::new();
         for (w, keys, at) in &batch.wants {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
-            if let Want::Split { ticket, pdb, .. } = w {
+            if let Want::Split {
+                ticket,
+                pdb,
+                key: skey,
+                at: sat,
+                prof,
+            } = w
+            {
                 // ★★★ v3-mapfix — A SPLIT FAILS ONLY ON A REFUSAL THAT IS NOT MERE ABSENCE.
                 // `[measured 670bd310 nb1, UnifiedMemoryStreams]` ONE refused 64 KiB map in ONE
                 // process's space failed the split of the guest's UVM kernel channel (token 3,
@@ -1722,6 +2517,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     failed.contains(k) && !absent_only.contains(k) && !rewalk.contains(k)
                 });
                 let again = again || keys.iter().any(|k| rewalk.contains(k));
+                if hard.is_some() || !again {
+                    self.note_split_done(*ticket, *pdb, *skey, *sat);
+                    self.note_ticket_prof(*ticket, *pdb, *skey, *sat, prof);
+                }
                 match (hard, bad) {
                     (Some(k), _) => self
                         .splits_done
@@ -1746,13 +2545,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 continue;
             };
-            // ★ Owner ruling 2026-10-09 (§AA; supersedes 2026-09-25's "not cleared over leaves nobody
-            // mapped", opt-out `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`): the clear is NOT withheld when
+            // Unless `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`, clear the invalidate when
             // every failed space failed only by ABSENCE (a refused map or a walk-refused leaf, never
             // an unmap or an invalidate refusal) and none is re-walking. A GPU access to an absent
             // leaf faults on that space's twin (as the split already does, v3-mapfix); the withheld
             // clear instead left the guest polling the trigger forever with its locks held
-            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117).
+            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117, see `docs/design/V3_WINDOWS_BRING_UP_20261009.md`).
             let absent_ok = bad.is_some()
                 && self.clear_absent
                 && keys.iter().all(|k| {
@@ -1793,6 +2591,23 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         out.unreconciled.push(r.seq);
                     }
                 }
+            }
+        }
+        // A request of this walk that is not requeued is finished (completed or failed): its window
+        // count goes.
+        for (w, _, _) in &batch.wants {
+            let id = match w {
+                Want::Split { ticket, .. } => (0u8, *ticket),
+                Want::Invalidate(r, _) => (1u8, r.seq),
+                Want::Root(_) => continue,
+            };
+            let again = requeue.iter().any(|(q, _)| match (q, w) {
+                (Want::Split { ticket: a, .. }, Want::Split { ticket: b, .. }) => a == b,
+                (Want::Invalidate(a, _), Want::Invalidate(b, _)) => a.seq == b.seq,
+                _ => false,
+            });
+            if !again {
+                self.cut_windows.remove(&id);
             }
         }
         for (w, at) in requeue.into_iter().rev() {
@@ -1852,6 +2667,15 @@ mod tests {
         diff_runs: Vec<usize>,
         /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
         refuse_in: Option<u64>,
+        /// A root whose walk the kernel CUT at a per-space limit: `(pdb, KFWR_R_* bits)`. The
+        /// kernel withholds a cut space's whole diff, so its entry carries no runs.
+        cut_in: Option<(u64, u32)>,
+        /// The `need` every entry reports (the kernel's `KfPdbEntry::need`).
+        cut_need: u32,
+        /// The report's run capacity; a larger diff is cut as the kernel cuts it.
+        report_cap: Option<usize>,
+        /// Hidden capacity re-walks so far ([`Walker::capacity_retries`]; a test bumps it).
+        retries: u64,
     }
 
     impl ModelWalker {
@@ -1871,6 +2695,10 @@ mod tests {
                 fail_poll: None,
                 diff_runs: vec![],
                 refuse_in: None,
+                cut_in: None,
+                cut_need: 0,
+                report_cap: None,
+                retries: 0,
             }
         }
     }
@@ -1947,15 +2775,38 @@ mod tests {
             let mut entries = Vec::new();
             let mut last = Vec::new();
             let mut first = 0usize;
-            for (e, w) in q {
-                let com = self.slots.get(&e.slot).cloned().unwrap_or_default();
-                let d = diffmodel::diff(&com, &w, self.cap);
-                let runs: Vec<DiffRun> = d
-                    .runs
+            // Every entry's whole diff first; then the report's capacity (when the test sets one).
+            let diffs: Vec<(WalkEntry, diffmodel::EntryDiff)> = q
+                .into_iter()
+                .map(|(e, w)| {
+                    let com = self.slots.get(&e.slot).cloned().unwrap_or_default();
+                    (e, diffmodel::diff(&com, &w, self.cap))
+                })
+                .collect();
+            let mut cut = vec![false; diffs.len()];
+            let mut reported: Vec<Vec<KfMapRun>> =
+                diffs.iter().map(|(_, d)| d.runs.clone()).collect();
+            if let Some(cap) = self.report_cap {
+                let c = diffmodel::cut_report(&reported, cap);
+                if c.truncated {
+                    // The legacy answer, still the answer when one clump is larger than the report.
+                    return Err("walk report TRUNCATED (flags=0x85, refuse_mask=0x10, runs 0 of 0; refusing entries: []): nothing of it is applied, nothing committed".to_string());
+                }
+                reported = c.entries;
+                cut = c.cut;
+            }
+            for (i, (e, d)) in diffs.into_iter().enumerate() {
+                let cut_bits = self.cut_in.filter(|&(p, _)| p == e.pdb).map(|(_, b)| b);
+                if cut_bits.is_some() {
+                    reported[i].clear();
+                }
+                let runs: Vec<DiffRun> = reported[i]
                     .iter()
                     .map(|m| crate::apply::PermPolicy::default().diff_run(m))
                     .collect();
-                let refused = if self.refuse_in == Some(e.pdb) {
+                let refused = if let Some(b) = cut_bits {
+                    b
+                } else if self.refuse_in == Some(e.pdb) {
                     0x2000
                 } else {
                     0
@@ -1965,12 +2816,14 @@ mod tests {
                     slot: e.slot,
                     first,
                     runs,
-                    partial: d.partial,
+                    partial: cut_bits.is_none() && (d.partial || cut[i]),
+                    cut: cut[i],
                     overflow: d.overflow,
                     refused,
+                    need: self.cut_need,
                 });
-                first += d.runs.len();
-                last.push((e.slot, d.runs));
+                first += reported[i].len();
+                last.push((e.slot, reported[i].clone()));
             }
             self.diff_runs.push(first);
             self.last = Some((self.generation, last));
@@ -1995,6 +2848,9 @@ mod tests {
         }
         fn slots(&self) -> u32 {
             self.nslots
+        }
+        fn capacity_retries(&self) -> u64 {
+            self.retries
         }
     }
 
@@ -3196,6 +4052,682 @@ mod tests {
         );
     }
 
+    /// The report's per-entry flags as the apply sees them: `KFWR_V_CUT` and `KFWR_V_PARTIAL` both make an
+    /// entry partial, nothing else does, and a withheld entry (no runs) is partial too.
+    fn report_with(flags: &[u32], runs_each: u32) -> kf_cuda::Report {
+        use kf_cuda::abi::{KfMapRun, KfPdbEntry, KfReportHeader};
+        let mut runs = Vec::new();
+        let mut pdbs = Vec::new();
+        for (i, &f) in flags.iter().enumerate() {
+            pdbs.push(KfPdbEntry {
+                pdb: 0x1000 * (i as u64 + 1),
+                first_run: runs.len() as u32,
+                run_count: runs_each,
+                vas_flags: f,
+                reserved: i as u32,
+                ..KfPdbEntry::default()
+            });
+            for k in 0..runs_each {
+                runs.push(KfMapRun {
+                    va: 0x1000 * u64::from(k + 1),
+                    gpga: 0x10_0000,
+                    len: 0x1000,
+                    flags: 2,
+                    op: 1,
+                    pdb_index: i as u16,
+                });
+            }
+        }
+        kf_cuda::Report {
+            header: KfReportHeader::default(),
+            pdbs,
+            runs,
+            gpga_span: 1 << 40,
+        }
+    }
+
+    #[test]
+    fn a_cut_entry_is_partial_for_the_apply() {
+        use kf_cuda::abi::{KFWR_V_CUT, KFWR_V_OVERFLOW, KFWR_V_PARTIAL};
+        let r = report_with(&[0, KFWR_V_CUT, KFWR_V_PARTIAL, KFWR_V_OVERFLOW], 2);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert_eq!(
+            e.iter().map(|x| x.partial).collect::<Vec<_>>(),
+            vec![false, true, true, false]
+        );
+        assert_eq!(
+            e.iter().map(|x| x.cut).collect::<Vec<_>>(),
+            vec![false, true, false, false],
+            "only KFWR_V_CUT is a cut; a capacity-withheld diff is partial and not cut"
+        );
+        assert!(e[3].overflow && !e[1].overflow);
+        assert_eq!(e[1].runs.len(), 2);
+        assert_eq!(e[2].first, 4);
+    }
+
+    /// A cut space's refused bits and reported need reach the apply as the report carries them
+    /// (`reserved2`: bits low, need high).
+    #[test]
+    fn a_cut_entrys_bits_and_need_reach_the_apply() {
+        use kf_cuda::abi::{KFWR_R_FRONTIER_CAP, KFWR_V_REFUSED};
+        let mut r = report_with(&[KFWR_V_REFUSED, 0], 0);
+        r.pdbs[0].reserved2 = (974_249u64 << 32) | u64::from(KFWR_R_FRONTIER_CAP);
+        r.pdbs[1].reserved2 = 7u64 << 32;
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert_eq!((e[0].refused, e[0].need), (KFWR_R_FRONTIER_CAP, 974_249));
+        assert_eq!(
+            (e[1].refused, e[1].need),
+            (0, 7),
+            "no V_REFUSED: no refused bits"
+        );
+    }
+
+    /// The reported need is carried for every entry, cut or not (`reserved2`, high half).
+    #[test]
+    fn an_entrys_reported_need_reaches_the_apply_whether_or_not_it_was_cut() {
+        let mut r = report_with(&[0, 0], 0);
+        r.pdbs[0].reserved2 = 31u64 << 32;
+        r.pdbs[1].reserved2 = 974_249u64 << 32;
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert_eq!((e[0].need, e[0].refused), (31, 0));
+        assert_eq!((e[1].need, e[1].refused), (974_249, 0));
+    }
+
+    /// The capacity-withheld case (`KFWR_V_PARTIAL`) is unchanged by the cut flag: still partial.
+    #[test]
+    fn a_capacity_withheld_entry_is_still_partial_for_the_apply() {
+        use kf_cuda::abi::KFWR_V_PARTIAL;
+        let r = report_with(&[KFWR_V_PARTIAL], 3);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert!(e[0].partial && !e[0].overflow && e[0].refused == 0 && e[0].runs.len() == 3);
+    }
+
+    #[test]
+    fn a_withheld_entry_with_no_runs_is_partial_for_the_apply() {
+        use kf_cuda::abi::KFWR_V_CUT;
+        let r = report_with(&[KFWR_V_CUT, KFWR_V_CUT], 0);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert!(e.iter().all(|x| x.partial && x.runs.is_empty()));
+    }
+
+    /// ★★★ 2026-11-15 (M4) — `[measured f4a b20fd84b]` one diff larger than the report's run
+    /// capacity was refused (`walk report TRUNCATED`), the split failed and the channel died. Now
+    /// the report carries a window, every window is applied and acknowledged, and the split is NOT
+    /// done until the diff is empty: 25 scattered maps at a report capacity of 10 are three walks.
+    #[test]
+    fn a_split_over_a_diff_larger_than_the_report_completes_only_when_it_is_empty() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(10);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..25u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows.clone());
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        let mut walks = 0;
+        while r.m.take_splits().is_empty() {
+            assert!(r.m.in_flight(), "walked again at once while runs remain");
+            let out = r.m.on_walk_ready(r.port.trigger());
+            walks += 1;
+            assert!(walks <= 3, "25 runs at 10 per report are three walks");
+            assert!(out.unreconciled.is_empty());
+            let landed = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+            assert_eq!(
+                landed,
+                (10 * walks).min(25),
+                "walk {walks}: a window of the diff landed"
+            );
+            if walks < 3 {
+                assert!(
+                    r.m.take_splits().is_empty(),
+                    "the split is not done while the diff is not empty"
+                );
+            } else {
+                break;
+            }
+        }
+        assert_eq!(walks, 3);
+        assert_eq!(
+            r.m.take_splits(),
+            vec![(7, Ok(()))],
+            "done on the third walk, and Ok"
+        );
+        assert_eq!(
+            r.m.stats.partial, 2,
+            "two windows were partial, the third was whole"
+        );
+        let maps: Vec<Op> = ops(&r)
+            .into_iter()
+            .filter(|o| matches!(o, Op::Map(..)))
+            .collect();
+        assert_eq!(
+            maps,
+            rows.iter()
+                .map(|&(va, at, len, _)| Op::Map(va, at, len))
+                .collect::<Vec<_>>(),
+            "every map exactly once, lowest addresses first"
+        );
+        assert!(ops(&r).iter().all(|o| !matches!(o, Op::Unmap(_))));
+    }
+
+    /// The same as a verdict: the split's answer is Ok, and only on the last walk.
+    #[test]
+    fn the_split_verdict_arrives_on_the_last_window_and_is_ok() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(4);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..9u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 21, r.port.trigger());
+        let mut verdicts = Vec::new();
+        for walk in 1..=3 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if walk < 3 {
+                assert!(v.is_empty(), "walk {walk}: not done");
+            }
+            verdicts.extend(v);
+        }
+        assert_eq!(verdicts, vec![(21, Ok(()))]);
+        assert!(!r.m.in_flight());
+    }
+
+    /// An invalidate over a larger-than-the-report diff clears on the last window and not before
+    /// (§49.1: a clear over runs still unapplied would tell the guest a mapping is live that is not).
+    #[test]
+    fn an_invalidate_over_a_larger_than_the_report_diff_clears_only_on_the_last_window() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(6);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..14u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        for walk in 1..=3 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            if walk < 3 {
+                assert!(
+                    out.completed.is_empty() && busy(&r.port),
+                    "walk {walk}: still busy"
+                );
+                assert!(r.m.in_flight());
+            } else {
+                assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)]);
+                assert!(!busy(&r.port));
+            }
+        }
+    }
+
+    /// An UNMAP and the maps that overlap it are in ONE window: `[old 16 KiB placement]` becomes four
+    /// pages with the middle two re-pointed, while 30 unrelated maps appear. A report of 8 never
+    /// carries the maps without the unmap (or the unmap without its maps).
+    #[test]
+    fn a_window_carries_an_unmap_with_the_maps_that_replace_it() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x4000, 0)]);
+        settle(&mut r, PDB_A);
+        r.m.walker_mut().report_cap = Some(8);
+        let mut rows = vec![
+            (0x1000_0000, 0x0200_0000, 0x1000, 0),
+            (0x1000_1000, 0x0500_0000, 0x1000, 0),
+            (0x1000_2000, 0x0500_1000, 0x1000, 0),
+            (0x1000_3000, 0x0200_3000, 0x1000, 0),
+        ];
+        rows.extend((0..30u64).map(|i| {
+            (
+                0x2000_0000 + 0x2000 * i,
+                0x0600_0000 + 0x2000 * i,
+                0x1000,
+                0,
+            )
+        }));
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.ops.borrow_mut().clear();
+        r.m.on_split(Some(PDB_A), 3, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let first = ops(&r);
+        assert!(
+            first.contains(&Op::Unmap(0x1000_0000)),
+            "the unmap is in the first window: {first:x?}"
+        );
+        let remade = first
+            .iter()
+            .filter(|o| matches!(o, Op::Map(va, ..) if (0x1000_0000..0x1000_4000).contains(va)))
+            .count();
+        assert!(remade >= 1, "with the maps that replace it: {first:x?}");
+        assert!(r.m.take_splits().is_empty());
+        for _ in 0..8 {
+            if r.m.take_splits().len() == 1 || !r.m.in_flight() {
+                break;
+            }
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        let maps = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+        assert_eq!(
+            maps, 34,
+            "every new page is mapped exactly once across the windows"
+        );
+    }
+
+    /// ★ A refused MAP (absence) inside a window must NOT complete the split early: the absence ruling
+    /// (v3-mapfix) completes a split over a refused map because the diff is otherwise whole — here the
+    /// diff goes on past the window, and unreported runs (UNMAPs among them) would be left stale under a
+    /// completed split. The split waits for the walk whose diff is whole, and then completes unsettled.
+    #[test]
+    fn a_refused_map_in_a_window_does_not_complete_the_split_early() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000 + 0x2000 * 3);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(10);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..25u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        for walk in 1..=3 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            if walk < 3 {
+                assert!(
+                    r.m.take_splits().is_empty(),
+                    "walk {walk}: runs remain unreported, the split is not done (a refused map is absence only when the diff is whole)"
+                );
+                assert!(r.m.in_flight());
+            }
+        }
+        assert_eq!(r.m.take_splits(), vec![(31, Ok(()))]);
+        assert_eq!(
+            r.m.stats.splits_unsettled, 1,
+            "completed over the one refused map, named"
+        );
+    }
+
+    /// ⊘ A window in which NOTHING applied (here: the one run it carries is refused, capacity 1) is not
+    /// re-walked for ever and not completed over unreported runs: it fails the split by name.
+    #[test]
+    fn a_window_in_which_nothing_applied_fails_the_split_by_name() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(1);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..3u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 41, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(41, Err(e))] if e.contains("did not apply")),
+            "{s:?}"
+        );
+        assert!(!r.m.in_flight(), "not re-walked for ever");
+    }
+
+    /// The same for an invalidate: a window in which nothing applied leaves the trigger armed and is
+    /// named (a visible failure — the guest's own timeout), never cleared over unreported runs.
+    #[test]
+    fn an_invalidate_over_a_window_in_which_nothing_applied_stays_armed() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(1);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..3u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.unreconciled, vec![q.seq]);
+        assert!(
+            out.completed.is_empty() && busy(&r.port),
+            "armed, not cleared"
+        );
+        assert!(!r.m.in_flight());
+    }
+
+    /// `n` scattered one-page maps from page `from`, 8 KiB apart (they never coalesce).
+    fn scattered(from: u64, n: u64) -> Vec<(u64, u64, u64, u32)> {
+        (from..from + n)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect()
+    }
+
+    /// A rig whose space B refuses the map at page `bad` (absence), over `n_b` pages, with the report
+    /// capacity `cap`; space A (walked BEFORE B) holds 2 pages.
+    fn two_spaces(cap: usize, bad: u64, n_b: u64) -> Rig {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x5000_0000 + 0x2000 * bad);
+        r.m.table.insert(K_B, h);
+        r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(cap);
+        let b: Vec<(u64, u64, u64, u32)> = (0..n_b)
+            .map(|i| {
+                (
+                    0x5000_0000 + 0x2000 * i,
+                    0x0400_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_B, b);
+        r.tables.borrow_mut().insert(PDB_A, scattered(0, 2));
+        r
+    }
+
+    /// The guest adds `n` pages to space A before the next walk.
+    fn guest_edits_a(r: &Rig, round: u64, n: u64) {
+        let mut t = r.tables.borrow_mut();
+        t.get_mut(&PDB_A)
+            .unwrap()
+            .extend(scattered(2 + round * n, n));
+    }
+
+    /// ★ Review of PR #424, F1 (the review's model run: 40 walks with no verdict). Progress is judged PER
+    /// SPACE: space B's window is the single run its capacity share allows, and that run is refused;
+    /// space A, walked before B, applies something on every walk because the guest keeps editing it.
+    /// ⊘ Judged over the whole report, A's progress kept B's split alive for ever with no verdict.
+    #[test]
+    fn a_space_whose_window_never_applies_fails_the_split_while_another_space_progresses() {
+        let mut r = two_spaces(3, 0, 6);
+        r.m.on_split(None, 77, r.port.trigger());
+        let mut verdict = None;
+        for walk in 1..=6u64 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if !v.is_empty() {
+                verdict = Some((walk, v));
+                break;
+            }
+            guest_edits_a(&r, walk, 2);
+        }
+        let (walk, v) = verdict.expect("a verdict within 6 walks, not 40 without one");
+        assert!(walk <= 2, "named at once, walk {walk}");
+        assert!(
+            matches!(&v[..], [(77, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+    }
+
+    /// The same for an invalidate of every space: it stays armed and is named, it does not hang.
+    #[test]
+    fn an_invalidate_whose_space_window_never_applies_is_named_while_another_space_progresses() {
+        let mut r = two_spaces(3, 0, 6);
+        let q = guest_invalidate(&r.port, PDB_A, true);
+        r.m.on_invalidate(q, r.port.trigger());
+        let mut named = None;
+        for walk in 1..=6u64 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            if !out.unreconciled.is_empty() {
+                named = Some((walk, out.unreconciled));
+                break;
+            }
+            guest_edits_a(&r, walk, 2);
+        }
+        let (walk, un) = named.expect("named within 6 walks");
+        assert!(walk <= 2 && un == vec![q.seq], "walk {walk} {un:?}");
+        assert!(
+            busy(&r.port),
+            "armed, never cleared over runs still unreported"
+        );
+    }
+
+    /// ★ Review of PR #424, F2 (the review's model run: one refused run at capacity 2 took 19 walks instead
+    /// of 10). Windows re-carry the refused run, so a request spends more walks than it would: it is
+    /// allowed `MAX_CUT_WINDOWS_PER_REQUEST`, then fails by name.
+    #[test]
+    fn one_persistently_refused_run_costs_windows_and_the_budget_bounds_them() {
+        // control: without the budget biting, 20 maps at capacity 2 with the lowest refused complete
+        // (unsettled) in 19 walks
+        let run = |budget: u32| {
+            let mut r = rig();
+            let h = host(&r, None, Vec::new());
+            *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+            r.m.table.insert(K_A, h);
+            r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+            r.m.walker_mut().report_cap = Some(2);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 20));
+            r.m.on_split(Some(PDB_A), 5, r.port.trigger());
+            for walk in 1..=40u32 {
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (walk, v, r.m.cut_windows.len());
+                }
+            }
+            (0, Vec::new(), r.m.cut_windows.len())
+        };
+        let (walks, v, left) = run(MAX_CUT_WINDOWS_PER_REQUEST);
+        assert_eq!((walks, &v[..]), (19, &[(5, Ok(()))][..]));
+        assert_eq!(left, 0, "a finished request keeps no window count");
+        let (walks, v, left) = run(8);
+        assert_eq!(walks, 9, "the 9th window is refused");
+        assert!(
+            matches!(&v[..], [(5, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+        assert_eq!(left, 0, "a failed request keeps no window count");
+    }
+
+    /// F2: a guest that keeps editing its tables between windows never lets the diff drain; the request
+    /// fails by name at the budget (the control, the same table left alone, completes).
+    #[test]
+    fn a_guest_that_keeps_editing_between_windows_exhausts_the_budget() {
+        let drive = |edit: bool| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(2);
+            r.m.cut_window_budget = 8;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 4));
+            r.m.on_split(Some(PDB_A), 6, r.port.trigger());
+            for walk in 1..=30u64 {
+                // (the next walk was submitted inside the last `on_walk_ready`, so an edit made
+                // BEFORE this call is what the walk after it reads)
+                if edit {
+                    let mut t = r.tables.borrow_mut();
+                    t.get_mut(&PDB_A)
+                        .unwrap()
+                        .extend(scattered(4 + walk * 2, 2));
+                }
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (walk, v);
+                }
+            }
+            (0, Vec::new())
+        };
+        assert_eq!(drive(false), (2, vec![(6, Ok(()))]));
+        let (walk, v) = drive(true);
+        assert_eq!(walk, 9, "the ninth window is refused");
+        assert!(
+            matches!(&v[..], [(6, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+    }
+
+    /// F2, the edge: a request that needs exactly `budget` windows completes, one more fails (a split
+    /// and an invalidate alike).
+    #[test]
+    fn the_budget_is_exactly_the_windows_a_request_may_spend() {
+        let split = |budget: u32| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(10);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 25)); // 3 windows: 10, 10, 5
+            r.m.on_split(Some(PDB_A), 8, r.port.trigger());
+            for _ in 0..6 {
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (v[0].1.is_ok(), r.m.cut_windows.len());
+                }
+            }
+            (false, 99)
+        };
+        // windows needing continuation are counted: 2 of the 3 walks continue
+        assert_eq!(split(2), (true, 0));
+        assert_eq!(split(1), (false, 0));
+        let inval = |budget: u32| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(10);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 25));
+            let q = guest_invalidate(&r.port, PDB_A, false);
+            r.m.on_invalidate(q, r.port.trigger());
+            for _ in 0..6 {
+                let out = r.m.on_walk_ready(r.port.trigger());
+                if !out.unreconciled.is_empty() {
+                    return (false, r.m.cut_windows.len());
+                }
+                if !out.completed.is_empty() {
+                    return (true, r.m.cut_windows.len());
+                }
+            }
+            (false, 99)
+        };
+        assert_eq!(inval(2), (true, 0));
+        assert_eq!(inval(1), (false, 0));
+    }
+
+    /// A space withheld behind a full report (an earlier space fills it) has no window of its own to
+    /// judge: it waits while the report applies, and completes once the earlier space is out of the way.
+    #[test]
+    fn a_split_waits_for_a_space_withheld_behind_a_full_report() {
+        let mut r = two_spaces(2, 99, 6);
+        r.m.on_split(None, 12, r.port.trigger());
+        let mut verdict = None;
+        for walk in 1..=12u32 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if !v.is_empty() {
+                verdict = Some((walk, v));
+                break;
+            }
+        }
+        let (walk, v) = verdict.expect("a verdict");
+        assert!(walk >= 3, "B was withheld on the first walk (walk {walk})");
+        assert_eq!(v, vec![(12, Ok(()))]);
+        let landed = ops(&r)
+            .iter()
+            .filter(|o| matches!(o, Op::Map(va, ..) if *va >= 0x5000_0000 && *va < 0x6000_0000))
+            .count();
+        assert_eq!(landed, 6, "all of B landed");
+    }
+
+    #[test]
+    fn an_invalidate_waits_for_a_space_withheld_behind_a_full_report() {
+        let mut r = two_spaces(2, 99, 6);
+        let q = guest_invalidate(&r.port, PDB_A, true);
+        r.m.on_invalidate(q, r.port.trigger());
+        let mut done = None;
+        for walk in 1..=12u32 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            assert!(
+                out.unreconciled.is_empty(),
+                "walk {walk}: not named while B merely waits"
+            );
+            if !out.completed.is_empty() {
+                done = Some((walk, out.completed));
+                break;
+            }
+        }
+        let (walk, c) = done.expect("cleared");
+        assert!(walk >= 3);
+        assert_eq!(c, vec![(q.seq, ClearOutcome::Cleared)]);
+    }
+
+    /// ⊘ What is NOT recoverable stays loud: one overlap-connected clump larger than the report
+    /// cannot be windowed, so the walk is refused by name and the split fails (the legacy answer).
+    #[test]
+    fn a_clump_larger_than_the_report_still_fails_the_split_by_name() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x10_0000, 0)]);
+        settle(&mut r, PDB_A);
+        r.m.walker_mut().report_cap = Some(4);
+        // the whole placement re-pointed as 8 separately-backed pages: an unmap over 8 maps
+        let rows: Vec<(u64, u64, u64, u32)> = (0..8u64)
+            .map(|i| {
+                (
+                    0x1000_0000 + 0x1000 * i,
+                    0x0700_0000 + 0x3000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 5, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(5, Err(e))] if e.contains("TRUNCATED")),
+            "{s:?}"
+        );
+    }
+
     /// ★ A removed object's slot is emptied before the next walk diffs anything against it — a
     /// new object given that slot starts from nothing, never from another object's placements.
     #[test]
@@ -3279,7 +4811,7 @@ mod tests {
         );
     }
 
-    /// ★ Owner ruling 2026-09-25: a walk that REFUSED leaves in a space fails that space by name
+    /// A walk that refused leaves in a space fails that space by name
     /// (its invalidate stays armed) — while what the walk did describe is still applied (the
     /// failure is scoped to the refused leaves, which are absent, never "unmapped").
     #[test]
@@ -3314,7 +4846,7 @@ mod tests {
         assert!(ops(&r).is_empty());
     }
 
-    /// ★ Owner ruling 2026-10-09: a space that failed ONLY by absence (a
+    /// A space that failed only by absence (a
     /// walk-refused leaf) no longer holds its invalidate armed forever; what the walk described is
     /// applied, the invalidate completes, and the refusal stays counted and named.
     #[test]
@@ -3347,7 +4879,7 @@ mod tests {
         );
     }
 
-    /// ★ Owner ruling 2026-10-09: a host-REFUSED map is absence too — the invalidate completes, the
+    /// A host-refused map is absence too. The invalidate completes, the
     /// refusal is named, and commit-on-ack still re-emits ONLY the refused map on the next diff.
     #[test]
     fn a_refused_map_completes_the_invalidate_and_is_retried_by_the_next_one() {
@@ -3427,6 +4959,281 @@ mod tests {
         assert_eq!(r.m.stats.cleared_over_absent, 0);
     }
 
+    /// A space whose walk the kernel CUT at a per-space limit (`KFWR_R_FRONTIER_CAP`, the run or
+    /// frontier share; `KFWR_R_BUDGET`) has its WHOLE diff withheld, unmaps included, so it is not
+    /// mere absence: the guest's invalidate stays armed (no completion over withheld mappings,
+    /// whatever the clear-over-absence default says) and nothing is mapped for it.
+    #[test]
+    fn a_walk_cut_by_a_per_space_limit_holds_the_invalidate() {
+        for bits in [
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP,
+            kf_cuda::abi::KFWR_R_BUDGET,
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP | 0x2000,
+        ] {
+            let mut r = rig();
+            assert!(r.m.clear_absent, "the default stays on");
+            r.tables
+                .borrow_mut()
+                .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+            r.m.walker_mut().cut_in = Some((PDB_A, bits));
+            let out = settle(&mut r, PDB_A);
+            assert_eq!(out.completed.len(), 0, "bits {bits:#x}: not completed");
+            assert_eq!(out.unreconciled.len(), 1, "bits {bits:#x}");
+            assert!(busy(&r.port), "bits {bits:#x}: the trigger stays armed");
+            assert_eq!(r.m.stats.cleared_over_absent, 0, "bits {bits:#x}");
+            assert!(
+                !ops(&r).iter().any(|o| matches!(o, Op::Map(..))),
+                "bits {bits:#x}: a cut space maps nothing"
+            );
+            assert_eq!(r.m.stats.walk_cut_spaces, 1, "bits {bits:#x}: named");
+            assert_eq!(
+                r.m.stats.walk_refused_spaces, 0,
+                "bits {bits:#x}: not absence"
+            );
+            assert!(
+                r.m.stats
+                    .refusals
+                    .iter()
+                    .any(|x| x.contains("walk per-space CEILING")),
+                "bits {bits:#x}: {:?}",
+                r.m.stats.refusals
+            );
+            if bits & kf_cuda::abi::KFWR_R_BUDGET != 0 {
+                assert!(
+                    r.m.stats
+                        .refusals
+                        .iter()
+                        .any(|x| x.contains("shared total") && x.contains("under its own budget")),
+                    "bits {bits:#x}: a budget cut may be the walk's shared total: {:?}",
+                    r.m.stats.refusals
+                );
+            }
+            if bits & kf_cuda::abi::KFWR_R_FRONTIER_CAP != 0 {
+                assert!(
+                    r.m.stats
+                        .refusals
+                        .iter()
+                        .any(|x| x.contains("does not say which")),
+                    "bits {bits:#x}: {:?}",
+                    r.m.stats.refusals
+                );
+            }
+        }
+    }
+
+    /// A cut space fails by itself: a neighbour in the same walk is not failed. Walk 1 is the
+    /// invalidate of A (in flight); the invalidate of B and the split of A queue behind it and share
+    /// walk 2, in which A is cut and B is not.
+    #[test]
+    fn a_cut_space_does_not_fail_the_invalidate_of_its_neighbour_in_the_walk() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        let a = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(a, r.port.trigger());
+        let b = guest_invalidate(&r.port, PDB_B, false);
+        r.m.on_invalidate(b, r.port.trigger());
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.walker().submits.last().map(|s| s.len()), Some(2));
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert!(
+            out.completed.iter().any(|(seq, _)| *seq == b.seq),
+            "B completes: {out:?}"
+        );
+        assert!(
+            ops(&r)
+                .iter()
+                .any(|o| matches!(o, Op::Map(0x2000_0000, 0x0300_0000, 0x1000))),
+            "B's mapping is applied"
+        );
+        assert_eq!(r.m.stats.walk_cut_spaces, 2, "A walks cut twice, B never");
+    }
+
+    /// The split of a channel on a space that was NOT cut still completes while another space of
+    /// the same walk is cut (the verdict is per space and per ticket).
+    #[test]
+    fn a_cut_space_does_not_fail_the_split_of_its_neighbour_in_the_walk() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        let a = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(a, r.port.trigger());
+        r.m.on_split(Some(PDB_B), 32, r.port.trigger());
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.walker().submits.last().map(|s| s.len()), Some(2));
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let mut s = r.m.take_splits();
+        s.sort_by_key(|(t, _)| *t);
+        assert!(
+            matches!(&s[..], [(31, Err(e)), (32, Ok(()))] if e.contains("did not apply")),
+            "{s:?}"
+        );
+    }
+
+    /// The text of the code above `mod tests`.
+    fn production_source() -> &'static str {
+        let src = include_str!("vasmgr.rs");
+        &src[..src.find("#[cfg(test)]\nmod tests {").expect("test module")]
+    }
+
+    /// The ceiling line is logged through `kf_arch::rate_eprintln!` (the first 8, then powers of
+    /// two): a guest that keeps a space cut must not make one log line per request.
+    #[test]
+    fn the_ceiling_line_is_logged_through_the_rate_limit() {
+        let src = production_source();
+        assert_eq!(
+            src.matches("kf_arch::rate_eprintln!(\"kf3: {line}\");")
+                .count(),
+            1,
+            "the cut branch logs its line with rate_eprintln!"
+        );
+    }
+
+    /// No plain `eprintln!` carries the ceiling line (`kf3: {line}`) or its name in the production code.
+    #[test]
+    fn no_plain_eprintln_carries_the_walk_ceiling() {
+        let src = production_source();
+        for (i, _) in src.match_indices("eprintln!(") {
+            if src[..i].ends_with("rate_") {
+                continue;
+            }
+            let call = &src[i..src[i..].find(");").map_or(src.len(), |e| i + e)];
+            assert!(
+                !call.contains("kf3: {line}") && !call.contains("per-space CEILING"),
+                "a plain eprintln! logs the ceiling: {call}"
+            );
+        }
+    }
+
+    /// The Camera Raw run of the pc (fixture numbers): slot 25, root 0x1ece5a000, needing
+    /// 969 918 then 974 249 runs, then cut with `refuse_mask=0x1000`. The ceiling line names the
+    /// root, the need and both limits the bit may mean; a leaf refusal is never a ceiling.
+    #[test]
+    fn the_logged_cut_is_named_with_both_limits() {
+        let l = walk_cut_line(
+            VasKey(13_965_663_178_898_540_624),
+            0x1ece_5a000,
+            25,
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP,
+            974_249,
+        );
+        for want in [
+            "walk per-space CEILING",
+            "root 0x1ece5a000",
+            "slot 25",
+            "refuse_mask=0x1000",
+            "reported need 974249",
+            "1048576 runs",
+            "32768 entries per level",
+            "does not say which",
+        ] {
+            assert!(l.contains(want), "`{want}` missing from {l}");
+        }
+        let b = walk_cut_line(VasKey(1), 0x1000, 0, kf_cuda::abi::KFWR_R_BUDGET, 0);
+        assert!(
+            b.contains("own entry budget")
+                && b.contains("walk's shared total (4 x entry_budget)")
+                && b.contains("under its own budget")
+                && !b.contains("run share"),
+            "{b}"
+        );
+        // through the manager: the reported need reaches the line; the line goes through
+        // `kf_arch::rate_eprintln!`, whose schedule (the first 8 events, then powers of two) is this
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        r.m.walker_mut().cut_need = 974_249;
+        let _ = settle(&mut r, PDB_A);
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("reported need 974249")),
+            "{:?}",
+            r.m.stats.refusals
+        );
+        let logged: Vec<u64> = (1..=1100)
+            .filter(|&n| kf_arch::ratelog::admitted(n))
+            .collect();
+        assert_eq!(
+            logged,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 128, 256, 512, 1024]
+        );
+        assert!(!kf_arch::ratelog::admitted(0));
+    }
+
+    /// The split of a channel whose space was cut fails by name, so the channel dies at its poll
+    /// (the existing DEAD path) instead of running over mappings that were never applied.
+    #[test]
+    fn a_walk_cut_by_a_per_space_limit_fails_the_split() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        r.m.walker_mut().cut_need = 974_249;
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("reported need 974249")),
+            "{:?}",
+            r.m.stats.refusals
+        );
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(31, Err(e))] if e.contains("did not apply")),
+            "{s:?}"
+        );
+        assert_eq!(r.m.stats.splits_unsettled, 0, "not completed as unsettled");
+        assert_eq!(r.m.stats.walk_cut_spaces, 1, "the cut is counted by name");
+    }
+
+    /// A cut space is not retried by the host: with no new guest request nothing is walked again.
+    /// The guest's next request walks it again and it fails again (the limit is fixed); once the
+    /// space fits, the withheld diff is applied whole and the invalidate completes.
+    #[test]
+    fn a_cut_space_stays_failed_and_is_walked_again_only_on_a_guest_request() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        let walks = r.m.walker().submits.len();
+        for _ in 0..4 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            assert!(out.completed.is_empty());
+        }
+        assert_eq!(r.m.walker().submits.len(), walks, "no host-side retry loop");
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1, "still cut, still failed");
+        assert_eq!(
+            r.m.stats.walk_cut_spaces, 2,
+            "each walk that cuts it counts"
+        );
+        assert!(busy(&r.port));
+        r.m.walker_mut().cut_in = None;
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1, "fits now: completes");
+        assert!(
+            ops(&r)
+                .iter()
+                .any(|o| matches!(o, Op::Map(0x1000, 0x10_0000, 0x1000)))
+        );
+    }
+
     /// Past the walker's slots, an object is refused by name — never walked against a guess.
     #[test]
     fn an_object_without_a_slot_is_refused_by_name() {
@@ -3446,5 +5253,837 @@ mod tests {
         r.m.on_invalidate(q, r.port.trigger());
         assert_eq!(r.m.stats.no_slot, 1);
         assert!(busy(&r.port), "never cleared: nothing was applied");
+    }
+
+    // Slow-path instrumentation (enscape TDR hunt)
+
+    /// The threshold is STRICTLY greater: exactly at it is not slow, one ns over is.
+    #[test]
+    fn exceeds_ms_is_strict_and_in_milliseconds() {
+        assert!(!exceeds_ms(500_000_000, 500));
+        assert!(exceeds_ms(500_000_001, 500));
+        assert!(!exceeds_ms(0, 500));
+        assert!(!exceeds_ms(499_999_999, 500));
+        assert!(exceeds_ms(1_000_000_001, 1000));
+        assert!(!exceeds_ms(1_000_000_000, 1000));
+        assert!(
+            !exceeds_ms(u64::MAX / 2, u64::MAX),
+            "no overflow on a huge ms"
+        );
+        assert_eq!(SLOW_APPLY_MS, 500);
+        assert_eq!(SLOW_SPLIT_MS, 1000);
+    }
+
+    /// The rate limit: the first `cap` are admitted, the rest counted, never lost.
+    #[test]
+    fn line_budget_admits_cap_and_counts_the_rest() {
+        let mut b = LineBudget::new(3);
+        assert!(b.admit() && b.admit() && b.admit());
+        assert_eq!(b.suppressed(), 0);
+        assert!(!b.admit());
+        assert!(!b.admit());
+        assert_eq!(b.seen(), 5);
+        assert_eq!(b.suppressed(), 2);
+        let mut z = LineBudget::new(0);
+        assert!(!z.admit());
+        assert_eq!(z.suppressed(), 1);
+        assert_eq!(SLOW_LOG_CAP, 20);
+    }
+
+    /// `admit` itself (not only the counts): a cap of one prints exactly one.
+    #[test]
+    fn line_budget_cap_one_admits_exactly_one() {
+        let mut b = LineBudget::new(1);
+        assert!(b.admit());
+        assert!(!b.admit());
+        assert!(!b.admit());
+    }
+
+    fn empty_batch() -> Batch {
+        Batch {
+            wants: Vec::new(),
+            walked: BTreeMap::new(),
+            submitted: std::time::Instant::now(),
+            id: 1,
+            submit_ns: 0,
+            retries0: 0,
+        }
+    }
+
+    /// An apply at the threshold is not slow; over it, counted.
+    #[test]
+    fn note_apply_counts_only_over_the_threshold() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 500_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!((tm.slow_applies, lines.seen()), (0, 0));
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 500_000_001),
+            (200_534, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!((tm.slow_applies, lines.seen()), (1, 1));
+    }
+
+    /// Past the cap the lines stop, the counter does not.
+    #[test]
+    fn note_apply_counts_every_slow_apply_but_prints_only_the_cap() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        for _ in 0..5 {
+            R::note_apply(
+                &mut tm,
+                &mut lines,
+                &[],
+                &b,
+                (K_A, 600_000_000),
+                (5, 5),
+                &MapStatSnap::default(),
+            );
+        }
+        assert_eq!(tm.slow_applies, 5);
+        assert_eq!(lines.suppressed(), 3);
+    }
+
+    /// The worst apply is kept (below the threshold too) and is not windowed.
+    #[test]
+    fn note_apply_tracks_the_worst_apply() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 40_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.apply_ns_max, 40_000_000);
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 3_778_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 10_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.apply_ns_max, 3_778_000_000);
+        let w = tm.since(&VaTiming::default());
+        assert_eq!(w.apply_ns_max, 3_778_000_000);
+    }
+
+    /// The real apply path feeds the worst-apply figure.
+    #[test]
+    fn a_walk_updates_the_apply_max() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert!(r.m.stats.timing.apply_ns_max > 0);
+        assert_eq!(r.m.stats.timing.slow_applies, 0);
+    }
+
+    /// Threshold test: a split is named only past one second.
+    #[test]
+    fn note_split_done_names_only_over_one_second() {
+        let mut r = rig();
+        let now = std::time::Instant::now();
+        let ago = |ms: u64| now - std::time::Duration::from_millis(ms);
+        r.m.note_split_done(1, None, Some(K_A), ago(900));
+        assert_eq!(
+            (r.m.stats.timing.slow_splits, r.m.slow_split_lines.seen()),
+            (0, 0)
+        );
+        assert!(r.m.stats.timing.split_ns_max >= 900_000_000);
+        r.m.note_split_done(2, Some(PDB_A), None, ago(1_500));
+        assert_eq!(
+            (r.m.stats.timing.slow_splits, r.m.slow_split_lines.seen()),
+            (1, 1)
+        );
+        assert!(r.m.stats.timing.split_ns_max >= 1_500_000_000);
+    }
+
+    /// Past the cap SPLIT-LATE lines stop, the counter does not.
+    #[test]
+    fn note_split_done_counts_every_late_split_but_prints_only_the_cap() {
+        let mut r = rig();
+        let at = std::time::Instant::now() - std::time::Duration::from_millis(1_200);
+        for t in 0..38 {
+            r.m.note_split_done(t, None, None, at);
+        }
+        assert_eq!(r.m.stats.timing.slow_splits, 38);
+        assert_eq!(r.m.slow_split_lines.suppressed(), 38 - SLOW_LOG_CAP);
+    }
+
+    /// The clock starts at the request: a split that waits behind another space's walk includes
+    /// that wait (not just its own walk).
+    #[test]
+    fn a_split_queued_behind_a_walk_counts_the_queue_time() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split(Some(PDB_B), 5, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        r.m.on_walk_ready(r.port.trigger()); // A lands; B's walk starts only now
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(5, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 30_000_000);
+    }
+
+    /// A real walk's split carries its request time through the batch: a split asked, then
+    /// finished by the walk, shows up in `split_ns_max` (the plumbing, not just the helper).
+    #[test]
+    fn a_split_finished_by_a_walk_updates_split_max() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 5_000_000);
+        assert_eq!(r.m.stats.timing.slow_splits, 0);
+    }
+
+    /// ★ KNOWN-RED (documents the CURRENT behaviour; the fix is a later task).
+    /// Space A's walk carries a 200,000-run diff (the enscape-01 TDR's apply: 200,534 maps in
+    /// 3,778 ms). Space B's split arrives while A's walk is in flight. The VA thread applies A's
+    /// whole diff before it starts B's walk, so B's split is done only after ALL of A's host maps:
+    /// head-of-line blocking across spaces. The property a bounded design would give is asserted
+    /// here (B's split finishes behind at most `BOUND` of A's maps); it fails today, by about the
+    /// full 200,000. Run: `cargo test -p kf-mem known_red -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "KNOWN-RED: documents today's cross-space head-of-line behaviour (analysis tdr_enscape_analysis_20261113); not fixed in the instrumentation task"]
+    fn known_red_space_b_split_waits_behind_a_200k_map_apply_of_space_a() {
+        const N: u64 = 200_000;
+        const BOUND: usize = 1_000;
+        let mut r = rig();
+        r.m.walker_mut().cap = 1 << 20;
+        let leaves: Vec<(u64, u64, u64, u32)> = (0..N)
+            .map(|i| (0x1_0000_0000 + i * 0x2000, (i % 60_000) * 0x1000, 0x1000, 0))
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, leaves);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        // A's walk is submitted (an invalidate of A); B's split arrives during it.
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split(Some(PDB_B), 42, r.port.trigger());
+        assert!(r.m.take_splits().is_empty());
+        // A's walk lands: its diff is applied in full on this thread.
+        r.m.on_walk_ready(r.port.trigger());
+        let maps_a = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+        // B's walk, then B's split.
+        let mut done = r.m.take_splits();
+        while done.is_empty() {
+            r.m.on_walk_ready(r.port.trigger());
+            done = r.m.take_splits();
+        }
+        let before = ops(&r)
+            .iter()
+            .take_while(|o| !matches!(o, Op::Map(0x9000_0000, ..)))
+            .filter(|o| matches!(o, Op::Map(..)))
+            .count();
+        eprintln!(
+            "KNOWN-RED measurement: host maps applied before space B's split completed = {before} (A's diff {maps_a} maps)"
+        );
+        assert_eq!(done, vec![(42, Ok(()))]);
+        assert!(
+            before <= BOUND,
+            "space B's split waited behind {before} of space A's host maps (bound {BOUND})"
+        );
+    }
+
+    /// Batch counters: rows before, pieces after (mmaps), call ns and the worst per piece.
+    #[test]
+    fn mapstat_counts_rows_and_pieces_of_batches() {
+        let m = MapStat::new();
+        m.record_scattered(10, 4, 80_000);
+        m.record_scattered(2, 2, 40_000);
+        let d = m.snapshot();
+        assert_eq!((d.scat_calls, d.scat_rows, d.scat_pieces), (2, 12, 6));
+        assert_eq!(
+            (d.scat_ns, d.scat_ns_max, d.scat_piece_ns_max),
+            (120_000, 80_000, 20_000)
+        );
+    }
+
+    /// Per-run maps are split by backing kind.
+    #[test]
+    fn mapstat_splits_single_maps_by_kind() {
+        let m = MapStat::new();
+        m.record_single(true, 20_000);
+        m.record_single(true, 60_000);
+        m.record_single(false, 5_000);
+        let d = m.snapshot();
+        assert_eq!((d.ram_calls, d.ram_ns, d.ram_ns_max), (2, 80_000, 60_000));
+        assert_eq!(
+            (d.store_calls, d.store_ns, d.store_ns_max),
+            (1, 5_000, 5_000)
+        );
+    }
+
+    /// Host-map statistics: rows -> pieces (mmaps), per-call and per-piece figures, per kind.
+    #[test]
+    fn mapstat_reports_coalescing_and_costs_per_kind() {
+        let m = MapStat::new();
+        let z = m.snapshot();
+        // 10 rows coalesced to 4 pieces in 80 us; 2 rows -> 2 pieces in 40 us.
+        m.record_scattered(10, 4, 80_000);
+        m.record_scattered(2, 2, 40_000);
+        m.record_single(true, 20_000);
+        m.record_single(true, 60_000);
+        m.record_single(false, 5_000);
+        let d = m.snapshot().since(&z);
+        assert_eq!((d.scat_calls, d.scat_rows, d.scat_pieces), (2, 12, 6));
+        assert_eq!(
+            (d.scat_ns, d.scat_ns_max, d.scat_piece_ns_max),
+            (120_000, 80_000, 20_000)
+        );
+        assert_eq!((d.ram_calls, d.ram_ns, d.ram_ns_max), (2, 80_000, 60_000));
+        assert_eq!(
+            (d.store_calls, d.store_ns, d.store_ns_max),
+            (1, 5_000, 5_000)
+        );
+        let t = d.describe();
+        assert!(t.contains("rows=12 -> pieces(mmaps)=6"), "{t}");
+        assert!(
+            t.contains("call_avg_us=60 piece_avg_us=20 call_max_us=80 piece_max_us=20"),
+            "{t}"
+        );
+        assert!(t.contains("ram_run_maps[n=2 avg_us=40 max_us=60]"), "{t}");
+        assert!(t.contains("store_run_maps[n=1 avg_us=5 max_us=5]"), "{t}");
+        // A window since a snapshot excludes what came before it.
+        let z2 = m.snapshot();
+        m.record_single(false, 7_000);
+        let w = m.snapshot().since(&z2);
+        assert_eq!((w.store_calls, w.ram_calls, w.scat_calls), (1, 0, 0));
+        assert!(
+            MapStat::new()
+                .snapshot()
+                .describe()
+                .contains("calls=0 rows=0 -> pieces(mmaps)=0")
+        );
+    }
+
+    /// The same, for a deferred-split (key) want queued behind a walk.
+    #[test]
+    fn a_keyed_split_queued_behind_a_walk_counts_the_queue_time() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split_space(K_B, 6, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        r.m.on_walk_ready(r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(6, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 30_000_000);
+    }
+
+    /// The SLOW-APPLY line formats with real wants (carried, behind) without panicking.
+    #[test]
+    fn slow_apply_line_formats_with_carried_and_pending_wants() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut r = rig();
+        let now = std::time::Instant::now();
+        let mut b = empty_batch();
+        let req = guest_invalidate(&r.port, PDB_A, false);
+        b.wants.push((Want::Invalidate(req, now), vec![K_A], now));
+        b.wants.push((Want::Root(K_A), vec![K_A], now));
+        for t in 0..9 {
+            b.wants.push((
+                Want::Split {
+                    pdb: None,
+                    ticket: t,
+                    key: Some(K_A),
+                    at: now,
+                    prof: crate::vaprof::TicketProf::default(),
+                },
+                vec![K_A],
+                now,
+            ));
+        }
+        let pending = vec![
+            Want::Split {
+                pdb: None,
+                ticket: 99,
+                key: Some(K_B),
+                at: now,
+                prof: crate::vaprof::TicketProf::default(),
+            },
+            Want::Root(K_B),
+        ];
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(1);
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &pending,
+            &b,
+            (K_A, 3_000_000_000),
+            (9, 9),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.slow_applies, 1);
+        let _ = &mut r;
+    }
+
+    /// Unchanged whole-ms worsts are not reprinted.
+    #[test]
+    fn worst_unchanged_in_whole_ms_is_not_printed() {
+        assert!(!worst_changed((0, 0), 999_999, 0));
+        assert!(!worst_changed((5, 7), 5_900_000, 7_100_000));
+    }
+
+    /// A new whole-ms worst of either value is printed.
+    #[test]
+    fn worst_changed_in_either_value_is_printed() {
+        assert!(worst_changed((5, 7), 6_000_000, 7_000_000));
+        assert!(worst_changed((5, 7), 5_000_000, 8_000_000));
+    }
+
+    /// Equal figures are quiet; a change of the split alone is printed.
+    #[test]
+    fn worst_equal_is_quiet_and_split_alone_counts() {
+        assert!(!worst_changed((6, 7), 6_000_000, 7_000_000));
+        assert!(worst_changed((6, 7), 6_000_000, 9_000_000));
+    }
+    /// (`V3_VA_PROFILE.md`): a fixed sequence of splits (windowed, PDB_ALL, a remap),
+    /// invalidates and a refused map, rendered as everything the manager decided: host ops in
+    /// order, each walk's verdict codes, the split outcomes, the reconciled spaces and the
+    /// decision counters. `split` asks for one split (the caller chooses the API).
+    fn equivalence_trace(split: &dyn Fn(&mut Rig, Option<u64>, u64)) -> String {
+        let mut r = rig();
+        let mut out = String::new();
+        let step = |r: &mut Rig, out: &mut String, tag: &str| {
+            let rec = r.m.on_walk_ready(r.port.trigger());
+            let applied: Vec<String> = rec
+                .applied
+                .iter()
+                .map(|(k, a)| format!("{k:?}:{a:?}"))
+                .collect();
+            let verdict = r.m.walker().verdict.clone();
+            let splits = r.m.take_splits();
+            out.push_str(&format!(
+                "[{tag}] collected={} applied={applied:?} completed={:?} unreconciled={:?} verdict={:?} splits={:?}\n",
+                rec.collected,
+                rec.completed,
+                rec.unreconciled,
+                verdict,
+                splits
+            ));
+        };
+        r.m.walker_mut().report_cap = Some(4);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..9u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        split(&mut r, Some(PDB_A), 21);
+        for w in 0..4 {
+            step(&mut r, &mut out, &format!("a{w}"));
+        }
+        r.m.walker_mut().report_cap = None;
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x5000_0000, 0x0400_0000, 0x2000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_B, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        step(&mut r, &mut out, "b");
+        // a remap of A's first rows and a refused map, then PDB_ALL
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = Some(0x6000_0000);
+        }
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x4000_0000, 0x0500_0000, 0x1000, 0),
+                (0x6000_0000, 0x0600_0000, 0x1000, 0),
+            ],
+        );
+        split(&mut r, None, 22);
+        split(&mut r, Some(PDB_B), 23);
+        for w in 0..3 {
+            step(&mut r, &mut out, &format!("c{w}"));
+        }
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        step(&mut r, &mut out, "d");
+        let s = &r.m.stats;
+        out.push_str(&format!(
+            "ops={:?}\nsubmits={:?}\nstats walks={}/{}/{} spaces={} mapped={} unmapped={} inval={} cleared={} unreconciled={} splits={} unsettled={} partial={} refusals={:?}\n",
+            ops(&r),
+            r.m.walker().submits,
+            s.walks_submitted,
+            s.walks_reconciled,
+            s.walks_refused,
+            s.spaces_reconciled,
+            s.mapped,
+            s.unmapped,
+            s.host_invalidates,
+            s.cleared,
+            s.unreconciled,
+            s.splits,
+            s.splits_unsettled,
+            s.partial,
+            s.refusals
+        ));
+        out
+    }
+
+    fn fnv(s: &str) -> u64 {
+        s.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    }
+
+    /// The trace of the scenario above on `origin/next` 2831e3c9c, BEFORE any profiling code existed
+    /// (captured 2026-11-16 by running `equivalence_trace` there with `on_split`).
+    const GOLDEN_FNV: u64 = 0x7751_ee14_7073_7f6c;
+    const GOLDEN_LEN: usize = 7296;
+
+    fn queued_ago(ms: u64) -> Option<std::time::Instant> {
+        std::time::Instant::now().checked_sub(std::time::Duration::from_millis(ms))
+    }
+
+    /// ★★ OBSERVATION CANNOT CHANGE BEHAVIOUR: the same splits/invalidates give the same host ops,
+    /// verdicts, split outcomes and counters as the code before profiling existed — with the slow
+    /// records off, with every apply and ticket recorded (threshold 0), and with enqueue times.
+    #[test]
+    fn profiling_does_not_change_acks_commits_or_host_ops() {
+        let plain = equivalence_trace(&|r, pdb, t| r.m.on_split(pdb, t, r.port.trigger()));
+        assert_eq!(
+            (fnv(&plain), plain.len()),
+            (GOLDEN_FNV, GOLDEN_LEN),
+            "trace differs from the pre-profiling golden:\n{plain}"
+        );
+        let all = equivalence_trace(&|r, pdb, t| {
+            r.m.slow_profile_ns = 0;
+            r.m.on_split_queued(pdb, t, queued_ago(5), r.port.trigger());
+        });
+        assert_eq!(
+            all, plain,
+            "profiling every apply and ticket changed a decision"
+        );
+        let none = equivalence_trace(&|r, pdb, t| {
+            r.m.slow_profile_ns = u64::MAX;
+            r.m.on_split_queued(pdb, t, None, r.port.trigger());
+        });
+        assert_eq!(none, plain);
+    }
+
+    /// The same, for the space-keyed split (`on_split_space_queued` vs `on_split_space`).
+    #[test]
+    fn profiling_does_not_change_a_space_split() {
+        let run = |queued: bool| {
+            let mut r = rig();
+            r.m.slow_profile_ns = if queued { 0 } else { u64::MAX };
+            r.m.walker_mut().report_cap = Some(2);
+            r.tables.borrow_mut().insert(
+                PDB_A,
+                (0..5u64)
+                    .map(|i| {
+                        (
+                            0x4000_0000 + 0x2000 * i,
+                            0x0300_0000 + 0x2000 * i,
+                            0x1000,
+                            0,
+                        )
+                    })
+                    .collect(),
+            );
+            if queued {
+                r.m.on_split_space_queued(K_A, 5, queued_ago(3), r.port.trigger());
+            } else {
+                r.m.on_split_space(K_A, 5, r.port.trigger());
+            }
+            let mut v = Vec::new();
+            for _ in 0..5 {
+                let rec = r.m.on_walk_ready(r.port.trigger());
+                let verdict = r.m.walker().verdict.clone();
+                let splits = r.m.take_splits();
+                v.push(format!("{:?} {verdict:?} {splits:?}", rec.applied));
+            }
+            (v, ops(&r))
+        };
+        assert_eq!(run(true), run(false));
+    }
+
+    /// ★ The inbox wait starts at the WORKER's enqueue, not at the manager's acceptance.
+    #[test]
+    fn profiling_q_inbox_starts_at_the_worker_enqueue() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split_queued(Some(PDB_A), 7, queued_ago(30), r.port.trigger());
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.q_inbox.n, 1);
+        assert!(p.q_inbox.ns >= 30_000_000, "{:?}", p.q_inbox);
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.req.n, 1);
+        assert!(
+            p.req.max >= 30_000_000,
+            "request latency includes the inbox: {:?}",
+            p.req
+        );
+        assert_eq!(p.req_hist.count(), 1);
+        assert_eq!(p.collect.n, 1);
+        assert_eq!(p.submit.n, 1);
+        // a split with no known enqueue time is a request, not an inbox sample
+        r.m.on_split(Some(PDB_A), 8, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.q_inbox.n, p.req.n), (1, 2));
+    }
+
+    /// ★ A slow ticket's record: its windows, inbox time, and the request latency that contains it.
+    #[test]
+    fn profiling_a_slow_ticket_record_names_its_inbox_time_and_windows() {
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        r.m.walker_mut().report_cap = Some(4);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            (0..9u64)
+                .map(|i| {
+                    (
+                        0x4000_0000 + 0x2000 * i,
+                        0x0300_0000 + 0x2000 * i,
+                        0x1000,
+                        0,
+                    )
+                })
+                .collect(),
+        );
+        r.m.on_split_queued(Some(PDB_A), 21, queued_ago(30), r.port.trigger());
+        for _ in 0..3 {
+            r.m.walker_mut().retries += 1;
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
+        let tickets: Vec<crate::vaprof::SlowRecord> =
+            r.m.slow_records()
+                .into_iter()
+                .map(|(_, rec, _)| rec)
+                .filter(|rec| rec.kind == crate::vaprof::SlowKind::Ticket)
+                .collect();
+        assert_eq!(tickets.len(), 1, "one verdict, one ticket record");
+        let t = tickets[0];
+        assert_eq!((t.ticket, t.windows, t.walk, t.pdb), (21, 3, 3, PDB_A));
+        assert!(t.q_inbox_us >= 30_000, "{t:?}");
+        assert!(t.req_us >= t.q_inbox_us + t.mgr_us - 1, "{t:?}");
+        assert_eq!(t.cap_retries, 3);
+        assert!(t.apply_own_us <= t.apply_all_us);
+        assert_eq!(r.m.stats.timing.prof.slow_reqs, 1);
+    }
+
+    /// ★ Every space's apply is counted with its phases (the apply's own partition).
+    #[test]
+    fn profiling_every_apply_is_counted_with_its_phases() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        let _ = settle(&mut r, PDB_A);
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.aps.n, p.aps_hist.count()), (1, 1));
+        for ph in [
+            Phase::Prep,
+            Phase::UnmapPhase,
+            Phase::MapPhase,
+            Phase::Takedown,
+            Phase::Invalidate,
+        ] {
+            assert_eq!(p.phases.get(ph).n, 1, "{ph:?}");
+        }
+        // phases of a FakeHost apply never reach a host-verb accumulator (no BatchedVas)
+        assert_eq!(p.phases.get(Phase::RmMap).n, 0);
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        let _ = settle(&mut r, PDB_A);
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.aps.n, 2);
+        assert_eq!(p.phases.get(Phase::Prep).n, 2);
+        assert_eq!(p.slow_aps, 0, "nothing is slow at the default threshold");
+        assert!(r.m.slow_records().is_empty());
+    }
+
+    /// ★ A slow apply's record carries its ticket, walk, space, root, slot and window ordinal.
+    #[test]
+    fn profiling_a_slow_apply_record_carries_its_ids() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let held = r.m.slow_records();
+        let (seq, a, _) = held
+            .iter()
+            .copied()
+            .find(|(_, rec, _)| rec.kind == crate::vaprof::SlowKind::Apply)
+            .expect("an apply record");
+        assert_eq!(seq, 1, "the apply is recorded before the ticket's verdict");
+        assert_eq!(
+            (
+                a.ticket, a.walk, a.key, a.pdb, a.slot, a.window, a.maps, a.unmaps
+            ),
+            (
+                7,
+                1,
+                K_A.0,
+                PDB_A,
+                r.m.table.slot(K_A).unwrap_or(99),
+                1,
+                1,
+                0
+            )
+        );
+        assert_eq!(a.phases.get(Phase::Prep).n, 1);
+        assert_eq!(r.m.stats.timing.prof.slow_aps, 1);
+        // the teardown dump returns what was not printed live, then a summary; a second dump only
+        // the summary
+        let first = r.m.slow_ring_dump();
+        assert!(
+            first
+                .last()
+                .is_some_and(|l| l.contains("VA_SLOW SUMMARY recorded=2"))
+        );
+        let second = r.m.slow_ring_dump();
+        assert_eq!(second.len(), 1);
+        assert!(second[0].contains("dumped_now=0"));
+    }
+
+    /// ★ The ring never grows past its size; what it overwrote is counted and published.
+    #[test]
+    fn profiling_the_ring_holds_at_most_its_size() {
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        let rounds = 70u64;
+        for i in 0..rounds {
+            r.tables.borrow_mut().insert(
+                PDB_A,
+                vec![(0x4000_0000 + 0x2000 * (i % 2), 0x0300_0000, 0x1000, 0)],
+            );
+            r.m.on_split(Some(PDB_A), 100 + i, r.port.trigger());
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            assert_eq!(r.m.take_splits(), vec![(100 + i, Ok(()))]);
+        }
+        let p = r.m.stats.timing.prof;
+        assert_eq!(
+            (p.aps.n, p.req.n, p.slow_aps, p.slow_reqs),
+            (rounds, rounds, rounds, rounds)
+        );
+        let held = r.m.slow_records();
+        assert_eq!(held.len(), crate::vaprof::SLOW_RING);
+        let pushed = 2 * rounds;
+        assert_eq!(p.ring_overwritten, pushed - crate::vaprof::SLOW_RING as u64);
+        // the newest are kept, oldest first
+        assert_eq!(held.last().map(|h| h.0), Some(pushed));
+        assert_eq!(
+            held.first().map(|h| h.0),
+            Some(pushed - crate::vaprof::SLOW_RING as u64 + 1)
+        );
+        // the live print budget's burst was spent; the rest stayed in the ring for the teardown dump
+        assert_eq!(p.slow_printed, u64::from(crate::vaprof::DUMP_BURST));
+        assert_eq!(p.slow_printed + p.slow_suppressed, pushed);
+        let dump = r.m.slow_ring_dump();
+        assert!(dump.len() <= crate::vaprof::SLOW_RING + 1);
+    }
+
+    /// ★ Per window: submit, collect/decode and hidden capacity re-walks are counted; the phases
+    /// of every window's apply are merged.
+    #[test]
+    fn profiling_windows_count_submit_collect_and_retries() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(4);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            (0..9u64)
+                .map(|i| {
+                    (
+                        0x4000_0000 + 0x2000 * i,
+                        0x0300_0000 + 0x2000 * i,
+                        0x1000,
+                        0,
+                    )
+                })
+                .collect(),
+        );
+        r.m.on_split(Some(PDB_A), 21, r.port.trigger());
+        for _ in 0..3 {
+            r.m.walker_mut().retries += 2;
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.submit.n, p.collect.n), (3, 3));
+        assert_eq!(p.cap_retries, 6);
+        assert_eq!(p.windows_max, 3);
+        assert_eq!(p.phases.get(Phase::Prep).n, 3);
+        assert_eq!(p.phases.get(Phase::MapPhase).n, 3);
+        // the window of the status line
+        let d = r.m.stats.timing.since(&VaTiming::default());
+        assert_eq!(d.prof.collect.n, 3);
     }
 }

@@ -1,0 +1,5 @@
+== System (display, kernel power, TDR)
+2026-11-22T02:44:48Z 14 Microsoft-Windows-Wininit Credential Guard configuration: Registry Configuration: 0x0 Test Configuration: 0 Auto Enablement: 0
+2026-11-22T02:43:47Z 153 Microsoft-Windows-Kernel-Boot Virtualization-based security (policies: 0) is disabled.
+== Application 1000/1001/1002
+== LiveKernelReports

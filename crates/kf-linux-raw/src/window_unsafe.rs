@@ -186,7 +186,7 @@ impl GuestWindow {
     /// `memory_region_init_ram_device_ptr`). `None` if it leaves the window. The window is mapped
     /// from construction until `Drop`; only `unsafe` code can open the span.
     #[must_use]
-    pub fn host_span(&self, off: usize, len: usize) -> Option<crate::HostSpan> {
+    pub fn host_span(&self, off: usize, len: usize) -> Option<crate::HostSpan<'_>> {
         crate::HostSpan::within(self.base, self.len, off, len)
     }
 

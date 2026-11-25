@@ -1,0 +1,82 @@
+=== nvbandwidth side=host start=2026-11-24T00:31:05+00:00 host=ubuntu cmd: ${KF_GPU_ENV:+env $KF_GPU_ENV }python3 -B -I /opt/apps/bundle/share/open_rows/nvbandwidth_row.py run --out /opt/apps/out/host/nvbandwidth --bundle /opt/apps/bundle --emit
+CASE host_to_device_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_host_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_device_bidirectional_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_host_bidirectional_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_memcpy_read_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_memcpy_write_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_bidirectional_memcpy_read_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_bidirectional_memcpy_write_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_local_copy class=local result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_host_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_host_bidirectional_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_all_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_all_bidirectional_memcpy_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_one_write_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_one_read_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE one_to_all_write_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE one_to_all_read_ce class=ce result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_device_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_host_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_device_bidirectional_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_host_bidirectional_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_memcpy_read_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_memcpy_write_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_bidirectional_memcpy_read_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_bidirectional_memcpy_write_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_host_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_host_bidirectional_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_all_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_to_all_bidirectional_memcpy_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_one_write_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE all_to_one_read_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE one_to_all_write_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE one_to_all_read_sm class=sm result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE host_device_latency_sm class=latency result=FAIL reason=binary_error status=Error best=- secs=0.0
+CASE device_to_device_latency_sm class=latency result=FAIL reason=binary_error status=Error best=- secs=0.0
+@@FILE results.tsv sha256=0c479133480acfa3 bytes=2237
+id	class	result	reason	status	best	secs
+host_to_device_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_host_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+host_to_device_bidirectional_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_host_bidirectional_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_device_memcpy_read_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_device_memcpy_write_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_device_bidirectional_memcpy_read_ce	ce	FAIL	binary_error	Error	-	0.0
+device_to_device_bidirectional_memcpy_write_ce	ce	FAIL	binary_error	Error	-	0.0
+device_local_copy	local	FAIL	binary_error	Error	-	0.0
+all_to_host_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+all_to_host_bidirectional_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+host_to_all_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+host_to_all_bidirectional_memcpy_ce	ce	FAIL	binary_error	Error	-	0.0
+all_to_one_write_ce	ce	FAIL	binary_error	Error	-	0.0
+all_to_one_read_ce	ce	FAIL	binary_error	Error	-	0.0
+one_to_all_write_ce	ce	FAIL	binary_error	Error	-	0.0
+one_to_all_read_ce	ce	FAIL	binary_error	Error	-	0.0
+host_to_device_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_host_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+host_to_device_bidirectional_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_host_bidirectional_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_device_memcpy_read_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_device_memcpy_write_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_device_bidirectional_memcpy_read_sm	sm	FAIL	binary_error	Error	-	0.0
+device_to_device_bidirectional_memcpy_write_sm	sm	FAIL	binary_error	Error	-	0.0
+all_to_host_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+all_to_host_bidirectional_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+host_to_all_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+host_to_all_bidirectional_memcpy_sm	sm	FAIL	binary_error	Error	-	0.0
+all_to_one_write_sm	sm	FAIL	binary_error	Error	-	0.0
+all_to_one_read_sm	sm	FAIL	binary_error	Error	-	0.0
+one_to_all_write_sm	sm	FAIL	binary_error	Error	-	0.0
+one_to_all_read_sm	sm	FAIL	binary_error	Error	-	0.0
+host_device_latency_sm	latency	FAIL	binary_error	Error	-	0.0
+device_to_device_latency_sm	latency	FAIL	binary_error	Error	-	0.0
+@@END results.tsv
+@@FILE summary.txt sha256=2f1d31745c003ab2 bytes=309
+# gpu_use_why=no case passed, so there was no work to prove
+NVBANDWIDTH_PROOF device=none gpus=0 passed=0 ce=0 sm=0 latency=0 local=0 min_gbps=0
+NVBANDWIDTH_SUMMARY status=FAIL reason=unexpected_results pass=0 waived=0 fail=35 mismatch=0 not_run=0 cases=35 gpus=0 gpu_use=NA device=none buffer_mib=512 secs=1
+@@END summary.txt
+NVBANDWIDTH_PROOF device=none gpus=0 passed=0 ce=0 sm=0 latency=0 local=0 min_gbps=0
+NVBANDWIDTH_SUMMARY status=FAIL reason=unexpected_results pass=0 waived=0 fail=35 mismatch=0 not_run=0 cases=35 gpus=0 gpu_use=NA device=none buffer_mib=512 secs=1
+=== end rc=1 secs=1 2026-11-24T00:31:06+00:00

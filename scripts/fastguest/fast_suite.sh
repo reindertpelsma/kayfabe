@@ -19,6 +19,9 @@ TAG=${1:-fastsuite}; shift || true
 # ⊘ Still a ceiling, not a formality: a hang is a failure. Revisit on a non-nested KVM host.
 BUDGET=${1:-180}; shift || true
 BENCH=${BENCH_DIR:-/workspace/bench}
+# `--defer-liveness` and `--missing-page-fault` test the FAULT of an unmapped read, which the device's default
+# (`unmapped-reads-zero` ON for every guest) no longer produces. run_fast_guest.sh boots those two arms, and only
+# those, with `unmapped-reads-zero=off` (FAULT_ARMS there); the other 28 arms run with the default.
 ARMS=("$@")
 if [ "${#ARMS[@]}" -eq 0 ]; then
     ARMS=(--timer --engines --doorbell-census --gpu-info-sweep --bus-info-sweep --concurrency

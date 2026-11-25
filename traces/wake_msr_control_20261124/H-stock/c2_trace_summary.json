@@ -1,0 +1,2952 @@
+{
+ "host_synic": [
+  [
+   2388.764165,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000081 data 0x1 host 1"
+  ],
+  [
+   2388.764166,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000080 data 0x0 host 1"
+  ],
+  [
+   2388.764167,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000082 data 0x0 host 1"
+  ],
+  [
+   2388.764168,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000083 data 0x0 host 1"
+  ],
+  [
+   2388.764168,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000090 data 0x10000 host 1"
+  ],
+  [
+   2388.764169,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000091 data 0x10000 host 1"
+  ],
+  [
+   2388.76417,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000092 data 0x10000 host 1"
+  ],
+  [
+   2388.764171,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000093 data 0x10000 host 1"
+  ],
+  [
+   2388.764171,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000094 data 0x10000 host 1"
+  ],
+  [
+   2388.764172,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000095 data 0x10000 host 1"
+  ],
+  [
+   2388.764173,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000096 data 0x10000 host 1"
+  ],
+  [
+   2388.764174,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000097 data 0x10000 host 1"
+  ],
+  [
+   2388.764174,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000098 data 0x10000 host 1"
+  ],
+  [
+   2388.764175,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x40000099 data 0x10000 host 1"
+  ],
+  [
+   2388.764176,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009a data 0x10000 host 1"
+  ],
+  [
+   2388.764176,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009b data 0x10000 host 1"
+  ],
+  [
+   2388.764177,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009c data 0x10000 host 1"
+  ],
+  [
+   2388.764178,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009d data 0x10000 host 1"
+  ],
+  [
+   2388.764179,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009e data 0x10000 host 1"
+  ],
+  [
+   2388.764179,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 0 msr 0x4000009f data 0x10000 host 1"
+  ],
+  [
+   2388.764377,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000081 data 0x1 host 1"
+  ],
+  [
+   2388.764378,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000080 data 0x0 host 1"
+  ],
+  [
+   2388.764379,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000082 data 0x0 host 1"
+  ],
+  [
+   2388.764379,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000083 data 0x0 host 1"
+  ],
+  [
+   2388.76438,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000090 data 0x10000 host 1"
+  ],
+  [
+   2388.764381,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000091 data 0x10000 host 1"
+  ],
+  [
+   2388.764382,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000092 data 0x10000 host 1"
+  ],
+  [
+   2388.764382,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000093 data 0x10000 host 1"
+  ],
+  [
+   2388.764383,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000094 data 0x10000 host 1"
+  ],
+  [
+   2388.764384,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000095 data 0x10000 host 1"
+  ],
+  [
+   2388.764384,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000096 data 0x10000 host 1"
+  ],
+  [
+   2388.764385,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000097 data 0x10000 host 1"
+  ],
+  [
+   2388.764386,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000098 data 0x10000 host 1"
+  ],
+  [
+   2388.764386,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x40000099 data 0x10000 host 1"
+  ],
+  [
+   2388.764387,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009a data 0x10000 host 1"
+  ],
+  [
+   2388.764388,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009b data 0x10000 host 1"
+  ],
+  [
+   2388.764388,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009c data 0x10000 host 1"
+  ],
+  [
+   2388.764389,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009d data 0x10000 host 1"
+  ],
+  [
+   2388.76439,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009e data 0x10000 host 1"
+  ],
+  [
+   2388.76439,
+   "kvm_hv_synic_set_msr",
+   "vcpu_id 1 msr 0x4000009f data 0x10000 host 1"
+  ]
+ ],
+ "host_stimer": [
+  [
+   2388.76418,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 0 config 0x0 host 1"
+  ],
+  [
+   2388.764182,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 1 config 0x0 host 1"
+  ],
+  [
+   2388.764183,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 2 config 0x0 host 1"
+  ],
+  [
+   2388.764183,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 0 timer 3 config 0x0 host 1"
+  ],
+  [
+   2388.764185,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 0 count 0 host 1"
+  ],
+  [
+   2388.764185,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 1 count 0 host 1"
+  ],
+  [
+   2388.764186,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 2 count 0 host 1"
+  ],
+  [
+   2388.764187,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 0 timer 3 count 0 host 1"
+  ],
+  [
+   2388.764391,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 0 config 0x0 host 1"
+  ],
+  [
+   2388.764392,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 1 config 0x0 host 1"
+  ],
+  [
+   2388.764393,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 2 config 0x0 host 1"
+  ],
+  [
+   2388.764394,
+   "kvm_hv_stimer_set_config",
+   "vcpu_id 1 timer 3 config 0x0 host 1"
+  ],
+  [
+   2388.764395,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 0 count 0 host 1"
+  ],
+  [
+   2388.764395,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 1 count 0 host 1"
+  ],
+  [
+   2388.764396,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 2 count 0 host 1"
+  ],
+  [
+   2388.764397,
+   "kvm_hv_stimer_set_count",
+   "vcpu_id 1 timer 3 count 0 host 1"
+  ]
+ ],
+ "guest_msr": [
+  [
+   2382.444712,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.449955,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.465521,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.465902,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.471942,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.478931,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.533396,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.535896,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.544915,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.572903,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.572952,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.588921,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.59991,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.610895,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.65993,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.674902,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.677912,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.687874,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.687914,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.688074,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.688444,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.689589,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.697386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.716892,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.718527,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.718921,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.724324,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.729848,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.73074,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.732436,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.732461,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.732805,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.733383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.744452,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.747902,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.749909,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.752893,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.80792,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.807982,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.808395,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.80893,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.809873,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.810936,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.812932,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.822926,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.829397,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.830881,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.833885,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.863919,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.896878,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.907381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.917915,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.931913,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.944916,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.94786,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.94837,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.950873,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.962871,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.963758,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.963946,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.963971,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.964175,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.965396,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.966903,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.969901,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.976885,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.976909,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2382.986369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.019953,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.025192,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2383.025235,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2383.025262,
+   "kvm_msr",
+   "msr_read 40000021 = 0x4a04001"
+  ],
+  [
+   2383.025284,
+   "kvm_msr",
+   "msr_read 40000080 = 0x0"
+  ],
+  [
+   2383.025306,
+   "kvm_msr",
+   "msr_read 40000082 = 0x0"
+  ],
+  [
+   2383.02536,
+   "kvm_msr",
+   "msr_read 40000083 = 0x0"
+  ],
+  [
+   2383.025396,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2383.02542,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x0"
+  ],
+  [
+   2383.025442,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x0"
+  ],
+  [
+   2383.025465,
+   "kvm_msr",
+   "msr_read 40000020 = 0x16c4b1de"
+  ],
+  [
+   2383.025541,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2383.025667,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2383.02579,
+   "kvm_msr",
+   "msr_read 40000021 = 0x4a04001"
+  ],
+  [
+   2383.025912,
+   "kvm_msr",
+   "msr_read 40000080 = 0x0"
+  ],
+  [
+   2383.025971,
+   "kvm_msr",
+   "msr_read 40000082 = 0x0"
+  ],
+  [
+   2383.026029,
+   "kvm_msr",
+   "msr_read 40000083 = 0x0"
+  ],
+  [
+   2383.026104,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2383.026164,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x0"
+  ],
+  [
+   2383.026222,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x0"
+  ],
+  [
+   2383.02628,
+   "kvm_msr",
+   "msr_read 40000020 = 0x16c4d1b1"
+  ],
+  [
+   2383.070883,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.071875,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.073913,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.076912,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.234953,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.236888,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.239848,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.244886,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.245871,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.265942,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.266365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.274928,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.279929,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.285924,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.286782,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.296726,
+   "kvm_msr",
+   "msr_write 40000073 = 0x0"
+  ],
+  [
+   2383.296868,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.296888,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.296983,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.298466,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.298487,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.298543,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2383.300596,
+   "kvm_msr",
+   "msr_read 40000021 = 0x4a04001"
+  ],
+  [
+   2383.300613,
+   "kvm_msr",
+   "msr_write 40000021 = 0x4a04000"
+  ],
+  [
+   2383.30383,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2383.303847,
+   "kvm_msr",
+   "msr_write 40000001 = 0x51a3000"
+  ],
+  [
+   2383.303863,
+   "kvm_msr",
+   "msr_write 40000073 = 0x0"
+  ],
+  [
+   2392.414027,
+   "kvm_msr",
+   "msr_read 40000002 = 0x0"
+  ],
+  [
+   2392.414084,
+   "kvm_msr",
+   "msr_write 40000073 = 0x51a2001"
+  ],
+  [
+   2392.414094,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2392.414104,
+   "kvm_msr",
+   "msr_write 40000001 = 0x51a3001"
+  ],
+  [
+   2392.41794,
+   "kvm_msr",
+   "msr_read 40000021 = 0x0"
+  ],
+  [
+   2392.41795,
+   "kvm_msr",
+   "msr_write 40000021 = 0x4a04001"
+  ],
+  [
+   2392.424293,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.42433,
+   "kvm_msr",
+   "msr_read 40000002 = 0x1"
+  ],
+  [
+   2392.424428,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.424498,
+   "kvm_msr",
+   "msr_write 40000073 = 0x53f7001"
+  ],
+  [
+   2392.444452,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.446421,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.44651,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.458685,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.459483,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.459557,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.460362,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.460456,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.472416,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.491748,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.541412,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.541494,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.543275,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2392.543476,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2392.5436,
+   "kvm_msr",
+   "msr_read 40000021 = 0x4a04001"
+  ],
+  [
+   2392.543625,
+   "kvm_msr",
+   "msr_read 40000080 = 0x0"
+  ],
+  [
+   2392.543664,
+   "kvm_msr",
+   "msr_read 40000082 = 0x0"
+  ],
+  [
+   2392.543951,
+   "kvm_msr",
+   "msr_read 40000083 = 0x0"
+  ],
+  [
+   2392.543989,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2392.544012,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x0"
+  ],
+  [
+   2392.544034,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x0"
+  ],
+  [
+   2392.544057,
+   "kvm_msr",
+   "msr_read 40000020 = 0x1c71271a"
+  ],
+  [
+   2392.544146,
+   "kvm_msr",
+   "msr_read 40000000 = 0x0"
+  ],
+  [
+   2392.54428,
+   "kvm_msr",
+   "msr_read 40000001 = 0x51a3000"
+  ],
+  [
+   2392.544456,
+   "kvm_msr",
+   "msr_read 40000021 = 0x4a04001"
+  ],
+  [
+   2392.54453,
+   "kvm_msr",
+   "msr_read 40000080 = 0x0"
+  ],
+  [
+   2392.544605,
+   "kvm_msr",
+   "msr_read 40000082 = 0x0"
+  ],
+  [
+   2392.544673,
+   "kvm_msr",
+   "msr_read 40000083 = 0x0"
+  ],
+  [
+   2392.544729,
+   "kvm_msr",
+   "msr_read 40000092 = 0x10000"
+  ],
+  [
+   2392.544783,
+   "kvm_msr",
+   "msr_read 400000b0 = 0x0"
+  ],
+  [
+   2392.544837,
+   "kvm_msr",
+   "msr_read 400000b1 = 0x0"
+  ],
+  [
+   2392.54491,
+   "kvm_msr",
+   "msr_read 40000020 = 0x1c714865"
+  ],
+  [
+   2392.547451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.556459,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.591451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.595451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.596441,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.597452,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.600451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.720457,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.727368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.753669,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.754403,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.756558,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.761451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.764446,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.76449,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.764584,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.775403,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.777451,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.96142,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2392.962405,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.26848,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.270302,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.304942,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.343483,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.376448,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2393.617407,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.789495,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.789559,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.810556,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.815433,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.837393,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.879526,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.880003,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.88123,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.88839,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.889758,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.89149,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.90055,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.906529,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.910474,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.914398,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.9154,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.91645,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.94553,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.949424,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.951408,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.956426,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.977381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.979365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2394.997386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.000395,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.01044,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.019383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.035357,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.036382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.037426,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.037651,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.03806,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.039101,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.043382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.048533,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.051656,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.062734,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.063413,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.068379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.069391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.128819,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.130765,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.132439,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.142372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.145208,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.149404,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.150383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.15138,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.190371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.225356,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.231377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.234397,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.239423,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.243359,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.253373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.260373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.269366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.27041,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.27097,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.271161,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.271373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.272562,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.283615,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.288373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.292545,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.293362,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.299383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.299588,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.311608,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.373872,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.374374,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.37938,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.380379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.390378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.393392,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.394397,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.39639,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.397377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.4004,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.41338,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.421379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.423378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.428371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.451383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.455382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.464443,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.468429,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.485389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.499365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.505365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.507362,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.50837,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.512049,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.512233,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.512366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.512437,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.513373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.513667,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.523371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.525367,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.527946,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.52837,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.530367,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.532359,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.532398,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.533365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.534373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.535368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.539399,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.543373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.550242,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.55636,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.55736,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.558364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.613531,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.613771,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.624391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.633385,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.636383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.637376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.640369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.661388,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.665378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.669392,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.674371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.689381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.69437,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.698394,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.705391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.710396,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.725385,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.729371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.730367,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.73137,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.734371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.735369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.736363,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.737372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.738364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.740367,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.743365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.747377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.748366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.74937,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.75137,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.753381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.754372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.755368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.756364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.757368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.757952,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.758142,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.758283,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.758357,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.75954,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.761373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.765366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.766366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.767356,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.769364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.770364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.771368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.773365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.773365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.775057,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.775362,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.775401,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.776365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.777368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.778366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.779364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.779448,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.780369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.78136,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.782371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.782371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.786901,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.787034,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.787371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.788365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.788368,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.789364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.78937,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.790369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.791364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.791371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.792369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.792376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.793372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.793375,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.794356,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.794356,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.795359,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.795359,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.796365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.797363,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.797365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.797974,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.798365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.798365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.799311,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.799346,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.800363,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.803364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.807373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.86155,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.861856,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.86237,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.864375,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.86537,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.866365,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.867372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.870394,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.872382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.873377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.874378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.877374,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.879388,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.880372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.880381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.887374,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.887386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.897383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.908384,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.913379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.915371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.915383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.916391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.920382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.922386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.926385,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.92738,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.928381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.931379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.93339,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.937382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.939377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.944392,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.946371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.94739,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.948381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.951388,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.951393,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.95239,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.956373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.95739,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.95937,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.961382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.962378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.963376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.964378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.966374,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.97737,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.978381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.980372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.981378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.98238,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.983372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.984376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.988376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.989375,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.991366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.992363,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.994376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.99638,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2395.998366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.000366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.003364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.003374,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.00438,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.008371,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.009369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.010383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.011372,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.012362,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.013361,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.013501,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.013715,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.014117,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.015039,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.015353,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.016383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.017376,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.019373,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.021359,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.022364,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.024367,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.02536,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.026366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.026366,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.029574,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.030369,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.03124,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.03437,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.035858,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.03637,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2396.037379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.200391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.202386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.203386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.204386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.206394,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.288386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.28939,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.290386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.291386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.292389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.293394,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.294393,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.319389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.368395,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.376391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.383377,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.384389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.385389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.386387,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.388391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.38939,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.49539,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.496388,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.496391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.527381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.52839,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.623395,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.624389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.687394,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.68838,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.736382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.736386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.821379,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.821383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.879389,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.879391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.880382,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2397.944383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.007391,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.008392,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.071386,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.199384,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.319383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.359383,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.383381,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.519378,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.775384,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ],
+  [
+   2398.967395,
+   "kvm_msr",
+   "msr_write 40000070 = 0x0"
+  ]
+ ],
+ "tsc_offset": [
+  [
+   2388.764159,
+   "kvm_write_tsc_offset",
+   "vcpu=0 prev=18446735513898416178 next=18446735454017655924"
+  ],
+  [
+   2388.764371,
+   "kvm_write_tsc_offset",
+   "vcpu=1 prev=18446735513898416178 next=18446735454017655924"
+  ]
+ ],
+ "counts": {
+  "kvm_msr": 529,
+  "kvm_write_tsc_offset": 2,
+  "kvm_hv_synic_set_msr": 40,
+  "kvm_hv_stimer_set_config": 8,
+  "kvm_hv_stimer_set_count": 8
+ }
+}

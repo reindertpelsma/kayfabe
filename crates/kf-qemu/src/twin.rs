@@ -24,7 +24,7 @@
 //! only in `Kernel` — so a privileged leaf is never placed in a space a user channel can run in,
 //! and no lock is added to the VA thread's path.
 //!
-//! ★ Always on since 2026-10-10 (`OWNER_RULINGS.md` §AB: `KF3_TSPACE` deleted). ⊘ The default
+//! ★ Always on since 2026-10-10. ⊘ The default
 //! path's unconditional flip (`force_kernel`: a Translated birth marked the space kernel with no
 //! refusal, passthrough births uncounted) is deleted with it.
 

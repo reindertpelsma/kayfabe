@@ -18,8 +18,7 @@ mod bridge;
 mod rpcwire;
 
 use bridge::*;
-use kf_abi::capability::PassthroughRule;
-use kf_abi::capability::{Denial, DeniedBecause};
+use kf_abi::capability::{Denial, Judgement, Refusal};
 use kf_abi::wire::AbiError;
 use kf_abi::{ClientKindRuleUnknown, GuestOs};
 use kf_arch::ClientKind;
@@ -859,7 +858,7 @@ fn the_control_refusal_order_matches_the_alloc_arms() {
             ),
         )
     };
-    let unknown_cmd = 0x0080_1812u32;
+    let unknown_cmd = 0x0080_18ffu32;
 
     // Everything wrong at once -> the namespace.
     assert_eq!(
@@ -1085,7 +1084,7 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
             cmd: 0x2080_0122,
             denial: Denial::Refused {
                 name: "NV2080_CTRL_CMD_GPU_EXEC_REG_OPS",
-                why: DeniedBecause::RegisterAccess,
+                why: Refusal::Judgement(Judgement::RegisterAccess),
             },
         },
         BridgeRefusal::AllocClassNotPermitted {
@@ -1096,7 +1095,7 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
             class: 0x0000_0071,
             denial: Denial::Refused {
                 name: "NV01_MEMORY_SYSTEM_OS_DESCRIPTOR",
-                why: DeniedBecause::CallerMemoryDescriptor,
+                why: Refusal::Judgement(Judgement::CallerMemory),
             },
         },
     ];
@@ -3942,8 +3941,8 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
     // ★★ The list SPLIT when the capability gate landed, and the split is the finding.
     // Every one of these used to answer `UnknownControl`; only the ones the boundary
     // actually permits still do. `GR_GET_CTX_BUFFER_INFO` is here on purpose: it is
-    // permitted only because this port added it as `Origin::Mode2Rpc` (the C's
-    // ioctl-era list has it nowhere) and it is deliberately not modelled, so it is the
+    // permitted only because kayfabe added it as a `Basis::Mode2Rpc` row (no ioctl-era
+    // list has it) and it is deliberately not modelled, so it is the
     // canonical permitted-but-unmodelled control now that `GPU_PROMOTE_CTX` is decoded.
     for cmd in [
         0x2080_1219, // GR_GET_CTX_BUFFER_INFO — Mode-2 only, listed, unmodelled
@@ -3956,19 +3955,13 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             "cmd {cmd:#x}",
         );
     }
-    // ★★ `u32::MAX` was in that list, annotated *"permitted by the GSS-legacy rule, not
-    // by a row"* — and that annotation is now the variant. A control admitted by a RULE
-    // rather than a row was admitted on nvproxy's premise that a GSP services it, which
-    // in Mode 2 names our own fake GSP; `BridgeRefusal::GspRuleControlUnserviced` carries
-    // the argument and the guest-side control flow. The split is asserted here rather
-    // than merged away because the two are separately countable in the census, and
-    // `crates/kayfabe-rmrpc/tests/gss_legacy_answer.rs` is where it is pinned in full.
+    // `u32::MAX` (bit 15 set) gets no rule pass at the gate: refused there, unlisted.
     let body = w::control_body(spd::C, spd::DEV, u32::MAX, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
     assert_eq!(
         xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
-        Err(BridgeRefusal::GspRuleControlUnserviced {
+        Err(BridgeRefusal::ControlNotPermitted {
             cmd: u32::MAX,
-            rule: PassthroughRule::GssLegacy,
+            denial: Denial::NotOnAllowlist,
         }),
     );
     // …and the ones the boundary refuses outright never reach the params table. This is
@@ -3977,7 +3970,6 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
     // stopped running.
     for cmd in [
         0x0000_0000u32,
-        0x0080_1812, // one BELOW the modelled command
         0x0080_1815,
         0x0080_180f, // UPDATE_PDE_2 — one PDE, not the root
         0x90f1_0105, // one below COPY_SERVER_RESERVED_PDES
@@ -3993,6 +3985,19 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             "cmd {cmd:#x}",
         );
     }
+    // One below the modelled command is ogkm's `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` (kernel clients
+    // only in ogkm). The gate admits it by a `Mode2Rpc` row because the channel link serves it
+    // (security review of PR #545, F1); the bridge has no params shape for it, so it is refused HERE
+    // as unknown, never carried: admission is necessary, not sufficient.
+    let below = 0x0080_1812u32;
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_CONTROL,
+            3,
+            &w::control_body(spd::C, spd::DEV, below, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+        )),
+        Err(BridgeRefusal::UnknownControl { cmd: below }),
+    );
     // ★ A control the port refuses BY NAME is a third answer, distinct from both — and
     // the `Denial` it carries is what a census counts it under.
     let regops = 0x2080_0122u32;
@@ -4006,7 +4011,7 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             cmd: regops,
             denial: Denial::Refused {
                 name: "NV2080_CTRL_CMD_GPU_EXEC_REG_OPS",
-                why: DeniedBecause::RegisterAccess,
+                why: Refusal::Judgement(Judgement::RegisterAccess),
             },
         }),
     );
@@ -6879,9 +6884,9 @@ fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
     let mut script = RpcScript::new();
     script
         .client_root(w::NV01_ROOT, x::A, x::PID_A)
-        // ★ `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — a class nvproxy deliberately omits and
-        // the C omitted with it, because it pins a descriptor over the CALLER's own
-        // address range, and in Mode 2 the caller is the guest kernel.
+        // ★ `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — refused by kayfabe's judgement
+        // (`CallerMemory`): it pins a descriptor over the CALLER's own address range, and in
+        // Mode 2 the caller is the guest kernel.
         .alloc(x::A, x::A, 0x5c00_0099, 0x0000_0071, &[0u8; 16])
         // …and one nobody has ever seen.
         .alloc(x::A, x::A, 0x5c00_009a, 0x0000_f001, &[0u8; 16])
@@ -6926,7 +6931,7 @@ fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
             class: 0x0000_0071,
             denial: Denial::Refused {
                 name: "NV01_MEMORY_SYSTEM_OS_DESCRIPTOR",
-                why: DeniedBecause::CallerMemoryDescriptor,
+                why: Refusal::Judgement(Judgement::CallerMemory),
             },
         }),
     );
@@ -6952,7 +6957,7 @@ fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
     // is this test's own distinction, met in production and costing a hang.
     //
     // The exemplar is now its bare sibling `NV01_EVENT` (`0x05`): still on the allowlist
-    // (`capability.rs`, `Origin::Empirical`), still modelled in no params table, and one
+    // (an `Empirical` row of `tools/api_boundaries/ingress_rules.tsv`), still modelled in no params table, and one
     // family over from the two classes that do have rows, so the three answers stay
     // distinguishable.
     //

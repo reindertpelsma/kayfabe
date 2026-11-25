@@ -1,0 +1,4 @@
+member image.qcow2 stored at offset 61 size 96514746368 zip size 96515484058
+ZIP_SHA256 OK c702ef2deeb6c4b2 secs=64
+members ['image.qcow2', 'state.json', 'manifest.json'] manifest_mismatch [] qcow2_in_manifest ec36a395342a1443
+VERIFY_EXIT rc=0

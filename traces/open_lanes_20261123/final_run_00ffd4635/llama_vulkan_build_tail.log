@@ -1,0 +1,60 @@
+[ 95%] Building CXX object common/CMakeFiles/llama-common.dir/json.cpp.o
+[ 95%] Building CXX object common/CMakeFiles/llama-common.dir/llguidance.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/log.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/chat-diff-analyzer.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-helpers.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/chat-peg-parser.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/chat.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-cache.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/common.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/debug.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/download.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/fit.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-map.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-mod.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/peg-parser.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema-to-grammar.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/preset.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/json.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/log.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-cache.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-map.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/reasoning-budget.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/sampling.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/speculative.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/subproc.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/peg-parser.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/trie.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/unicode.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/preset.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/lexer.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/parser.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/reasoning-budget.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/runtime.cpp.o
+[ 98%] Building CXX object common/CMakeFiles/llama-common.dir/sampling.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/value.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/speculative.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/string.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/lexer.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/parser.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/caps.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/runtime.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/value.cpp.o
+[100%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/caps.cpp.o
+[100%] Linking CXX shared library ../bin/libllama-common.so
+[100%] Built target llama-common
+[100%] Building CXX object tools/llama-bench/CMakeFiles/llama-bench-impl.dir/llama-bench.cpp.o
+[100%] Linking CXX shared library ../bin/libllama-common.so
+[100%] Built target llama-common
+[100%] Building CXX object tools/llama-bench/CMakeFiles/llama-bench-impl.dir/llama-bench.cpp.o
+[100%] Linking CXX shared library ../../bin/libllama-bench-impl.so
+[100%] Built target llama-bench-impl
+[100%] Building CXX object tools/llama-bench/CMakeFiles/llama-bench.dir/main.cpp.o
+[100%] Linking CXX executable ../../bin/llama-bench
+[100%] Built target llama-bench
+Linking CXX shared library ../../bin/libllama-bench-impl.so
+Built target llama-bench-impl
+Consolidate compiler generated dependencies of target llama-bench
+Linking CXX executable ../../bin/llama-bench
+Built target llama-bench

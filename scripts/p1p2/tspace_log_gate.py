@@ -9,6 +9,7 @@ whether the properties a box step owes held on that run.
   tspace_log_gate.py LOG --windows                  # the KF3_TSPACE=0 arm: the KNOWN POSITIVE -
                                                     # mirrors DO carry windows (the gate can see them)
   tspace_log_gate.py LOG --negctl NAME              # a positive-control run: NAME's counter MUST move
+                                                    # (the QEMU must come from `build_kf3.sh --negctl`)
       NAME: stale (KF3_NEGCTL_STALE_BIND), shadow (KF3_NEGCTL_SHADOW), heap (KF3_NEGCTL_HEAP),
             carve (KF3_NEGCTL_CARVE), twin (KF3_NEGCTL_TWIN), oversize (KF3_NEGCTL_TSPACE_OVERSIZE),
             window (KF3_NEGCTL_TWIN_WINDOW: WINDOWS=NONE must FAIL on it)
@@ -73,6 +74,10 @@ TCENSUS_RE = re.compile(r"TCENSUS tok=\S+ host=\S+ key=VasKey\((0x[0-9a-f_]+)\)"
 TSHADOW_RE = re.compile(r"TSHADOW .*max_pieces=(\d+) would_refuse=\[([^\]]*)\] resolve_miss=(\d+) "
                         r"unknown_field=(\d+) unclassified=(\d+)")
 NOT_BUILT_RE = re.compile(r"tspace: not built \((.*)\)")
+
+# The line `Device::realize` prints in a `negctl` (bench) build only. A control run whose log lacks it ran a
+# binary that has no switch to turn on: that run controls nothing and must not be read as a result.
+NEGCTL_BUILD_LINE = "NEGCTL feature compiled in (bench build)"
 
 NEGCTLS = ("stale", "shadow", "heap", "carve", "twin", "oversize", "window")
 
@@ -165,6 +170,10 @@ def gate(lines: list[str], windows: bool = False, negctl: str | None = None, use
     if not lines:
         return [("LOG", False, "empty log: nothing was recorded, which is not a pass")]
     if negctl is not None:
+        if not any(NEGCTL_BUILD_LINE in ln for ln in lines):
+            return [("NEGCTL-BUILD", False,
+                     "the log has no `" + NEGCTL_BUILD_LINE + "` line: the binary was built without the `negctl` "
+                     "feature (build it with scripts/bench/build_kf3.sh --negctl), so the switch did nothing")]
         return [negctl_check(lines, negctl)]
     if windows:
         # The KF3_TSPACE=0 arm: the known positive. The gate must SEE windows here.

@@ -1,0 +1,76 @@
+V3_GATES_START 2026-11-13T23:09:51+00:00
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+HEAD= dirty=0
+GPU=NVIDIA GeForce RTX 3060, 535.154.05
+    |                      ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:448:38
+    |
+448 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                      ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:448:49
+    |
+448 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                                 ^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-chan/src/user_batch.rs:31:1
+   |
+31 | pub enum Refusal {
+   | ^^^^^^^^^^^^^^^^
+
+=== kf-gate1
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE1_VERDICT=FAIL
+=== kf-gate2
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE2_VERDICT=FAIL
+=== kf-gate3
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE3_VERDICT=FAIL
+=== kf-gate4
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE4_VERDICT=FAIL
+=== kf-gate5
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE5_VERDICT=FAIL
+=== kf-gate6
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE6_VERDICT=FAIL
+=== kf-gate7
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE7_VERDICT=FAIL
+=== kf-gate8
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+GATE8_VERDICT=FAIL
+=== kf-gate9
+kf-cuda: cuda thread posture thread=main cap_sys_admin=not-held (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+CHECK ver2_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver2_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver3_gpu_diff_is_the_model_diff PASS 160 walks, 3395 runs compared, 0 mismatching entries, verdicts failed=817 held=91 permission edits=444
+CHECK ver3_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_keyall_gpu_diff_is_the_model_diff PASS 160 walks, 3558 runs compared, 0 mismatching entries, verdicts failed=843 held=76 permission edits=448
+CHECK ver2_keyall_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_growth_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver2_growth_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_growth_slots_actually_grew PASS walk pool 1048576 runs, slot pool 2097152 runs (2096128 free), max per space 1048576, slots held 2, grows 4, retries 4, ceilings 0, largest slot 512, largest walk 512
+CHECK ver2_level_move_to_fb0_is_quiet PASS first walk 7 MAP runs (model 7, all MAP true); settled quiet true; after the move 0 runs (0 UNMAP), refusals=0 mask=0x0
+CHECK ver2_level_move_known_positive_empty_level_unmaps_all PASS 7 UNMAP of 7 placements (7 runs)
+CHECK ver3_level_move_to_fb0_is_quiet PASS first walk 7 MAP runs (model 7, all MAP true); settled quiet true; after the move 0 runs (0 UNMAP), refusals=0 mask=0x0
+CHECK ver3_level_move_known_positive_empty_level_unmaps_all PASS 7 UNMAP of 7 placements (7 runs)
+MEASURE throughput rows=13000 one_run_reports=13000 gpu_us_p50@1000=137 gpu_us_p50@13000=427 wall_us_p50@13000=1069 total_s=14.0
+CHECK every_added_page_is_a_one_run_diff PASS 13000 of 13000
+CHECK the_diff_does_not_grow_with_the_space PASS gpu p50 137 us @1000 rows -> 427 us @13000 rows
+GATE9_VERDICT=PASS
+=== kf-micro-reserve-probe reserve (gate 10)
+MICRO_RESERVE_START arm=reserve pid=5489
+CHECK run FAIL RM bring-up failed at R2 host driver version: host driver 535.154.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 535.154.05)
+MICRO_RESERVE_VERDICT arm=reserve FAIL
+GATE10_VERDICT=FAIL
+V3_GATES_SUMMARY pass=1 fail=8 gate10=FAIL failed: kf-gate1(rc=1,verdict=FAIL) kf-gate2(rc=1,verdict=FAIL) kf-gate3(rc=1,verdict=FAIL) kf-gate4(rc=1,verdict=FAIL) kf-gate5(rc=1,verdict=FAIL) kf-gate6(rc=1,verdict=FAIL) kf-gate7(rc=1,verdict=FAIL) kf-gate8(rc=1,verdict=FAIL)
+V3_GATES_BIRTHS births=0 user=0 refused=0 ok=0
+V3_GATES_EXIT pass=1 fail=8 births_ok=0 gate10=FAIL 2026-11-13T23:10:06+00:00

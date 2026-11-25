@@ -1,0 +1,26 @@
+{
+	"nvbandwidth" : 
+	{
+		"CUDA Runtime Version" : 12090,
+		"Driver Version" : "575.51.03",
+		"GPU Device list" : null,
+		"git_version" : "4a49bda",
+		"testcases" : 
+		[
+			{
+				"bandwidth_description" : "memory latency SM CPU(row) <-> GPU(column) (ns)",
+				"bandwidth_matrix" : 
+				[
+					[
+						"568.143"
+					]
+				],
+				"name" : "host_device_latency_sm",
+				"status" : "Passed",
+				"sum" : 568.14316660165787
+			}
+		],
+		"version" : "v0.9"
+	}
+}
+

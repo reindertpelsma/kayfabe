@@ -1,0 +1,21 @@
+  [synthetic] 15 images, 1211 benign leaves agreed exactly, 2 hostile leaves inside the reference
+  [real-ga106] 5 images, 7005 benign leaves agreed exactly, 0 hostile leaves inside the reference
+  FAIL kf_cpu_walk.cpp:254 v3_leaves(t, &l) == 16u: ver3 unmapped big PTE: 32 leaves, want the 16 of slot 1 only
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=600000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=601000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=602000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=603000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=604000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=605000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=606000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=607000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=608000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=609000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60a000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60b000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60c000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60d000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60e000 published
+  FAIL kf_cpu_walk.cpp:256 l[k].va >= V3Tree::VA + 0x10000ull: ver3 unmapped big PTE: stale leaf va=60f000 published
+  FAIL kf_cpu_walk.cpp:281 v3_leaves(t) == 0u: ver3 sparse big half (PCF_BIG=3) must hide the small table
+==== kf_cpu_walk: FAIL ====

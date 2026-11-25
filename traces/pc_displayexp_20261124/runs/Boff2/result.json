@@ -1,0 +1,53 @@
+{
+ "arm": "Boff",
+ "up_at_s": 10,
+ "qemu_exit_at_s": null,
+ "qemu_rc": null,
+ "alive_at_end": true,
+ "poll_s": 300,
+ "host_uptime_window_s": [
+  71336.9,
+  71641.7
+ ],
+ "host_mmuWalkMap_lines": 0,
+ "host_no_memory_lines": 0,
+ "qemu_log_0x51_lines": 0,
+ "qemu_log_refusal_lines": 340,
+ "qmp_events": [
+  {
+   "timestamp": {
+    "seconds": 1795551821,
+    "microseconds": 455283
+   },
+   "event": "RTC_CHANGE",
+   "data": {
+    "offset": -1,
+    "qom-path": "/machine/unattached/device[10]/rtc"
+   },
+   "t_host": 1795551821.4553726
+  },
+  {
+   "timestamp": {
+    "seconds": 1795551826,
+    "microseconds": 811090
+   },
+   "event": "NIC_RX_FILTER_CHANGED",
+   "data": {
+    "path": "/machine/peripheral-anon/device[2]/virtio-backend"
+   },
+   "t_host": 1795551826.8111892
+  },
+  {
+   "timestamp": {
+    "seconds": 1795552119,
+    "microseconds": 579394
+   },
+   "event": "SHUTDOWN",
+   "data": {
+    "guest": false,
+    "reason": "host-qmp-quit"
+   },
+   "t_host": 1795552119.5794673
+  }
+ ]
+}

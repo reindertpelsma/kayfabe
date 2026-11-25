@@ -7,11 +7,8 @@
 //! fields the core actually consumes, produced by [`crate::versions`] from
 //! whichever wire layout the detected driver version uses.
 //!
-//! This is nvproxy's own decomposition. `NVOS21_PARAMETERS` and
-//! `NVOS64_PARAMETERS` are two wire shapes for one verb, and nvproxy normalises
-//! them through `ToOS64`/`FromOS64`
-//! (`gvisor/pkg/abi/nvgpu/frontend.go:335-357, :824-827`) so its handlers see one
-//! shape. [`AllocReq`] is that, generalised: one view per verb, N wire layouts
+//! `NVOS21_PARAMETERS` and `NVOS64_PARAMETERS` are two wire shapes for one verb;
+//! [`AllocReq`] is the one view a handler sees: one view per verb, N wire layouts
 //! behind it.
 //!
 //! Field names deliberately mirror `kayfabe_core::rmgraph::RmEvent`'s payloads,
@@ -36,8 +33,7 @@ pub struct FreeReq {
 /// wire shapes (`NVOS21` v1 and `NVOS64` v2).
 ///
 /// `rights_requested` is `NVOS64`-only and reads as `0` from an `NVOS21`, which
-/// is what nvproxy's `NVOS21_PARAMETERS::GetPRightsRequested` also returns
-/// (`gvisor/pkg/abi/nvgpu/frontend.go:322-324`) — a *declared* absence, not a
+/// is a *declared* absence (the `NVOS21` struct has no such field), not a
 /// lost field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AllocReq {
@@ -96,7 +92,7 @@ pub enum AllocWire {
 /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2132-2135`, repeated
 /// `:6464-6465`), which are element-relative with a 48-byte element header and a
 /// 32-byte envelope in front, i.e. **minus 80** they are `0/4/8/12/20/32`. Two
-/// humans, two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts
+/// humans, two trees, one answer; `crates/kf-abi/tests/mean_wire.rs` asserts
 /// the subtraction rather than trusting it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RpcAllocReq {
@@ -153,7 +149,7 @@ impl RpcAllocReq {
 /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2134-2135`, repeated
 /// `:2732-2733`), element-relative with a 48-byte element header and a 32-byte
 /// envelope in front, i.e. **minus 80** they are `0/4/8/12/16/40`. Two humans,
-/// two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts the
+/// two trees, one answer; `crates/kf-abi/tests/mean_wire.rs` asserts the
 /// subtraction rather than trusting it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RpcControlReq {
@@ -300,9 +296,8 @@ pub struct UnmapMemoryDma {
 ///   (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:47-52` /
 ///   `ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:47-52`, with
 ///   `NV_PROC_NAME_MAX_LENGTH = 100U` at `nvlimits.h:47` in both), but has **no
-///   oracle outside ogkm at all**: gVisor's `nvproxy` does not model
-///   `NV0000_ALLOC_PARAMETERS`, and neither does the C artifact
-///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). Both vendored
+///   oracle outside ogkm at all**: the C artifact does not model
+///   `NV0000_ALLOC_PARAMETERS` (`grep NV0000_ALLOC_PARAMETERS` finds nothing). Both vendored
 ///   tags are ≥ 580 while [`crate::versions::table_for`] admits versions down to
 ///   550.54.14, and `pOsPidInfo` has the shape of a recent addition — so
 ///   `sizeof` at 550/575 was **unverified** when this was written. ★ [measured
@@ -326,8 +321,7 @@ pub struct ClientAllocFacts {
 /// `NV0080_ALLOC_PARAMETERS` — the multi-GPU routing fact a Device declares.
 ///
 /// Unlike [`ClientAllocFacts`] this is decoded from the **whole** struct, because
-/// its 56-byte size is confirmed by three independent oracles: ogkm 610.43.02,
-/// `gvisor/pkg/abi/nvgpu/classes.go:198-211`, and the C artifact's
+/// its 56-byte size is confirmed by two independent oracles: ogkm 610.43.02 and the C artifact's
 /// `tests/abi_parity/abi_parity_test.go:120` (`nv0080_alloc_parameters … 56`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DeviceAllocFacts {

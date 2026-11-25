@@ -1,4 +1,4 @@
-//! ★★★★★ **v3 `kf-chan` — channels, with no CPU executor anywhere.**
+//! **v3 `kf-chan` — channels, with no CPU executor anywhere.**
 //!
 //! Three kinds, one host verb set (`kf-host::channel`):
 //! - **Passthrough** — the guest's own ring and USERD, adopted at birth; its doorbell is a fenced
@@ -39,6 +39,7 @@ pub mod user_loop;
 pub mod user_progress;
 pub mod user_ring;
 pub mod user_scan;
+pub mod user_semaphore;
 pub mod user_storage;
 pub mod user_stream;
 pub mod user_turn;

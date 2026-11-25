@@ -293,7 +293,7 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
         "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}"
     );
     // ⊘ BIOS_GET_INFO_V2 was never captured — and a host that does not answer it is NOT a refused
-    // field: the version is cosmetic (coordinator, 2026-09-26). It is asked, and `None`.
+    // field: the version is cosmetic. It is asked, and `None`.
     assert!(host.asked.contains(&0x2080_0810));
     assert!(!refused.fields().contains(&"vbios_version"));
     assert_eq!(
@@ -1350,4 +1350,313 @@ fn a_host_without_the_subtree_map_control_gets_the_family_map() {
         kf_chip::authored_intr_subtree_map(Family::Ampere),
         Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4])
     );
+}
+
+// =====================================================================================
+// Engines with no derived method table are not offered to the guest
+// (`hostquery::HostFactsPolicy::hide_untabled_video`, run profile `KF3_WIN_HIDE_UNTABLED_VIDEO=1`)
+//
+// The guest-visible engine set of the captured GA106 host, before and after. ⚠ The replay holds no
+// falcon table, so the stand-in below adds the one `video_engines.rs` documents (the C's GA106
+// capture); the rest is `CompletedGa106`. What this proves is the shape of the served statements
+// (FIFO rows, `engineCaps`, falcons, interrupt table, PRI bases), not a hardware value.
+// =====================================================================================
+
+use kf_abi::falconinfo::{self, ConstructedFalcon, FalconInventoryRow};
+use kf_chip::classes::Kind;
+use kf_rm::HostFacts;
+use kf_rm::authored::{self, EngineKind};
+use std::collections::BTreeSet;
+
+/// `NV2080_ENGINE_TYPE_OFA0`.
+const OFA0: u32 = 0x33;
+
+/// The host's falcon table as the C captured it on a GA106 (`video_engines.rs`, same bytes).
+fn ga106_falcon_table() -> Vec<u8> {
+    let all = [
+        (0x8a20_bf00u32, 0x1000u32, 0x009a_4000u32),
+        (0x5ee8_dc00, 0x1000, 0x0040_9000),
+        (0x4781_e800, 0x1000, 0x0041_a000),
+        (0x8f99_e100, 0x1000, 0x0084_8000),
+        (0xf3d7_2200, 0x1000, 0x0010_a000),
+        (0xe97b_6c00, 0x1000, 0x001c_8000),
+        (0x28c4_0800, 0x10000, 0x0084_0000),
+        (0xdd7b_ab00, 0x1000, 0x0084_4000),
+    ];
+    let falcons: Vec<ConstructedFalcon> = all
+        .iter()
+        .map(
+            |&(eng_desc, ctx_buffer_size, register_base)| ConstructedFalcon {
+                eng_desc,
+                ctx_attr: 0,
+                ctx_buffer_size,
+                addr_space_list: 1,
+                register_base,
+            },
+        )
+        .collect();
+    let row = FalconInventoryRow {
+        falcons: Box::leak(falcons.into_boxed_slice()),
+    };
+    falconinfo::encode_constructed_falcon_info(&row, 16 << 20).expect("encodes")
+}
+
+/// A GA106 host with its falcon table, optionally one whose own engine list has no OFA.
+struct VideoGa106 {
+    inner: CompletedGa106,
+    host_lacks_ofa: bool,
+}
+
+impl HostControls for VideoGa106 {
+    fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+        if cmd == falconinfo::NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO {
+            p.copy_from_slice(&ga106_falcon_table());
+            return Ok(());
+        }
+        self.inner.control(cmd, p)?;
+        if self.host_lacks_ofa && cmd == hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 {
+            let kept: Vec<u32> = hostfacts::derive_engine_list(p)
+                .expect("the replay's list decodes")
+                .into_iter()
+                .filter(|t| *t != OFA0)
+                .collect();
+            p[0..4].copy_from_slice(&(kept.len() as u32).to_le_bytes());
+            for (i, t) in kept.iter().enumerate() {
+                p[4 + 4 * i..8 + 4 * i].copy_from_slice(&t.to_le_bytes());
+            }
+        }
+        Ok(())
+    }
+}
+
+fn ga106_facts(hide: bool, host_lacks_ofa: bool) -> HostFacts {
+    let mut host = VideoGa106 {
+        inner: CompletedGa106(Ga106Replay::load()),
+        host_lacks_ofa,
+    };
+    hostquery::query_host_facts_with(
+        &mut host,
+        Family::Ampere,
+        hostquery::HostFactsPolicy {
+            hide_untabled_video: hide,
+        },
+    )
+    .unwrap_or_else(|e| panic!("{e}"))
+}
+
+fn names(f: &HostFacts) -> Vec<&'static str> {
+    f.engines.iter().map(|e| e.name).collect()
+}
+
+fn falcon_descs(f: &HostFacts) -> Vec<u32> {
+    f.constructed_falcons
+        .falcons
+        .iter()
+        .map(|c| c.eng_desc)
+        .collect()
+}
+
+fn caps_bit(f: &HostFacts, nv2080_type: u32) -> bool {
+    let caps = authored::engine_caps(&f.engines);
+    caps[nv2080_type as usize / 32] & (1 << (nv2080_type % 32)) != 0
+}
+
+/// The video classes the guest's RM keeps in its class database: `gpuCheckEngineWithOrderList_KERNEL`
+/// (`ogkm-580: gpu.c:6550-6562`) answers a video engine from `engineCaps` alone, and a class whose
+/// engine is absent is dropped. Derived here from the served `engineCaps` and the family's own class
+/// sets, never listed by hand.
+fn guest_video_classes(f: &HostFacts) -> BTreeSet<u32> {
+    let mut out = BTreeSet::new();
+    for (kind, ty) in [
+        (Kind::VideoDecoder, kf_abi::submit::engine_type_nvdec(0)),
+        (Kind::VideoEncoder, kf_abi::submit::engine_type_nvenc(0)),
+        (Kind::OpticalFlow, kf_abi::submit::engine_type_ofa(0)),
+    ] {
+        if caps_bit(f, ty.expect("instance 0 exists")) {
+            out.extend(f.family.classes().of_kind(kind).iter().copied());
+        }
+    }
+    out
+}
+
+/// BEFORE: the default policy serves the guest exactly what it was served before 2026-11-15.
+#[test]
+fn by_default_the_guest_is_served_nvdec_nvenc_and_ofa() {
+    let f = ga106_facts(false, false);
+    assert_eq!(
+        names(&f),
+        [
+            "GR0", "CE0", "CE1", "CE2", "CE3", "NVDEC0", "NVENC0", "OFA", "SOFTWARE"
+        ]
+    );
+    assert!(caps_bit(&f, OFA0), "engineCaps names OFA0");
+    assert_eq!(
+        falcon_descs(&f),
+        [0x8f99_e100, 0xe97b_6c00, 0xdd7b_ab00],
+        "NVDEC0, NVENC0 and OFA0 falcons"
+    );
+    assert!(
+        f.intr_table.iter().any(|e| e.engine_idx == 81),
+        "an MC_ENGINE_IDX_OFA0 row"
+    );
+    assert!(f.device_info.pri_bases.iter().any(|r| r.engine == "OFA"));
+    assert_eq!(
+        guest_video_classes(&f),
+        BTreeSet::from([0xc6b0, 0xc7b0, 0xc7b7, 0xc6fa, 0xc7fa]),
+        "the guest class list holds the OFA classes"
+    );
+}
+
+/// AFTER: with the profile, OFA is gone from EVERY statement the guest derives its engines from, and
+/// every other row is byte-for-byte what it was.
+#[test]
+fn with_the_profile_ofa_leaves_every_statement_and_nothing_else_changes() {
+    let before = ga106_facts(false, false);
+    let after = ga106_facts(true, false);
+    assert_eq!(
+        names(&after),
+        [
+            "GR0", "CE0", "CE1", "CE2", "CE3", "NVDEC0", "NVENC0", "SOFTWARE"
+        ]
+    );
+    // FIFO rows: the same rows minus OFA, runlists and all.
+    let kept: Vec<_> = before.engines.iter().filter(|e| e.name != "OFA").collect();
+    assert_eq!(kept.len(), after.engines.len());
+    for (a, b) in kept.iter().zip(&after.engines) {
+        assert_eq!(*a, b, "{}", b.name);
+    }
+    // engineCaps: exactly the OFA0 bit is cleared.
+    let mut want = authored::engine_caps(&before.engines);
+    want[OFA0 as usize / 32] &= !(1 << (OFA0 % 32));
+    assert_eq!(authored::engine_caps(&after.engines), want);
+    // The falcon table, the interrupt table and the PRI bases lose only OFA.
+    assert_eq!(falcon_descs(&after), [0x8f99_e100, 0xe97b_6c00]);
+    let intr: Vec<_> = before
+        .intr_table
+        .iter()
+        .filter(|e| e.engine_idx != 81)
+        .cloned()
+        .collect();
+    assert_eq!(after.intr_table, intr);
+    assert!(after.intr_table.iter().all(|e| e.engine_idx != 81));
+    let pri: Vec<_> = before
+        .device_info
+        .pri_bases
+        .iter()
+        .filter(|r| r.engine != "OFA")
+        .copied()
+        .collect();
+    assert_eq!(after.device_info.pri_bases, &pri[..]);
+    // Nothing outside the engine statements moved.
+    assert_eq!(after.family, before.family);
+    assert_eq!(after.lce_pce_masks, before.lce_pce_masks);
+    assert_eq!(after.chip_info, before.chip_info);
+    assert_eq!(after.ce_caps, before.ce_caps);
+}
+
+/// The guest-visible class list, before and after: no OFA class, and every NVDEC/NVENC class that has
+/// a table is still offered.
+#[test]
+fn the_guest_class_list_loses_the_ofa_classes_and_keeps_the_tabled_video_classes() {
+    let before = guest_video_classes(&ga106_facts(false, false));
+    let after = guest_video_classes(&ga106_facts(true, false));
+    assert_eq!(after, BTreeSet::from([0xc6b0, 0xc7b0, 0xc7b7]));
+    let lost: BTreeSet<u32> = before.difference(&after).copied().collect();
+    assert_eq!(lost, BTreeSet::from([0xc6fa, 0xc7fa]));
+    for c in &lost {
+        assert!(
+            kf_chip::video_gaps::is_untabled(*c),
+            "{c:#x} left the list without being on the untabled list"
+        );
+    }
+    for c in &after {
+        assert!(!kf_chip::video_gaps::is_untabled(*c), "{c:#x}");
+    }
+}
+
+/// A host that lacks OFA anyway: the profile changes nothing, and the result is the same device as
+/// the profile on a host that has one.
+#[test]
+fn a_host_without_ofa_is_served_the_same_with_or_without_the_profile() {
+    let off = ga106_facts(false, true);
+    let on = ga106_facts(true, true);
+    assert_eq!(
+        names(&off),
+        [
+            "GR0", "CE0", "CE1", "CE2", "CE3", "NVDEC0", "NVENC0", "SOFTWARE"
+        ]
+    );
+    assert_eq!(names(&on), names(&off));
+    assert_eq!(
+        authored::engine_caps(&on.engines),
+        authored::engine_caps(&off.engines)
+    );
+    assert_eq!(on.intr_table, off.intr_table);
+    assert_eq!(on.device_info, off.device_info);
+    assert_eq!(falcon_descs(&on), falcon_descs(&off));
+    let hidden = ga106_facts(true, false);
+    assert_eq!(names(&on), names(&hidden));
+    assert_eq!(on.intr_table, hidden.intr_table);
+    assert_eq!(on.engines, hidden.engines);
+}
+
+/// The profile hides; it does not hide the family check, and the plain entry point is the default
+/// policy.
+#[test]
+fn the_profile_masks_no_refusal_and_the_plain_query_is_the_default_policy() {
+    let mut host = VideoGa106 {
+        inner: CompletedGa106(Ga106Replay::load()),
+        host_lacks_ofa: false,
+    };
+    let refused = hostquery::query_host_facts_with(
+        &mut host,
+        Family::Hopper,
+        hostquery::HostFactsPolicy {
+            hide_untabled_video: true,
+        },
+    )
+    .expect_err("a GA106 asked as a Hopper");
+    assert!(
+        refused
+            .refusals
+            .iter()
+            .any(|r| matches!(r.cause, FieldCause::FamilyMismatch { .. }))
+    );
+    assert!(!hostquery::HostFactsPolicy::default().hide_untabled_video);
+}
+
+/// The plain entry point (every existing caller, every Linux lane) is the default policy: it serves OFA.
+#[test]
+fn the_plain_query_still_serves_ofa() {
+    let mut host = VideoGa106 {
+        inner: CompletedGa106(Ga106Replay::load()),
+        host_lacks_ofa: false,
+    };
+    let plain = hostquery::query_host_facts(&mut host, Family::Ampere).expect("fills");
+    assert!(names(&plain).contains(&"OFA"));
+    assert!(caps_bit(&plain, OFA0));
+    assert_eq!(names(&plain), names(&ga106_facts(false, false)));
+}
+
+/// OFA instance 0 is the instance the guest-kernel ring uses (class `0xC9FA` on the PC run's Ada;
+/// `0xC7FA` here): the engine kind the filter removes is the kind the router sends to a video ring.
+#[test]
+fn the_engine_the_filter_removes_is_ofa0() {
+    assert_eq!(kf_abi::submit::engine_type_ofa(0), Some(OFA0));
+    assert_eq!(
+        hostquery::classify_engine(OFA0).map(|(k, _)| k),
+        Some(EngineKind::OpticalFlow(0))
+    );
+}
+
+/// The plain entry point's guest still gets the OFA falcon and the OFA classes in its class list.
+#[test]
+fn the_plain_query_keeps_the_ofa_falcon_and_classes() {
+    let mut host = VideoGa106 {
+        inner: CompletedGa106(Ga106Replay::load()),
+        host_lacks_ofa: false,
+    };
+    let plain = hostquery::query_host_facts(&mut host, Family::Ampere).expect("fills");
+    assert!(falcon_descs(&plain).contains(&0xdd7b_ab00));
+    assert!(guest_video_classes(&plain).contains(&0xc7fa));
 }

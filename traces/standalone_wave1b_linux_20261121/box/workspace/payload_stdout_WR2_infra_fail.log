@@ -1,0 +1,9 @@
+KF_PAYLOAD_ROOTLESS mode=require user=ci memlock=0 root_stages=none stages=kfml
+KF_PAYLOAD_TIER windows=0 source=instruction tier=large rehearsal=1 windows_runs=1 stages=none spec=none winapps=none linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       243G   85G  158G  35% /
+KF_PREFLIGHT_FREE_BYTES=169649643520
+KF_PAYLOAD_FAIL suite=infrastructure
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=0
+suite name=infrastructure pass=0 fail=1 skip=0
+KF_FINAL_SUMMARY_END

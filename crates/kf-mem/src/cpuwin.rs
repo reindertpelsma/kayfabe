@@ -33,7 +33,7 @@
 //!
 //! The window is re-pointed INSIDE the trapped window-base write, synchronously: the guest's next
 //! PRAMIN access must see the new window and there is no later point to defer to. ★ **Owner ruling
-//! 2026-09-25: this is the ONE sanctioned exception to "no syscalls on a vCPU", and it gets ONE host
+//! This is the ONE sanctioned exception to "no syscalls on a vCPU", and it gets ONE host
 //! map + ONE `mmap` per window move** — not the 16 per-granule placements of pre-armed views it
 //! replaces (`[measured 5dd01b48]` ~400-540 µs worst in the trap, each `mmap` under the driver's
 //! per-device semaphore). The 16 slots coalesce into runs (normally ONE: 1 MiB of store, or of
@@ -146,7 +146,7 @@ pub struct WindowStats {
 /// never sees it. It retires at the end of the FIRST batch that changes anything in this window, at
 /// any VA ([`CpuWindow::retire_seed`]) — the closest observable equivalent of BAR1 going virtual.
 ///
-/// ★ 2026-10-03 (`v3-gop-unload`, box test B5): it is placed AGAIN when the guest's RM gives BAR1
+/// It is placed AGAIN when the guest's RM gives BAR1
 /// back ([`CpuWindow::reseed`]) — a real card's RM returns BAR1 to PHYSICAL mode at teardown
 /// (`kbusTeardownMailbox_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-765`),
 /// so the firmware console keeps drawing into FB 0 while no RM holds the GPU — and it retires
@@ -1845,7 +1845,7 @@ mod tests {
         (0..16).map(|i| SlotSource::Store(base + i * g)).collect()
     }
 
-    /// ★★★ 2026-10-03 (review finding 2): a refused PLACEMENT must not retire the view it was
+    /// A refused PLACEMENT must not retire the view it was
     /// meant to replace. The refused `MAP_FIXED` can leave the old view mapped, and retiring it
     /// hands its host BAR1 aperture back while the guest can still reach it. Before the fix the
     /// second re-point released `0x10_0000` at once.
@@ -1941,7 +1941,7 @@ mod tests {
         );
     }
 
-    /// ★★★ 2026-10-03 (review finding 1 of the third round): a view whose slots are landed over
+    /// A view whose slots are landed over
     /// PIECEWISE, by several re-points that each refuse a different half, is unreachable once the
     /// last of its slots is landed, and must go then. Requiring one re-point to land its whole
     /// range held it for the VM's life (the review's probe: 200 alternating re-points, the first

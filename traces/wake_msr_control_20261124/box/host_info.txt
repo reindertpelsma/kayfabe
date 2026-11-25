@@ -1,0 +1,21 @@
+6.8.0-59-generic
+Linux version 6.8.0-59-generic (buildd@lcy02-amd64-117) (x86_64-linux-gnu-gcc-12 (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2
+model name	: AMD Ryzen 7 1800X Eight-Core Processor
+7
+tsc
+[    0.000005] tsc: Detected 3599.950 MHz processor
+[    0.259555] TSC deadline timer available
+[    0.805912] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x33e423a668f, max_idle_ns: 440795265315 ns
+[    1.827306] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x33e423a668f, max_idle_ns: 440795265315 ns
+[    1.837664] clocksource: Switched to clocksource tsc
+[    4.625533] kvm_amd: TSC scaling supported
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro console=tty1 console=ttyS0 tsc=reliable clocksource=tsc panic=-1
+1
+filename:       /lib/modules/6.8.0-59-generic/kernel/arch/x86/kvm/kvm.ko
+vermagic:       6.8.0-59-generic SMP preempt mod_unload modversions 
+ii  ovmf           2022.02-3ubuntu0.22.04.7 all          UEFI firmware for 64-bit x86 virtual machines
+-rw-r--r-- 1 root root 621284352 Nov 24 00:33 /root/w/noble-server-cloudimg-amd64.img
+04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94  /root/w/noble-server-cloudimg-amd64.img
+901ac59f62a89896210637c404323b72f2c0b0fc8e9c88f74b1de689e0821dbb  /usr/share/OVMF/OVMF_CODE_4M.secboot.fd
+31f27cdd3c674794883f2e910164a7740f664c5ad24eee2beb0922d51a55fac8  /root/w/build-patched/qemu-system-x86_64
+9831133937e72efb9c6d581026ba32c98164cf25b07e85db00a4d12feccd8380  /root/w/build-stock/qemu-system-x86_64

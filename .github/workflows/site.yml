@@ -25,7 +25,10 @@ env:
   STATUS_API_BASE: ${{ vars.STATUS_API_BASE }}
   STATUS_LOGS_BASE: ${{ vars.STATUS_LOGS_BASE }}
 concurrency:
-  group: pages
+  # Only deploys share the `pages` group (one at a time, none cancelled). A pull-request build gets its own
+  # group per ref: with one shared group, GitHub keeps a single *pending* run and cancels the older pending
+  # ones, which turned the `site` status red (ERROR, no jobs) on every other open PR (2026-11-14, ~30 PRs).
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: false
 
 jobs:

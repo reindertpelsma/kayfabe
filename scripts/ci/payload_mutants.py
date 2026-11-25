@@ -182,7 +182,10 @@ CASES = [
     ),
     (
         "wrong-arm-admitted",
-        replace("            return not delta", '            arm = "--defer-liveness"'),
+        replace(
+            '            return None if not delta else "%d host Xid line(s) in an arm with no admitted fault" % len(delta)',
+            '            arm = "--defer-liveness"',
+        ),
     ),
     ("xid-refusal-status-forged", replace("    return 0 if ok else 6", "    return 0")),
     (
@@ -409,6 +412,7 @@ CASES += [
     ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
     ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
     ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-command-lets-the-lane-guest-go-offline", replace('                    "KF_SPEC_NET=online",\n', "")),
     ("spec-command-keeps-the-narrowed-table", replace('                    "KF_SPEC_TABLE",\n', '                    "KF_SPEC_LANE_X",\n')),
     (
         "spec-narrowed-verdict-accepted",
@@ -721,6 +725,14 @@ CASES += [
 ]
 
 CASES += [
+    ("winapps-pin-refusal-is-a-retry-row", scoped("winapps_rows", 'raise EvidenceError("windows_apps_pin")', 'raise EvidenceError("windows_apps_retry_refused")')),
+    ("winapps-pin-refusal-never-recognised", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if False and re.fullmatch(')),
+    ("winapps-pin-refusal-any-reason", scoped("winapps_rows", '(RECIPE_INPUT_DRIFT|PIN_MISMATCH)', '[A-Z_]+')),
+    ("winapps-pin-refusal-any-class", scoped("winapps_rows", ' class=PIN reason=', ' class=[A-Z]+ reason=')),
+    ("winapps-pin-refusal-prefix-match", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if len(verdicts) == 1 and re.match(')),
+]
+
+CASES += [
     ("xd1-blackwell-host-names-refused", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('GR_HOST')"
     ), "native_xid_guard.py"),
@@ -729,6 +741,31 @@ CASES += [
     ), "native_xid_guard.py"),
     ("xd1-only-captured-host-zero", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "engine in ('GR_HOST0', 'GR0_PBDMA0')"
+    ), "native_xid_guard.py"),
+    ("xd1-turing-host-names-refused", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('HOST')"
+    ), "native_xid_guard.py"),
+    ("xd1-turing-only-captured-host-zero", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in ('GR_HOST0', 'GR0_PBDMA0', 'HOST0')"
+    ), "native_xid_guard.py"),
+    ("xd1-turing-host-cpu-client-refused", guard_replace(
+        "client in HOST_FAULT_NAMES['clients']", "client in HOST_FAULT_NAMES['clients'] and client != 'HUBCLIENT_HOST_CPU'"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-reason-dropped", replace(
+        '        print("KF_XID_REFUSED arm=" + arm + " reason=" + reason, flush=True)',
+        '        print("KF_XID_REFUSED arm=" + arm, flush=True)'
+    )),
+    ("xd1-refusal-unknown-engine-not-named", guard_replace(
+        "        if parsed['engine'] not in table['engines']:", "        if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-unknown-client-not-named", guard_replace(
+        "        if parsed['client'] not in table['clients']:", "        if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-table-not-named", guard_replace(
+        '"engine %r is not in native_fault_names.json engines (%d names, ogkm %s)"', '"engine %r (%d, %s)"'
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-unmatched-records-not-shown", guard_replace(
+        '    detail += "; unmatched actual: %s; unmatched expected: %s" % (surplus, missing)', "    pass"
     ), "native_xid_guard.py"),
     ("xd1-host-engine-unchecked", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "True"
@@ -743,7 +780,7 @@ CASES += [
         "raise GuardRefused('missing/duplicate native exec identity')", "return 4242"
     ), "native_xid_guard.py"),
     ("xd1-command-window-ignored", scoped(
-        "xid_ok", "watched_command_output(text)", "arm_output"
+        "xid_refusal", "watched_command_output(text)", "arm_output"
     )),
     ("xd1-contract-va-unchecked", guard_replace(
         "if int(markers[0][1], 16) != 0x0000000a11000000:", "if False:"
@@ -837,6 +874,12 @@ def main():
         ci.mkdir(parents=True)
         for name in [
             "vast_payload.py",
+            "payload_instruction.py",
+            "box_downloader.py",
+            "propimage_apps.py",
+            "kfml_skip_codes.py",  # kfml_stage.py and a strict kfml_rows load the skip-code vocabulary with it
+            "kfml_stage.py",  # test_vast_payload_apps and the v7 fixture build the kfml stage log with it (default stage since 2026-11-17)
+            "kf_fetch.py",
             "vast_payload.sh",
             "vast_payload_hooks.sh",
             "test_vast_payload.py",
@@ -909,6 +952,9 @@ def main():
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parents[1] / relative, target)
+        vocabulary = root / "scripts/kfml/kfml/errors.py"  # the file kfml_skip_codes.py loads the vocabulary from
+        vocabulary.parent.mkdir(parents=True)
+        shutil.copyfile(HERE.parent / "kfml/kfml/errors.py", vocabulary)
         baseline = run(root)
         assert not baseline["killers"], baseline
         print("baseline: %d tests, no killers" % baseline["tests"], file=sys.stderr, flush=True)

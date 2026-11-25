@@ -1,0 +1,169 @@
+[Tue Nov 24 19:16:38 2026] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[Tue Nov 24 19:26:52 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.84  Release Build  (dvs-builder@U22-I3-AM25-26-2)  Wed Jun 10 21:06:37 UTC 2026
+[Tue Nov 24 19:26:59 2026] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.84  Release Build  (dvs-builder@U22-I3-AM25-26-2)  Wed Jun 10 21:06:37 UTC 2026
+[Tue Nov 24 19:27:45 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:27:46 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:27:52 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:27:58 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:28:00 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:06 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:28:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:10 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:12 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:12 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:12 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:28:18 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:28:41 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:28:42 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:06 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:13 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:14 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:19 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:20 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:26 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:27 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:33 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:34 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:40 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:29:41 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:29:47 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:31:29 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:31:50 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:31:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:32:58 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:33:00 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:33:06 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:33:28 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:33:30 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:34:05 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:34:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:34:14 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:34:16 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:44:47 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:44:47 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:44:52 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:44:52 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:44:53 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:46:30 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:46:32 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:46:35 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:46:35 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:46:36 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:51:08 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:51:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:51:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:51:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:46 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:46 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:52:46 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[Tue Nov 24 19:52:46 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:52:46 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x30f9fffff. Status = 0x00000051
+[Tue Nov 24 19:52:46 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:52:46 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:52:46 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:52:46 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:52:46 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:47 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:47 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:52 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:54 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:54 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:54 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:52:57 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:16 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 19:59:19 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:19 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:20 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:59 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:59 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 19:59:59 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[Tue Nov 24 19:59:59 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 19:59:59 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 19:59:59 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 19:59:59 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 19:59:59 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 19:59:59 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 19:59:59 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 19:59:59 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:00 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:03 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:09 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:24 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:25 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:26 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:26 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:00:33 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:04 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:06:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:07 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:08 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:37 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:37 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[Tue Nov 24 20:06:37 2026] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[Tue Nov 24 20:06:37 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[Tue Nov 24 20:06:37 2026] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[Tue Nov 24 20:06:37 2026] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[Tue Nov 24 20:06:37 2026] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[Tue Nov 24 20:06:37 2026] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[Tue Nov 24 20:06:37 2026] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[Tue Nov 24 20:06:37 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:37 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:38 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:40 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:46 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:06:48 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:11 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:38 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:38 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:39 2026] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1f0000 RangeLo: 0x60000, RangeHi: 0x24ffff, pageSzLockMask: 0x11000
+[Tue Nov 24 20:07:39 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:40 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:50 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:50 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:07:51 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:17:50 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:24:31 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:25:01 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:25:02 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[Tue Nov 24 20:25:53 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:26:25 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Tue Nov 24 20:26:26 2026] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605

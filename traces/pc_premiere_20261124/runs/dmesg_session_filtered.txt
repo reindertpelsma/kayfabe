@@ -1,0 +1,35 @@
+2026-11-24T06:59:07,397631+01:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-11-24T07:36:19,943265+01:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-11-24T07:50:10,197333+01:00 [drm] [nvidia-drm] [GPU ID 0x00000100] Unloading driver
+2026-11-24T07:50:10,593358+01:00 nvidia-modeset: Unloading
+2026-11-24T07:50:10,622331+01:00 nvidia-nvlink: Unregistered Nvlink Core, major device number 235
+2026-11-24T07:50:10,699434+01:00 VFIO - User Level meta-driver version: 0.3
+2026-11-24T07:50:10,718625+01:00 vfio-pci 0000:01:00.0: vgaarb: deactivate vga console
+2026-11-24T07:50:10,718629+01:00 vfio-pci 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=io+mem:owns=none
+2026-11-24T07:50:16,885770+01:00 vfio-pci 0000:01:00.0: resetting
+2026-11-24T07:50:16,989622+01:00 vfio-pci 0000:01:00.0: reset done
+2026-11-24T07:50:17,037584+01:00 vfio-pci 0000:01:00.0: resetting
+2026-11-24T07:50:17,037657+01:00 vfio-pci 0000:01:00.1: resetting
+2026-11-24T07:50:17,277819+01:00 vfio-pci 0000:01:00.0: reset done
+2026-11-24T07:50:17,277849+01:00 vfio-pci 0000:01:00.1: reset done
+2026-11-24T07:50:17,278686+01:00 vfio-pci 0000:01:00.0: resetting
+2026-11-24T07:50:17,381786+01:00 vfio-pci 0000:01:00.0: reset done
+2026-11-24T08:00:36,265664+01:00 vfio-pci 0000:01:00.0: resetting
+2026-11-24T08:00:36,265739+01:00 vfio-pci 0000:01:00.1: resetting
+2026-11-24T08:00:36,513160+01:00 vfio-pci 0000:01:00.0: reset done
+2026-11-24T08:00:36,513190+01:00 vfio-pci 0000:01:00.1: reset done
+2026-11-24T08:00:38,992146+01:00 vfio-pci 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=io+mem:owns=none
+2026-11-24T08:00:49,267677+01:00 nvidia-nvlink: Nvlink Core is being initialized, major device number 237
+2026-11-24T08:00:49,270188+01:00 nvidia 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=none:owns=none
+2026-11-24T08:00:49,318043+01:00 NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+2026-11-24T08:00:49,336104+01:00 nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+2026-11-24T08:00:49,341466+01:00 [drm] [nvidia-drm] [GPU ID 0x00000100] Loading driver
+2026-11-24T08:00:50,855527+01:00 [drm] Initialized nvidia-drm 0.0.0 for 0000:01:00.0 on minor 1
+2026-11-24T08:00:50,855537+01:00 nvidia 0000:01:00.0: vgaarb: deactivate vga console
+2026-11-24T08:00:50,900395+01:00 fbcon: nvidia-drmdrmfb (fb0) is primary device
+2026-11-24T08:00:50,982834+01:00 nvidia 0000:01:00.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+2026-11-24T08:00:51,047446+01:00 input: HDA NVidia HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input35
+2026-11-24T08:00:51,047501+01:00 input: HDA NVidia HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input36
+2026-11-24T08:00:51,047558+01:00 input: HDA NVidia HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input37
+2026-11-24T08:00:51,047613+01:00 input: HDA NVidia HDMI/DP,pcm=9 as /devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input38
+2026-11-24T08:02:34,907959+01:00 NVRM:unknown NVRM ioctl command: 0xf0

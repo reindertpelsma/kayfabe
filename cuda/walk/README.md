@@ -14,7 +14,7 @@
 > the Rust model. Everything below about the WALK (I1–I3, the seam, hostile/race/differential) stands;
 > read every "delta"/"resync"/"ack" passage as history.
 
-**STATUS: LIVE (2026-09-14).** A standalone CUDA proving ground for the kernel of
+**STATUS: LIVE (2026-11-15; the report-capacity cut below was added on that date, the rest is as of 2026-09-14).** A standalone CUDA proving ground for the kernel of
 `docs/design/dirty_tracking_without_uffd.md` §w720e, emitting the report of
 `docs/design/the_walk_kernel_report_format.md`. Bare metal, no VM, no guest,
 nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
@@ -33,6 +33,48 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
 | `evidence/` | dated run logs, each naming its GPU and driver |
 
+> ### ★ 2026-11-15 (M4) — A DIFF LARGER THAN THE REPORT IS CUT AT A VA BOUNDARY, NOT REFUSED
+> ⊘ Before this date (and in `t_hostile_report_run_cap`, which asserted it) a diff that does not fit the report was
+> "handed out as NOTHING": `kf_diff_emit` set `TRUNCATED`, `RUN_CAP`, `run_count 0`, and the host, which
+> never retries a report-level truncation, refused the split and marked the guest-kernel copy channel dead
+> (`[measured f4a b20fd84b]` `walk report TRUNCATED (flags=0x85, refuse_mask=0x10, runs 0 of 0)` at one diff of
+> more than `run_capacity` = 262 144 runs; 1 boot in 23, near misses at 260 446 and 253 996 runs).
+> Now `kf_diff_emit` reports a WINDOW of the first entry whose running total passes the capacity: every run, of
+> the eight staged lists, that STARTS below the largest boundary `v` that no run straddles (`va < v < va + len`)
+> and keeps the report within the capacity. A staged-order PREFIX is wrong (it can carry a MAP without the
+> overlapping UNMAP of another page-size class, and it separates an UNMAP from the MAP that carries its unchanged
+> pages); a window by address is closed under overlap, so the host applies exactly that window of the whole diff.
+> The report carries `KFWR_HF_CUT` (not `TRUNCATED`: the commit applies it), each entry that is not whole
+> `KFWR_V_CUT`; entries after the cut entry are withheld. The host treats `CUT` like `PARTIAL`: apply, acknowledge,
+> walk again at once, complete the split or invalidate only on a walk whose diff is empty, and spend at most
+> `MAX_CUT_WINDOWS_PER_REQUEST` walks on one request. The cut is exact with no step limit (review of PR #424 F3: an
+> earlier version gave up after 4096 steps down a chain of overlapping runs and refused a report that had a window).
+> ⊘ Still refused, loudly (the legacy `TRUNCATED`): the FIRST thing in an entry is one overlap-connected clump of runs
+> (a chain of overlapping runs counts as one, however long) larger than the report, which cannot be windowed.
+> Graded on this source by `kf_cpu_walk.cpp` (`emit_cut_cases`, `emit_cut_random`; mutants in
+> `scripts/ci/walk_kernel_mutants.py`), and by `diffmodel::cut_report` and the `kf-mem` windowed-apply model.
+> `[not measured on a GPU]` the PTX is rebuilt, but `kf_tests` (including the rewritten `t_hostile_report_run_cap`)
+> has not been run on this revision.
+
+> **2026-11-13 addition (security review 3 F-5):** the committed `kf_walk.ptx` is now rebuilt with the pinned
+> NVRTC 12.2.140 and compared byte for byte on every push (CI job `ptx`, `scripts/ci/walk_ptx_repro.py`), and
+> `make check-cpu` runs this file's device half on a CPU (g++, no GPU) over `corpus/` against the reference
+> leaves (`kf_cpu_walk.cpp`; `./kf_cpu_walk --dump` prints every run for an old-vs-new identity diff). The
+> parallel walk itself still needs a GPU (`./kf_tests`).
+>
+> **2026-11-13 correction (security review 3 F-2, F-3, F-9, F-10), above the I3 text it corrects:** the entry
+> budget is a bound on what is READ, per address space: a table is loaded only after its entries are admitted
+> against that space's `entry_budget` and the walk's 4 x `entry_budget` ceiling, and each space may hold at most
+> a quarter of a level's frontier and of the leaf run stage. A space at its own limit is CUT (its own
+> `KFWR_R_BUDGET` / `KFWR_R_FRONTIER_CAP`, `KFWR_V_REFUSED`, no diff); the walk is no longer truncated for it,
+> so the other spaces of the batch apply. The walk still aborts (every space fails) on a shared ceiling, a bad
+> descriptor (`KFWR_R_BAD_FORMAT`: the PTX now validates the descriptor itself, `kf_dev_format_ok`), a short
+> shared-memory launch, or more than `KF_MAX_PDB` entries; after an abort no kernel reads a table or a stale
+> frontier. Cases: `hostile/entry_budget`, `hostile/budget_fails_only_its_space`, `hostile/frontier_fan_in`,
+> `format/device_refuses_bad_descriptors`, `hostile/short_shared_memory_launch`,
+> `hostile/npdb_past_kernel_arrays`, `hostile/commit_bound_before_write` (GPU); the hostile-descriptor
+> corpus in `kf_cpu_walk.cpp` (CPU).
+>
 > **2026-10-31 correction (test port), folded above the one it corrects:** the Rust half is back, as a
 > TEST-ONLY decoder derived from ogkm: `crates/kf-cuda/tests/gmmu_ver2/` (`reference.rs`, with every field
 > cited to a `file:line` re-read at 580.159.04). `corpus.rs` there decodes `corpus/corpus.bin` and

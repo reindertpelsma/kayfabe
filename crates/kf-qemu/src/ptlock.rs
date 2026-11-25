@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **A mutex whose release hands off** (`kf_chan::handoff`, `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10).
+//! **A mutex whose release hands off** (`kf_chan::handoff`, `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10).
 //!
 //! [`PtLock`] is the `pt` map's lock: the same `lock` / `try_lock` as a std `Mutex`, and its guard, AFTER it has released the lock, tells the
 //! [`HandoffHub`] ([`HandoffHub::released`]): the epoch moves and every relay that lost a `try_lock` and registered is rung. No lock is taken

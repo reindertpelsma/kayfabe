@@ -1,0 +1,2573 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+"""One proprietary-image pipeline: verified unpack, offline overlay, identity/GPU checks,
+interactive app evidence, and shutdown. STATUS: DESIGN-ONLY, 2026-11-13; unified
+pipeline is not hardware-qualified. Measured predecessor facts: traces/hwrun_20261113/README.md.
+A fresh overlay uses the frozen RTC; --resume advances its .clock sidecar across clean
+stops and verifies against that derived base. In-process guest reboots keep clock=vm.
+No window-exists passes. No authentication, runtime downloads or binary reverse engineering.
+"""
+import argparse
+import importlib.util
+import json
+import math
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+import warnings
+from contextlib import ExitStack
+from datetime import timedelta
+from pathlib import Path
+from types import SimpleNamespace
+
+HERE = Path(__file__).resolve().parent
+
+
+def _load_propimage():
+    spec = importlib.util.spec_from_file_location("propimage", HERE / "propimage.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+PI = _load_propimage()
+
+
+def _load_resolve_gpu():
+    """The Resolve GPU lane (resolve_gpu.py, gpu_use_assert.py, resolve_media.py) loaded lazily from this directory."""
+    spec = importlib.util.spec_from_file_location("kf_resolve_gpu", HERE / "resolve_gpu.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["kf_resolve_gpu"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+PLATFORM = "kf3"
+
+
+def enable_vfio(bdf):
+    """Differential-test platform `vfio`: the same harness, image, overlay, offline slirp, clock, CPU profile and in-guest scripts, but the
+    kf3 device is replaced by the real GPU (function 0 and its audio function .1) through vfio-pci, and the kf3-only checks (seed UUID
+    repair/compare) are not applicable: they are recorded as VFIO_DIFF, never as a pass of kf3. The caller (the PC) has bound the GPU to
+    vfio-pci and holds the GPU lock (traces/pcnight_20261114 vfio_host.sh)."""
+    global PLATFORM
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.0", bdf):
+        raise ValueError("--vfio-gpu must be a PCI address of function 0, for example 0000:01:00.0")
+    audio = bdf[:-1] + "1"
+    original = PI.build_argv
+
+    def build_argv(*a, **k):
+        argv = original(*a, **k)
+        i = next(n for n, v in enumerate(argv) if v == "-device" and argv[n + 1].startswith("kf3-gpu"))
+        del argv[i : i + 2]
+        argv[i:i] = [
+            "-device",
+            f"vfio-pci,host={bdf},multifunction=on,addr=0x4.0",
+            "-device",
+            f"vfio-pci,host={audio},addr=0x4.1",
+        ]
+        return argv
+
+    PI.build_argv = build_argv
+    globals()["gpu_fix"] = lambda g, uuid: (True, "VFIO platform: kf3 seed repair/UUID check not applicable (real GPU)")
+    compare = PI.compare
+    PI.compare = lambda st, facts: [
+        tuple("VFIO_DIFF" if (j == 1 and v == "MISMATCH") else v for j, v in enumerate(r)) for r in compare(st, facts)
+    ]
+    PLATFORM = "vfio"
+
+
+GUEST_DIR = r"C:\kfapps"
+
+
+def run(cmd, **kw):
+    kw.setdefault("capture_output", True)
+    kw.setdefault("text", True)
+    if kw["text"]:
+        kw.setdefault("errors", "replace")  # guest/box output is data; a stray byte must not abort the run
+    return subprocess.run(cmd, check=False, **kw)
+
+
+def require_swtpm(output):
+    match = re.search(r"\bversion\s+(\d+)\.(\d+)(?:\.(\d+))?", output)
+    version = tuple(int(x or 0) for x in match.groups()) if match else (0, 0, 0)
+    if version < (0, 10, 0):
+        raise ValueError(
+            "Prerequisite: swtpm >= 0.10 required for this image TPM state; set SWTPM to a compatible binary (also requires compatible libtpms)"
+        )
+    return version
+
+
+def boot_age_guard(age, budget):
+    if not all(type(x) in (int, float) for x in (age, budget)):
+        raise TypeError("Invalid boot-age type")
+    if not all(math.isfinite(x) and x >= 0 for x in (age, budget)):
+        raise ValueError("Invalid boot age or check budget")
+    return age + budget > 55 * 60
+
+
+def classify_shutdown(events):
+    return (
+        "harness"
+        if any(
+            e.get("event_id") == 1074 and re.search(r"(?i)\bwlms\.exe\b", str(e.get("process", "")))
+            for e in events
+        )
+        else None
+    )
+
+
+def shutdown_events(g):
+    script = r"""
+$boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+$events=@(Get-WinEvent -FilterHashtable @{LogName='System';Id=1074;StartTime=$boot} -ErrorAction SilentlyContinue | ForEach-Object {
+ @{event_id=$_.Id;process=[string]$_.Properties[0].Value;time=$_.TimeCreated.ToUniversalTime().ToString('o')}
+})
+ConvertTo-Json -InputObject $events -Compress
+"""
+    p = g.ps(script)
+    if p.returncode:
+        raise ValueError("Guest event log unavailable; shutdown cause unverified")
+    events = json.loads(p.stdout.lstrip("\ufeff"))
+    if not isinstance(events, list):
+        raise TypeError("Invalid shutdown event record")
+    return events
+
+
+def render_gpu_fix():
+    """Seed repair and Present-only restart. No polling and no UUID query here (2026-11-17): the poll is a Python loop (gpu_fix), because one
+    120 s ssh call hid whether the guest returned nothing, an error, two GPUs or a wrong value."""
+    return r"""
+$ErrorActionPreference='Stop'
+$base='HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+$changed=$false
+$restarted=0
+# -Name lists key names only: a full Get-ChildItem opens every subkey, and the protected Properties subkey denies access.
+Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object {
+ $kp=Join-Path $base $_
+ $ip=Get-ItemProperty $kp
+ if(($ip.DriverDesc -match 'NVIDIA' -or $ip.ProviderName -match 'NVIDIA') -and $ip.EnableGpuFirmware -ne 1){
+  New-ItemProperty -Path $kp -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
+  $changed=$true
+ }
+}
+if($changed){
+ # Only PRESENT NVIDIA devices (hardware id VEN_10DE): a die other than the image's own leaves the old GPU as a phantom entry (Status Unknown,
+ # CM_PROB_PHANTOM) that cannot be restarted, and a new device is still named 'Video Controller (VGA Compatible)' until its driver binds
+ # (MEASURED 2026-11-16 on RTX 4000 Ada, RTX 4060 Ti and RTX 4090 boxes: restarting the phantom RTX 4070 failed the whole step).
+ Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+  pnputil /restart-device $_.InstanceId | Out-Null
+  if($LASTEXITCODE -ne 0){throw 'NVIDIA display device restart failed'}
+  $restarted++
+ }
+}
+ConvertTo-Json -Compress @{changed=$changed; restarted=$restarted; guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
+"""
+
+
+# One short query: nvidia-smi (return code and every output line) and the PnP state of every VEN_10DE device. The host classifies the answer
+# (classify_gpu_query); the guest only reports.
+RENDER_GPU_QUERY = r"""
+$ErrorActionPreference='Continue'
+$sw=[Diagnostics.Stopwatch]::StartNew()
+$smi=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>&1 | ForEach-Object {[string]$_})
+$rc=$LASTEXITCODE
+$smis=[int]$sw.Elapsed.TotalSeconds
+$dev=@(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {$_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+ $id=$_.InstanceId
+ $pc=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_ProblemCode -ErrorAction SilentlyContinue).Data
+ $sv=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Service -ErrorAction SilentlyContinue).Data
+ @{class=[string]$_.Class;present=[bool]$_.Present;status=[string]$_.Status;problem=$pc;service=[string]$sv}
+})
+ConvertTo-Json -Compress -Depth 4 @{smi_rc=$rc; smi_s=$smis; smi_out=@($smi); devices=@($dev); guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
+"""
+
+# A device left in Code 43 by the plain restart: Disable/Enable (MEASURED 2026-11-16 on an RTX 4090 box: clears it at once). Applied once, after the
+# first half of the poll budget, and recorded with the PnP state that preceded it.
+RENDER_GPU_REENABLE = r"""
+$ErrorActionPreference='Stop'
+$n=0
+Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+ Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ Start-Sleep 5
+ Enable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ $n++
+}
+ConvertTo-Json -Compress @{reenabled=$n}
+"""
+
+# Collected once, when the step fails: the guest's own account of the driver start (times are guest UTC).
+RENDER_GPU_EVIDENCE = r"""
+$ErrorActionPreference='Continue'
+function Short($t,$n){ $t=([string]$t) -replace '\s+',' '; if($t.Length -gt $n){ $t.Substring(0,$n) } else { $t } }
+$os=Get-CimInstance Win32_OperatingSystem
+'== now_utc ' + (Get-Date).ToUniversalTime().ToString('o')
+'== boot_utc ' + $os.LastBootUpTime.ToUniversalTime().ToString('o')
+'== nvlddmkm events since boot (System log)'
+Get-WinEvent -FilterHashtable @{LogName='System';ProviderName='nvlddmkm';StartTime=$os.LastBootUpTime} -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object {
+ '{0} id={1} level={2} {3}' -f $_.TimeCreated.ToUniversalTime().ToString('HH:mm:ss'),$_.Id,$_.Level,(Short $_.Message 160)
+}
+'== Kernel-PnP events naming the NVIDIA device or driver since boot'
+Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Kernel-PnP/Configuration';StartTime=$os.LastBootUpTime} -ErrorAction SilentlyContinue | Where-Object {([string]$_.Message) -match 'VEN_10DE|nv_disp|nvlddmkm'} | Select-Object -First 40 | ForEach-Object {
+ '{0} id={1} {2}' -f $_.TimeCreated.ToUniversalTime().ToString('HH:mm:ss'),$_.Id,(Short $_.Message 200)
+}
+'== setupapi.dev.log, lines naming the NVIDIA device or driver (last 40)'
+Select-String -Path C:\Windows\INF\setupapi.dev.log -Pattern 'VEN_10DE|nv_disp|nvlddmkm' -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object { Short $_.Line 220 }
+'== setupapi.dev.log tail (last 60 lines)'
+Get-Content C:\Windows\INF\setupapi.dev.log -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Short $_ 220 }
+"""
+
+
+GPU_ID = re.compile(r"GPU-[0-9A-Za-z-]+")
+BARE_UUID = re.compile(r"(?<![{0-9A-Za-z])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![}0-9A-Za-z])")
+GPU_WAIT_SETTLED_S = 120  # bound of the wait for the NVIDIA device to finish its first-boot install before the restart
+GPU_POLL_S = 240  # bound of the poll after the restart (the Disable/Enable retry comes at half of it)
+GPU_POLL_EVERY_S = 10
+GPU_QUERY_TIMEOUT_S = 150  # one query call. MEASURED 2026-11-17 (RTX 4090 box, 4 boots): the FIRST nvidia-smi after the restart blocks for about 60 s (call 74-80 s, a normal one 13 s); 90 s was too close
+
+
+def redact(text, limit=2000):
+    """Guest and host text for evidence: printable ASCII, GPU identity strings replaced, bounded. A UUID value never reaches a file."""
+    text = re.sub(r"[^\x20-\x7e\n\t]", "?", str(text))
+    return BARE_UUID.sub("<uuid>", GPU_ID.sub("GPU-<redacted>", text))[:limit]
+
+
+def qemu_log_tail(path, limit=200, max_bytes=262144):
+    """The tail of a QEMU/kf3 log, redacted, kept as evidence (the stage's cleanup deletes the log itself)."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError as exc:
+        return "qemu log unavailable: %s\n" % redact(exc, 120)
+    return "".join(redact(ln, 300) + "\n" for ln in lines[-limit:])
+
+
+def host_gpu_uuids():
+    """The host GPU's own UUIDs (None when they cannot be read): only used to say whether a wrong guest value is the host's."""
+    try:
+        done = run(["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"], timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return [ln.strip() for ln in done.stdout.splitlines() if ln.strip()] if done.returncode == 0 else None
+
+
+def classify_gpu_query(q, expected, host_uuids=None):
+    """One query answer -> the case. kinds: expected | no_uuid (nvidia-smi ran, printed nothing) | error_text (any other text, or a failing
+    return code) | multi (more than one GPU line) | wrong_value (one GPU line, not the seed's). Counts and flags only, never the value."""
+    out = [str(x).strip() for x in (q.get("smi_out") or []) if str(x).strip()]
+    rc = q.get("smi_rc")
+    gpu = [x for x in out if re.fullmatch(r"GPU-[0-9A-Za-z-]+", x)]
+    other = [x for x in out if x not in gpu]
+    res = {"smi_rc": rc if type(rc) is int else None, "smi_s": q.get("smi_s") if type(q.get("smi_s")) is int else None, "gpu_lines": len(gpu), "other_lines": len(other), "observed_is_expected": None, "observed_is_host": None}
+    if len(gpu) > 1:
+        res["kind"] = "multi"
+    elif len(gpu) == 1 and rc == 0 and not other:
+        same = gpu_uuid_matches(gpu[0], expected)
+        res["observed_is_expected"] = same
+        if not same:
+            res["observed_is_host"] = (gpu[0] in host_uuids) if host_uuids else None
+        res["kind"] = "expected" if same else "wrong_value"
+    elif not out and rc == 0:
+        res["kind"] = "no_uuid"
+    else:
+        res["kind"] = "error_text"
+        res["text"] = redact(" | ".join(other or ["return code %s" % rc]), 240)
+    devices = []
+    for d in (q.get("devices") or [])[:8]:
+        if type(d) is dict:
+            devices.append({"class": redact(d.get("class"), 20), "present": d.get("present") is True, "status": redact(d.get("status"), 12),
+                            "problem": d.get("problem") if type(d.get("problem")) is int else None, "service": redact(d.get("service"), 24)})
+    res["devices"] = devices
+    return res
+
+
+def gpu_device_settled(devices):
+    """Exactly one present NVIDIA display device, bound to the NVIDIA service (not the basic display driver), and out of the install states.
+    Problem code 43 counts as settled: on a die other than the image's own the new device instance sits in Code 43 (no EnableGpuFirmware yet)
+    until the repair and the restart, so waiting for Status OK first would only burn the whole wait (MEASURED 2026-11-17 on an RTX 4090 box:
+    Code 43 and the NVIDIA service from the first query on, 135 s wait for nothing, the restart then fixed it at once)."""
+    shown = [d for d in devices if d["present"] and d["class"] == "Display"]
+    return len(shown) == 1 and shown[0]["service"].lower() == "nvlddmkm" and shown[0]["problem"] in (0, 43)
+
+
+def problem_codes(devices):
+    return [d["problem"] for d in devices if d["present"]]
+
+
+def gpu_query(g, expected, host_fn, started_at, clock):
+    """One bounded query as a record, with how long the whole call took (`dur_s`) and, from the guest, how long nvidia-smi itself blocked (`smi_s`)."""
+    t = clock()
+    rec = _gpu_query_record(g, expected, host_fn, {"t": int(t - started_at)})
+    rec["dur_s"] = int(clock() - t)
+    return rec
+
+
+def _gpu_query_record(g, expected, host_fn, rec):
+    """A transport error or a timeout is its own case, never 'mismatch'."""
+    try:
+        p = g.ps(RENDER_GPU_QUERY, timeout=GPU_QUERY_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return dict(rec, kind="timeout", devices=[])
+    except OSError as exc:
+        return dict(rec, kind="transport", text=redact(exc, 120), devices=[])
+    if p.returncode:
+        return dict(rec, kind="transport", rc=p.returncode, text=redact(p.stdout + p.stderr, 240), devices=[])
+    try:
+        q = json.loads(p.stdout.lstrip("\ufeff"))
+        if type(q) is not dict:
+            raise ValueError("not an object")
+    except ValueError:
+        return dict(rec, kind="unparsed", text=redact(p.stdout + p.stderr, 240), devices=[])
+    res = classify_gpu_query(q, expected)
+    if res["kind"] == "wrong_value":
+        res = classify_gpu_query(q, expected, host_fn())
+    return dict(rec, **res)
+
+
+def gpu_events(g):
+    try:
+        p = g.ps(RENDER_GPU_EVIDENCE, timeout=90)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return "events unavailable: %s\n" % redact(type(exc).__name__, 40)
+    return redact(p.stdout + p.stderr, 24000) + "\n"
+
+
+GPU_TERMINAL = ("expected", "wrong_value", "multi")
+
+
+def gpu_fix(g, expected, sleep=time.sleep, clock=time.monotonic, wait_s=None, poll_s=None, host_fn=host_gpu_uuids):
+    """Wait (bounded) for the NVIDIA device to SETTLE (installed, driver bound), repair and restart it, then poll from here (bounded) until the guest answers with
+    one GPU line. Returns (ok, JSON text): the case (`kind`), counts, PnP problem codes, timings and, on failure, the guest's event text
+    under "events". The JSON holds no UUID value."""
+    if not re.fullmatch(r"GPU-[A-Za-z0-9-]+", expected):
+        raise ValueError("Invalid expected GPU UUID")
+    wait_s = GPU_WAIT_SETTLED_S if wait_s is None else wait_s
+    poll_s = GPU_POLL_S if poll_s is None else poll_s
+    t0 = clock()
+    diag = {"schema": "kayfabe.gpu-step/1", "waited": [], "polls": []}
+    while True:
+        q = gpu_query(g, expected, host_fn, t0, clock)
+        diag["waited"].append({k: q.get(k) for k in ("t", "dur_s", "smi_s", "kind", "devices", "text") if k in q})
+        settled = gpu_device_settled(q["devices"])
+        if settled or clock() - t0 >= wait_s:
+            break
+        sleep(5)
+    diag["settled_before_restart"] = settled
+    diag["pnp_before_restart"] = q["devices"]
+    diag["wait_s"] = int(clock() - t0)
+    diag["waited"] = diag["waited"][-6:]
+    try:
+        rep = g.ps(render_gpu_fix())
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        rep = SimpleNamespace(returncode=1, stdout="", stderr=type(exc).__name__)
+    if rep.returncode:
+        diag.update(kind="repair_failed", ok=False, repair_text=redact(rep.stdout + rep.stderr, 300))
+        diag["events"] = gpu_events(g)
+        return False, json.dumps(diag)
+    try:
+        diag["repair"] = {k: v for k, v in json.loads(rep.stdout.lstrip("\ufeff")).items() if k in ("changed", "restarted")}
+    except (ValueError, AttributeError):
+        diag["repair"] = {"unparsed": redact(rep.stdout, 120)}
+    restart_t = clock()
+    diag["restart_at_s"] = int(restart_t - t0)
+    reenabled = False
+    while True:
+        q = gpu_query(g, expected, host_fn, restart_t, clock)
+        diag["polls"].append(q)
+        elapsed = clock() - restart_t
+        if q["kind"] in GPU_TERMINAL or elapsed >= poll_s:
+            break
+        if not reenabled and elapsed >= poll_s / 2:
+            reenabled = True
+            diag["reenable_at_s"] = int(elapsed)
+            diag["pnp_before_reenable"] = q.get("devices", [])
+            try:
+                again = g.ps(RENDER_GPU_REENABLE, timeout=120)
+                diag["reenable_rc"] = again.returncode
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                diag["reenable_rc"] = type(exc).__name__
+        sleep(GPU_POLL_EVERY_S)
+    last = diag["polls"][-1]
+    diag.update(kind=last["kind"], ok=last["kind"] == "expected", total_s=int(clock() - t0), poll_s=int(clock() - restart_t),
+                problem_codes=problem_codes(last.get("devices", [])), smi_rc=last.get("smi_rc"), gpu_lines=last.get("gpu_lines"),
+                observed_is_host=last.get("observed_is_host"))
+    if len(diag["polls"]) > 14:
+        diag["polls"] = diag["polls"][:4] + diag["polls"][-10:]
+    if not diag["ok"]:
+        diag["events"] = gpu_events(g)
+    return diag["ok"], json.dumps(diag)
+
+
+def gpu_step_detail(ok, detail):
+    """The harness row's detail from gpu_fix's OWN result (never a fixed string): the case first, because the stage keeps only the first 120 characters."""
+    try:
+        d = json.loads(detail)
+    except (TypeError, ValueError):
+        d = None
+    if type(d) is not dict or d.get("schema") != "kayfabe.gpu-step/1":
+        return redact(detail, 300).strip() or ("PASS" if ok else "FAIL")  # a stub or the VFIO control says what it is
+    codes = ",".join(str(c) for c in d.get("problem_codes") or []) or "none"
+    if ok:
+        return "post-fix seed UUID exact match after %ss (expected=1 observed=1 host=n/a), problem code %s, settled before restart=%s" % (
+            d.get("total_s"), codes, d.get("settled_before_restart"))
+    host = {True: "same-as-host", False: "not-host", None: "unknown"}[d.get("observed_is_host")]
+    return "observed UUID %s: expected=1 observed=%s host=%s, problem code %s, after %ss, settled before restart=%s; see gpu_diag.json" % (
+        d.get("kind"), d.get("gpu_lines"), host, codes, d.get("total_s"), d.get("settled_before_restart"))
+
+
+def save_qemu_tail(out, qemu_log):
+    """A failed gpu step keeps the kf3 QEMU log tail in out/ and prints its last lines (the stage's cleanup deletes the log itself)."""
+    tail = qemu_log_tail(qemu_log)
+    (Path(out) / "qemu_kf3_tail.txt").write_text(tail)
+    print("kf3 QEMU log tail (redacted, last 30 of %d lines kept in qemu_kf3_tail.txt):" % tail.count("\n"), flush=True)
+    print("".join(tail.splitlines(True)[-30:]), end="", flush=True)
+    return tail
+
+
+def write_gpu_evidence(out, detail):
+    """gpu_fix.txt (the result as returned), gpu_diag.json and gpu_events.txt (the guest's own text) in the step's output directory."""
+    out = Path(out)
+    (out / "gpu_fix.txt").write_text(redact(detail, 60000))
+    try:
+        d = json.loads(detail)
+    except (TypeError, ValueError):
+        return
+    if type(d) is dict and d.get("schema") == "kayfabe.gpu-step/1":
+        events = d.pop("events", None)
+        (out / "gpu_diag.json").write_text(json.dumps(d, indent=2))
+        if events is not None:
+            (out / "gpu_events.txt").write_text(events)
+
+
+# Data used both to render the repair and to validate its independent readback.
+POWER_SETTINGS = {
+    "sleep": ("SUB_SLEEP", "STANDBYIDLE"),
+    "hibernate_after": ("SUB_SLEEP", "HIBERNATEIDLE"),
+    "unattended_sleep": ("SUB_SLEEP", "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0"),
+    "hybrid_sleep": ("SUB_SLEEP", "HYBRIDSLEEP"),
+    "monitor": ("SUB_VIDEO", "VIDEOIDLE"),
+    "disk": ("SUB_DISK", "DISKIDLE"),
+    "wake_signin": ("SUB_VIDEO", "8ec4b3a5-6868-48c2-be75-4f3044be88a7"),  # CONSOLELOCK: hidden setting, not in powercfg /aliases (MEASURED on guest)
+}
+POWER_REGISTRY = {
+    "hibernate_enabled": (r"HKLM:\SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
+    "fast_startup": (
+        r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power",
+        "HiberbootEnabled",
+        0,
+    ),
+    "lock_screen": (
+        r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization",
+        "NoLockScreen",
+        1,
+    ),
+    "inactivity": (
+        r"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+        "InactivityTimeoutSecs",
+        0,
+    ),
+}
+for _prefix, _path in (
+    ("desktop", r"HKCU:\Control Panel\Desktop"),
+    ("policy", r"HKCU:\Software\Policies\Microsoft\Windows\Control Panel\Desktop"),
+):
+    for _key, _value in (
+        ("active", "ScreenSaveActive"),
+        ("secure", "ScreenSaverIsSecure"),
+        ("timeout", "ScreenSaveTimeOut"),
+    ):
+        POWER_REGISTRY[_prefix + "_" + _key] = (_path, _value, "0")
+
+
+def render_power_fix():
+    settings = [{"name": n, "subgroup": s, "setting": v} for n, (s, v) in POWER_SETTINGS.items()]
+    registry = [
+        {
+            "name": n,
+            "path": p,
+            "key": k,
+            "value": v,
+            "kind": "DWord" if type(v) is int else "String",
+        }
+        for n, (p, k, v) in POWER_REGISTRY.items()
+    ]
+    data = json.dumps({"settings": settings, "registry": registry}).replace("'", "''")
+    return (
+        "$plan=ConvertFrom-Json '"
+        + data
+        + "'\n"
+        + r"""
+$ErrorActionPreference='Stop'
+$r=@{queries=@{};registry=@{};sources=@{};errors=@();sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
+function Power { param([string[]]$argsList)
+ $text=(& powercfg @argsList 2>&1 | Out-String)
+ if($LASTEXITCODE -ne 0){$r.errors+=('powercfg '+($argsList -join ' ')+' failed: '+$text)}
+ return $text
+}
+try {
+ $guid='[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
+ $scheme=[regex]::Match((Power @('/getactivescheme')),$guid).Value
+ if(-not $scheme){throw 'Cannot identify active power scheme'}
+ $aliases=Power @('/aliases')
+ function Resolve-Guid($value){
+  if($value -match ('^'+$guid+'$')){return $value}
+  $m=[regex]::Match($aliases,('(?im)('+ $guid +')\s+'+[regex]::Escape($value)+'\s*$'))
+  if(-not $m.Success){throw ('Missing powercfg alias '+$value)}
+  return $m.Groups[1].Value
+ }
+ function Opt($p,$n){ try { (Get-ItemProperty -LiteralPath $p -Name $n -ErrorAction Stop).$n } catch { $null } }
+ $old=Opt 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'InactivityTimeoutSecs'
+ $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+ $marker='HKLM:\SOFTWARE\Kayfabe\PropimageChecks'
+ $priorBoot=Opt $marker 'InactivityRestartBoot'
+ $r.restart_required=(($null -ne $old -and $old -ne 0) -or $priorBoot -ceq $boot)
+ if($r.restart_required){
+  if(-not (Test-Path $marker)){New-Item $marker -Force | Out-Null}
+  New-ItemProperty $marker -Name InactivityRestartBoot -PropertyType String -Value $boot -Force | Out-Null
+ }
+ $null=Power @('/hibernate','off')
+ foreach($s in $plan.settings){
+  $null=Power @('/setacvalueindex',$scheme,$s.subgroup,$s.setting,'0')
+  $null=Power @('/setdcvalueindex',$scheme,$s.subgroup,$s.setting,'0')
+ }
+ foreach($v in $plan.registry){
+  # powercfg is authoritative for hibernation; do not forge its readback by writing HibernateEnabled.
+  if($v.name -ne 'hibernate_enabled'){
+   if(-not (Test-Path $v.path)){New-Item -Path $v.path -Force | Out-Null}
+   New-ItemProperty -Path $v.path -Name $v.key -PropertyType $v.kind -Value $v.value -Force | Out-Null
+  }
+ }
+ $null=Power @('/setactive',$scheme)
+ $r.raw_query=Power @('/q',$scheme)
+ foreach($s in $plan.settings){
+  $sg=Resolve-Guid $s.subgroup;$vg=Resolve-Guid $s.setting
+  # Read explicit indices written by powercfg; avoid localised /q labels and hidden-setting omissions.
+  $path="HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\$scheme\$sg\$vg"
+  $ac=Get-ItemPropertyValue $path -Name ACSettingIndex
+  $dc=Get-ItemPropertyValue $path -Name DCSettingIndex
+  $r.queries[$s.name]=('AC 0x{0:x8} DC 0x{1:x8}' -f $ac,$dc)
+  $r.sources[$s.name]='active-scheme registry; powercfg /q retained in raw_query'
+ }
+ foreach($v in $plan.registry){$r.registry[$v.name]=Get-ItemPropertyValue $v.path -Name $v.key}
+ $r.hiberfile_exists=Test-Path ($env:SystemDrive+'\hiberfil.sys')
+ if([regex]::Match((Power @('/getactivescheme')),$guid).Value -ine $scheme){throw 'Active scheme changed during power repair'}
+}catch{$r.errors+=$_.Exception.Message}
+ConvertTo-Json -InputObject $r -Depth 6 -Compress
+"""
+    )
+
+
+def render_screen_power(task):
+    if not re.fullmatch("power_[a-f0-9]{32}", task):
+        raise ValueError("Invalid power task")
+    return (
+        r"""
+$r=@{sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
+try {
+ Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfPower {
+ [DllImport("user32.dll",EntryPoint="SystemParametersInfoW",SetLastError=true)] public static extern bool Set(uint action,uint value,IntPtr data,uint flags);
+ [DllImport("user32.dll",EntryPoint="SystemParametersInfoW",SetLastError=true)] public static extern bool Get(uint action,uint unused,out int value,uint flags);
+}
+'@
+ foreach($action in @(0x0011,0x0077,0x000f)){
+  # 1260 = ERROR_ACCESS_DISABLED_BY_POLICY: the screensaver policy written by the repair already forbids it; the Get readback below decides.
+  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3) -and [Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 1260){throw 'Cannot disable interactive screensaver'}
+ }
+ $active=0;$secure=0;$timeout=0
+ if(-not [KfPower]::Get(0x0010,0,[ref]$active,0) -or -not [KfPower]::Get(0x0076,0,[ref]$secure,0) -or -not [KfPower]::Get(0x000e,0,[ref]$timeout,0)){throw 'Cannot read interactive screensaver'}
+ $r.active=[bool]$active;$r.secure=[bool]$secure;$r.timeout=$timeout
+}catch{$r.error=$_.Exception.Message}
+"""
+        + f'ConvertTo-Json -InputObject $r -Compress | Set-Content -Encoding UTF8 "C:\\kfhw\\{task}.tmp"\nMove-Item "C:\\kfhw\\{task}.tmp" "C:\\kfhw\\{task}.json"\n'
+    )
+
+
+def power_verdict(data):
+    values = {}
+    errors = []
+    try:
+        if type(data.get("errors")) is not list:
+            errors.append("Repair error list missing")
+        elif data["errors"]:
+            errors.extend(str(error) for error in data["errors"])
+        for name in POWER_SETTINGS:
+            indices = re.fullmatch(
+                r"AC 0x([0-9a-fA-F]{8}) DC 0x([0-9a-fA-F]{8})", data["queries"][name]
+            )
+            if not indices:
+                raise ValueError("Missing AC/DC indices for " + name)
+            ac, dc = (int(v, 16) for v in indices.groups())
+            values[name] = {"ac": ac, "dc": dc}
+            if ac != 0 or dc != 0:
+                errors.append(name + " not never/off")
+        for name, (_, _, expected) in POWER_REGISTRY.items():
+            actual = data["registry"][name]
+            values[name] = actual
+            if type(actual) is not type(expected) or actual != expected:
+                errors.append(name + " not disabled")
+        values["hiberfile_exists"] = data.get("hiberfile_exists")
+        values["restart_required"] = data.get("restart_required")
+        screen = data.get("screen", {})
+        values["screen_active"] = screen.get("active")
+        values["screen_secure"] = screen.get("secure")
+        values["screen_timeout"] = screen.get("timeout")
+        if data.get("hiberfile_exists") is not False or data.get("restart_required") is not False:
+            errors.append("Hibernation file present, or inactivity-policy restart required/unknown")
+        if (
+            bool(screen.get("error"))
+            or not data.get("sid")
+            or screen.get("sid") != data["sid"]
+            or screen.get("active") is not False
+            or screen.get("secure") is not False
+            or type(screen.get("timeout")) is not int
+            or screen["timeout"] != 0
+        ):
+            errors.append("Interactive session screensaver readback failed or wrong user")
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        errors.append(str(exc))
+    return {"ok": not errors, "values": values, "errors": errors, "readback": data}
+
+
+def power_fix(g, sleep=time.sleep, clock=time.monotonic):
+    """SSH repairs plus same-user interactive runtime apply/readback; no reboot or credentials."""
+    try:
+        result = g.ps(render_power_fix())
+        if result.returncode:
+            return {
+                "ok": False,
+                "values": {},
+                "errors": ["SSH power repair failed: " + result.stderr],
+            }
+        data = json.loads(result.stdout.lstrip("\ufeff"))
+        task = "power_" + uuid.uuid4().hex
+        try:
+            p = g.interactive(task, render_screen_power(task))
+            if p.returncode:
+                raise ValueError("Cannot start interactive power readback")
+            start = clock()
+            while clock() - start < 60:
+                p = g.ps(
+                    f"if(Test-Path 'C:/kfhw/{task}.json'){{Get-Content 'C:/kfhw/{task}.json' -Raw}}"
+                )
+                if p.returncode:
+                    raise ValueError("Interactive power readback transport failed")
+                if p.stdout.strip():
+                    data["screen"] = json.loads(p.stdout.lstrip("\ufeff"))
+                    break
+                sleep(2)
+            else:
+                raise ValueError("Interactive power readback timed out")
+        finally:
+            g.ps(
+                f"Stop-ScheduledTask -TaskName kf_{task} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName kf_{task} -Confirm:$false -ErrorAction SilentlyContinue"
+            )
+        return power_verdict(data)
+    except (AttributeError, TypeError, ValueError, OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "values": {}, "errors": [str(exc)]}
+
+
+def gpu_uuid_matches(actual, expected):
+    return bool(actual.strip()) and actual.strip() == expected
+
+
+# Measured anchor: rectangle 1024x640, click at offset (927,602), sp_run.log.
+# These are dimensionless fractions, not absolute screen coordinates. New UI versions
+# and result-screen OCR remain hypotheses until a hardware lane qualifies them.
+SUPERPOSITION = r"""
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfClick {
+ [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+ [DllImport("user32.dll")] public static extern void mouse_event(uint f,int x,int y,uint d,UIntPtr e);
+ [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+}
+'@
+[KfClick]::SetProcessDPIAware() | Out-Null
+$cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$p.Id)
+$wins=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+if($wins.Count -ne 1){throw 'Launcher window missing or ambiguous'}
+$rect=$wins[0].Current.BoundingRectangle
+if($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0){throw 'No UIA window rectangle'}
+if(-not [KfClick]::SetForegroundWindow($p.MainWindowHandle)){throw 'Cannot focus launcher'}
+Save-Screen "$D\before.png"
+$x=[int]($rect.Left+$rect.Width*(927.0/1024.0))
+$y=[int]($rect.Top+$rect.Height*(602.0/640.0))
+[KfClick]::SetCursorPos($x,$y) | Out-Null
+[KfClick]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+[KfClick]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+$deadline=(Get-Date).AddMinutes(10)
+while((Get-Date) -lt $deadline){
+ if(Test-Path $source){$text=Get-Content $source -Raw;if($text -match 'Benchmark running' -and $text -match 'Benchmark stopped'){break}}
+ Start-Sleep 5
+}
+Save-Screen "$D\result.png"
+$f=Get-Item $source
+Copy-Item $source "$D\log.html"
+$r.kind='FILE';$r.artifact='log.html';$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length
+"""
+
+
+def extract_screen_text(directory):
+    """Best-effort OCR of the result screen. Never a verdict: measured 2026-11-14, tesseract returned noise
+    for a clean result screen, so the score it may read is only reported."""
+    try:
+        p = run(
+            ["tesseract", str(directory / "result.png"), str(directory / "screen"), "--psm", "11"],
+            timeout=60,
+        )
+        return not p.returncode
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+SOFTWARE_RENDERERS = re.compile(r"(?i)basic render|\bwarp\b|llvmpipe|softpipe|swiftshader|software")
+
+
+def _log_seconds(stamp):
+    h, mi, se = (int(x) for x in stamp.split(":"))
+    return h * 3600 + mi * 60 + se
+
+
+def parse_superposition_log(raw):
+    """Facts from the saved Unigine log.html, nothing guessed. The 1.1 log carries the GPU, the renderer
+    and the 'Benchmark running/stopped' interval; the score and FPS are only on the result screen."""
+    text = re.sub(r"<[^>]*>", "\n", raw)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    facts = {"fatal": len(re.findall(r'<div class="f">', raw))}
+    for ln in lines:
+        gpu = re.fullmatch(r"\d\d:\d\d:\d\d GPU: (.+?) (\d+(?:\.\d+)+) x\d+", ln)
+        if gpu and "gpu" not in facts:
+            facts["gpu"], facts["driver"] = gpu[1], gpu[2]
+        desc = re.fullmatch(r"\d\d:\d\d:\d\d Direct3D11 desc: (.+)", ln)
+        if desc and "renderer" not in facts:
+            facts["renderer"] = desc[1].strip()
+        if "Benchmark running" in ln or "Benchmark stopped" in ln:
+            stamp = re.match(r"(\d\d:\d\d:\d\d) Benchmark (running|stopped)$", ln)
+            if stamp:
+                facts.setdefault(stamp[2], []).append(_log_seconds(stamp[1]))
+    if len(facts.get("running", [])) == 1 and len(facts.get("stopped", [])) == 1:
+        facts["interval_s"] = (facts["stopped"][0] - facts["running"][0]) % 86400
+    return facts
+
+
+def screen_values(text):
+    """Optional OCR read of the result screen: (score, min, avg, max) or None when not readable."""
+    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text)
+    fps = [
+        re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
+        for label in ("min", "avg", "max")
+    ]
+    if not score or not all(fps):
+        return None
+    return (int(score[1]),) + tuple(float(x[1]) for x in fps)
+
+
+def validate_superposition(r, directory, start, end):
+    """Verdict from the saved log (FILE). Returns the signal text; raises ValueError when not a pass."""
+    if r.get("artifact") != "log.html" or not start < r.get("modified", 0) <= end:
+        raise ValueError("Stale or missing benchmark log")
+    raw = (directory / "log.html").read_bytes()
+    if not raw or len(raw) != r.get("bytes"):
+        raise ValueError("Benchmark log length mismatch")
+    log = raw.decode("utf-8-sig")
+    running = log.find("Benchmark running")
+    stopped = log.find("Benchmark stopped")
+    if (
+        running < 0
+        or stopped <= running
+        or log.count("Benchmark running") != 1
+        or log.count("Benchmark stopped") != 1
+    ):
+        raise ValueError("No single completed benchmark interval")
+    facts = parse_superposition_log(log)
+    interval = facts.get("interval_s")
+    if not interval or interval <= 0:
+        raise ValueError("Benchmark interval has no positive length")
+    if interval > end - start:
+        raise ValueError("Benchmark interval is longer than this run (stale or foreign log)")
+    if facts["fatal"]:
+        raise ValueError("Fatal line in the benchmark log")
+    gpu, renderer = facts.get("gpu"), facts.get("renderer")
+    if not gpu or not renderer:
+        raise ValueError("Benchmark log names no GPU or renderer")
+    if SOFTWARE_RENDERERS.search(gpu + " " + renderer):
+        raise ValueError("Software renderer: not GPU work")
+    if "nvidia" not in gpu.lower() or not gpu.startswith(renderer):
+        raise ValueError("Benchmark log GPU is not the NVIDIA device the renderer reports")
+    before = (directory / "before.png").read_bytes()
+    after = (directory / "result.png").read_bytes()
+    if (
+        not before.startswith(b"\x89PNG\r\n\x1a\n")
+        or not after.startswith(b"\x89PNG\r\n\x1a\n")
+        or before == after
+    ):
+        raise ValueError("Missing or unchanged result screen")
+    signal = (
+        f"Completed benchmark interval {interval} s on {gpu} (driver {facts['driver']}) from the saved "
+        "log; score and FPS are not in the log file"
+    )
+    try:
+        values = screen_values((directory / "screen.txt").read_text())
+    except OSError:
+        values = None
+    if values:
+        score, lo, avg, hi = values
+        if not (0 < avg and 0 <= lo <= avg <= hi and score > 0):
+            raise ValueError("Result screen read shows zero or inconsistent FPS")
+        signal += f"; screen read (not the verdict): score {score}, FPS min {lo} avg {avg} max {hi}"
+    return signal
+
+
+def load_image(archive, directory):
+    """Check both required members; an already unpacked directory also needs its manifest."""
+    import zipfile
+
+    directory = Path(directory)
+    if archive:
+        with zipfile.ZipFile(archive) as z:
+            manifest = json.loads(z.read("manifest.json"))
+    else:
+        manifest = json.loads((directory / "manifest.json").read_text())
+    members = manifest.get("members", {})
+    if set(members) != {"image.qcow2", "state.json"} or not all(
+        re.fullmatch("[0-9a-f]{64}", x) for x in members.values()
+    ):
+        raise ValueError(
+            "Manifest must hash image.qcow2 and state.json; supply --zip to unpack and verify"
+        )
+    if archive:
+        state = PI.unpack(archive, directory)
+        (directory / "manifest.json").write_text(json.dumps(manifest))
+    else:
+        for name, digest in members.items():
+            if PI.sha256_file(directory / name) != digest:
+                raise ValueError("Manifest mismatch: " + name)
+        state = json.loads((directory / "state.json").read_text())
+        PI.validate_state(state, require_password=True)
+        if not PI.seed_matches(state):
+            raise ValueError("Seed mismatch")
+    return state
+
+
+def stage_gop(work, directory, explicit=None):
+    """The signed boot GOP driver is not in state.json: copy it into work/firmware (found by --gop-efi, else
+    <dir>/kf-gop.signed.efi or <dir>/firmware/kf-gop.signed.efi). A missing file is a harness error before QEMU starts."""
+    dst = Path(work) / "firmware/kf-gop.signed.efi"
+    if dst.is_file():
+        return dst
+    cands = [Path(explicit)] if explicit else [Path(directory) / "kf-gop.signed.efi", Path(directory) / "firmware/kf-gop.signed.efi"]
+    for c in cands:
+        if c.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(c.read_bytes())
+            return dst
+    raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
+
+
+HOST_LOG_PATTERN = re.compile(r"(?i)xid|tdr|reset|refus|walker|pramin|error|warn|timeout|fault|fail")
+
+
+STATUS_LINE = re.compile(r"^kf3: family=\S+ phase=")
+STATUS_NONZERO = re.compile(r"\b(refused|ram_refused|unshadowed_writes|read_exits)=[1-9]")
+
+
+def _host_line_interesting(line, pattern):
+    """The periodic kf3 status line names 'refused' even when the counter is 0 (measured 2026-11-14: it flooded
+    the excerpt); it counts only when one of its error counters is non-zero."""
+    if STATUS_LINE.match(line):
+        return bool(STATUS_NONZERO.search(line))
+    return bool(pattern.search(line))
+
+
+def host_log_excerpt(path, limit=300, pattern=HOST_LOG_PATTERN):
+    """Last `limit` lines of the host qemu/kf3 log that match the pattern (the whole log is never copied)."""
+    try:
+        lines = Path(path).read_text(errors="replace").splitlines()
+    except OSError:
+        return []
+    return [ln[:400] for ln in lines if _host_line_interesting(ln, pattern)][-limit:]
+
+
+def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic, alive=lambda: True):
+    """Manual iteration aid: keep the booted guest up until the release file exists (or max_s passes).
+
+    Returns "released", "timeout" or "qemu-exited" (alive() turned false: the VM ended during the hold).
+    The release file must not exist beforehand (a stale file would release at once, so refuse it)."""
+    path = Path(path)
+    if path.exists():
+        raise ValueError("Release file already exists; refusing a stale release")
+    t0 = clock()
+    while clock() - t0 < max_s:
+        if not alive():
+            return "qemu-exited"
+        if path.exists():
+            return "released"
+        sleep(5)
+    return "timeout"
+
+
+# QMP events that say how the VM ended. The guest can raise some events at will, so only these are kept, and at most
+# QMP_MAX_EVENTS of them.
+QMP_KEEP = {"SHUTDOWN", "GUEST_PANICKED", "GUEST_CRASHLOADED", "RESET", "POWERDOWN", "STOP"}
+QMP_MAX_EVENTS = 200
+
+
+def _load_qmp():
+    spec = importlib.util.spec_from_file_location("kf_qmp", HERE / "qmp.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def record_qmp_events(sock, out, qmp=None, attach_s=120.0, clock=time.monotonic, sleep=time.sleep):
+    """Append the QMP_KEEP events of QEMU's event socket to out until QEMU closes it. False if it never attached."""
+    qmp = qmp or _load_qmp()
+    deadline = clock() + attach_s
+    while True:
+        try:
+            s, f = qmp.qmp_open(str(sock), timeout=30.0)
+            break
+        except (OSError, EOFError, ValueError, RuntimeError):
+            if clock() >= deadline:
+                return False
+            sleep(0.5)
+    kept = 0
+    with s, open(out, "a", encoding="utf-8") as o:
+        s.settimeout(None)
+        while True:
+            try:
+                r = qmp.recv(f)
+            except (EOFError, OSError, ValueError):
+                break
+            if r.get("event") in QMP_KEEP and kept < QMP_MAX_EVENTS:
+                o.write(json.dumps(r) + "\n")
+                o.flush()
+                kept += 1
+    return True
+
+
+def start_qmp_events(sock, out):
+    t = threading.Thread(target=record_qmp_events, args=(sock, out), daemon=True)
+    t.start()
+    return t
+
+
+def read_qmp_events(path):
+    events = []
+    try:
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if type(e) is dict:
+                events.append(e)
+    except OSError:
+        pass
+    return events
+
+
+def qemu_exit_cause(events):
+    """(verdict, text) for a QEMU that exited before the harness stopped it, from its recorded QMP events.
+
+    With hv-crash in the CPU flags and no -action panic=..., a Windows bugcheck reaches QEMU as GUEST_PANICKED and QEMU's
+    default panic action ends the process with status 0 and no log line, which looks like a guest power-off."""
+    for e in events:
+        if e.get("event") == "GUEST_PANICKED":
+            info = (e.get("data") or {}).get("info") or {}
+            args = " ".join("%#x" % info[k] for k in ("arg1", "arg2", "arg3", "arg4", "arg5") if type(info.get(k)) is int)
+            return "FAIL", "guest bugcheck: GUEST_PANICKED type=%s%s (arg1 is the bugcheck code); QEMU's panic action ended the VM" % (
+                info.get("type", "?"), (" args=" + args) if args else "")
+    reasons = [str((e.get("data") or {}).get("reason")) for e in events if e.get("event") == "SHUTDOWN"]
+    if reasons:
+        return "FAIL", "QEMU exited before the harness stopped it: SHUTDOWN reason=%s" % reasons[-1]
+    return "FAIL", "QEMU exited before the harness stopped it; no QMP SHUTDOWN or GUEST_PANICKED event recorded"
+
+
+def stop_process(proc):
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=10)
+
+
+class Guest:
+    def __init__(self, state, key, port):
+        self.key, self.port, self.user = key, port, state["guest"]["user"]
+
+    def ssh(self, argv, stdin=None, timeout=120):
+        base = [
+            "ssh",
+            "-i",
+            self.key,
+            "-p",
+            str(self.port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+            "-o",
+            "ConnectTimeout=20",
+            "-o",
+            "BatchMode=yes",
+            f"{self.user}@127.0.0.1",
+        ]
+        return run(base + argv, input=stdin, timeout=timeout)
+
+    def ps(self, script, timeout=120):
+        """PowerShell. A one-liner goes over stdin; a multi-line script is copied to C:\\kfhw and run with -File (stdin parsing of
+        multi-line blocks silently printed nothing on the first hardware run)."""
+        if "\n" not in script.strip():
+            return self.ssh(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"],
+                stdin=script,
+                timeout=timeout,
+            )
+        with tempfile.TemporaryDirectory(prefix="kf-ps-") as td:
+            tmp = Path(td) / "script.ps1"
+            tmp.write_text(script)
+            prep = self.ps(r"New-Item -Force -ItemType Directory C:\kfhw | Out-Null")
+            if prep.returncode:
+                return prep
+            sent = self.scp(str(tmp), "C:/kfhw/ps_run.ps1", True)
+            if sent.returncode:
+                return sent
+            return self.ssh(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    r"C:\kfhw\ps_run.ps1",
+                ],
+                timeout=timeout,
+            )
+
+    def scp(self, src, dst, to_guest):
+        base = [
+            "scp",
+            "-q",
+            "-i",
+            self.key,
+            "-P",
+            str(self.port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+        ]
+        remote = f"{self.user}@127.0.0.1:{dst if to_guest else src}"
+        return run(base + ([src, remote] if to_guest else [remote, dst]), timeout=300)
+
+    def interactive(self, name, body, wait_s=0):
+        """Run PowerShell `body` in the logged-in desktop session (a scheduled task whose principal is the interactive user)."""
+        with tempfile.TemporaryDirectory(prefix="kf-interactive-") as td:
+            tmp = Path(td) / (name + ".ps1")
+            tmp.write_text(body)
+            prep = self.ps(r"New-Item -Force -ItemType Directory C:\kfhw | Out-Null")
+            if prep.returncode:
+                return prep
+            sent = self.scp(str(tmp), "C:/kfhw/" + name + ".ps1", True)
+            if sent.returncode:
+                return sent
+            result = self.ps(task_wrapper(name, self.user))
+        if wait_s:
+            time.sleep(wait_s)
+        return result
+
+
+# Guest scripts are authored here; selectors must come from a collected UIA tree.
+# No authentication, online requests or closed-binary inspection. Only the explicit
+# Superposition fallback uses input derived from a measured UIA window rectangle.
+PS_LIB = r"""
+$ErrorActionPreference='Stop'
+Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+function Save-Screen($path){
+ $b=[System.Windows.Forms.SystemInformation]::VirtualScreen
+ $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height
+ $g=[System.Drawing.Graphics]::FromImage($bmp)
+ try {$g.CopyFromScreen($b.Left,$b.Top,0,0,$bmp.Size);$bmp.Save($path,[System.Drawing.Imaging.ImageFormat]::Png)} finally {$g.Dispose();$bmp.Dispose()}
+}
+function Epoch($d) { ([DateTimeOffset]$d.ToUniversalTime()).ToUnixTimeMilliseconds()/1000.0 }
+function Dump-Uia($pidValue) {
+ $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pidValue)
+ $roots=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+ $rows=New-Object System.Collections.Generic.List[object]
+ $queue=New-Object System.Collections.Queue
+ foreach($root in $roots){$queue.Enqueue($root)}
+ while($queue.Count -gt 0 -and $rows.Count -lt 2048){
+  $el=$queue.Dequeue()
+  try {
+   $c=$el.Current
+   $rows.Add(@{Name=$c.Name;AutomationId=$c.AutomationId;ControlType=$c.ControlType.ProgrammaticName;ProcessId=$c.ProcessId;Patterns=@($el.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})})
+   foreach($child in $el.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)){
+    if($queue.Count -lt 2048){$queue.Enqueue($child)}
+   }
+  }catch{}
+ }
+ ConvertTo-Json -InputObject @($rows.ToArray()) -Depth 6 | Set-Content -Encoding UTF8 "$D\uia.json"
+}
+function Find-Control($selector,$pidValue) {
+ $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pidValue)
+ $roots=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+ $found=@(foreach($root in $roots){
+  $all=$root.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition)
+  foreach($el in $all){$c=$el.Current
+   if($c.AutomationId -ceq $selector.id -and (-not $selector.name -or $c.Name -ceq $selector.name) -and $c.ControlType.ProgrammaticName -ceq $selector.type){$el}
+  }
+ })
+ if($found.Count -ne 1){throw 'UIA selector missing or ambiguous'}
+ return $found[0]
+}
+"""
+
+CHECKS = {
+    "superposition": {
+        "timeout": 900,
+        "exe": r"C:\Program Files\Unigine\Superposition Benchmark\bin\launcher.exe",
+    },
+    "3dmark": {"timeout": 1800, "exe": r"C:\Program Files\UL\3DMark\3DMark.exe"},
+    "solidworks": {
+        "timeout": 900,
+        "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
+    },
+    "resolve": {
+        "timeout": 1800,
+        "exe": r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe",
+    },
+    "edrawings": {
+        "timeout": 300,
+        "exe": r"C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe",
+    },
+    "wukong": {
+        "timeout": 480,
+        "exe": r"C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool\b1_benchmark.exe",
+    },
+    "edge": {
+        "timeout": 300,
+        "exe": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    },
+}
+
+# 3DMark (measured 2026-11-14): 3DMarkCmd.exe refuses with "Professional or Developer license key required
+# for command line access", so the run goes through the UI. The CEF UI exposes its controls to UI Automation
+# only when started with --force-renderer-accessibility. The 'RUN' link is picked by geometry from the
+# Time Spy title in the UIA tree (no coordinates), invoked through InvokePattern, and the finish is the new
+# .3dmark-result that 3DMark itself saves to Documents\3DMark (the verdict reads that file).
+THREEDMARK_RUN = r"""
+$exe='C:\Program Files\UL\3DMark\3DMark.exe'
+$cmd='C:\Program Files\UL\3DMark\3DMarkCmd.exe'
+$r.cli_output=''
+if(Test-Path $cmd){
+ $o=(& $cmd --definition=timespy.3dmdef --online=off --audio=off --systeminfo=off --out="$D\cli.3dmark-result" 2>&1 | Out-String)
+ $r.cli_output=$o.Substring(0,[Math]::Min(600,$o.Length))
+}
+$docs="$env:USERPROFILE\Documents\3DMark"
+$started=Get-Date
+$p=Start-Process $exe -ArgumentList '--force-renderer-accessibility' -PassThru
+function Main-Window(){
+ foreach($pr in Get-Process -Name 3DMark -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){ if($w.Current.Name -eq '3DMark'){return $w} }
+ }
+}
+function Ui-Elements($w){ @($w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition)) }
+function Ui-Texts($els){ ($els | ForEach-Object {$_.Current.Name} | Where-Object {$_} | Select-Object -Unique -First 60) -join ' ; ' }
+$r.ui_ready=$false;$r.progress_seen=$false;$r.result_file='';$r.ui_texts=''
+$deadline=(Get-Date).AddSeconds(240);$els=@()
+while((Get-Date) -lt $deadline){
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w; if(@($els | Where-Object {$_.Current.Name -eq 'BENCHMARKS' -or $_.Current.Name -eq 'HOME'}).Count -gt 0 -and @($els | Where-Object {$_.Current.Name -eq 'Time Spy'}).Count -gt 0){$r.ui_ready=$true;break}}
+ Start-Sleep 5
+}
+if(-not $r.ui_ready){$r.ui_texts=Ui-Texts $els;throw 'Time Spy card not visible in the UI Automation tree (UI never became ready)'}
+$title=$els | Where-Object {$_.Current.Name -eq 'Time Spy' -and $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Text'} | Select-Object -First 1
+$tl=$title.Current.BoundingRectangle
+$run=$null;$best=99999
+foreach($e in $els){$c=$e.Current;if($c.Name -eq 'RUN' -and $c.ControlType.ProgrammaticName -eq 'ControlType.Hyperlink'){$b=$c.BoundingRectangle;if([math]::Abs($b.Left-$tl.Left) -lt 6 -and $b.Top -gt $tl.Top -and ($b.Top-$tl.Top) -lt $best){$best=$b.Top-$tl.Top;$run=$e}}}
+if(-not $run){throw 'No RUN link under the Time Spy card'}
+$run.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+$r.invoked=Epoch (Get-Date)
+$deadline=(Get-Date).AddSeconds(1080)
+while((Get-Date) -lt $deadline){
+ Start-Sleep 5
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w;$t=Ui-Texts $els;if($t){$r.ui_texts=$t};if($t -match 'Running benchmark'){$r.progress_seen=$true}}
+ $f=Get-ChildItem $docs -Filter *.3dmark-result -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -gt $started} | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+ if($f){Start-Sleep 5;$f=Get-Item $f.FullName;Copy-Item $f.FullName "$D\result.3dmark-result";$r.result_file=$f.Name;$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length;break}
+}
+$r.kind='TDM'
+try {Save-Screen "$D\3dmark.png"} catch {}
+Get-Process | Where-Object {$_.Name -match '^3DMark'} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# eDrawings (measured 2026-11-14): the first start shows a Software License Agreement dialog. Its ACCEPT is a
+# Win32 button that UI Automation exposes as a Pane named 'ACCEPT' (AutomationId '1', the dialog's IDOK) with NO
+# Invoke pattern, so UIA cannot press it; the window handle UIA reports for it takes a BM_CLICK message (no
+# coordinates, no focus needed). After accepting, the opened part shows as a TabItem named after the file in the
+# UIA tree (the window title stays 'eDrawings'); that tab is the evidence. Licence wording is not a decision
+# factor for test use.
+EDRAWINGS_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfMsg { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }
+'@
+function Find-Ui($root,$test){
+ $q=New-Object System.Collections.Queue;$q.Enqueue($root);$n=0
+ while($q.Count -gt 0 -and $n -lt 800){$el=$q.Dequeue();$n++
+  try{foreach($ch in $el.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)){ if(& $test $ch){return $ch}; $q.Enqueue($ch) }}catch{}
+ }
+}
+$sample=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $sample){throw 'No sample part under C:\ProgramData\SolidWorks'}
+Copy-Item $sample.FullName "$D\kfsample.sldprt"
+$r.sample='kfsample.sldprt';$r.accepted=$false;$r.accept_method='';$r.tab_name='';$r.windows_seen=@()
+$p=Start-Process 'C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe' -ArgumentList "`"$D\kfsample.sldprt`"" -PassThru
+$deadline=(Get-Date).AddSeconds(240)
+while((Get-Date) -lt $deadline){
+ foreach($pr in Get-Process -Name eDrawings -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   $r.windows_seen=@(@($r.windows_seen)+@("$($w.Current.ClassName):$($w.Current.Name)") | Select-Object -Unique -First 12)
+   if(-not $r.accepted){
+    $btn=Find-Ui $w {param($e) $e.Current.Name -ceq 'ACCEPT' -and $e.Current.AutomationId -ceq '1'}
+    if($btn){$h=[IntPtr]$btn.Current.NativeWindowHandle;if($h -ne [IntPtr]::Zero){[KfMsg]::SendMessage($h,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null;$r.accepted=$true;$r.accept_method='BM_CLICK on the UIA window handle';Start-Sleep 5}}
+   }
+   $tab=Find-Ui $w {param($e) $e.Current.ControlType.ProgrammaticName -ceq 'ControlType.TabItem' -and $e.Current.Name -ieq 'kfsample.sldprt'}
+   if($tab){$r.tab_name=$tab.Current.Name}
+  }
+ }
+ if($r.tab_name){break}
+ Start-Sleep 3
+}
+$r.kind='EDW'
+Start-Sleep 3
+try {Save-Screen "$D\edrawings.png"} catch {}
+Get-Process -Name eDrawings -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Resolve (measured 2026-11-14): the Qt UI is fully visible to UI Automation once past the splash: the Project
+# Manager window ('Project Manager', AutomationId UiProjectManagerDialog) has a 'New Project' button
+# (AutomationId ending btnAddProject, InvokePattern); the main window is named 'DaVinci Resolve - <project>'.
+# Scripting through DaVinciResolveScript returns None (external scripting is not available), and Resolve has no
+# built-in benchmark, so no render is run: the verdict is the UIA window for a project this run created plus
+# Resolve's own log lines (compute API, OpenGL context, NVDEC/NVENC) written after the start.
+RESOLVE_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfFocus {
+ [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte vk,byte sc,uint f,UIntPtr e);
+ [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
+ [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a,uint b,bool f);
+ [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+}
+'@
+function Focus-Win($w){
+ $h=[IntPtr]$w.Current.NativeWindowHandle;$fg=[KfFocus]::GetForegroundWindow();$d=0
+ $ft=[KfFocus]::GetWindowThreadProcessId($fg,[ref]$d);$me=[KfFocus]::GetCurrentThreadId()
+ [KfFocus]::AttachThreadInput($me,$ft,$true) | Out-Null
+ [KfFocus]::keybd_event(0x12,0,0,[UIntPtr]::Zero);[KfFocus]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
+ [KfFocus]::SetForegroundWindow($h) | Out-Null
+ [KfFocus]::AttachThreadInput($me,$ft,$false) | Out-Null
+ ([KfFocus]::GetForegroundWindow() -eq $h)
+}
+function Resolve-Win(){
+ foreach($pr in Get-Process -Name Resolve -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   if($w.Current.AutomationId -in 'UiProjectManagerDialog','UiMainWindow'){return $w}
+  }
+ }
+}
+$name='kf'+$r.run_id.Substring(0,8)
+$r.project_name=$name;$r.window_name='';$r.stage='';$r.log_lines=@()
+$t0=Get-Date
+$p=Start-Process 'C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe' -PassThru
+$deadline=(Get-Date).AddSeconds(300);$w=$null
+while((Get-Date) -lt $deadline){$w=Resolve-Win;if($w -and $w.Current.AutomationId -eq 'UiProjectManagerDialog'){break};Start-Sleep 3}
+if(-not $w -or $w.Current.AutomationId -ne 'UiProjectManagerDialog'){$r.stage='no project manager';throw 'Resolve Project Manager window never appeared in UI Automation'}
+$r.stage='project manager'
+$new=$w.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'New Project' -and $_.Current.AutomationId.EndsWith('btnAddProject')} | Select-Object -First 1
+if(-not $new){throw 'New Project button not found by AutomationId'}
+$new.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+Start-Sleep 4
+$r.focus=Focus-Win $w
+[System.Windows.Forms.SendKeys]::SendWait('^a');Start-Sleep -Milliseconds 300
+[System.Windows.Forms.SendKeys]::SendWait($name);Start-Sleep -Milliseconds 500
+[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+$r.stage='create sent'
+$deadline=(Get-Date).AddSeconds(120)
+while((Get-Date) -lt $deadline){$m=Resolve-Win;if($m -and $m.Current.AutomationId -eq 'UiMainWindow'){$r.window_name=$m.Current.Name;if($r.window_name -like "*$name*"){break}};Start-Sleep 3}
+$r.stage='main window'
+Start-Sleep 5
+$log="$env:APPDATA\Blackmagic Design\DaVinci Resolve\Support\logs\davinci_resolve.log"
+$lines=@()
+foreach($ln in Get-Content $log -ErrorAction SilentlyContinue){
+ $m=[regex]::Match($ln,'\| (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \| (.*)$')
+ if($m.Success){$ts=[datetime]::ParseExact($m.Groups[1].Value,'yyyy-MM-dd HH:mm:ss',$null);if($ts -ge $t0.AddSeconds(-2) -and $m.Groups[2].Value -match 'Selected compute API|initialised as decoding|Initialized OpenGL|Let There Be CUDA|Detected 1 GPUs'){$lines+=$ln.Substring(0,[Math]::Min(260,$ln.Length))}}
+}
+$r.log_lines=@($lines | Select-Object -First 40)
+$r.kind='RESOLVE'
+try {Save-Screen "$D\resolve.png"} catch {}
+Get-Process -Name Resolve -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
+# launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
+# CEF window UI Automation cannot see). Measured 2026-11-14: with the AppID in the environment (read from
+# Steam's own appmanifest) the launcher starts b1-Win64-Shipping.exe directly. The script samples VRAM
+# with nvidia-smi and, if the game dies, collects its crash context and the kernel watchdog event.
+WUKONG_RUN = r"""
+$game='C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool'
+$exe="$game\b1_benchmark.exe"
+if(-not (Test-Path $exe)){throw 'Black Myth: Wukong Benchmark Tool is not installed'}
+$manifest=Get-ChildItem 'C:\Program Files (x86)\Steam\steamapps\appmanifest_*.acf' | Where-Object {(Get-Content $_.FullName -Raw) -match '"installdir"\s+"Black Myth Wukong Benchmark Tool"'} | Select-Object -First 1
+if(-not $manifest){throw 'No Steam appmanifest for the benchmark tool'}
+$appid=[regex]::Match((Get-Content $manifest.FullName -Raw),'"appid"\s+"(\d+)"').Groups[1].Value
+if(-not $appid){throw 'No appid in the Steam appmanifest'}
+$crashRoot="$game\b1\Saved\Crashes"
+$known=@(Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {$_.Name})
+if(-not (Get-Process steam -ErrorAction SilentlyContinue)){
+ Start-Process 'C:\Program Files (x86)\Steam\steam.exe' -ArgumentList '-silent' | Out-Null
+ $w=(Get-Date).AddSeconds(90); while((Get-Date) -lt $w -and -not (Get-Process steamwebhelper -ErrorAction SilentlyContinue)){Start-Sleep 3}
+ Start-Sleep 10
+}
+$r.video_controllers=@(Get-CimInstance Win32_VideoController | ForEach-Object {@{name=$_.Name;adapter_ram=$_.AdapterRAM;driver=$_.DriverVersion}})
+try {& nvidia-smi -q -d MEMORY 2>&1 | Out-File -Encoding utf8 "$D\nvidia_smi_memory.txt"} catch {}
+try {$dx=Start-Process dxdiag -ArgumentList "/t","$D\dxdiag.txt" -PassThru;$dx.WaitForExit(90000) | Out-Null} catch {}
+$env:SteamAppId=$appid;$env:SteamGameId=$appid
+$p=Start-Process $exe -WorkingDirectory $game -PassThru
+$r.appid=$appid;$r.shipping_seen=$false;$r.shipping_secs=0;$r.vram_peak_mib=0;$r.vram_total_mib=0;$r.samples=@()
+$t0=Get-Date;$first=$null;$deadline=$t0.AddSeconds(360)
+while((Get-Date) -lt $deadline){
+ $g=Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue | Select-Object -First 1
+ $smi=@(& nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>$null)
+ $used=0;$total=0
+ if($smi.Count -gt 0 -and $smi[0] -match '^\s*(\d+)\s*,\s*(\d+)'){$used=[int]$Matches[1];$total=[int]$Matches[2]}
+ if($used -gt $r.vram_peak_mib){$r.vram_peak_mib=$used};if($total -gt 0){$r.vram_total_mib=$total}
+ if($g){ if(-not $first){$first=Get-Date;$r.shipping_seen=$true}; $r.shipping_secs=[int]((Get-Date)-$first).TotalSeconds }
+ if($r.samples.Count -lt 200){$r.samples+=@{t=[int]((Get-Date)-$t0).TotalSeconds;alive=[bool]$g;vram=$used}}
+ if($first -and -not $g){break}
+ Start-Sleep 5
+}
+$r.exited=[bool]($first -and -not (Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue))
+$r.kind='WUKONG'
+$r.crash=$null
+$dir=Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | Where-Object {$known -notcontains $_.Name} | Select-Object -First 1
+if($dir -and (Test-Path "$($dir.FullName)\CrashContext.runtime-xml")){
+ $x=Get-Content "$($dir.FullName)\CrashContext.runtime-xml" -Raw
+ function Field($n){$m=[regex]::Match($x,"<$n>([^<]{0,300})</$n>");if($m.Success){$m.Groups[1].Value}else{''}}
+ $mods=@([regex]::Matches((Field 'CallStack'),'[A-Za-z0-9_\-]+') | ForEach-Object {$_.Value} | Where-Object {$_ -match '^(sl_|nv|d3d|dxg|b1|ntdll|KERNEL)'} | Select-Object -Unique -First 8)
+ $r.crash=@{dir=$dir.Name;type=(Field 'CrashType');message=(Field 'ErrorMessage');exe=(Field 'ExecutableName');gpu=(Field 'Misc.PrimaryGPUBrand');seconds_since_start=(Field 'SecondsSinceStart');modules=$mods}
+ Copy-Item "$($dir.FullName)\CrashContext.runtime-xml" "$D\crash_context.xml"
+}
+$r.kernel_events=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1001;StartTime=$t0} -ErrorAction SilentlyContinue | ForEach-Object {$m=[regex]::Match($_.Message,'Event Name: (\w+)[\s\S]*?P1: (\w+)');if($m.Success -and $m.Groups[1].Value -eq 'LiveKernelEvent'){@{event=$m.Groups[1].Value;code=$m.Groups[2].Value;time=(Epoch $_.TimeCreated)}}})
+$r.app_errors=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000;StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.Message -match 'b1-Win64-Shipping'} | ForEach-Object {$m=$_.Message;@{time=(Epoch $_.TimeCreated);text=$m.Substring(0,[Math]::Min(400,$m.Length))}})
+Get-WinEvent -FilterHashtable @{LogName='System';StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.ProviderName -match 'Display|nvlddmkm|dxgkrnl|BugCheck|LiveKernel'} | Select-Object -First 200 | ForEach-Object {'{0} {1} id={2} {3}' -f $_.TimeCreated.ToString('HH:mm:ss'),$_.ProviderName,$_.Id,($_.Message -replace '\s+',' ').Substring(0,[Math]::Min(300,$_.Message.Length))} | Set-Content "$D\system_events.txt"
+Get-Process | Where-Object {$_.Name -match '^(b1_benchmark|b1-Win64-Shipping|CrashReportClient)$' -and $_.StartTime -gt $t0.AddSeconds(-5)} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Edge check: the harness authors a local page (no network) that draws with WebGL for 4 s and puts
+# the renderer string, the frame count and a per-run nonce in the document title. The verdict reads that
+# title from the browser window through UI Automation, so a window that merely exists cannot pass.
+EDGE_PAGE = r"""<!doctype html><meta charset=utf-8><title>KFGL pending</title><canvas id=c width=64 height=64></canvas>
+<script>
+const nonce='__NONCE__';
+try {
+ const c=document.getElementById('c');
+ const gl=c.getContext('webgl2')||c.getContext('webgl');
+ const ext=gl.getExtension('WEBGL_debug_renderer_info');
+ const r=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
+ let n=0;const t0=performance.now();
+ function f(){gl.clearColor((n%255)/255,0.5,0.2,1);gl.clear(gl.COLOR_BUFFER_BIT);n++;
+  if(performance.now()-t0<4000){requestAnimationFrame(f);}
+  else{document.title='KFGL '+nonce+' ok renderer='+r+' frames='+n;}}
+ requestAnimationFrame(f);
+} catch(e){document.title='KFGL '+nonce+' err '+e;}
+</script>"""
+
+EDGE_RUN = r"""
+$exe='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+$page="$D\kfgl.html"
+$html=@'
+__PAGE__
+'@
+Set-Content -Encoding UTF8 $page $html.Replace('__NONCE__',$r.run_id)
+$profile="$D\edge-profile"
+$uri=([System.Uri]$page).AbsoluteUri
+$p=Start-Process $exe -ArgumentList "--user-data-dir=`"$profile`"","--no-first-run","--no-default-browser-check","--disable-sync","--new-window",$uri -PassThru
+$deadline=(Get-Date).AddSeconds(120)
+$r.launched=$false;$r.window_title=''
+while((Get-Date) -lt $deadline){
+ $procs=@(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {$_.ProcessId})
+ $r.edge_pids=$procs
+ foreach($pidv in $procs){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pidv)
+  $wins=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+  foreach($w in $wins){
+   $name=$w.Current.Name
+   if($name -like 'KFGL *'){$r.launched=$true;$r.window_title=$name}
+  }
+ }
+ if($r.window_title -match ' (ok|err) '){break}
+ Start-Sleep -Seconds 2
+}
+$r.kind='UIA'
+try {Save-Screen "$D\edge.png"} catch {}
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
+"""
+
+SOLIDWORKS = r"""
+# Measured 2026-11-14: PowerShell's COM adapter fails every SldWorks call with TYPE_E_ELEMENTNOTFOUND, but
+# late-bound IDispatch InvokeMember works (RevisionNumber 34.5.2, OpenDoc6, SaveAs). Optional IDispatch
+# arguments must be a DispatchWrapper around null; ints by reference need a ParameterModifier.
+$ComT=[System.__ComObject]
+$bf=[Reflection.BindingFlags]
+function Com-Call($obj,$name,$kind,$argv,$byref){
+ $pm=$null
+ if($byref -and $byref.Count -gt 0){$m=New-Object Reflection.ParameterModifier $argv.Count;foreach($i in $byref){$m[$i]=$true};$pm=@($m)}
+ $ComT.InvokeMember($name,$bf::$kind,$null,$obj,$argv,$pm,$null,$null)
+}
+$r.step='create'
+$t=[Type]::GetTypeFromProgID('SldWorks.Application')
+$sw=[Activator]::CreateInstance($t)
+$r.step='visible'
+[void](Com-Call $sw 'Visible' SetProperty @($true) @())
+$r.revision=[string](Com-Call $sw 'RevisionNumber' InvokeMethod @() @())
+$part=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $part){throw 'No sample part under C:\ProgramData\SolidWorks'}
+$r.step='open'
+$a=[object[]]@($part.FullName,[int]1,[int]1,'',[int]0,[int]0)
+$model=Com-Call $sw 'OpenDoc6' InvokeMethod $a @(4,5)
+if(-not $model -or $a[4] -ne 0){throw "OpenDoc6 failed err=$($a[4])"}
+$r.opened_title=[string](Com-Call $model 'GetTitle' InvokeMethod @() @())
+$r.step='saveas'
+$ext=Com-Call $model 'Extension' GetProperty @() @()
+$b=[object[]]@("$D\model.step",[int]0,[int]1,[System.Runtime.InteropServices.DispatchWrapper]::new([object]$null),[int]0,[int]0)
+$ok=Com-Call $ext 'SaveAs' InvokeMethod $b @(4,5)
+$r.step='stat'
+$f=Get-Item "$D\model.step"
+$r.kind='FILE';$r.artifact='model.step';$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length
+$r.api_ok=([bool]$ok -and $b[4] -eq 0)
+$r.step='exit'
+try{[void](Com-Call $sw 'ExitApp' InvokeMethod @() @())}catch{}
+Get-Process SLDWORKS -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# UIA is deliberately data-driven: no invented AutomationIds or completion labels.
+UIA_RUN = r"""
+$status=Find-Control $plan.status $p.Id
+$r.before=$status.Current.Name
+if($r.before -ceq $plan.finished){throw 'Finished state predates this run'}
+$button=Find-Control $plan.run $p.Id
+$invoke=$button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+$invoke.Invoke()
+$deadline=(Get-Date).AddSeconds($plan.timeout)
+$r.progress='';$r.after=''
+while((Get-Date) -lt $deadline){
+ $status=Find-Control $plan.status $p.Id
+ $text=$status.Current.Name
+ if($text -ceq $plan.running){$r.progress=$text}
+ if($r.progress -and $text -ceq $plan.finished){$r.after=$text;break}
+ Start-Sleep -Milliseconds 500
+}
+$r.kind='UIA'
+$r.running=$plan.running;$r.finished=$plan.finished
+"""
+
+
+def env_prefix(env):
+    """Old coordinate calibration is intentionally refused."""
+    if env:
+        raise ValueError("Coordinate calibration removed; collect UIA selectors instead")
+    return ""
+
+
+def validate_plan(plan):
+    if not isinstance(plan, dict) or set(plan) != {
+        "run",
+        "status",
+        "running",
+        "finished",
+        "timeout",
+    }:
+        raise ValueError("UIA plan needs run/status selectors, running/finished text and timeout")
+    for key in ("run", "status"):
+        sel = plan[key]
+        if not isinstance(sel, dict) or set(sel) != {"id", "name", "type"}:
+            raise ValueError("Selector needs id/name/type")
+        if not all(isinstance(v, str) and len(v) <= 256 for v in sel.values()):
+            raise ValueError("Invalid selector")
+        if not sel["type"].startswith("ControlType."):
+            raise ValueError("Invalid control type")
+    if not all(
+        isinstance(plan[k], str) and 0 < len(plan[k]) <= 256 for k in ("running", "finished")
+    ):
+        raise ValueError("Missing state text")
+    if (
+        plan["running"] == plan["finished"]
+        or type(plan["timeout"]) is not int
+        or not 1 <= plan["timeout"] <= 1200
+    ):
+        raise ValueError("Invalid state transition or timeout")
+    return plan
+
+
+def render_check(
+    name,
+    env=None,
+    run_id="0" * 32,
+    plan=None,
+    accessibility_experiment=False,
+    solidworks_export=True,
+    superposition_run=False,
+    resolve_plan=None,
+):
+    spec = CHECKS[name]
+    env_prefix(env or {})
+    if not re.fullmatch("[a-f0-9]{32}", run_id):
+        raise ValueError("Invalid run id")
+    directory = GUEST_DIR + "\\" + run_id + "\\" + name
+    script = PS_LIB + f"\n$D='{directory}'\n"
+    script += "New-Item -ItemType Directory -Path $D -ErrorAction Stop | Out-Null\n"
+    script += (
+        f"$r=@{{app='{name}';run_id='{run_id}';started=(Epoch (Get-Date));kind='PROBE'}}\ntry {{\n"
+    )
+    if name == "solidworks" and solidworks_export:
+        script += SOLIDWORKS
+    elif name == "edge":
+        script += EDGE_RUN.replace("__PAGE__", EDGE_PAGE)
+    elif name == "wukong":
+        script += WUKONG_RUN
+    elif name == "3dmark":
+        script += THREEDMARK_RUN
+    elif name == "edrawings":
+        script += EDRAWINGS_RUN
+    elif name == "resolve" and resolve_plan:
+        script += _load_resolve_gpu().guest_body(resolve_plan)
+    elif name == "resolve":
+        script += RESOLVE_RUN
+    else:
+        if name == "superposition" and superposition_run:
+            script += (
+                r"$source=Join-Path $env:USERPROFILE 'Superposition\log.html'; Remove-Item $source -ErrorAction SilentlyContinue"
+                + "\n"
+            )
+        args = (
+            " -ArgumentList '--force-renderer-accessibility'"
+            if name == "3dmark" and accessibility_experiment
+            else ""
+        )
+        script += f"$p=Start-Process '{spec['exe']}'{args} -PassThru; Start-Sleep 30\n"
+        script += "$p.Refresh();$r.kind='LAUNCH_ONLY';$r.launched=(-not $p.HasExited);$r.title=$p.MainWindowTitle\n"
+        script += "try {Dump-Uia $p.Id} catch {$r.uia_error=$_.Exception.Message}\n"
+        if name == "superposition" and superposition_run:
+            script += SUPERPOSITION
+        elif plan:
+            validate_plan(plan)
+            literal = json.dumps(plan).replace("'", "''")
+            script += f"$plan=ConvertFrom-Json '{literal}'\n" + UIA_RUN
+        else:
+            script += "$r.note='UIA tree collected; verified run controls and result schema pending'\n"
+    script += '} catch { $r.error=$_.Exception.Message } finally {\ntry {Save-Screen "$D\\screen.png"} catch {$r.screen_error=$_.Exception.Message}\n$r.ended=Epoch (Get-Date)\n'
+    script += 'ConvertTo-Json -InputObject $r -Depth 6 | Set-Content -Encoding UTF8 "$D\\result.tmp"\nMove-Item "$D\\result.tmp" "$D\\result.json"\n}\n'
+    return script
+
+
+def validate_transition(record, running, finished):
+    return (
+        isinstance(running, str)
+        and bool(running)
+        and isinstance(finished, str)
+        and bool(finished)
+        and running != finished
+        and record.get("before") not in (None, "", running, finished)
+        and record.get("progress") == running
+        and record.get("after") == finished
+    )
+
+
+def validate_edge(r, run_id):
+    """Grade the browser window title that the authored WebGL page wrote (read through UIA)."""
+    if r.get("launched") is not True:
+        raise ValueError("Edge page window not found (no window with the run's title)")
+    title = str(r.get("window_title", ""))
+    ok = re.match(r"KFGL ([0-9a-f]{32}) ok renderer=(.*) frames=(\d+)", title)
+    if not ok:
+        raise ValueError("Edge WebGL page did not report a renderer: " + title[:120])
+    if ok[1] != run_id:
+        raise ValueError("Edge page title belongs to another run")
+    renderer, frames = ok[2], int(ok[3])
+    if frames <= 0:
+        raise ValueError("Edge WebGL drew no frames")
+    if SOFTWARE_RENDERERS.search(renderer):
+        raise ValueError("Edge WebGL renderer is software: " + renderer[:120])
+    if "nvidia" not in renderer.lower():
+        raise ValueError("Edge WebGL renderer is not the NVIDIA device: " + renderer[:120])
+    return f"WebGL drew {frames} frames in 4 s on {renderer[:120]} (title read through UIA)"
+
+
+TDM_MAX_MEMBER = 64 * 1024 * 1024
+TDM_MEMBERS = {
+    "Result.xml", "Arielle.xml", "SI.xml", "hash.txt", "Monitoring.csv", "RawMonitoringData.json",
+    "product-info-level.log",
+}
+
+
+def cli_refused(text):
+    """3DMarkCmd.exe prints this and exits 0 when the key's edition has no command line (measured 2026-11-14)."""
+    return bool(re.search(r"(?i)license key required for command line access", text))
+
+
+def _tdm_xml(zf, name):
+    import xml.etree.ElementTree as ET
+
+    raw = zf.read(name)
+    if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):
+        raise ValueError(f"{name} contains a DOCTYPE/ENTITY declaration; refused as data")
+    try:
+        return ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError(f"{name} is not valid XML: {exc}") from exc
+
+
+def _tdm_epoch(stamp):
+    from datetime import datetime, timezone
+
+    base = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)", stamp or "")
+    if not base:
+        raise ValueError("3DMark result has no parseable start/finish time")
+    return datetime.strptime(base[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+
+
+def validate_3dmark_result(path, run_start, run_end):
+    """Grade a saved .3dmark-result (a zip read as data, never extracted or executed). Returns the signal text.
+
+    Result.xml carries the scores, Arielle.xml the workload status codes and start/finish times, SI.xml the
+    devices. Structure measured on the PC's 2026-11-12 Time Spy BASIC result; the finish time must fall inside
+    this run so the stale preparation result in the image can never pass."""
+    import zipfile
+
+    try:
+        zf = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError(f"3DMark result is not a readable zip: {exc}") from exc
+    with zf:
+        for info in zf.infolist():
+            if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:
+                raise ValueError(f"Unexpected or oversized zip member {info.filename[:60]!r}")
+        for need in ("Result.xml", "Arielle.xml", "SI.xml"):
+            if need not in zf.namelist():
+                raise ValueError(f"3DMark result lacks {need}")
+        result, arielle, si = (_tdm_xml(zf, n) for n in ("Result.xml", "Arielle.xml", "SI.xml"))
+    infos = {
+        (i.findtext("name") or ""): (i.findtext("value") or "") for i in arielle.iter("info")
+    }
+    began, finished = _tdm_epoch(infos.get("benchmark_start_time")), _tdm_epoch(infos.get("benchmark_finish_time"))
+    if not (run_start <= began < finished <= run_end):
+        raise ValueError("3DMark result is not from this run (start/finish outside the guest run window)")
+    codes = [s.get("code") for s in arielle.iter("status")]
+    if not codes or any(c != "0" for c in codes):
+        raise ValueError(f"3DMark workload status codes not all 0: {codes[:8]}")
+    scores = {}
+    for node in result.iter():
+        tag = node.tag
+        if tag.endswith("3DMarkScore") or tag.endswith("GraphicsScore"):
+            try:
+                scores.setdefault(tag, int(node.text or "0"))
+            except ValueError:
+                scores.setdefault(tag, 0)
+    total = [v for k, v in scores.items() if k.endswith("3DMarkScore")]
+    graphics = [v for k, v in scores.items() if k.endswith("GraphicsScore")]
+    if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:
+        raise ValueError("3DMark result has no positive 3DMark and graphics score")
+    fps = []
+    for node in result.iter():
+        if re.search(r"GraphicsTest\d+$", node.tag):
+            try:
+                fps.append(float(node.text or "0"))
+            except ValueError:
+                fps.append(0.0)
+    if not fps or min(fps) <= 0:
+        raise ValueError("3DMark result has no positive graphics-test FPS")
+    gpus = []
+    for dev in si.iter("Device"):
+        vals = {}
+        for v in dev.iter("Value"):  # DriverVersion sits in a nested Software_Key (measured 2026-11-14)
+            sub = v.find("Value")
+            if sub is not None:
+                vals[v.findtext("Name")] = sub.text or ""
+        if vals.get("Class") == "Display" and "nvidia" in (vals.get("DeviceDesc", "")).lower():
+            gpus.append((vals.get("DeviceDesc", ""), vals.get("DriverVersion", "?")))
+    if not gpus:
+        raise ValueError("SI.xml names no NVIDIA display device")
+    if any(SOFTWARE_RENDERERS.search(name) for name, _ in gpus):
+        raise ValueError("SI.xml display device is a software renderer")
+    name, driver = gpus[0]
+    return (
+        f"3DMark score {total[0]} (graphics {graphics[0]}), graphics tests {', '.join(f'{x:g}' for x in fps)} FPS, "
+        f"finished {infos['benchmark_finish_time'][:19]}Z on {name} driver {driver}, all {len(codes)} workload status codes 0"
+    )
+
+
+GPU_KERNEL_EVENTS = {"117": "VIDEO_TDR_FAILURE", "141": "VIDEO_ENGINE_TIMEOUT_DETECTED (watchdog)"}
+
+
+def validate_wukong(r):
+    """Returns (status, text). FAIL on a crash or GPU watchdog event, INCONCLUSIVE when the tool merely stayed up
+    (nothing drives its benchmark yet), never a PASS from a window or a process alone."""
+    peak, total = r.get("vram_peak_mib"), r.get("vram_total_mib")
+    vram = f"VRAM peak {peak} of {total} MiB" if peak and total else "VRAM not sampled"
+    if r.get("shipping_seen") is not True:
+        return "FAIL", "Benchmark process b1-Win64-Shipping never started"
+    events = [
+        str(e.get("code"))
+        for e in (r.get("kernel_events") or [])
+        if str(e.get("code")) in GPU_KERNEL_EVENTS
+    ]
+    crash = r.get("crash")
+    if crash:
+        mods = ",".join(str(x) for x in (crash.get("modules") or [])[:6])
+        text = (
+            f"Game crashed after {r.get('shipping_secs')} s: {crash.get('type')} "
+            f"'{crash.get('message')}' in {crash.get('exe')} on {crash.get('gpu')}; modules {mods}; {vram}"
+        )
+        if events:
+            text += "; kernel " + ", ".join(f"LiveKernelEvent {c} {GPU_KERNEL_EVENTS[c]}" for c in events)
+        return "FAIL", text
+    if events:
+        return "FAIL", f"GPU watchdog event {events[0]} {GPU_KERNEL_EVENTS[events[0]]} during the run; {vram}"
+    if r.get("exited") is True and r.get("app_errors"):
+        return "FAIL", "Game exited with an Application Error event; " + vram
+    if r.get("exited") is True:
+        return "INCONCLUSIVE", f"Game ran {r.get('shipping_secs')} s and exited without a crash; no result file to grade; {vram}"
+    return "INCONCLUSIVE", (
+        f"Game stayed up {r.get('shipping_secs')} s with no crash or GPU event; the benchmark was not driven, "
+        f"so no work is proven; {vram}"
+    )
+
+
+def verdict(name, run_id, directory, plan=None, resolve_host=None):
+    """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
+    row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
+    resolve_host = resolve_host or {}
+    try:
+        r = json.loads((directory / "result.json").read_text(encoding="utf-8-sig"))
+        if r.get("app") != name or r.get("run_id") != run_id:
+            raise ValueError("Result identity mismatch")
+        start, end = r["started"], r["ended"]
+        if (
+            not all(type(v) in (int, float) and math.isfinite(v) for v in (start, end))
+            or not start < end
+        ):
+            raise ValueError("Invalid guest timestamps")
+        row["secs"] = int(end - start)
+        if name == "wukong":
+            row["launched"] = r.get("shipping_seen") is True
+        if r.get("error") and r.get("kind") != "RESOLVE_GPU":
+            step = f" (script step {r['step']})" if r.get("step") else ""
+            raise ValueError(str(r["error"]) + step)
+        if r.get("kind") == "FILE" and name == "solidworks":
+            artifact = r.get("artifact")
+            if artifact != "model.step":
+                raise ValueError("Unexpected artifact path")
+            modified = r.get("modified")
+            if type(modified) not in (int, float) or not start < modified <= end:
+                raise ValueError("Stale artifact")
+            raw = (directory / artifact).read_bytes()
+            if not raw or len(raw) != r.get("bytes"):
+                raise ValueError("Artifact length mismatch")
+            if r.get("api_ok") is not True:
+                raise ValueError("API export failed")
+            text = raw.decode("ascii")
+            if not (
+                text.startswith("ISO-10303-21;")
+                and text.rstrip().endswith("END-ISO-10303-21;")
+                and "DATA;" in text
+                and re.search(r"#[0-9]+\s*=", text)
+            ):
+                raise ValueError("Invalid STEP exchange structure")
+            row.update(
+                ok=True,
+                evidence="FILE",
+                signal="API exported STEP with entity data (not a GPU/render benchmark)",
+            )
+        elif name == "3dmark" and r.get("kind") == "TDM":
+            row["evidence"] = "NONE"
+            if not r.get("result_file"):
+                if r.get("progress_seen") is True:
+                    raise ValueError(
+                        "3DMark ran (UIA saw 'Running benchmark') but saved no result file before the budget; UI: "
+                        + str(r.get("ui_texts", ""))[:200]
+                    )
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "3DMark run did not start; blocker text from the UI: " + str(r.get("ui_texts", ""))[:300]
+                )
+            modified = r.get("modified")
+            if not re.fullmatch(r"[A-Za-z0-9 ._()\-]{1,120}\.3dmark-result", str(r["result_file"])):
+                raise ValueError("Unexpected result file name")
+            if type(modified) not in (int, float) or not start < modified <= end:
+                raise ValueError("Stale result file")
+            path = directory / "result.3dmark-result"
+            if not path.is_file() or path.stat().st_size != r.get("bytes"):
+                raise ValueError("Result file length mismatch")
+            signal = validate_3dmark_result(path, start, end)
+            if cli_refused(str(r.get("cli_output", ""))):
+                signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
+            row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "resolve" and r.get("kind") == "RESOLVE_GPU":
+            graded = _load_resolve_gpu().grade(r, directory, **resolve_host)
+            row["evidence"] = "FILE"
+            row.update({k: v for k, v in graded.items() if k not in ("ok", "status", "error")})
+            if not graded["ok"]:
+                row["status"] = graded["status"]
+                raise ValueError(graded["error"])
+            row.update(ok=True)
+        elif name == "resolve" and r.get("kind") == "RESOLVE":
+            row["evidence"] = "NONE"
+            wanted = "kf" + run_id[:8]
+            lines = [str(x) for x in (r.get("log_lines") or [])]
+            blob = "\n".join(lines)
+            gl = re.search(r"Initialized OpenGL [\d.]+ .*on device '([^']*)'", blob)
+            problems = []
+            if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):
+                problems.append(f"main window {str(r.get('window_name'))[:60]!r} does not name the project this run created")
+            if "Selected compute API: CUDA" not in blob:
+                problems.append("log does not show the CUDA compute API selected after the start")
+            if "initialised as decoding and encoding device" not in blob:
+                problems.append("log does not show the NVIDIA decode/encode device initialised")
+            if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):
+                problems.append("log shows no NVIDIA OpenGL context")
+            if problems:
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError("; ".join(problems) + f"; stage {r.get('stage')}")
+            row.update(
+                ok=True,
+                evidence="FILE",
+                signal=(
+                    f"Resolve created project {wanted} (UIA main window {r['window_name']!r}); its log after the start shows "
+                    f"CUDA compute, NVDEC/NVENC initialised and OpenGL on {gl[1]}; no render or benchmark was run"
+                ),
+            )
+        elif name == "edrawings" and r.get("kind") == "EDW":
+            tab = str(r.get("tab_name", ""))
+            if r.get("sample") != "kfsample.sldprt" or tab.lower() != "kfsample.sldprt":
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "eDrawings shows no tab for the opened sample; licence accepted: "
+                    + str(r.get("accepted") is True)
+                    + "; windows: "
+                    + str(r.get("windows_seen"))[:160]
+                )
+            row.update(
+                ok=True,
+                evidence="UIA",
+                signal=(
+                    f"eDrawings opened the sample part (UIA TabItem {tab!r}); licence dialog accepted: "
+                    f"{r.get('accepted') is True} ({r.get('accept_method', '')})"
+                ),
+            )
+        elif name == "wukong" and r.get("kind") == "WUKONG":
+            status, text = validate_wukong(r)
+            row["evidence"] = "FILE" if r.get("crash") or r.get("kernel_events") else "NONE"
+            row["status"] = status
+            raise ValueError(text)
+        elif name == "edge" and r.get("kind") == "UIA":
+            row.update(ok=True, evidence="UIA", signal=validate_edge(r, run_id))
+        elif r.get("kind") == "UIA" and plan and name != "wukong":
+            validate_plan(plan)
+            if not validate_transition(r, plan["running"], plan["finished"]):
+                raise ValueError("No fresh progress-to-finished transition")
+            row.update(
+                ok=True,
+                evidence="UIA",
+                signal="Observed progress then finished; selector semantics require hardware qualification",
+            )
+        elif r.get("kind") == "FILE" and name == "superposition":
+            row.update(
+                ok=True,
+                evidence="FILE",
+                signal=validate_superposition(r, directory, start, end),
+            )
+        else:
+            if r.get("kind") == "LAUNCH_ONLY" and r.get("launched") is True:
+                row["status"] = "LAUNCH_ONLY"
+            raise ValueError(r.get("note", "No supported work evidence"))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        row["error"] = str(exc)
+    return row
+
+
+def task_wrapper(name, user="kfimage"):
+    """Runs C:\\kfapps\\<name>.ps1 in the interactive session, once, and removes the task (no -RunLevel surprises)."""
+    if not re.fullmatch(r"[a-z0-9_]+", name):
+        raise ValueError("Invalid task name")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,19}", user):
+        raise ValueError("Invalid interactive user")
+    return (
+        f"$n='kf_{name}'; Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue\n"
+        f"$a=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\\kfhw\\{name}.ps1'\n"
+        f"$p=New-ScheduledTaskPrincipal -UserId {user} -LogonType Interactive -RunLevel Highest\n"
+        "Register-ScheduledTask -TaskName $n -Action $a -Principal $p | Out-Null; Start-ScheduledTask -TaskName $n; 'started'\n"
+    )
+
+
+def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.monotonic, **options):
+    """Run in a unique guest directory; pull only authored, bounded artifact names."""
+    run_id = uuid.uuid4().hex
+    remote = GUEST_DIR.replace("\\", "/") + "/" + run_id + "/" + name
+    d = out / name / run_id
+    d.mkdir(parents=True)
+    tmp = d / (name + ".ps1")
+    resolve_cfg = options.pop("resolve_gpu", None)  # dict (media directory, ...) or None: the launch-only Resolve row
+    qlog = options.pop("qemu_log", None)
+    resolve_plan, host_sampler, host_t0, qlines0 = None, None, None, None
+    if name != "resolve" or resolve_cfg is None:
+        tmp.write_text(render_check(name, env, run_id, plan, **options))
+    task = "app_" + run_id
+    t0 = clock()
+    try:
+        if name == "resolve" and resolve_cfg is not None:
+            rg = _load_resolve_gpu()
+            resolve_plan = rg.prepare(guest, run_id, resolve_cfg)
+            tmp.write_text(render_check(name, env, run_id, plan, resolve_plan=resolve_plan, **options))
+            host_sampler = rg.G.HostSampler()
+            host_sampler.start()
+            time.sleep(2)
+            host_t0 = time.time()
+            qlines0 = len(Path(qlog).read_text(errors="replace").splitlines()) if qlog and Path(qlog).is_file() else None
+        p = guest.interactive(task, tmp.read_text())
+        if p.returncode:
+            raise ValueError("Task start failed")
+        while clock() - t0 < CHECKS[name]["timeout"]:
+            p = guest.ps(f"if(Test-Path '{remote}/result.json'){{'ready'}}")
+            if p.returncode == 0 and p.stdout.strip() == "ready":
+                break
+            if p.returncode:
+                raise ValueError("Guest transport lost; not an app failure")
+            sleep(5)
+        else:
+            raise ValueError("Task timeout; no verdict")
+        # Native exchange file, UIA tree and metadata, never guest-selected filenames or executables.
+        for f in (
+            "result.json",
+            "uia.json",
+            "model.step",
+            "log.html",
+            "before.png",
+            "result.png",
+            "screen.png",
+            "edge.png",
+            "crash_context.xml",
+            "result.3dmark-result",
+            "3dmark.png",
+            "edrawings.png",
+            "resolve.png",
+            "nvidia_smi_memory.txt",
+            "dxdiag.txt",
+            "system_events.txt",
+        ):
+            limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith((".png", ".3dmark-result")) else 1024 * 1024
+            p = guest.ps(
+                f"if(Test-Path '{remote}/{f}'){{$f=Get-Item '{remote}/{f}';if($f.Length -le {limit}){{'bounded'}}}}",
+            )
+            if (
+                p.returncode == 0
+                and p.stdout.strip() == "bounded"
+                and guest.scp(remote + "/" + f, str(d / f), False).returncode
+            ):
+                raise ValueError("Artifact transfer failed")
+        if name == "superposition" and (d / "result.png").exists():
+            extract_screen_text(d)  # optional extra; the verdict is the saved log
+        resolve_host = None
+        if resolve_plan:
+            rg = _load_resolve_gpu()
+            host_csv = host_sampler.stop() if host_sampler else ""
+            host_sampler = None
+            (d / "host_smi.csv").write_text(host_csv)
+            rg.pull_outputs(guest, d, resolve_plan, remote)
+            resolve_host = {"host_csv": host_csv, "host_t0": host_t0, "host_utc_offset_s": float(time.localtime().tm_gmtoff),
+                            "platform": PLATFORM}
+            if PLATFORM == "kf3" and qlog and qlines0 is not None and Path(qlog).is_file():
+                window = Path(qlog).read_text(errors="replace").splitlines()[qlines0:]
+                resolve_host["census_lines"] = window
+                (d / "kf3_census.json").write_text(json.dumps(rg.census(window), indent=1))
+        row = verdict(name, run_id, d, plan, resolve_host=resolve_host)
+    except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
+        row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
+    finally:
+        if host_sampler is not None:
+            host_sampler.stop()
+        # Stop only this authored task, never process-name sweeps.
+        try:
+            guest.ps(
+                f"Stop-ScheduledTask -TaskName kf_{task} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName kf_{task} -Confirm:$false -ErrorAction SilentlyContinue",
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    (d / "verdict.json").write_text(json.dumps(row, indent=2))
+    return row
+
+
+def table(rows):
+    lines = ["app\tok\tevidence\tsecs\tsignal / error"]
+    for r in rows:
+        lines.append(
+            "\t".join(
+                str(v).replace("\t", " ").replace("\n", " ")
+                for v in (
+                    r["app"],
+                    "yes" if r.get("ok") else "NO",
+                    r.get("evidence", "NONE"),
+                    r.get("secs", 0),
+                    r.get("error") or r.get("signal", ""),
+                )
+            )
+        )
+    return "\n".join(lines)
+
+
+def result_markdown(rows):
+    lines = ["| step | verdict | evidence | class | detail |", "|---|---|---|---|---|"]
+    for item in rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                str(item[k]).replace("|", "/").replace("\n", " ")
+                for k in ("step", "verdict", "evidence", "class", "detail")
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def app_classification(app):
+    if app.get("class") == "harness":
+        return "HARNESS", "harness"
+    if app.get("ok") is True:
+        return ("PASS_LIMITED" if app.get("limited") else "PASS"), "app"
+    if app.get("status") in ("LAUNCH_ONLY", "INCONCLUSIVE"):
+        return app["status"], "unqualified"
+    return "FAIL", "app"
+
+
+def overlay_clock(overlay, frozen, guest_utc=None, resume=False):
+    """Persist the RTC base, monotonic guest high-water mark and start counter."""
+    path = Path(str(overlay) + ".clock")
+    try:
+        data = json.loads(path.read_text())
+        base = PI.utc(data["base_utc"])
+        last = PI.utc(data["last_guest_utc"]) if data["last_guest_utc"] else None
+        if type(data["boots"]) is not int or data["boots"] < 0:
+            raise ValueError("invalid boots")
+    except (OSError, ValueError, TypeError, KeyError, PI.PropError):
+        if resume or path.exists():
+            warnings.warn(
+                "Overlay clock missing/corrupt: frozen fallback", RuntimeWarning, stacklevel=2
+            )
+        data, base, last = {"boots": 0}, frozen, None
+    base = max(frozen, base)
+    if guest_utc is None:
+        base = max(base, last + timedelta(seconds=60) if last else frozen)
+        data["boots"] += 1
+    else:
+        last = max(PI.utc(guest_utc), base, last or base)
+    data.update(base_utc=PI.fmt(base), last_guest_utc=PI.fmt(last) if last else None)
+    temporary = Path(str(path) + ".tmp")
+    temporary.write_text(json.dumps(data))
+    temporary.replace(path)
+    return base
+
+
+def apply_vfio_platform(gpu):
+    """The control platform of a differential run: the kf3-gpu device is replaced by the real GPU through vfio-pci; the kf3-only GPU seed
+    repair and UUID check are skipped (the real GPU has its own identity) and a MISMATCH in the identity comparison is relabelled
+    VFIO_DIFF (not blocking). Everything else (image, overlay, offline slirp, faked RTC, CPU profile, TPM, scripts) is unchanged.
+    Same patch as the 2026-11-14 Wukong VFIO reference runs (scripts of the pcnight work)."""
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.0", gpu):
+        raise ValueError("bad --vfio-gpu")
+    orig = PI.build_argv
+
+    def patched(*args, **kw):
+        argv = orig(*args, **kw)
+        i = next(n for n, v in enumerate(argv) if v == "-device" and argv[n + 1].startswith("kf3-gpu"))
+        del argv[i:i + 2]
+        argv[i:i] = ["-device", f"vfio-pci,host={gpu},multifunction=on,addr=0x4.0", "-device", f"vfio-pci,host={gpu[:-1]}1,addr=0x4.1"]
+        return argv
+
+    PI.build_argv = patched
+    globals()["gpu_fix"] = lambda g, uuid: (True, "VFIO control: kf3 seed repair and UUID check not applicable (real GPU)")
+    oc = PI.compare
+    PI.compare = lambda st, facts: [tuple("VFIO_DIFF" if (j == 1 and v == "MISMATCH") else v for j, v in enumerate(r)) for r in oc(st, facts)]
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--zip", help="Private image archive already present locally; no downloads")
+    ap.add_argument("--dir", required=True, help="Verified unpack directory")
+    ap.add_argument("--work", required=True, help="Fresh directory; --resume reuses a stopped run")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--qemu", required=True)
+    ap.add_argument("--stop-utc")
+    ap.add_argument("--resume", action="store_true", help="Manual: reuse stopped --work; no --zip")
+    ap.add_argument("--flags", default=str(HERE / "kf3_flags.sample.env"))
+    ap.add_argument("--broker", default=str(HERE.parents[2] / "broker/nvkvm-display-broker"))
+    ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
+    ap.add_argument("--display", choices=("broker", "off"), default="broker")
+    ap.add_argument("--apps", default=",".join(CHECKS))
+    ap.add_argument("--app-set", choices=("a", "b"), default="a", help="a: the first image's applications (default); b: the second image's creative applications")
+    ap.add_argument("--data-iso", help="read-only data volume (label KFDATA) attached on the AHCI cd port; required by --app-set b")
+    ap.add_argument(
+        "--fb-mb",
+        type=int,
+        help="DIAGNOSTIC ARM: override the guest-visible FB size (the image's own value is the default)",
+    )
+    ap.add_argument(
+        "--ram-mb",
+        type=int,
+        help="override the guest RAM of this run in MiB (the image's own value, 8192, is the default); refused above 75 percent of the host's MemAvailable. "
+        "The sealed state.json is not changed",
+    )
+    ap.add_argument(
+        "--audio",
+        action="store_true",
+        help="add a virtual HDA sound card (QEMU null audio backend: no host audio is opened); off by default",
+    )
+    ap.add_argument(
+        "--hold-until-file",
+        help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
+    )
+    ap.add_argument("--plans", type=Path)
+    ap.add_argument(
+        "--platform",
+        choices=("kf3", "vfio"),
+        default="kf3",
+        help="how the guest GPU is provided: kf3 (the product) or vfio (the real GPU, control for differential tests; PC only)",
+    )
+    ap.add_argument("--vfio-gpu", default="0000:01:00.0", help="PCI address of the GPU function 0 for --platform vfio")
+    ap.add_argument(
+        "--resolve-launch-only",
+        action="store_true",
+        help="Resolve row: only create a project (the old weak check) instead of the GPU rendering coverage",
+    )
+    ap.add_argument(
+        "--resolve-lane",
+        choices=("gate", "discovery"),
+        default="gate",
+        help="Resolve row set: gate (must pass on kf3, in the app boot) or discovery (exotic deliverables meant to break kf3; own clone, time-boxed)",
+    )
+    ap.add_argument(
+        "--resolve-media",
+        help="Directory for the open media of the Resolve row (fetched from the pinned sources or the public mirror when missing)",
+    )
+    ap.add_argument(
+        "--experiment-3dmark-accessibility",
+        action="store_true",
+        help="UNPROVEN Chromium accessibility experiment, not an established fix",
+    )
+    ap.add_argument(
+        "--solidworks-launch-only",
+        dest="solidworks_export",
+        action="store_false",
+        help="Skip the COM sample-part/STEP export (default: run it)",
+    )
+    ap.add_argument(
+        "--superposition-run",
+        action="store_true",
+        help="Repeat measured rectangle-derived RUN click; requires local tesseract for result-screen validation",
+    )
+    a = ap.parse_args(argv)
+    if a.platform == "vfio":
+        enable_vfio(a.vfio_gpu)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+
+    def record(step, status, detail="", evidence="NONE", classification="harness"):
+        item = dict(
+            step=step,
+            verdict=status,
+            detail=str(detail)[:1000],
+            evidence=evidence,
+            **{"class": classification},
+        )
+        rows.append(item)
+        print(step, status, evidence, str(detail)[:200], flush=True)
+
+    try:
+        if a.resume and a.zip:
+            raise ValueError("--resume needs the verified unpacked --dir, without --zip")
+        checks, app_runner = CHECKS, None
+        if a.app_set == "b":
+            spec_b = importlib.util.spec_from_file_location("propimage_apps_b", HERE / "propimage_apps_b.py")
+            app_b = importlib.util.module_from_spec(spec_b)
+            spec_b.loader.exec_module(app_b)
+            checks, app_runner = app_b.CHECKS, app_b.run_check
+            if not a.data_iso or not Path(a.data_iso).is_file():
+                raise ValueError("--app-set b needs --data-iso FILE (the open test-asset volume)")
+            if a.apps == ",".join(CHECKS):
+                a.apps = ",".join(getattr(app_b, "ENABLED", checks))
+        names = list(checks) if a.apps == "all" else a.apps.split(",")
+        # Preserve the measured predecessor's app spelling as an input alias only.
+        names = ["wukong" if n == "blackmyth" else n for n in names]
+        if any(n not in checks for n in names) or len(set(names)) != len(names):
+            raise ValueError("Unknown or duplicate app")
+        plans = json.loads(a.plans.read_text()) if a.plans else {}
+        for name, plan in plans.items():
+            if name not in checks or name == "wukong":
+                raise ValueError("Unsupported plan app")
+            validate_plan(plan)
+        if a.platform == "vfio":
+            apply_vfio_platform(a.vfio_gpu)
+        swtpm = os.environ.get("SWTPM", "swtpm")
+        try:
+            version = run([swtpm, "--version"], timeout=30)
+        except FileNotFoundError as exc:
+            raise ValueError(
+                "Prerequisite: swtpm >= 0.10 not found; set SWTPM to a compatible binary"
+            ) from exc
+        if version.returncode:
+            raise ValueError("Prerequisite: cannot query swtpm version; swtpm >= 0.10 required")
+        require_swtpm(version.stdout + version.stderr)
+        record("prerequisite", "PASS", "swtpm >= 0.10 (libtpms state compatibility still required)")
+        record("platform", "PASS", a.platform)
+        state = load_image(a.zip, a.dir)
+        record("unpack", "PASS", "SHA256 of image and state; derived seed verified")
+        if a.stop_utc:
+            if PI.utc(a.stop_utc) < PI.utc(state["clock"]["last_time_at_stop_utc"]):
+                raise ValueError("Refusing backwards stop-time override")
+            state["clock"]["last_time_at_stop_utc"] = PI.fmt(PI.utc(a.stop_utc))
+        if a.fb_mb is not None:
+            if not 1024 <= a.fb_mb <= 1048576:
+                raise ValueError("--fb-mb out of range")
+            state["qemu"]["fb_mb"] = a.fb_mb
+        if a.ram_mb is not None:
+            PI.check_ram_override(a.ram_mb, PI.mem_available_mb())     # named ValueError (PropError) before anything is created or booted
+        work = Path(a.work).resolve()
+        work.mkdir(parents=True, exist_ok=a.resume)
+        (work / "run").mkdir(exist_ok=a.resume)
+        base = work / "image.base.qcow2"
+        clone = work / "run/clone.qcow2"
+        if a.resume:
+            if not clone.is_file() or base.resolve() != (Path(a.dir) / "image.qcow2").resolve():
+                raise ValueError("Resumed overlay/base missing or belongs to another image")
+        else:
+            PI.restore_files(state, str(work))
+            base.symlink_to((Path(a.dir) / "image.qcow2").resolve())
+            create = ["qemu-img", "create", "-q", "-f", "qcow2"]
+            made = run(create + ["-b", str(base), "-F", "qcow2", str(clone)])
+            if made.returncode:
+                raise ValueError("Overlay creation failed: " + made.stderr)
+        info = run(["qemu-img", "info", "--output=json", str(clone)])
+        if (
+            info.returncode
+            or Path(json.loads(info.stdout).get("full-backing-filename", "")) != base
+        ):
+            raise ValueError("Overlay backing-file mismatch")
+        record("overlay", "PASS", "throwaway clone of image.base.qcow2; base not booted")
+        if a.resume:
+            for artifact in ("swtpm.sock", "run/broker.sock", "run/broker.fifo"):
+                (work / artifact).unlink(missing_ok=True)
+        frozen = PI.boot_clock(state, "ci")
+        rtc_base = overlay_clock(clone, frozen, resume=a.resume)
+        # Same adjusted copy feeds both QEMU's RTC and compare()'s 1800-second window.
+        state["clock"]["last_time_at_stop_utc"] = PI.fmt(
+            rtc_base - timedelta(seconds=state["clock"]["gap_s"])
+        )
+        (work / "state.json").write_text(json.dumps(state))
+        kind = "resumed" if a.resume else "fresh"
+        record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
+        if a.fb_mb is not None:
+            record("fb-mb", "PASS", f"DIAGNOSTIC ARM: guest-visible FB {a.fb_mb} MiB (image default differs)")
+        if a.ram_mb is not None:
+            record("ram-mb", "PASS", f"OVERRIDE: guest RAM {a.ram_mb} MiB for this run (the image's own value is the default; sealed state.json unchanged)")
+        if a.audio:
+            record("audio", "PASS", "virtual HDA sound card, QEMU null backend (no host audio opened)")
+        env = dict(os.environ)
+        for line in Path(a.flags).read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, sep, value = line.partition("=")
+            if not sep or not re.fullmatch(r"KF3_[A-Z0-9_]+", key) or not value.isdigit():
+                raise ValueError("Refused KF3 flag line")
+            env[key] = value
+        if any(
+            row[1] != "MATCH" for row in PI.cpu_preflight(state, Path("/proc/cpuinfo").read_text())
+        ):
+            raise ValueError("CPU_PROFILE_UNSUPPORTED")
+        with ExitStack() as stack:
+            r = work / "run"
+            sw = subprocess.Popen(
+                [
+                    swtpm,
+                    "socket",
+                    "--tpm2",
+                    "--tpmstate",
+                    f"dir={work}/tpm,mode=0600",
+                    "--ctrl",
+                    f"type=unixio,path={work}/swtpm.sock,mode=0600",
+                    "--log",
+                    f"file={r}/swtpm.log,level=20",
+                    "--terminate",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            stack.callback(stop_process, sw)
+            for _ in range(50):
+                if (work / "swtpm.sock").exists() or sw.poll() is not None:
+                    break
+                time.sleep(0.2)
+            if not (work / "swtpm.sock").exists():
+                raise ValueError(
+                    "swtpm failed to load image state; verify swtpm/libtpms compatibility"
+                )
+            sock = str(r / "broker.sock")
+            kw = {}
+            if a.display == "broker":
+                stage_gop(work, a.dir, a.gop_efi)
+                fifo = r / "broker.fifo"
+                os.mkfifo(fifo)
+                fd = os.open(fifo, os.O_RDWR)
+                stack.callback(os.close, fd)
+                log = stack.enter_context(open(r / "broker.log", "w"))
+                bp = subprocess.Popen(
+                    [
+                        a.broker,
+                        "--socket",
+                        sock,
+                        "--backend",
+                        "test",
+                        "--persist",
+                        "--verbose",
+                        "--size",
+                        "1920x1080",
+                    ],
+                    stdin=fd,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
+                stack.callback(stop_process, bp)
+                for _ in range(50):
+                    if Path(sock).exists() or bp.poll() is not None:
+                        break
+                    time.sleep(0.2)
+                if not Path(sock).exists():
+                    raise ValueError("Display broker did not become ready")
+                kw = {
+                    "broker_sock": sock,
+                    "gop_efi": str(work / "firmware/kf-gop.signed.efi"),
+                    "uid": 0,
+                }
+            command = PI.build_argv(
+                state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display,
+                data_iso=a.data_iso if a.app_set == "b" else None, ram_mb=a.ram_mb, audio=a.audio, **kw
+            )
+            if "restrict=on" not in " ".join(command) or str(clone) not in " ".join(command):
+                raise ValueError("Offline overlay invariant violated")
+            ev_sock = r / "qmp-ev.sock"
+            ev_sock.unlink(missing_ok=True)
+            command = command + ["-qmp", "unix:%s,server=on,wait=off" % ev_sock]   # read only by the event recorder
+            (r / "last_cmd.txt").write_text(shlex.join(command) + "\n")
+            log = stack.enter_context(open(r / "qemu.log", "w"))
+            q = subprocess.Popen(
+                command, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL
+            )
+            stack.callback(stop_process, q)
+            events_file = out / "qmp_events.jsonl"
+            recorder = start_qmp_events(ev_sock, events_file)
+            booted = time.monotonic()
+            record("boot", "PASS", "ci mode, restrict=on, disposable overlay")
+            key = work / "id_kf"
+            key.write_text(state["guest"]["ssh_private_key"])
+            key.chmod(0o600)
+            stack.callback(key.unlink, missing_ok=True)
+            g = Guest(state, str(key), state["ids"]["net"]["ssh_port"])
+            try:
+                while time.monotonic() - booted < 420 and q.poll() is None:
+                    try:
+                        if g.ssh(["echo", "up"], timeout=40).returncode == 0:
+                            break
+                    except subprocess.TimeoutExpired:
+                        pass        # the forwarded port accepts before sshd answers (MEASURED on a nested-KVM box): not up yet
+                    time.sleep(5)
+                else:
+                    tail = ""
+                    if q.poll() is not None:
+                        tail = " (QEMU exited rc=%s: %s)" % (q.returncode, Path(r / "qemu.log").read_text()[-300:].strip())
+                    raise ValueError("Guest SSH unavailable" + tail)
+                record("ssh", "PASS", "loopback guest transport ready")
+                time.sleep(60)
+                power = power_fix(g)
+                (out / "power.json").write_text(json.dumps(power, indent=2))
+                power_detail = (
+                    ("OK" if power["ok"] else "NOT OK")
+                    + " values="
+                    + json.dumps(power["values"], separators=(",", ":"))
+                )
+                if power["errors"]:
+                    power_detail += " errors=" + ("; ".join(power["errors"]))
+                record("power", "OK" if power["ok"] else "NOT OK", power_detail, "FILE")
+                if not power["ok"]:
+                    raise ValueError(
+                        "Power prerequisites NOT OK; app checks not run (see power.json)"
+                    )
+                fixed, detail = gpu_fix(g, state["ids"]["gpu_uuid"])
+                write_gpu_evidence(out, detail)
+                record("gpu", "PASS" if fixed else "FAIL", gpu_step_detail(fixed, detail))
+                if not fixed:
+                    # the kf3 QEMU log is the host's side of the driver restart; the stage deletes the log itself, this tail stays in out/
+                    save_qemu_tail(out, r / "qemu.log")
+                    if a.hold_until_file:  # manual investigation: keep the guest up (max 1 h) so the PnP state can be inspected
+                        record(
+                            "hold",
+                            hold_for_release(a.hold_until_file, 3600),
+                            "guest held after the GPU prerequisite failed; ssh port %s" % g.port,
+                        )
+                    raise ValueError("GPU prerequisite failed; app checks not run")
+                facts = PI.run_guest_probe(state, str(key))
+                matches = PI.compare(state, facts)
+                (out / "verify.txt").write_text(
+                    "\n".join(" ".join(str(v) for v in row) for row in matches)
+                )
+                if any(row[1] == "MISMATCH" for row in matches):
+                    raise ValueError("Blocking identity mismatch; app checks not run")
+                record("verify", "PASS", "identity, clock, TPM and seed GPU checked")
+                if a.hold_until_file:
+                    held = hold_for_release(a.hold_until_file, 3 * 3600, alive=lambda: q.poll() is None)
+                    record("hold", held, "guest held for manual iteration; ssh port %s" % g.port)
+                    if held == "qemu-exited":
+                        raise ValueError("QEMU exited while the guest was held (cause: the qemu-exit row)")
+                for name in names:
+                    if boot_age_guard(time.monotonic() - booted, checks[name]["timeout"]):
+                        record(
+                            "app:" + name,
+                            "NOT_RUN",
+                            "Boot-age warning: check budget would cross 55 minutes; fresh boot required",
+                        )
+                        continue
+                    events = shutdown_events(g)
+                    (out / "shutdown_events.json").write_text(json.dumps(events, indent=2))
+                    if classify_shutdown(events) == "harness":
+                        record(
+                            "license",
+                            "HARNESS",
+                            "wlms.exe event 1074: evaluation shutdown, not app FAIL",
+                        )
+                        break
+                    if app_runner:
+                        app = app_runner(name, out, g)
+                    else:
+                        app = run_check(
+                            name,
+                            {},
+                            out,
+                            g,
+                            plan=plans.get(name),
+                            accessibility_experiment=a.experiment_3dmark_accessibility,
+                            solidworks_export=a.solidworks_export,
+                            superposition_run=a.superposition_run,
+                            **(
+                                {
+                                    "resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media"), "lane": a.resolve_lane},
+                                    "qemu_log": str(r / "qemu.log"),
+                                }
+                                if name == "resolve" and not a.resolve_launch_only
+                                else {}
+                            ),
+                        )
+                    try:
+                        events = shutdown_events(g)
+                        (out / "shutdown_events.json").write_text(json.dumps(events, indent=2))
+                        license_shutdown = classify_shutdown(events) == "harness"
+                        if license_shutdown:
+                            record(
+                                "app:" + name, "HARNESS", "wlms.exe event 1074; not an app failure"
+                            )
+                            break
+                    except (ValueError, TypeError, OSError, subprocess.TimeoutExpired):
+                        record(
+                            "app:" + name,
+                            "HARNESS",
+                            "Guest event log/transport lost; shutdown cause unverified, not app FAIL",
+                        )
+                        break
+                    if name == "wukong":
+                        (out / "host_qemu_filtered.txt").write_text(
+                            "\n".join(host_log_excerpt(r / "qemu.log")) + "\n"
+                        )
+                    status, classification = app_classification(app)
+                    record(
+                        "app:" + name,
+                        status,
+                        app.get("error") or app.get("signal", ""),
+                        app["evidence"],
+                        classification,
+                    )
+            finally:
+                if q.poll() is not None:
+                    recorder.join(timeout=10)
+                    record("qemu-exit", *qemu_exit_cause(read_qmp_events(events_file)), "FILE")
+                    record("clock-save", "WARN", "Guest clock not saved: QEMU had already exited")
+                else:
+                    try:
+                        utc = g.ps("(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')")
+                        if utc.returncode:
+                            raise ValueError("Guest UTC unavailable before shutdown")
+                        overlay_clock(clone, frozen, guest_utc=utc.stdout.strip())
+                    except (PI.PropError, ValueError, OSError, subprocess.SubprocessError) as exc:
+                        record("clock-save", "WARN", "Guest clock not saved: " + str(exc))
+                    try:
+                        g.ps("Stop-Computer -Force", timeout=30)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+                try:
+                    q.wait(timeout=180)
+                except subprocess.TimeoutExpired:
+                    stop_process(q)
+                record(
+                    "stop",
+                    "PASS" if q.poll() is not None else "FAIL",
+                    "own QEMU stopped; other own helpers cleaned by ExitStack",
+                )
+    except (
+        PI.PropError,
+        ValueError,
+        TypeError,
+        OSError,
+        KeyError,
+        subprocess.SubprocessError,
+    ) as exc:
+        record("harness", "HARNESS", exc)
+    (out / "result.json").write_text(json.dumps(rows, indent=2))
+    (out / "result.md").write_text(result_markdown(rows) + "\n")
+    return 0 if rows and all(r["verdict"] in ("PASS", "OK", "PASS_LIMITED") for r in rows) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

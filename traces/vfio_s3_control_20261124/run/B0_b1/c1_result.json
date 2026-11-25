@@ -1,0 +1,96 @@
+{
+ "label": "B0_b1",
+ "cycle": 1,
+ "boot0": "2026-11-24T01:57:07.5000000+00:00",
+ "explorer_before": "1",
+ "quser_before": "USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME |  kfimage               console             1  Active      none   11/24/2026 1:57 AM",
+ "suspended": true,
+ "suspend_wait_s": 2,
+ "wake_utc": "2026-11-24T01:59:06Z",
+ "rates_wake+4s": {
+  "exits": 5390543,
+  "halt_exits": 1132,
+  "io_exits": 0,
+  "mmio_exits": 0,
+  "halt_wakeup": 1132,
+  "irq_injections": 513064
+ },
+ "tsc_page": {
+  "before_suspend": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000001f7bca4 0x0000000000000000\r\n",
+  "while_suspended": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000001f7bca4 0x0000000000000000\r\n",
+  "after_wake": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000001f7bca4 0x0000000000000000\r\n"
+ },
+ "tsc_page_unchanged": true,
+ "trace": {
+  "events": {
+   "kvm_hv_stimer_set_config": 41880,
+   "tracing_mark_write": 1,
+   "kvm_write_tsc_offset": 8,
+   "kvm_hv_synic_set_msr": 176,
+   "kvm_hv_stimer_cleanup": 2934809,
+   "kvm_hv_stimer_set_count": 1465569,
+   "kvm_msr": 16,
+   "kvm_hv_stimer_start_periodic": 8596,
+   "kvm_hv_stimer_expiration": 1466868,
+   "kvm_hv_stimer_callback": 4993
+  },
+  "hv_writes_after_wake": [
+   "5067.428119 qemu-system-x86 SIMP=0x92001",
+   "5067.428119 qemu-system-x86 SIMP=0x94001",
+   "5067.428119 qemu-system-x86 SIMP=0x95001",
+   "5067.428119 qemu-system-x86 SIMP=0x91001",
+   "5067.428119 qemu-system-x86 SIMP=0x96001",
+   "5067.428119 qemu-system-x86 SIMP=0x93001",
+   "5067.428120 qemu-system-x86 SIMP=0x90001",
+   "5067.428132 qemu-system-x86 SIMP=0x97001",
+   "5067.432126 qemu-system-x86 SINT3=0xd1",
+   "5067.432126 qemu-system-x86 SINT3=0xd1",
+   "5067.432127 qemu-system-x86 SINT3=0xd1",
+   "5067.432127 qemu-system-x86 SINT3=0xd1",
+   "5067.432127 qemu-system-x86 SINT3=0xd1",
+   "5067.432130 qemu-system-x86 SINT3=0xd1",
+   "5067.432135 qemu-system-x86 SINT3=0xd1",
+   "5067.432139 qemu-system-x86 SINT3=0xd1"
+  ],
+  "hv_writes_before_wake": [],
+  "stimer_first": [],
+  "stimer_distinct": {},
+  "tsc_offset": [
+   "5066.709650 AFTER vcpu=0 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709716 AFTER vcpu=1 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709758 AFTER vcpu=2 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709808 AFTER vcpu=3 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709875 AFTER vcpu=4 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709919 AFTER vcpu=5 prev=18446725592144331384 next=18446725138464900134",
+   "5066.709957 AFTER vcpu=6 prev=18446725592144331384 next=18446725138464900134",
+   "5066.710017 AFTER vcpu=7 prev=18446725592144331384 next=18446725138464900134"
+  ],
+  "synic_host_writes_at_wake": 160,
+  "expirations_ok": 0,
+  "expirations_fail": 1466868
+ },
+ "ssh_back": false,
+ "back_after_s": null,
+ "rates_late": {
+  "exits": 5376012,
+  "halt_exits": 1132,
+  "io_exits": 0,
+  "mmio_exits": 0,
+  "halt_wakeup": 1132,
+  "irq_injections": 511890
+ },
+ "status_after": "running",
+ "storm": {
+  "top_rearm": 0,
+  "wraps_x100": false,
+  "exits_per_s_late": 5376012,
+  "signature": true
+ },
+ "guest_alive": false,
+ "verdict": "STORM",
+ "reasons": [
+  "no ssh within 150 s"
+ ],
+ "arm": "B0",
+ "qemu": "/workspace/bench/vfio_s3_20261124/qemu/build-stock/qemu-system-x86_64"
+}

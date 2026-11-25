@@ -4,6 +4,7 @@ import base64
 import importlib.util
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +64,11 @@ def sleep(seconds):
 
 
 m.time.sleep = sleep
+# The runner's stop-commands token is random hex (secrets.token_hex(24)); it is printed many times,
+# so it contains the port digits by chance in roughly 1 run in 600. The optional third argument
+# forces that collision so the check below is proven independent of the random token.
+if len(sys.argv) > 3 and sys.argv[3] == "token-has-port":
+    m.secrets.token_hex = lambda n: ("a" * (2 * n))[: 2 * n - 5] + str(45000 + variant)
 
 
 def status(verdict="UNAVAILABLE", posted=False):
@@ -176,6 +182,8 @@ assert result["verdict"] == expected, (result, calls)
 assert rents == (1 if case == "reported" else limit), (rents, calls)
 assert calls.count("/stop/123-1") == 1, calls
 text = "".join(messages) + summary.getvalue()
+# The leak check is about the provider's private endpoint, not the runner's own random token.
+text = re.sub(r"[0-9a-f]{48}", "<token>", text)
 assert ip not in text and port not in text, text
 assert "RENTAL instance=" in text, text
 assert controller.retry == 0

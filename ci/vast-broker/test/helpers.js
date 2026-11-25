@@ -140,6 +140,9 @@ export class MockCloud {
   inspected = [];
   calls = [];
   ambiguous = false;
+  r2Keys = new Set();
+  r2Any = false; // every key exists (a test of the Worker's own path checks)
+  r2Status = undefined;
   githubError = 0;
   vastError = 0;
   logReady = true;
@@ -292,6 +295,13 @@ export class MockCloud {
       if (!this.logReady) return new Response('', { status: 404 });
       return new Response(this.logText, { status: this.logStatus, headers: this.logHeaders });
     }
+    // The private R2 bucket (src/privatedata.js): only a presigned HEAD is ever sent; `r2Keys` are the objects that exist.
+    if (u.hostname.endsWith('.r2.cloudflarestorage.com')) {
+      if (method !== 'HEAD') throw Error('Unapproved R2 method');
+      if (this.r2Status !== undefined) return new Response('', { status: this.r2Status });
+      const exists = this.r2Any || this.r2Keys.has(u.pathname.split('/').slice(2).join('/'));
+      return new Response('', { status: exists ? 200 : 404 });
+    }
     if (u.hostname !== 'console.vast.ai') throw Error('Unapproved external host');
     if (this.vastError) return new Response('PRIVATE-UPSTREAM', { status: this.vastError });
     if (u.pathname === '/api/v0/users/current')
@@ -382,7 +392,15 @@ export function callbackToken(record, secret = env.RUN_TOKEN_SECRET, patch = {})
   const input =
     b64({ alg: 'HS256' }) +
     '.' +
-    b64({ run: r.run, attempt: r.attempt, sha: r.sha, nonce: r.nonce, exp });
+    b64({
+      run: r.run,
+      attempt: r.attempt,
+      sha: r.sha,
+      nonce: r.nonce,
+      // the claim order of the real token (src/tokens.js: payload claims, then exp), so the bytes are the issued token's
+      ...(r.scopes === undefined ? {} : { scopes: r.scopes }),
+      exp,
+    });
   return input + '.' + createHmac('sha256', secret).update(input).digest('base64url');
 }
 // The runner's /rent body (runner.py execute). Tests build theirs here so a protocol change of
@@ -424,6 +442,7 @@ export async function setup(overrides = {}) {
     adminStart: (...args) => service.adminStart(...args),
     adminStopBatch: (...args) => service.adminStopBatch(...args),
     adminBatches: (...args) => service.adminBatches(...args),
+    adminProviderSuccess: (...args) => service.adminProviderSuccess(...args),
     evidenceReserve: (...args) => service.evidenceReserve(...args),
     evidenceSettle: (...args) => service.evidenceSettle(...args),
   };

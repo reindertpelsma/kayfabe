@@ -1,0 +1,15 @@
+[     0.0s] S3PROBE_START label=d1 arm=B backing=gate_gdisp cpu=- qemu=/workspace/bench/kf3-bins/a2df9a81/qemu-system-x86_64
+[     1.5s] host {'uname': '6.8.0-59-generic', 'clocksource': 'tsc', 'tsc_dmesg': ['[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro console=tty1 console=ttyS0 tsc=reliable clocksource=tsc panic=-1', '[    0.138779] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro console=tty1 console=ttyS0 tsc=reliable clocksource=tsc panic=-1'], 'cpu_flags_has_constant_tsc': False, 'cpu_flags_has_nonstop_tsc': False, 'repo_rev': 'a2df9a819', 'gpu': 'NVIDIA GeForce RTX 4090, 580.159.04'}
+[     1.8s] launch rc=0 [2026-11-23T15:18:56Z] detached: tag=s3_d1, log logs/s3_d1_run.log (stdout logs/s3_d1_run.out) 
+[   193.5s] guest up=True after 192s
+[   289.9s] powercfg /a: The following sleep states are available on this system: | Standby (S3) | The following sleep states are not available on this system: | Standby (S1) | The system firmware does not support this standby state. | Standby (S2) | The system firmware does not support this standby state. | Hibernate | The system firmware does not support hibernation. | Standby (S0 Low Power Idle) | The system firmware d
+[   295.2s] c1 boot0=2026-11-23T14:56:58.5000000+00:00 kf3_before={'s3wake': 0, 'kept': 0, 'gsp_resume': 0, 'cold': 0, 'unserviced': 248, 'ram_add_kept': 9, 'ram_changed': 0, 'ram_del': 8, 'user_ring_topology': 0, 'user_ring_refused': 0, 'fn47_unload': 0, 'lines': 6442, 'disp_stopped': 0, 'disp_stall': 0, 'wake_words': 0, 'wake_puts': 0}
+[   299.0s] c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   313.1s] c1 status=suspended after 14s
+[   318.1s] c1 system_wakeup sent
+[   340.6s] c1 ssh back=True after 23s
+[   448.0s] S3_CYCLE label=d1 n=1 verdict=FAIL reasons=['event 153']
+[   448.0s] S3PROBE_DONE label=d1 clean=0/1 of 3 planned
+[   471.9s] guest did not stop; QMP quit
+[   475.4s] S3PROBE_EXIT

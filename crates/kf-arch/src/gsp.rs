@@ -4,7 +4,7 @@
 //! exposed `mmu()`, `userd()` and `pushbuffer()` but **nothing that can express a
 //! register offset, a WPR2 encoding or a falcon-boot convention** — so a faked-GSP boot
 //! FSM had nowhere to put them except inside itself, which CLAUDE.md rule 1 forbids
-//! (`kayfabe-gsp` is a logic crate: no generation name, no offset, no `#[repr(C)]`).
+//! (`kf-gsp` is a logic crate: no generation name, no offset, no `#[repr(C)]`).
 //!
 //! The split this seam draws is the plan's §3.2 table, stated as a rule: **a register
 //! whose served value is a function of the GSP boot FSM's state belongs here; every
@@ -50,7 +50,7 @@
 //!   but `IrqSpec` lives in `kayfabe-vmm` and this crate does not depend on it. The FSM
 //!   emits an abstract "announce the status queue" action instead and the device shell,
 //!   which already owns the VMM vocabulary, chooses the delivery. Promoting `IrqSpec`
-//!   (or `BarId`) into a crate both `kayfabe-arch` and `kayfabe-vmm` can see is an owner
+//!   (or `BarId`) into a crate both `kf-arch` and `kayfabe-vmm` can see is an owner
 //!   decision about the lattice, not a side effect of building the GSP port.
 //! - **Every non-GSP register** (PTIMER, fuses, the PCI-config mirror, PRAMIN). Plan
 //!   §11-O1, still open. The boundary proposed there is exactly the rule above.
@@ -444,7 +444,7 @@ pub enum BootStep {
     /// generic bootloader descriptor's `dataDmaBase` written through the PIO port (TU10x
     /// `BOOT_WITH_LOADER`).
     FwsecCommand(u64),
-    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the RM firmware was loaded while no boot
+    /// (`docs/design/V3_S3_RESUME.md`) — the RM firmware was loaded while no boot
     /// was in progress (the processor not started, the protected region down). On a device whose
     /// GSP-RM state a PM-transition suspend saved, this is the **resume**: the FSM restores the
     /// saved queue binding (no publish, sequence numbers kept) and posts `GSP_INIT_DONE` into it.
@@ -797,7 +797,7 @@ pub trait BootSequence: Send + Sync {
     ///   `PDB_PROP_GPU_PREINITIALIZED_WPR_REGION`.
     fn after_suspend(&self) -> AfterSuspend;
 
-    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`) — **is the [`BootStep::PublishBootArgs`] address
+    /// (`V3_FAMILY_PORT_BLACKWELL.md`) — **is the [`BootStep::PublishBootArgs`] address
     /// the LibOS region array, or a structure that POINTS at it?** `None` (the default) = the
     /// array itself: the falcon regime's `MAILBOX0/1` carry `pLibosInitArgumentsMemdesc`'s address.
     /// `Some(off)` = a little-endian `u64` at `address + off` is the array's address.
@@ -839,6 +839,8 @@ pub trait BootSequence: Send + Sync {
         false
     }
 
+    /// Serve a generation-local register read (the state-dependent half; [`Self::may_read`] is the
+    /// state-free half).
     fn on_read(
         &self,
         _model: &dyn GspModel,
@@ -897,7 +899,7 @@ pub trait GspModel: Send + Sync {
     ///
     /// `bar` is the raw PCI BAR index. It is a `u8` rather than one of the repo's two
     /// existing BAR newtypes (`kayfabe_vmm::BarId`, `kayfabe_trace::Bar`) because
-    /// unifying them means giving `kayfabe-arch` a dependency it does not have today;
+    /// unifying them means giving `kf-arch` a dependency it does not have today;
     /// see this module's docs.
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg>;
 
@@ -960,7 +962,6 @@ pub trait GspModel: Send + Sync {
         None
     }
 
-    /// The LibOS region-array geometry this driver regime publishes.
     /// Where `reg` lives for this model, `(bar, offset)` — `None` if this family has no such
     /// register. ★ What lets a caller PUBLISH the model's answers into a read shadow (v3 BAR0 reads
     /// take no exit), uniformly across families.
@@ -968,6 +969,7 @@ pub trait GspModel: Send + Sync {
         None
     }
 
+    /// The LibOS region-array geometry this driver regime publishes.
     fn libos_region_layout(&self) -> LibosRegionLayout;
 
     /// ★★★ v3-initrace — **a write to the boot processor's ucode-load DMA registers**, decoded

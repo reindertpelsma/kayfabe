@@ -1,4 +1,4 @@
-//! ★ `display-max-fps` (`docs/design/V3_DISPLAY.md` §8.16, `OWNER_RULINGS.md` §M): the property is
+//! ★ `display-max-fps`: the property is
 //! refused BY NAME at realize — before anything is opened, so these run with no GPU — when it is set
 //! without the display, below 24 Hz, or above 75 Hz (owner decision D3). `Device::realize` is called
 //! for real: a realize that skipped `Config::check` would go on to open `/dev` and fail on something
@@ -23,6 +23,9 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         gpu_uuid: None,
         vm_id: None,
         pci_devfn: 0,
+        windows_support: true,
+        report_utilization: true,
+        unmapped_reads_zero: kf_qemu::device::UNMAPPED_READS_ZERO_DEFAULT,
         channel_budget: 0,
     }
 }

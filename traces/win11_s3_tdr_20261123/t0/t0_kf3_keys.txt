@@ -1,0 +1,13 @@
+6496:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+6497:kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+6506:kf3: device reset #2 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+7024:kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1833 cmd_seq=1798 cmd_read_ptr=32 peer_stat_read=34 [#1, rate-limited]
+7340:kf3: USER_RING_REFUSED 0xc1d0004c:0xff040020 host 0x49: USER_RING_PUT_READ: Topology; no completion/reuse credit [#1, rate-limited]
+7344:kf3: USER_RING_REFUSED 0xc1d0004e:0xff040022 host 0x2004b: USER_RING_PUT_READ: Topology; no completion/reuse credit [#2, rate-limited]
+7373:kf3: USER_RING_REFUSED 0xc1d0004f:0xff040011 host 0x3a: USER_RING_PUT_READ: Topology; no completion/reuse credit [#3, rate-limited]
+7398:kf3: USER_RING_REFUSED 0xc1d00029:0xff04000e host 0x37: USER_RING_PUT_READ: Topology; no completion/reuse credit [#4, rate-limited]
+7673:kf3: USER_RING_REFUSED 0xc1d00034:0xff040012 host 0x3b: USER_RING_PUT_READ: Topology; no completion/reuse credit [#5, rate-limited]
+7677:kf3: USER_RING_REFUSED 0xc1d00036:0xff040014 host 0x2003d: USER_RING_PUT_READ: Topology; no completion/reuse credit [#6, rate-limited]
+9406:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+14154:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+14156:kf3: GSP fn 47: the guest RM unloaded with 23 client(s) still holding host objects [c1d00066, c1d00068, c1d00069, c1d0006b, c1d0006c, c1d0006d, c1d0006e, c1d0006f, c1d00070, c1d00071, c1d00072, c1d00073, c1d00074, c1d00077, c1d0007c, c1d00081, c1d00082, 

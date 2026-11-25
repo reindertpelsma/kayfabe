@@ -696,7 +696,7 @@ fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unl
         "a probe naming 36 serves the arming — reachability instrumentation"
     );
     // …and nothing it does not name: 3 (THERMAL_SW) is another legal index on no list.
-    // ⊘ 2026-10-08: was 38, which is NV2080_NOTIFIERS_NVENC0 — now admitted as an engine
+    // Was 38, which is NV2080_NOTIFIERS_NVENC0 — now admitted as an engine
     // non-stall notifier (`ENGINE_NONSTALL_NOTIFIERS`).
     assert_ne!(
         probed.respond(&arming_of(3)).expect("claimed").rpc_result,
@@ -820,7 +820,7 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
     use kf_abi::eventnotify::{
         RULED_NOTIFIERS, is_delivered_notifier, is_guest_raised_notifier, is_silent_notifier,
     };
-    // ★ 2026-10-07 (audit S2): the rows name generated per-version runs; at the bench version they
+    // The rows name generated per-version runs; at the bench version they
     // resolve to the indices the ruling was made on.
     let indices: Vec<u32> = RULED_NOTIFIERS
         .iter()

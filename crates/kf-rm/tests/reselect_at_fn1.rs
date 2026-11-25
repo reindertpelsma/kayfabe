@@ -1,4 +1,4 @@
-//! ★★ Re-selection at fn 1 (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6): a device
+//! ★★ Re-selection at fn 1 (`docs/design/V3_DRIVER_MATRIX.md` §4.2): a device
 //! whose guest version was DEFAULTED rebuilds its chain for the guest's own version when the
 //! pair's pre-fn-1 surface is identical, and refuses by name otherwise; a DECLARED version is
 //! never overridden.
@@ -152,6 +152,13 @@ fn a_different_pre_fn1_surface_or_an_unmeasured_version_is_refused_by_name() {
         other => panic!("an unmeasured version must be refused, got {other:?}"),
     }
     assert_eq!(w.current(), v(580, 159, 4));
+    // an unserved version cannot be pinned (there is no table for it), so no pin is offered
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    let outcome = w.on_fn1(&fn1("580.159.03").payload);
+    assert!(
+        !w.describe(&outcome).expect("said").contains("guest-driver"),
+        "{outcome:?}"
+    );
 }
 
 /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the chain goes back to the provisional
@@ -188,4 +195,179 @@ fn a_reset_chain_is_a_fresh_provisional_build_and_the_next_life_reselects_again(
     w.reset_life();
     w.reset_life();
     assert_eq!(w.current(), v(580, 159, 4));
+}
+
+/// ★ The refusal says the fix (2026-11-20). A defaulted device that cannot re-select across
+/// branches names the EXACT pin the operator must add: `add guest-driver=<what the guest
+/// reported>`, and what the device defaulted to. Which pairs are refused is unchanged (the guest
+/// never selects the host side), so the outcome is asserted next to the text.
+#[test]
+fn a_cross_branch_refusal_names_the_exact_pin_to_add() {
+    for (host, guest, guest_says, what) in [
+        // a 580 guest on a 595 / 610 host, and the reverse
+        (
+            t(595, 84, 0),
+            v(580, 159, 4),
+            "580.159.04",
+            "MESSAGE_QUEUE_INIT_ARGUMENTS",
+        ),
+        (
+            t(610, 43, 2),
+            v(580, 159, 4),
+            "580.159.04",
+            "GSP_MSG_QUEUE_ELEMENT",
+        ),
+        (
+            t(580, 159, 4),
+            v(595, 84, 0),
+            "595.84",
+            "MESSAGE_QUEUE_INIT_ARGUMENTS",
+        ),
+        (
+            t(580, 159, 4),
+            v(610, 43, 2),
+            "610.43.02",
+            "GSP_MSG_QUEUE_ELEMENT",
+        ),
+        // 595 against 610
+        (
+            t(595, 84, 0),
+            v(610, 43, 2),
+            "610.43.02",
+            "GSP_MSG_QUEUE_ELEMENT",
+        ),
+    ] {
+        let defaulted = host.driver_version();
+        let (mut w, built) = wrapper(host, GuestDriverSource::Defaulted);
+        let outcome = w.on_fn1(&fn1(guest_says).payload);
+        let Reselection::RefusedSurface { reported, what: w2 } = outcome.clone() else {
+            panic!("{defaulted} host, {guest_says} guest: must stay refused, got {outcome:?}");
+        };
+        assert_eq!((reported, w2), (guest, what));
+        assert_eq!(
+            w.current(),
+            defaulted,
+            "a refusal never moves the host side"
+        );
+        assert_eq!(built.lock().expect("lock").len(), 1, "no chain was rebuilt");
+
+        let msg = w.describe(&outcome).expect("a refusal is said");
+        // the exact pin, spelled the way the property parses it
+        assert!(
+            msg.contains(&format!("add guest-driver={guest}")),
+            "{defaulted} host, {guest_says} guest: the pin is missing: {msg}"
+        );
+        assert_eq!(
+            kf_abi::DriverVersion::parse(&format!("{guest}")),
+            Some(guest),
+            "the pin round-trips through guest-driver="
+        );
+        // what the device defaulted to, and the first differing fact, stay in the text
+        assert!(
+            msg.contains(&defaulted.to_string()),
+            "{defaulted} host: the defaulted version is missing: {msg}"
+        );
+        assert!(msg.contains(what), "{what} is missing: {msg}");
+        assert!(
+            msg.contains("cannot re-select"),
+            "the refusal keeps its name: {msg}"
+        );
+    }
+}
+
+/// The pin is the GUEST's version, never the device's own: a message that told the operator to
+/// pin what the device already defaulted to would be a no-op.
+#[test]
+fn the_pin_is_what_the_guest_reported_not_what_the_device_defaulted_to() {
+    let (mut w, _) = wrapper(t(595, 84, 0), GuestDriverSource::Defaulted);
+    let outcome = w.on_fn1(&fn1("580.159.04").payload);
+    let msg = w.describe(&outcome).expect("said");
+    assert!(msg.contains("add guest-driver=580.159.04"), "{msg}");
+    assert!(
+        !msg.contains("guest-driver=595.84"),
+        "must not pin the host's own version: {msg}"
+    );
+    // the first differing fact is named, so the refusal can be looked up
+    assert!(msg.contains("MESSAGE_QUEUE_INIT_ARGUMENTS"), "{msg}");
+    // and the pair stays refused after an earlier fn 1 moved the chain within a branch: the
+    // text still says what the device DEFAULTED to
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    assert!(matches!(
+        w.on_fn1(&fn1("580.65.06").payload),
+        Reselection::Reselected { .. }
+    ));
+    let outcome = w.on_fn1(&fn1("610.43.02").payload);
+    let msg = w.describe(&outcome).expect("said");
+    assert!(msg.contains("from 580.159.04 (the version"), "{msg}");
+    assert!(msg.contains("add guest-driver=610.43.02"), "{msg}");
+}
+
+/// Every other outcome's message is byte-for-byte what it was, and none of them gains the pin
+/// advice: a declared version is never overridden, and re-selection or an unserved version has
+/// nothing to pin.
+#[test]
+fn every_other_outcome_message_is_unchanged() {
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Declared);
+    let declared = w.on_fn1(&fn1("595.84").payload);
+    assert_eq!(
+        w.describe(&declared).as_deref(),
+        Some(
+            "kf-rm: the guest says it is driver 595.84, the device was DECLARED 580.159.04; not \
+             re-selecting a declared version"
+        )
+    );
+
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    let r = w.on_fn1(&fn1("580.105.08").payload);
+    assert_eq!(
+        w.describe(&r).as_deref(),
+        Some(
+            "kf-rm: guest driver RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08 (the \
+             guest's own; pre-fn-1 surface identical)"
+        )
+    );
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    let r = w.on_fn1(&fn1("580.159.03").payload);
+    let msg = w.describe(&r).expect("said");
+    assert!(
+        msg.starts_with("kf-rm: the guest says it is driver 580.159.03; no table to re-select: ")
+            && msg.contains("never measured")
+            && !msg.contains("guest-driver="),
+        "{msg}"
+    );
+    // a guest that is the version already served says nothing
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    let r = w.on_fn1(&fn1("580.159.04").payload);
+    assert_eq!(w.describe(&r), None);
+}
+
+/// A declared device keeps its refusal text even for a cross-branch guest: the pin advice belongs
+/// to the DEFAULTED case only (a declared pin is already there, and is the thing that is wrong).
+#[test]
+fn a_declared_cross_branch_mismatch_gets_no_defaulted_advice() {
+    let (mut w, _) = wrapper(t(595, 84, 0), GuestDriverSource::Declared);
+    let r = w.on_fn1(&fn1("580.159.04").payload);
+    assert!(matches!(r, Reselection::RefusedDeclared { .. }), "{r:?}");
+    let msg = w.describe(&r).expect("said");
+    assert!(msg.contains("DECLARED 595.84"), "{msg}");
+    assert!(!msg.contains("add guest-driver"), "{msg}");
+}
+
+/// "What the device defaulted to" is the realize-time version, even after an earlier fn 1 moved
+/// the chain to another release of the same branch: the surface check is made against it.
+#[test]
+fn the_defaulted_version_in_the_message_is_the_realize_time_one() {
+    let (mut w, _) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    assert!(matches!(
+        w.on_fn1(&fn1("580.105.08").payload),
+        Reselection::Reselected { .. }
+    ));
+    assert_eq!(w.current(), v(580, 105, 8));
+    let outcome = w.on_fn1(&fn1("595.84").payload);
+    let msg = w.describe(&outcome).expect("said");
+    assert!(
+        msg.contains("cannot re-select from 580.159.04 (the version the device defaulted to)"),
+        "{msg}"
+    );
+    assert!(msg.contains("add guest-driver=595.84"), "{msg}");
 }

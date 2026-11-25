@@ -1,0 +1,15 @@
+[     0.0s] S3PROBE_START label=t1b arm=B backing=gate_tdr cpu=- qemu=/workspace/bench/kf3-bins/0c16cb72/qemu-system-x86_64
+[     1.4s] host {'uname': '6.8.0-59-generic', 'clocksource': 'tsc', 'tsc_dmesg': ['[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1', '[    0.166433] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1'], 'cpu_flags_has_constant_tsc': False, 'cpu_flags_has_nonstop_tsc': False, 'repo_rev': '0c16cb72a', 'gpu': 'NVIDIA GeForce RTX 4090, 580.159.04'}
+[     1.5s] launch rc=0 [2026-11-23T11:47:33Z] detached: tag=s3_t1b, log logs/s3_t1b_run.log (stdout logs/s3_t1b_run.out) 
+[    96.6s] guest up=True after 95s
+[   191.1s] powercfg /a: The following sleep states are available on this system: | Standby (S3) | The following sleep states are not available on this system: | Standby (S1) | The system firmware does not support this standby state. | Standby (S2) | The system firmware does not support this standby state. | Hibernate | The system firmware does not support hibernation. | Standby (S0 Low Power Idle) | The system firmware d
+[   195.2s] c1 boot0=2026-11-23T10:57:01.5000000+00:00 kf3_before={'s3wake': 0, 'kept': 0, 'gsp_resume': 0, 'cold': 0, 'unserviced': 247, 'ram_add_kept': 9, 'ram_changed': 0, 'ram_del': 8, 'user_ring_topology': 0, 'user_ring_refused': 0, 'fn47_unload': 0, 'lines': 6045}
+[   198.1s] c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   207.2s] c1 status=suspended after 9s
+[   212.2s] c1 system_wakeup sent
+[   223.2s] c1 ssh back=True after 11s
+[   339.2s] S3_CYCLE label=t1b n=1 verdict=FAIL reasons=['event 153']
+[   339.2s] S3PROBE_DONE label=t1b clean=0/1 of 3 planned
+[   356.8s] guest did not stop; QMP quit
+[   360.3s] S3PROBE_EXIT

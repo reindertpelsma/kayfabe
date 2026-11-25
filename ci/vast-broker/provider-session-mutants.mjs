@@ -789,7 +789,7 @@ const cases = [
   {
     name: 'absence verification disabled',
     file: 'src/vast.js',
-    before: 'if ((await this.inspect(record)) !== null) refuse();',
+    before: 'if ((await this.inspect(record, { destroying: true })) !== null) refuse();',
     after: 'void record;',
     all: false,
     pattern: '^rules teardown needs verified absence',
@@ -1059,6 +1059,10 @@ try {
   for (const path of [
     'scripts/ci/vast_report.py',
     'scripts/ci/vast_payload.py',
+    'scripts/ci/payload_instruction.py',
+    'scripts/ci/box_downloader.py',
+    'scripts/ci/propimage_apps.py',
+    'scripts/ci/kf_fetch.py',
     'scripts/ci/release_driver_pins.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',

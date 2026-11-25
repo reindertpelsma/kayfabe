@@ -1,0 +1,3 @@
+SPEC_ROW name=solidworks-08 result=PASS subtests=8/8 reason=- failed=-
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=SUBTEST failed=06_SanMiguelFullUltraHQ
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=2/8 reason=TIME failed=01_VotALitDetailTracing,02_VotALitGlobalTracing,05_CitySampleLitHitLighting

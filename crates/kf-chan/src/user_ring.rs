@@ -9,7 +9,7 @@
 //!
 //! A permitted completion mechanism in a restricted user space is still a
 //! design/measurement gate: do not map the Translated runner's writable private
-//! fence there. OWNER_RULINGS §AI authorizes only read-only commands/staging.
+//! fence there. Commands and staging are limited to read-only access.
 //! The prototype is deliberately conservative and may not yet make progress
 //! on a real migration; no timeout substitutes for a missing proof.
 
@@ -236,7 +236,7 @@ mod reference_wrap {
         assert_eq!(q.complete_reference(u32::MAX), Err(Refusal::Completion));
     }
 
-    /// 2026-10-31 — the retired #12 guard's contract (`fence_backwards_jump_is_a_loud_refusal_never_a_completion`,
+    /// The retired #12 guard's contract (`fence_backwards_jump_is_a_loud_refusal_never_a_completion`,
     /// `fence_arm_is_wrap_correct`) against the absolute-count model: a 32-bit wire reference
     /// completes exactly the work up to the one absolute count in `[completed, issued]` it names, and
     /// anything else (a stale value, a backwards write, a count nobody published) is

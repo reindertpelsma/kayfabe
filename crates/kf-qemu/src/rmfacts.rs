@@ -13,7 +13,7 @@
 
 use kf_chip::Family;
 use kf_rm::HostFacts;
-use kf_rm::hostquery::{HostControls, HostRefusal, query_host_facts};
+use kf_rm::hostquery::{HostControls, HostFactsPolicy, HostRefusal, query_host_facts_with};
 
 /// The host session as the [`HostControls`] seam: every control on OUR subdevice — except
 /// `GF100_ZBC_CLEAR` (`0x9096xxxx`) controls, which go to a ZBC object this session allocates on
@@ -98,7 +98,93 @@ impl HostControls for Session<'_> {
 /// a reply that did not decode, or a family an authored rule has no number for. ⊘ Never a
 /// default, never a GA106 row: the VM must not start on a guessed device.
 pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, String> {
-    query_host_facts(&mut Session(rm, None), family).map_err(|e| e.to_string())
+    let policy = host_facts_policy(std::env::var_os(HIDE_UNTABLED_VIDEO_ENV).as_deref());
+    query_host_facts_with(&mut Session(rm, None), family, policy).map_err(|e| e.to_string())
+}
+
+/// The run-profile flag that declares a guest which builds KERNEL rings on its video engines (the
+/// Windows profile): engines with no derived method table are not served to it
+/// (`kf_rm::hostquery::hide_untabled_video`). Exactly `1` turns it on; unset is off, which is the
+/// pre-2026-11-15 behaviour (every Linux lane). Read once, at realize.
+pub const HIDE_UNTABLED_VIDEO_ENV: &str = "KF3_WIN_HIDE_UNTABLED_VIDEO";
+
+/// The [`HostFactsPolicy`] a flag value declares. Any value other than exactly `1` is off, and a
+/// value that is set but is not `1` is named on stderr rather than silently read as off.
+#[must_use]
+pub fn host_facts_policy(value: Option<&std::ffi::OsStr>) -> HostFactsPolicy {
+    let on = value.is_some_and(|v| v == "1");
+    if let Some(v) = value
+        && !on
+    {
+        eprintln!(
+            "kf3: host facts: {HIDE_UNTABLED_VIDEO_ENV}={v:?} is not `1`: video engines are served as before"
+        );
+    }
+    HostFactsPolicy {
+        hide_untabled_video: on,
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn exactly_one_turns_the_filter_on() {
+        assert!(host_facts_policy(Some(OsStr::new("1"))).hide_untabled_video);
+    }
+
+    #[test]
+    fn the_declared_policy_is_exactly_the_one_field_set() {
+        assert_eq!(
+            host_facts_policy(Some(OsStr::new("1"))),
+            HostFactsPolicy {
+                hide_untabled_video: true
+            }
+        );
+    }
+
+    #[test]
+    fn zero_and_empty_are_off() {
+        for v in ["", "0"] {
+            assert!(
+                !host_facts_policy(Some(OsStr::new(v))).hide_untabled_video,
+                "{v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn near_misses_of_one_are_off() {
+        for v in ["01", "1 ", " 1", "11", "-1", "1\n", "1.0"] {
+            assert!(
+                !host_facts_policy(Some(OsStr::new(v))).hide_untabled_video,
+                "{v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn truthy_words_are_off() {
+        for v in ["true", "TRUE", "yes", "on", "enable"] {
+            assert!(
+                !host_facts_policy(Some(OsStr::new(v))).hide_untabled_video,
+                "{v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unset_is_the_default_policy_which_hides_nothing() {
+        assert_eq!(host_facts_policy(None), HostFactsPolicy::default());
+        assert!(!HostFactsPolicy::default().hide_untabled_video);
+    }
+
+    #[test]
+    fn the_flag_name_is_the_one_the_profile_and_the_docs_use() {
+        assert_eq!(HIDE_UNTABLED_VIDEO_ENV, "KF3_WIN_HIDE_UNTABLED_VIDEO");
+    }
 }
 
 /// Optional startup-only display facts. The request is authored from the HOST's
@@ -148,7 +234,7 @@ pub fn display_precomp(
     }
 }
 
-/// ★ 2026-10-11 (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
+/// (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
 /// runlist the guest is told AND the cap kayfabe enforces — from the host's own unprivileged
 /// `FIFO_GET_INFO` answers (one per served runlist) and the `channel-budget` property (`0` = derive).
 ///

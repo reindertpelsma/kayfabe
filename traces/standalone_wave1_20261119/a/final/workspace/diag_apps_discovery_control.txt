@@ -1,0 +1,23 @@
+# apps_discovery CONTROL (leg WA3): same tree 7fb1c98a0, KF_GUEST_IMG=/workspace/bench/guest_apps.qcow2 (the apps image) selected through the environment
+# APPRES lines
+APPRES side=guest app=nvcodec_matrix verdict=FAIL rc=1 secs=671 quiet=0 note=CASE enc_av1_420_8_1080p expect=SUPPORTED result=FAIL reason=other rc=234 secs=0.2 gpu_use=NA gpu_auth=none gpu_subs=83659 gpu_births=176 boot=ap_ci3ccf9f55b5b33f3cd_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=44 host_gpu_us
+APPRES side=guest app=nvml_dcgm verdict=PASS rc=0 secs=5 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=2 gpu_births=4 boot=ap_ci3ccf9f55b5b33f3cd_b2 guest_xid=0 kf3_lines=964 kf3_refusals=61 host_gpu_use=INFO need=info why=gpu=0_enc=0_dec=0_sess=0_mem_rise=18 unserviced_before=41 unserviced_after
+APPRES side=guest app=vkcts verdict=PASS rc=0 secs=1170 quiet=0 note=ok cases=291 pass=200 warn=0 ns=89 fail=0 crash=0 timeout=2 notrun=0 gpu=EXTERNAL gpu_use=NA gpu_auth=none gpu_subs=6805 gpu_births=74 boot=ap_ci3ccf9f55b5b33f3cd_b3 guest_xid=0 kf3_lines=3000 kf3_refusals=20
+APPRES side=guest app=vllm verdict=NOTRUN rc=0 secs=4 quiet=0 note=not-run:no_c_compiler_or_python_headers: install gcc and python3-dev (Triton and torch.compile build a launcher at first use) gpu_use=FAIL gpu_auth=host gpu_subs=4 gpu_births=6 boot=ap_ci3ccf9f55b5b33f3cd_b4 guest_xid=0 kf3_lines=521
+APPRES side=guest app=tensorrt verdict=NOTRUN rc=0 secs=3 quiet=0 note=not-run:not_set_up: run `mlrows.py setup --root /opt/apps/bundle/mlrows --rows tensorrt` first (our own configuration, not a statement about the GPU) gpu_use=FAIL gpu_auth=host gpu_subs=4 gpu_births=6 boot=ap_ci3ccf9f55b5b33f3cd_
+APPRES side=guest app=jax verdict=NOTRUN rc=0 secs=3 quiet=0 note=not-run:not_set_up: run `mlrows.py setup --root /opt/apps/bundle/mlrows --rows jax` first (our own configuration, not a statement about the GPU) gpu_use=FAIL gpu_auth=host gpu_subs=4 gpu_births=4 boot=ap_ci3ccf9f55b5b33f3cd_b6 guest_x
+# vkcts summary and the non-passing cases
+VKCTS_SUMMARY side=guest cases=291 pass=200 warn=0 not_supported=89 fail=0 crash=0 timeout=2 not_run=0 device=NVIDIA_GeForce_RTX_4090 type=DISCRETE_GPU gpu_use=EXTERNAL
+dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_24_r32ui	Timeout	timeout	sparse	killed by the harness
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16ui.samples_4	Timeout	timeout	sparse	killed by the harness
+# host Xid lines during the leg (dmesg since 01:14)
+[Fri Nov 20 01:42:54 2026] NVRM: Xid (PCI:0000:00:07): 109, pid=142803, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[Fri Nov 20 01:48:39 2026] NVRM: Xid (PCI:0000:00:07): 109, pid=142803, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+# stage json rows
+{'breakages': "['nvcodec_matrix']", 'host_control': 'absent', 'not_run': "['vllm', 'tensorrt', 'jax']", 'reason': 'discovery_not_run:vllm,tensorrt,jax', 'run_id': 'ci3ccf9f55b5b33f3cd', 'schema': '1', 'sha': '7fb1c98a00cb79e825e4390f910141a6d4fe45a7', 'verdict': 'FAIL'}
+nvcodec_matrix KNOWN_BREAKAGE FAIL FAIL
+nvml_dcgm PASS PASS 
+vkcts PASS PASS 
+vllm NOT_RUN NOTRUN no_c_compiler_or_python_headers:_install_gcc_and_python3-dev_Triton_and_torch.co
+tensorrt NOT_RUN NOTRUN not_set_up:_run_mlrows.py_setup_--root_opt_apps_bundle_mlrows_--rows_tensorrt_fi
+jax NOT_RUN NOTRUN not_set_up:_run_mlrows.py_setup_--root_opt_apps_bundle_mlrows_--rows_jax_first_o

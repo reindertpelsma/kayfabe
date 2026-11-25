@@ -293,9 +293,20 @@ export async function withTimeout(promise, ms) {
 }
 
 // Writes one object to the public bucket. Throws on failure or timeout (the caller fails open).
+// Review F6 (2026-11-13): the object's own headers are all R2 lets a Worker set; a custom domain
+// serves them as written. The disposition names a fixed file so that a box-written text can never
+// choose its own, and keeps the page inline (the site links "open log.txt"). `X-Content-Type-Options:
+// nosniff` and a CSP cannot be set per object: they are a Transform Rule on the logs domain
+// (DEPLOY.md, "Public logs"), and the content type is always text/plain or application/json.
+export const publicHeaders = (key, contentType) => ({
+  contentType,
+  contentDisposition:
+    'inline; filename="' + (key.endsWith('.json') ? 'report.json' : 'log.txt') + '"',
+  cacheControl: 'no-transform',
+});
 export async function putPublic(env, key, body, contentType) {
   await withTimeout(
-    env.LOGS_BUCKET.put(key, body, { httpMetadata: { contentType } }),
+    env.LOGS_BUCKET.put(key, body, { httpMetadata: publicHeaders(key, contentType) }),
     publishTimeouts.r2,
   );
 }

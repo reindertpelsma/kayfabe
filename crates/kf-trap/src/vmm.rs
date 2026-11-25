@@ -58,7 +58,10 @@ pub enum MmioOutcome {
     /// Wake the register drainer — ⊘ a *different* eventfd (§5.3).
     WakeDrainer,
     /// Ring a real host doorbell inline, on this vCPU. §5: no queue, no wake, no lock.
-    RingHostInline { host_token: u32 },
+    RingHostInline {
+        /// The host token whose doorbell to ring.
+        host_token: u32,
+    },
     /// ⊘ The privileged ring is full: raise a guest-visible fault. §5.4, never wait.
     PoisonDevice,
     /// ★ The VMM must not return until the effect is visible.
@@ -116,6 +119,7 @@ pub trait VmmOps: Send + Sync {
         host: HostMapping,
         readonly: bool,
     ) -> Result<SlotId, VmmError>;
+    /// Remove a memslot [`Self::install_memslot`] made.
     fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;
 
     /// Deliver an interrupt. ⊘ CH: `InterruptSourceGroup::trigger(index)`. QEMU: `msix_notify`.
@@ -124,6 +128,7 @@ pub trait VmmOps: Send + Sync {
 
     /// ★ Workers and the drainer park on these; the trap only ever *says* one is owed.
     fn signal_worker(&self);
+    /// Signal the register drainer.
     fn signal_drainer(&self);
 }
 
@@ -133,19 +138,26 @@ pub trait VmmOps: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostMapping(pub u64);
 
+/// A memslot the VMM installed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlotId(pub u32);
 
+/// Why the VMM refused a request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VmmError {
+    /// The guest-physical address is not one the VMM can serve.
     BadGpa,
+    /// No memslot is free.
     NoSlots,
-    Refused,
+    /// The VMM refused the request.
     /// ★ A region the memory map says must be backed had no backing supplied. `[w825]` Named,
     /// because the alternative — skipping it — installs a read exit nobody decided to have.
     Unbacked {
+        /// The BAR of the unbacked region.
         bar: u8,
+        /// Offset of the region in the BAR.
         base: u64,
+        /// Length of the region in bytes.
         len: u64,
     },
 }
@@ -180,6 +192,7 @@ pub trait GpuDevice: Send + Sync {
     }
 }
 
+/// Store `v` little-endian into the first (at most 8) bytes of `data`.
 pub fn store_value(data: &mut [u8], v: u64) {
     for (i, b) in data.iter_mut().take(8).enumerate() {
         *b = (v >> (8 * i)) as u8;

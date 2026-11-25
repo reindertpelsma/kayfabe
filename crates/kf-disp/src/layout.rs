@@ -92,7 +92,7 @@ pub fn for_version(version: &str) -> Option<&'static Layouts> {
             V580_159_04
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv"))),
         ),
-        // ★ 2026-10-04 (v3-windows): 580.65.06, the Linux twin of Windows 580.88 (same changelist
+        // 580.65.06, the Linux twin of Windows 580.88 (same changelist
         // 36308443). Derived by tools/derive_display_layouts.sh from ogkm 580.65.06; the rows are
         // identical to 580.159.04's apart from VERSION.
         "580.65.06" => Some(
@@ -251,7 +251,7 @@ mod tests {
         assert!(Params::new(l, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", &[0; 8]).is_none());
     }
 
-    /// ★ 2026-10-04 (v3-windows): guest 580.65.06 — the Linux twin of Windows 580.88 by changelist —
+    /// Guest 580.65.06 — the Linux twin of Windows 580.88 by changelist —
     /// has all three display tables, and they are the bench's rows apart from VERSION (re-derived
     /// from ogkm 580.65.06 by the three `tools/derive_display_*.sh`). A future re-derivation that
     /// differs fails here, by table, instead of answering a 580.65.06 guest with 580.159.04's rows.

@@ -1,0 +1,12 @@
+REV 62a58f053
+APPRES side=host app=jax verdict=PASS rc=0 secs=11 quiet=0 note=PASS on cu13: ok
+APPRES side=host app=tensorrt verdict=PASS rc=0 secs=108 quiet=0 note=PASS on cu13: ok
+APPRES side=host app=vllm verdict=PASS rc=0 secs=84 quiet=0 note=PASS on cu13: ok
+--- annotated
+APPRES side=host app=jax verdict=PASS rc=0 secs=11 quiet=0 note=PASS on cu13: ok gpu_use=PASS gpu_auth=guest gpu_subs=- gpu_births=-
+APPRES side=host app=tensorrt verdict=PASS rc=0 secs=108 quiet=0 note=PASS on cu13: ok gpu_use=PASS gpu_auth=guest gpu_subs=- gpu_births=-
+APPRES side=host app=vllm verdict=PASS rc=0 secs=84 quiet=0 note=PASS on cu13: ok gpu_use=PASS gpu_auth=guest gpu_subs=- gpu_births=-
+--- negctl
+NEGCTL app=jax control=CONTROL_OK judged=FAIL why=[app] FAIL: device is cpu:0, not cuda; device name is not an NVIDIA GPU: cpu; peak device memory 0 MiB is below 1000 MiB: the work did not r
+NEGCTL app=tensorrt control=CONTROL_OK judged=FAIL why=[app] FAIL: device is cpu:0, not cuda; device name is not an NVIDIA GPU: cpu; peak device memory 0 MiB is below 200 MiB: the work did not ru
+NEGCTL app=vllm control=CONTROL_OK judged=FAIL why=[app] FAIL: no GPU_USE_PROOF vllm line (the row dropped its device proof)

@@ -87,6 +87,8 @@ fn chain(log: &kf_rm::unserviced::UnservicedLog) -> Box<dyn CommandPolicy> {
         channels: None,
         display: Some((&kf_chip::display::AMPERE).into()),
         console: None,
+        windows: Default::default(),
+        utilization: None,
     };
     kf_rm::served_policy(
         ga106::board(),
@@ -144,7 +146,7 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
     let mut c = chain(&log);
     objects(&mut *c);
 
-    // 1. RC recovery (stub, owner ruling §S): GET reports ENABLED whatever the guest's input
+    // 1. RC recovery: GET reports ENABLED whatever the guest's input
     //    word, SET(ENABLED) is recorded (the VFIO sequence), a third value is refused 0x1f.
     assert_eq!(
         params(

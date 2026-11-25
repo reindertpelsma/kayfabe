@@ -1,4 +1,4 @@
-//! # kayfabe-abi — Axis A: the declarative ABI
+//! # kf-abi — Axis A: the declarative ABI
 //!
 //! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate holds the **generated,
 //! committed** wire layouts produced by `kayfabe-abi-gen` from the vendored open
@@ -6,7 +6,7 @@
 //! version-independent views the logic crates consume.
 //!
 //! **The quarantine rule (decision #2):** `#[repr(C)]` NVIDIA wire structs exist
-//! ONLY here. The logic crates speak abstract domain types (`kayfabe-arch::ids`,
+//! ONLY here. The logic crates speak abstract domain types (`kf-arch::ids`,
 //! `kayfabe-core::rmgraph::RmEvent`); this crate's decoders translate wire ↔ core
 //! at the boundary. A concrete driver version (`V580`, …) or `#[repr(C)]` layout
 //! in any logic crate fails review + the grep gate (testing strategy §7 Tier 2).
@@ -16,13 +16,13 @@
 //! # 1. The generation strategy, and the three it is not
 //!
 //! **Chosen: an offline generator whose output is committed and reviewed.**
-//! `crates/kayfabe-abi/gen/` is a standalone cargo project *outside* the
+//! `crates/kf-abi/gen/` is a standalone cargo project *outside* the
 //! workspace, with zero third-party dependencies, run by hand against a vendored
 //! open-gpu-kernel-modules checkout:
 //!
 //! ```text
-//! cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
-//!     <ogkm-root> crates/kayfabe-abi/src/generated
+//! cargo run --manifest-path crates/kf-abi/gen/Cargo.toml -- \
+//!     <ogkm-root> crates/kf-abi/src/generated
 //! ```
 //!
 //! | | build.rs generator | bindgen | offline + committed |
@@ -57,13 +57,13 @@
 //!
 //! # 2. How version skew is represented
 //!
-//! ★ **Since 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md`): MEASURED, per exact tag.**
+//! **MEASURED, per exact tag** (`docs/design/V3_DRIVER_MATRIX.md`).
 //! [`versions::table_for`] assembles a [`versions::DriverAbiTable`] for a driver version
 //! from [`matrix`] — every consumed layout and constant, measured by compiling ogkm at each
 //! tag (`tools/drivermatrix/`). Selection is **exact membership** in the measured tag list;
 //! an unmeasured version is [`wire::AbiError::Unmeasured`], never a nearest-neighbour
-//! fallback (the ogkm history moves fields INSIDE a branch). The one hand-kept row set left
-//! is the capability allowlist (nvproxy policy, "newest row ≤ version").
+//! fallback (the ogkm history moves fields INSIDE a branch). The guest-ingress gate
+//! ([`capability`]) is generated per tag too ([`ingress_generated`]).
 //!
 //! ## 2.1 ★ The guest OS is a SECOND key, and it lives beside this one
 //!
@@ -135,6 +135,9 @@ pub mod guestsysinfo;
 pub mod gvaspacepdes;
 pub mod host_driver;
 pub mod hostabi;
+#[allow(missing_docs, clippy::all)]
+#[rustfmt::skip]
+pub mod ingress_generated;
 pub mod hoststub;
 pub mod inittables;
 pub mod memory_list;
@@ -159,6 +162,7 @@ pub mod smcmode;
 pub mod submit;
 pub mod timer;
 pub mod transcribed;
+pub mod utilization;
 pub mod vbios;
 pub mod versions;
 pub mod view;
@@ -345,11 +349,9 @@ impl core::fmt::Display for DriverVersion {
 
 /// # Axis-A runtime dispatch (shape only this milestone)
 ///
-/// One impl per generated driver version (nvproxy-style versioned tables with
-/// inherit-then-mutate deltas). The four branch points mirror nvproxy's proven
-/// decomposition: frontend ioctls, UVM ioctls, control commands, alloc classes —
-/// each handler carrying its generated param size + capability allowlist entry
-/// (closing the default-allow gap, `nvproxy_gap_analysis`).
+/// One impl per generated driver version. Four branch points: frontend ioctls, UVM ioctls,
+/// control commands, alloc classes — each handler carrying its generated param size and its
+/// guest-ingress verdict ([`capability`]).
 ///
 /// `Send + Sync` supertrait (decision #17): like `Arch`, a driver-version table set
 /// is immutable shared data, selected once at realize and stored core-side.

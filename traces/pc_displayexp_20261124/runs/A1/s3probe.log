@@ -1,0 +1,7 @@
+[     0.1s] 0s rc=255 qemu_rc=None (no answer)
+[    20.7s] 10s rc=0 qemu_rc=None boot=2026-11-24T19:57:51.5000000+00:00 ev(id=count) 153=1 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    22.8s] 20s rc=0 qemu_rc=None boot=2026-11-24T19:57:51.5000000+00:00 ev(id=count) 153=1 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    60.1s] 30s rc=124 qemu_rc=None (no answer)
+[    70.2s] 60s rc=255 qemu_rc=None (no answer)
+[    75.9s] 70s rc=0 qemu_rc=None boot=2026-11-24T19:57:51.5000000+00:00 ev(id=count) 153=7 141=0 41=0 1074=0 6008=0 1001=0 4101=0
+[    80.1s] 80s rc=255 qemu_rc=None (no answer)

@@ -1,0 +1,11 @@
+{
+ "uname": "6.8.0-59-generic",
+ "clocksource": "kvm-clock",
+ "tsc_dmesg": [
+  "[    0.439904] tsc: Marking TSC unstable due to TSCs unsynchronized"
+ ],
+ "cpu_flags_has_constant_tsc": false,
+ "cpu_flags_has_nonstop_tsc": false,
+ "repo_rev": "1052e2f90",
+ "gpu": "NVIDIA GeForce RTX 4090, 580.159.04"
+}

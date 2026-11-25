@@ -1,0 +1,14 @@
+usage: kfroot.py bootstrap [-h] [--user USER] [--workspace WORKSPACE]
+                           [--chown CHOWN] [--dry-run] [--only-needed]
+                           [--no-memlock]
+
+options:
+  -h, --help            show this help message and exit
+  --user USER
+  --workspace WORKSPACE
+  --chown CHOWN         a tree the CI user must own (the checkout)
+  --dry-run
+  --only-needed         leave out every step whose effect is already there
+                        (the payload's mode)
+  --no-memlock          do not write the limits.d memlock file
+KFROOT_BOOTSTRAP {"schema": 1, "steps": [{"argv": null, "name": "kfroot_files", "path": "/etc/sudoers.d/kfroot", "rc": null, "required": true}, {"argv": ["sh", "-c", "if id ci >/dev/null 2>&1; then usermod -aG kvm ci; else useradd --create-home --shell /bin/ba

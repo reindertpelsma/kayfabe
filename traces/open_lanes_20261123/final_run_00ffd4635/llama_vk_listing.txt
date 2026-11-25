@@ -1,0 +1,26 @@
+total 60676
+drwxr-xr-x 2 root root     4096 Nov 24 00:28 .
+drwxr-xr-x 7 root root     4096 Nov 24 00:28 ..
+lrwxrwxrwx 1 root root       17 Nov 24 00:28 libggml-base.so -> libggml-base.so.0
+lrwxrwxrwx 1 root root       22 Nov 24 00:28 libggml-base.so.0 -> libggml-base.so.0.25.3
+-rwxr-xr-x 1 root root   920080 Nov 24 00:28 libggml-base.so.0.25.3
+lrwxrwxrwx 1 root root       16 Nov 24 00:28 libggml-cpu.so -> libggml-cpu.so.0
+lrwxrwxrwx 1 root root       21 Nov 24 00:28 libggml-cpu.so.0 -> libggml-cpu.so.0.25.3
+-rwxr-xr-x 1 root root  1376680 Nov 24 00:28 libggml-cpu.so.0.25.3
+lrwxrwxrwx 1 root root       19 Nov 24 00:28 libggml-vulkan.so -> libggml-vulkan.so.0
+lrwxrwxrwx 1 root root       24 Nov 24 00:28 libggml-vulkan.so.0 -> libggml-vulkan.so.0.25.3
+-rwxr-xr-x 1 root root 44296992 Nov 24 00:28 libggml-vulkan.so.0.25.3
+lrwxrwxrwx 1 root root       12 Nov 24 00:28 libggml.so -> libggml.so.0
+lrwxrwxrwx 1 root root       17 Nov 24 00:28 libggml.so.0 -> libggml.so.0.25.3
+-rwxr-xr-x 1 root root    55432 Nov 24 00:28 libggml.so.0.25.3
+-rwxr-xr-x 1 root root   481768 Nov 24 00:28 libllama-bench-impl.so
+lrwxrwxrwx 1 root root       20 Nov 24 00:28 libllama-common.so -> libllama-common.so.0
+lrwxrwxrwx 1 root root       24 Nov 24 00:28 libllama-common.so.0 -> libllama-common.so.0.5.0
+-rwxr-xr-x 1 root root  6170520 Nov 24 00:28 libllama-common.so.0.5.0
+lrwxrwxrwx 1 root root       13 Nov 24 00:28 libllama.so -> libllama.so.0
+lrwxrwxrwx 1 root root       17 Nov 24 00:28 libllama.so.0 -> libllama.so.0.5.0
+-rwxr-xr-x 1 root root  4647592 Nov 24 00:28 libllama.so.0.5.0
+lrwxrwxrwx 1 root root       14 Nov 24 00:28 libvulkan.so -> libvulkan.so.1
+lrwxrwxrwx 1 root root       20 Nov 24 00:28 libvulkan.so.1 -> libvulkan.so.1.4.341
+-rwxr-xr-x 1 root root  4137000 Nov 24 00:28 libvulkan.so.1.4.341
+-rwxr-xr-x 1 root root    17864 Nov 24 00:28 llama-bench

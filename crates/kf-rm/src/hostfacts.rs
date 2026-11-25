@@ -114,7 +114,7 @@ pub struct HostFacts {
     /// ★ v3-gfx: `FB_GET_GPU_CACHE_INFO` (`0x20801315`) — the host's L2 state words
     /// `{powerState, writeMode, bypassMode, rcmState}`; `None` = refused on the host.
     pub gpu_cache_info: Option<[u32; 4]>,
-    /// ★ 2026-09-26: the host's SM issue-rate modifier (`GR_GET_SM_ISSUE_RATE_MODIFIER`, the nine
+    /// The host's SM issue-rate modifier (`GR_GET_SM_ISSUE_RATE_MODIFIER`, the nine
     /// speed selects) — `None` when the host refused it (the guest's internal control is then
     /// refused as before). Served as `INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER`.
     pub gr_sm_issue_rate_modifier: Option<[u8; kf_abi::grstatic::SM_ISSUE_RATE_MODIFIER_BYTES]>,
@@ -165,7 +165,7 @@ pub struct HostFacts {
     /// ★ The host's `MSENC_GET_CAPS_V2` / `BSP_GET_CAPS_V2` tables for the advertised video
     /// engines (`kf_abi::videocaps`).
     pub video_caps: Vec<kf_abi::videocaps::CapsAnswer>,
-    /// ★ 2026-10-07: the host's `FIFO_GET_LATENCY_BUFFER_SIZE` answer per advertised engine
+    /// The host's `FIFO_GET_LATENCY_BUFFER_SIZE` answer per advertised engine
     /// (`kf_abi::fifoctl`); an engine the host refused is absent (the guest's is then refused).
     pub fifo_latency: Vec<kf_abi::fifoctl::LatencyRow>,
 }
@@ -504,7 +504,7 @@ pub enum FactRefusal {
 /// # Errors
 /// [`FactRefusal`] on a short reply or when LCE0 is refused.
 ///
-/// ⊘ 2026-09-26: a `None` BEFORE a later answer is a HOLE — a floorswept LCE (GB203's LCE2/3) —
+/// A `None` BEFORE a later answer is a HOLE — a floorswept LCE (GB203's LCE2/3) —
 /// and is stored as [`kf_abi::cepce::NO_PCE_MASK`] (`0`: no physical engine), which the serve path
 /// refuses as `NoMaskForEngine` exactly like an index past the end. Trailing `None`s end the list.
 pub fn derive_lce_pce_masks(replies: &[Option<&[u8]>]) -> Result<Vec<u32>, FactRefusal> {
@@ -693,7 +693,7 @@ pub fn derive_family(reply: &[u8]) -> Result<Family, FactRefusal> {
     })
 }
 
-/// ★ Lane C 2026-10-14: the die from the host's `MC_GET_ARCH_INFO` reply (both words, kept whole:
+/// The die from the host's `MC_GET_ARCH_INFO` reply (both words, kept whole:
 /// an implementation ogkm does not name is still a die, it just has no table rows).
 ///
 /// # Errors
@@ -1011,7 +1011,7 @@ pub const GR_CAPS_V2_PARAMS_SIZE: usize = 48;
 /// `alignment`, `size`, `bInfoPopulated`.
 pub const GR_CONTEXT_PROPERTIES_PARAMS_SIZE: usize = 32;
 
-// ★ 2026-09-26 (v3-gpcmask): the per-index GR floorsweeping controls. The host's kernel RM
+// The per-index GR floorsweeping controls. The host's kernel RM
 // serves each from ITS copy of the GSP's `FLOORSWEEPING_MASKS` reply, index for index, so
 // asking them is reading that struct back — the physical/logical index space of each field is
 // the host's, not a reading this port has to get right (`kf_abi::grstatic`'s floorswept-parts
@@ -1142,7 +1142,7 @@ pub fn derive_gr_fs_answers(
     Ok(out)
 }
 
-/// ★ 2026-09-28 — the GR-info readers `family`'s guest RM binds (the family row,
+/// The GR-info readers `family`'s guest RM binds (the family row,
 /// [`Family::reads_gr_veid_step_size`], cites the HAL binding). Every refusal and every encode of
 /// the table goes through this, at realize and at serve.
 #[must_use]
@@ -1152,7 +1152,7 @@ pub const fn gr_info_readers(family: Family) -> GrInfoReaders {
     }
 }
 
-/// ★ 2026-09-28 — the memory-system-config readers `family`'s guest RM binds
+/// The memory-system-config readers `family`'s guest RM binds
 /// ([`Family::reads_memsys_ltc_slices`]).
 #[must_use]
 pub const fn memsys_readers(family: Family) -> MemsysReaders {

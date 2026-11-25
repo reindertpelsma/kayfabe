@@ -1,13 +1,11 @@
 # kayfabe architecture — v3 on one page
 
-**STATUS: LIVE, 2026-09-26, at `master` `74dc3113`; crate table refreshed 2026-10-15 (integration of `claude/win11-userring-20261014`).**
-⊘ *Correction 2026-10-15:* the crate table below lacked `kf-disp`, `kf-broker`, `kf-oprom` and `kf-gop-image` (added), and the guest is no longer only
-Linux 580.159.04: the stock Windows 11 driver 580.88 runs too (see `README.md`). Guest USER channels on Windows may take a relayed USER ring
-(`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. This page is a map. The design authority is
+**STATUS: LIVE, 2026-11-24.** Written 2026-09-26 at `master` `74dc3113`; the crate table, the thread model (one register drainer and the workers), the unsafe rule and the gate list were checked against the tree on 2026-11-24: every `crates/kf-*` directory is in the table, every crate named here exists, and the gate files `kf-gate1.rs` to `kf-gate9.rs` match the list. The channel and memory sections restate the design documents they cite and were not re-derived from code. This page is a map. The design authority is
 [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md) (its argued-from-scratch
 statement is [`docs/design/THE_DESIGN.md`](docs/design/THE_DESIGN.md)), and the build
 decisions are in [`docs/design/V3_BUILD.md`](docs/design/V3_BUILD.md). Where this page and those
-documents disagree, they win. ⊘ The pre-v3 map (the hexagonal core, `kayfabe-core`/`-fwd`/`-rt`,
+documents disagree, they win. Guest USER channels on Windows may take a relayed USER ring
+(`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. **Superseded:** the pre-v3 map (the hexagonal core, `archive/crates/kayfabe-core`/`-fwd`/`-rt`,
 and the invariant catalog that old source comments cite as *"`ARCHITECTURE.md` invariant N"*) is
 archived at [`docs/archive/ARCHITECTURE_pre_v3.md`](docs/archive/ARCHITECTURE_pre_v3.md).
 
@@ -15,7 +13,7 @@ archived at [`docs/archive/ARCHITECTURE_pre_v3.md`](docs/archive/ARCHITECTURE_pr
 
 ```
  guest (untrusted: userspace AND guest root)
-   stock NVIDIA driver 580.159.04 ── GSP RPCs, page tables, doorbells ──┐
+   stock NVIDIA driver (Linux or Windows) ── GSP RPCs, page tables, doorbells ──┐
                                                                         │ BAR0 writes only
  ┌─────────────── one host process: QEMU + the kayfabe core ────────────▼───────────────┐
  │ kf3-gpu device (qemu/hw/misc/kf3 + kf-qemu)                                           │
@@ -71,7 +69,7 @@ the guest as host event → eventfd → MSI.
   that the host confirmed it made. That record is kept in vidmem per VA-space object. The host
   applies the diff as batched maps and unmaps, with the TLB-defer flag and one invalidate, and
   acknowledges run by run (commit-on-ack). A refused map stays a difference and is retried.
-  `kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it. VA-contiguous guest-RAM runs
+  `kf_cuda::diffmodel` is the spec; the gate `crates/kf-harness/src/bin/kf-gate9.rs` holds the GPU to it. VA-contiguous guest-RAM runs
   are mapped as one OS descriptor ([`V3_BATCHED_MAP.md`](docs/design/V3_BATCHED_MAP.md)).
 - **A VA space is an object; its PDB is an attribute, per GPU**, and it may be absent (§4.3).
 
@@ -95,23 +93,15 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-disp` | the display plane: a virtual NVDisplay the stock driver drives (EDID, display-channel decoder, head/window state, vblank, scanout). Emulated channels only |
 | `kf-broker` | the display-broker relay (connection machine, shared frame ring, input handed to the VMM); VMM-agnostic, safe code |
 | `kf-oprom`, `kf-gop-image` | the boot-display option ROM container, and the build script that compiles and embeds the boot-display GOP driver (`firmware/kf-gop`; no compiled binary is committed) |
-| `kf-harness` | the GPU gates `kf-gate1`…`9`: play the guest against the real planes, with no QEMU |
+| `kf-harness` | the GPU gates (binaries `crates/kf-harness/src/bin/kf-gate1.rs`…`kf-gate9.rs`): play the guest against the real planes, with no QEMU |
 | `kf-rawclient` | the raw client that will replace the frozen `kayfabe-rm-ladder` grader (`docs/design/V3_RAW_CLIENT.md`): an arm registry, the exit-code and `RUNG_`/`CHECK` output contract, a native-versus-guest mode flag, and its first arm `--refresh-stress` (fragmented memory pinned and mapped in batches, one invalidate, a correctness oracle that can fail). All hardware behind one trait; not yet wired into any script or CI lane, and not yet run on a GPU |
 | `kf-census` | offline tool, never linked into the product: decodes driver-GSP queue captures (the VFIO observer's `gsp.jsonl` and the `KFGSPCAP` capture format of a Windows capture module) with `kf-gsp`/`kf-abi`, checks them with a completeness oracle, and writes the per-control census; `kf-census scrub` rewrites a capture default-deny (message bodies replaced unless the control id is allow-listed) so a capture can be kept without board data (`V3_GSP_CAPTURE_FORMAT.md`) |
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 
-⊘ Correction, 2026-10-31 (folded above the text it corrects): the frozen tree is now ten crates, not
-sixteen. `kayfabe-chips` was cut to its `host_classes` module (the only part the grader uses) and its
-`ga10x`/`ad10x`/`gb20x`/`gh100` modules went to `archive/crates/kayfabe-chips-modules/`; with them went
-the crates only they reached (`kayfabe-mmu`, `-gsp`, `-mocks`, `-trace`, `-completion`), and
-`kayfabe-vmm`, whose one live item (the two-variant `Prot`) now lives in `kayfabe-isolate`. All are in
-`archive/crates/` and do not build (`archive/README.md`).
-
-`crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
+`crates/kayfabe-*` is the **frozen pre-v3 tree**, ten crates. It is kept because `kayfabe-rm-ladder`, the
 30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
-No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (including
-`kayfabe-device`, since 2026-10-31) are in `archive/crates/` and do not build (`archive/README.md`).
+No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (`kayfabe-core`, `-fwd`, `-rt`, `-device`, `-mmu`, `-gsp`, `-vmm` and the others) are in `archive/crates/` and do not build (`archive/README.md`). `kayfabe-chips` is cut to its `host_classes` module, the only part the grader uses.
 
 ## Rules that shape the code
 
@@ -129,14 +119,14 @@ No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader doe
   tables and joins, isolates and the IPC plane, publication epochs and dirty gates, per-page BAR
   traps, and snapshots of the guest's tables (`V3_BUILD.md`, *Rules*).
 - **Unsafe code** is allowed only in `kf-linux-raw`, `kf-qemu` and `kf-cuda`, and only in files
-  named `*_unsafe.rs`.
+  named `*_unsafe.rs`. The workspace sets `unsafe_code = "forbid"`; those three crates opt out in their `Cargo.toml`, and a CI step fails any `.rs` file that contains the word outside a `*_unsafe.rs` file. `kf-chan/src/tspace_unsafe.rs` also carries the suffix, as the address-authoring perimeter of the Translated plane, but contains no `unsafe` block.
 
 ## Verification
 
 | gate | what it proves | where |
 |---|---|---|
 | `kf-*` crate tests | logic, generated ABI against the oracles, C-trace replays (`cap1`, `cap1b`) | `cargo test -p kf-…`, GPU-free |
-| `kf-gate1`…`9` | the real planes on a real GPU, with no QEMU: a real CE on kayfabe's own ring completing through a host event (1); the host VAS matching the guest's tables, VER2 and VER3 formats (2, 7); Translated kernel CE (3); doorbells driving workers (4); passthrough on CE and GR (5, 6); invalidate completes only after the host map is committed (8); the walk kernel's diff protocol (9) | `scripts/bench/v3_gates.sh` |
+| gates `kf-gate1.rs`…`kf-gate9.rs` | the real planes on a real GPU, with no QEMU: a real CE on kayfabe's own ring completing through a host event (1); the host VAS matching the guest's tables, VER2 and VER3 formats (2, 7); Translated kernel CE (3); doorbells driving workers (4); passthrough on CE and GR (5, 6); invalidate completes only after the host map is committed (8); the walk kernel's diff protocol (9) | `scripts/bench/v3_gates.sh` |
 | thin guest, 30 arms | stock driver boot plus the raw client, one boot per arm, a hard time budget; bare metal is the baseline | `scripts/fastguest/fast_suite.sh` (`KF_DEVICE=kf3`) |
 | fat guest lanes | CUDA ladder (`cup3`, `cup8`), app matrix, LLM parity, graphics, video | `scripts/bench/boot_capture.sh` + the lane scripts |
 

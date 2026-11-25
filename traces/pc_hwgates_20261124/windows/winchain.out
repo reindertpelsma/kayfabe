@@ -1,0 +1,23 @@
+1
+== win_r2_new_off start 2026-11-24T18:27:52Z extra=[unmapped-reads-zero=off]
+== win_r2_new_off end 2026-11-24T18:30:10Z
+[    78.3s] GUEST_GPU 
+[   138.4s] EVENTS 0: []
+[   138.6s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 254}
+1
+== win_r3_new_default start 2026-11-24T18:30:10Z extra=[]
+== win_r3_new_default end 2026-11-24T18:33:45Z
+[    80.6s] GUEST_GPU ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK driver=32.0.15.8088 ; NVSMI NVIDIA GeForce RTX 4070, 580.88 ; NVSMI_RC 0 ; 
+[   142.1s] EVENTS 0: []
+[   215.1s] STOP guest Stop-Computer rc=0; exited 0
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": null, "stop": "guest Stop-Computer rc=0; exited 0", "refusal_lines": 472}
+2
+== win_r4_old_default start 2026-11-24T18:33:45Z extra=[]
+== win_r4_old_default end 2026-11-24T18:36:06Z
+[    80.7s] GUEST_GPU 
+[   140.9s] EVENTS 0: []
+[   141.0s] STOP not running
+WIN_KF3_RESULT {"up": true, "qemu_returncode_before_stop": 0, "stop": "not running", "refusal_lines": 435}
+2
+CHAIN_DONE

@@ -28,6 +28,12 @@ kf-chan.workspace = true
 kf-rm.workspace = true
 kf-trap.workspace = true
 
+[features]
+# Control builds only (`scripts/bench/build_kf3.sh --negctl`): compiles in every `KF3_NEGCTL_*` control switch,
+# here and in kf-host. Off by default; the release kit and a plain `build_kf3.sh` build without it, so that
+# binary reads no such variable and carries no such name.
+negctl = ["kf-host/negctl"]
+
 # ★ DELIBERATELY NOT `[lints] workspace = true` — this is the hypervisor FFI crate (extern "C"
 # entry points, pointers QEMU owns). Every `unsafe` lives in a `*_unsafe.rs` file and carries a
 # `// SAFETY:` naming its invariant; the safe composition lives beside it.

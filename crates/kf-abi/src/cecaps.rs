@@ -667,7 +667,7 @@ pub fn answer_ce_get_physical_caps(
     // ⊘ `copy_index_of_engine_type`, never `engine_type - 0x09`: the encoding is
     // two-branch (`COPY0..COPY9` then `COPY10..COPY19` at `0x34`), and the shortcut is
     // right on every engine THIS part has and wrong on a bigger one. The inverse is
-    // exercised over `0..=0x60` by `kayfabe-abi/tests/mean_wire.rs`.
+    // exercised over `0..=0x60` by `kf-abi/tests/mean_wire.rs`.
     let Some(index) = crate::submit::copy_index_of_engine_type(engine_type) else {
         return Err(CePhysicalCapsError::NotACopyEngine { engine_type });
     };

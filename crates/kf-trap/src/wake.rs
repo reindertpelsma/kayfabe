@@ -22,6 +22,7 @@ const SEQ_ONE: u64 = 1 << POLLER_BITS;
 /// §3 caps workers at 255 — which is exactly what 8 bits holds, and is why it is 8.
 pub const MAX_WORKERS: u64 = POLLER_MASK;
 
+/// One wakeup word: a publish sequence and a count of parked workers (§5.3).
 #[derive(Debug, Default)]
 pub struct WakeWord(AtomicU64);
 
@@ -39,6 +40,7 @@ pub enum Wake {
 }
 
 impl WakeWord {
+    /// A word with no publishes and no parked workers.
     pub const fn new() -> WakeWord {
         WakeWord(AtomicU64::new(0))
     }
@@ -100,6 +102,7 @@ impl WakeWord {
         );
     }
 
+    /// How many workers are registered as polling.
     #[inline]
     pub fn pollers(&self) -> u64 {
         self.0.load(Ordering::Acquire) & POLLER_MASK

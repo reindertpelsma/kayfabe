@@ -1,4 +1,4 @@
-//! ★ 2026-10-17 — **Lazy observe inside the REAL per-entry turn** (`kf_chan::user_turn::Relay` with
+//! **Lazy observe inside the REAL per-entry turn** (`kf_chan::user_turn::Relay` with
 //! `Relay::with_lazy`): rule A (cache the guest `GP_PUT` until the cursor reaches it) and rule B (read the private
 //! `USERD` only every N-th turn, or when something forces it), with the invalidation rules, the counters and the D6
 //! write-back guard. `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`, "Lazy observe (production)".

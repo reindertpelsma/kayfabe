@@ -127,7 +127,7 @@ fn classification_is_generic_over_families() {
     );
 }
 
-// ---- 2026-10-31: the contracts of the three retired `Arch`-level host-class tests ------------
+// The contracts of the three retired `Arch`-level host-class tests
 //
 // `archive/crates/kayfabe-chips-modules/tests/host_classes_arch_tests.rs` held three tests that
 // built the archived `Ga10xArch`/`Ad10xArch`/`Gh100Arch`/`Gb20xArch` and `MockArch`. v3 has no

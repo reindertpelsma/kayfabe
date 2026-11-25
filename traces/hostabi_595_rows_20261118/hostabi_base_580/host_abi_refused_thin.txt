@@ -1,0 +1,2 @@
+# thin: 31 QEMU logs scanned; 31 contain HOST-ABI REFUSED
+   31  kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784

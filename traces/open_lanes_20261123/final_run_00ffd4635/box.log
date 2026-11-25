@@ -1,0 +1,18 @@
+REV 00ffd4635ba2ed9f121bda98a69c8a130baceb30
+PROVISION_START 1795479920
+PROVISION_END 1795480113
+ROW_START nvbandwidth 1795480113
+nvbandwidth rc=0
+ROW_START nvbandwidth_negctl 1795480157
+nvbandwidth_negctl rc=1
+ROW_START llama_vulkan 1795480158
+llama_vulkan rc=0
+ROW_START llama_vulkan_negctl 1795480169
+llama_vulkan_negctl rc=1
+ROW_START llama_vulkan_ngl0_only 1795480203
+llama_vulkan_ngl0 rc=1
+ROW_START apps_nvbandwidth negctl=0 1795480219
+ROW_START apps_llama_vulkan negctl=0 1795480264
+ROW_START apps_nvbandwidth negctl=1 1795480265
+ROW_START apps_llama_vulkan negctl=1 1795480266
+BOX_END 1795480286 total_s=369

@@ -1,0 +1,97 @@
+[   13.316313] show_signal: 109 callbacks suppressed
+[   13.316318] traps: python3[1231] trap invalid opcode ip:78a36a388de2 sp:7ffeefa6b618 error:0 in libc.so.6[78a36a228000+189000]
+[   13.660396] PM: suspend entry (deep)
+[   13.662455] Filesystems sync: 0.002 seconds
+[   13.667274] Freezing user space processes
+[   13.668396] Freezing user space processes completed (elapsed 0.001 seconds)
+[   13.668409] OOM killer disabled.
+[   13.668412] Freezing remaining freezable tasks
+[   13.669310] Freezing remaining freezable tasks completed (elapsed 0.000 seconds)
+[   13.681012] ata3.00: Check power mode failed (err_mask=0x1)
+[   13.697599] ACPI: PM: Preparing to enter system sleep state S3
+[   13.697905] ACPI: PM: Saving platform NVS memory
+[   13.698234] Disabling non-boot CPUs ...
+[   13.702203] smpboot: CPU 1 is now offline
+[   13.708224] unchecked MSR access error: WRMSR to 0xc0011029 (tried to write 0x0000000000000000) at rIP: 0xffffffff8bac8c74 (native_write_msr+0x4/0x40)
+[   13.708392] Call Trace:
+[   13.708410]  <TASK>
+[   13.708417]  ? __restore_processor_state.constprop.0+0x1a8/0x220
+[   13.708601]  restore_processor_state+0x9/0x10
+[   13.708607]  x86_acpi_suspend_lowlevel+0xfc/0x180
+[   13.708618]  acpi_suspend_enter+0x57/0x200
+[   13.708642]  ? _raw_spin_lock_irqsave+0xe/0x20
+[   13.708666]  suspend_enter+0x345/0x440
+[   13.708788]  suspend_devices_and_enter+0x195/0x2f0
+[   13.708794]  enter_state+0x21b/0x5f0
+[   13.708799]  pm_suspend+0x44/0xe0
+[   13.708803]  state_store+0x2b/0x60
+[   13.708807]  kobj_attr_store+0x12/0x40
+[   13.708811]  sysfs_kf_write+0x3e/0x60
+[   13.708834]  kernfs_fop_write_iter+0x166/0x1f0
+[   13.708838]  vfs_write+0x2a4/0x470
+[   13.708851]  ksys_write+0x73/0x100
+[   13.708856]  __x64_sys_write+0x19/0x30
+[   13.708859]  x64_sys_call+0x7e/0x25a0
+[   13.708869]  do_syscall_64+0x87/0x180
+[   13.708874]  ? srso_return_thunk+0x5/0x5f
+[   13.708878]  ? do_syscall_64+0x94/0x180
+[   13.708882]  ? srso_return_thunk+0x5/0x5f
+[   13.708885]  ? generic_file_llseek+0x24/0x40
+[   13.708888]  ? srso_return_thunk+0x5/0x5f
+[   13.708892]  ? kernfs_fop_llseek+0x70/0xb0
+[   13.708896]  ? srso_return_thunk+0x5/0x5f
+[   13.708900]  ? ksys_lseek+0x80/0xd0
+[   13.708902]  ? srso_return_thunk+0x5/0x5f
+[   13.708906]  ? arch_exit_to_user_mode_prepare.isra.0+0x1a/0xe0
+[   13.708916]  ? srso_return_thunk+0x5/0x5f
+[   13.708919]  ? syscall_exit_to_user_mode+0x43/0x1e0
+[   13.708924]  ? srso_return_thunk+0x5/0x5f
+[   13.708928]  ? generic_file_llseek+0x24/0x40
+[   13.708931]  ? srso_return_thunk+0x5/0x5f
+[   13.708934]  ? generic_file_llseek+0x24/0x40
+[   13.708937]  ? srso_return_thunk+0x5/0x5f
+[   13.708940]  ? kernfs_fop_llseek+0x70/0xb0
+[   13.708944]  ? srso_return_thunk+0x5/0x5f
+[   13.708947]  ? ksys_lseek+0x80/0xd0
+[   13.708950]  ? srso_return_thunk+0x5/0x5f
+[   13.708954]  ? arch_exit_to_user_mode_prepare.isra.0+0x1a/0xe0
+[   13.708957]  ? srso_return_thunk+0x5/0x5f
+[   13.708960]  ? syscall_exit_to_user_mode+0x43/0x1e0
+[   13.708964]  ? srso_return_thunk+0x5/0x5f
+[   13.708968]  ? do_syscall_64+0x94/0x180
+[   13.708972]  ? srso_return_thunk+0x5/0x5f
+[   13.708975]  ? do_syscall_64+0x94/0x180
+[   13.708978]  ? irqentry_exit_to_user_mode+0x38/0x1e0
+[   13.708982]  ? srso_return_thunk+0x5/0x5f
+[   13.708986]  ? irqentry_exit+0x43/0x50
+[   13.708989]  ? srso_return_thunk+0x5/0x5f
+[   13.708993]  entry_SYSCALL_64_after_hwframe+0x78/0x80
+[   13.708997] RIP: 0033:0x70e7dd71c844
+[   13.709150] Code: c7 00 16 00 00 00 b8 ff ff ff ff c3 66 2e 0f 1f 84 00 00 00 00 00 f3 0f 1e fa 80 3d 05 f8 0e 00 00 74 13 b8 01 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 54 c3 0f 1f 00 55 48 89 e5 48 83 ec 20 48 89
+[   13.709154] RSP: 002b:00007ffeee702fd8 EFLAGS: 00000202 ORIG_RAX: 0000000000000001
+[   13.709163] RAX: ffffffffffffffda RBX: 000070e7dd95bff8 RCX: 000070e7dd71c844
+[   13.709165] RDX: 0000000000000003 RSI: 000000002bf66e40 RDI: 0000000000000003
+[   13.709167] RBP: 00007ffeee703020 R08: 0000000000000000 R09: 0000000000000000
+[   13.709169] R10: 0000000000000003 R11: 0000000000000202 R12: 0000000000000003
+[   13.709171] R13: 0000000000000003 R14: 000000002bf66e40 R15: 0000000000ba6748
+[   13.709178]  </TASK>
+[   13.709201] ACPI: PM: Low-level resume complete
+[   13.709535] ACPI: PM: Restoring platform NVS memory
+[   41.050308] Enabling non-boot CPUs ...
+[   41.050874] smpboot: Booting Node 0 Processor 1 APIC 0x1
+[   41.058119] CPU1 is up
+[   41.059403] ACPI: PM: Waking up from system sleep state S3
+[   41.076069] virtio_blk virtio2: 2/0/0 default/read/poll queues
+[   41.078298] virtio_blk virtio1: 2/0/0 default/read/poll queues
+[   41.094613] OOM killer enabled.
+[   41.094618] Restarting tasks ... done.
+[   41.098046] random: crng reseeded on system resumption
+[   41.172169] PM: suspend exit
+[   41.236354] traps: python3[1239] trap invalid opcode ip:78bab6188de2 sp:7ffdf30b9208 error:0 in libc.so.6[78bab6028000+189000]
+[   41.396246] ata4: SATA link down (SStatus 0 SControl 300)
+[   41.397306] ata1: SATA link down (SStatus 0 SControl 300)
+[   41.398277] ata2: SATA link down (SStatus 0 SControl 300)
+[   41.399305] ata3: SATA link up 1.5 Gbps (SStatus 113 SControl 300)
+[   41.400370] ata3.00: configured for UDMA/100
+[   41.401532] ata6: SATA link down (SStatus 0 SControl 300)
+[   41.402431] ata5: SATA link down (SStatus 0 SControl 300)

@@ -108,20 +108,25 @@ const SEQ_SHIFT: u32 = HOST_SHIFT + HOST_TOKEN_BITS;
 
 const STATE_MASK: u64 = (1 << STATE_BITS) - 1;
 const ROUTE_MASK: u64 = (1 << ROUTE_BITS) - 1;
+/// Mask of the host token's bits in the token word.
 pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;
 const SEQ_MASK: u64 = (1 << SEQ_BITS) - 1;
 
 /// The decoded token word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token {
+    /// The token's state machine state.
     pub state: State,
+    /// The route its work takes.
     pub route: Route,
+    /// The opaque host token.
     pub host_token: u32,
     /// §5.2: *"stamp the ring position, THEN `fetch_or(RUNG)` — order matters."*
     pub applied_seq: u64,
 }
 
 impl Token {
+    /// Split a token word into its fields.
     #[inline]
     pub fn decode(w: u64) -> Token {
         Token {
@@ -131,6 +136,7 @@ impl Token {
             applied_seq: (w >> SEQ_SHIFT) & SEQ_MASK,
         }
     }
+    /// Pack the fields into a token word; out-of-range values are masked, never asserted.
     #[inline]
     pub fn encode(self) -> u64 {
         // ⊘ MASK, never assert. §5.1: masking is what the hardware does with undecoded bits.
@@ -170,10 +176,12 @@ pub enum Release {
 }
 
 impl TokenWord {
+    /// A zero token word.
     pub const fn new() -> TokenWord {
         TokenWord(AtomicU64::new(0))
     }
 
+    /// The decoded token.
     #[inline]
     pub fn load(&self) -> Token {
         Token::decode(self.0.load(Ordering::Acquire))

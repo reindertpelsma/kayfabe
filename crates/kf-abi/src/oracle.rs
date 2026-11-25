@@ -622,7 +622,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \
               bytes of a 28-byte reply and only 16 were kept",
     },
-    // ★ 2026-09-26 (v3-mc9 merge): `0x20800a34` is BACK — v3-blackwell serves
+    // `0x20800a34` is BACK — v3-blackwell serves
     // INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER (`V3_FAMILY_PORT_BLACKWELL.md` §4), and it
     // does so from the HOST's unprivileged GR_GET_SM_ISSUE_RATE_MODIFIER, not from the capture.
     CaptureReliance {
@@ -638,11 +638,11 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               truncated C row (64 of 72 bytes kept) is never decoded. The other two sites only \
               name the id (the served-universe count and the replay's exception set)",
     },
-    // ⊘ 2026-09-26: the two §16.56 rows (`0x20800a34`, `0x20800b03`) are REMOVED. Their only
+    // The two §16.56 rows (`0x20800a34`, `0x20800b03`) are REMOVED. Their only
     // site was `tests/tests/admitted_is_served.rs` — a membership list, never a read — and that
     // suite moved to `archive/tests/` with the pre-v3 tree, so nothing live names either id any
     // more. `truncated_row_reads.rs` refuses a reliance statement nobody depends on, rightly.
-    // ★ 2026-09-27 (v3-display): the display link (`crates/kf-rm/src/display.rs`) serves three of
+    // The display link (`crates/kf-rm/src/display.rs`) serves three of
     // the C's truncated rows — and reads none of them. Its answers are authored from the chip's
     // display row (`kf_chip::display`) or echo the guest's own [IN] request.
     CaptureReliance {
@@ -675,7 +675,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         why: "NOT A READ. SET_STATIC_EDID_DATA is [IN] (a laptop's ACPI panel EDIDs); the reply is \
               the guest's own request with NV_OK",
     },
-    // ★ 2026-09-27 (v3-display step (1)): the display link now delegates to
+    // The display link now delegates to
     // `kf_disp::model::DisplayModel`, which serves one more of the C's truncated rows — and reads
     // none of it.
     CaptureReliance {

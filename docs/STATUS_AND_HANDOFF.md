@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-11-07.** One page to resume from. The newest dated UPDATE below (2026-11-04) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
+**STATUS: LIVE, 2026-11-24.** One page to resume from. The newest dated UPDATE below (2026-11-24) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
 
 ## Resume checklist
 
@@ -11,6 +11,46 @@
 5. The state of the branches: `git log --first-parent origin/master` (one line per batch) and `git log --first-parent origin/next`.
 6. The documents map: [`README.md`](README.md) (current documents versus history).
 
+
+## UPDATE 2026-11-24 — owner rulings §BE to §BL (documents only; nothing built)
+
+Recorded in [OWNER_RULINGS.md](OWNER_RULINGS.md) §BE to §BL; the documents they contradict carry dated notes. No code changed.
+- **CI composition (§BE):** a PR runs the Rust, CUDA and repo tests, the Windows boot, the small Linux and Windows app probes and exactly one middle run; propimages run only in the release run; §AZ item 5 is waived for the batch and PR flow (the first-release rule of §AZ stands). In code on the RC1 branch since 2026-11-25 (`ci/vast-broker/src/tier.js`, `defaults.json`; pending the batch, not deployed; the Worker bundle pin was re-measured, `ci/vast-broker/DEPLOY.md`). Older text: NOT YET IN CODE: `ci/vast-broker/src/tier.js` (`additionalStages`) and `release-matrix.json` still encode the earlier tiers; the change alters the Worker bundle pin and is separate.
+- **GPL (§BF):** the GPL-exception item is closed by the 2026-11-20 ogkm re-derivation (§BD, task I7); a binary may ship once the other gates pass; a counsel check is recommended, not blocking. The security gate (§P) and the owner's decision to publish remain.
+- **Skips (§BG):** a row may end NOT_RUN only for a cause outside kayfabe (RAM or VRAM too small, a hardware feature absent, cannot surely run on bare metal), with a named reason; every other skip fails. In code since 2026-11-24 for the kfml stage only (`kfml_not_run` now allows the named skip codes, PR #579); NOT YET IN CODE elsewhere: the strict rule (`STRICT_SKIP`, `apps_discovery_not_run`, `windows_open_rows_not_run`) is still what runs.
+- **Sparse zero fill (§BH):** `unmapped-reads-zero` defaults to ON for every guest, Linux included; implemented by another change, `next` still defaults it to `off` until it lands.
+- **Windows settings (§BL):** the owner's "four" was a typo; the three rows of `windows-guest.md` are final and Q4 of the packaging design is closed.
+- **QEMU patches (§BI), cleanliness tiers (§BJ), site URLs and process (§BK):** a patched binary is not forced (a `.patch` only if really needed and optional); full tidy for user-visible, install and the Rust crates, and clean core code, architecture MDs and user guides, while CI scripts, bench scripts, debug tooling and agent docs may stay a little messy; moved ops-page URLs accepted; each security-policy PR gets its own independent security review with a verdict before master, and the coordinator may merge the next -> master batch after its own judgment when `CI` and `gpu-vast` are green.
+
+## UPDATE 2026-11-20 — Distribution and packaging (design and owner rulings; nothing built)
+
+DESIGN-ONLY: [design/V3_PACKAGING_AND_DISTRIBUTION.md](design/V3_PACKAGING_AND_DISTRIBUTION.md), rulings in [OWNER_RULINGS.md](OWNER_RULINGS.md) §BC. Written down from the owner's 2026-11-20 discussion; it changes no code, gate or published page.
+- Decided: ship a patched QEMU release plus a build kit (full binary or module) that overlays the device onto any QEMU tree; every user setting on the QEMU command line, no environment variable needed; the guest driver automatic by default with the invariant that the guest never dictates the host ABI; the default standalone trust is git only, with three kinds of public object and a short printed line per download; the Worker reproducible by others; Microsoft terms prompted, NVIDIA terms noticed; user docs separate from internal docs.
+- CODE READ today (2026-11-20, `origin/next` `7fb1c98a0`): 27 device properties, none for display resolution or framelock, no umbrella object, no all-GPUs rule; `-global` is documented but no script uses it; no module build exists; no environment-read allowlist lint exists (120 distinct `KF3_`/`KF_`/`KAYFABE_` names in product sources); the property table in `docs/howto/installing.md` misses `x-gsp-observer-seconds`; automatic guest-driver selection works inside a branch only.
+- Added the same day (owner): the manual must tell how to start the display broker (non-headless only) with no environment dependency; section 2.6 of the design records the broker's flags and environment reads, two documentation defects (`broker/README.md` still shows nvkvm-pv QEMU options and advises `-display sdl`; `docs/howto/display.md` mixes design intent and history) and a target of explicit flags, one socket per GPU and a two-command quickstart.
+- ⊘ *Correction 2026-11-23: the GPL-exception half of the next bullet was outdated the day after it was written. Task I7 (2026-11-20, `OWNER_RULINGS.md` §BD, `LICENSE` exception 2) re-derived the guest-ingress allowlist from NVIDIA's open-gpu-kernel-modules, and `scripts/ci/qemu_license_closure.py` is in CI; a counsel check before a first public binary is recommended, not blocking. §P's security gate and the owner's decision to publish are unchanged.*
+- ⊘ *Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BF): the GPL exception is closed (option (a), the I7 re-derivation); a binary may ship once the other gates pass, and a counsel check is recommended, not blocking. Only §P's security gate and the owner's decision to publish remain.*
+- Two standing blockers of a public binary are untouched: the GPL exception for the nvproxy-derived files (`LICENSE`, exception 2) and §P's security gate.
+- ⊘ *Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BL): the "fourth Windows setting" below is moot; "4 is a typo", the three rows of `windows-guest.md` are final.*
+- Open questions (design document, section 16): module feasibility, the umbrella object, the fourth Windows setting (the table has three), the rootless audit result, the attested-bundle workflow, display resolution and framelock, which limits become settable, Proxmox trees, when a binary may ship.
+- In flight elsewhere and only referenced: the two-phase Windows guest script, the kfroot audit, and the propimage configuration PRs #526 to #528.
+
+## UPDATE 2026-11-15 — engines with no derived method table are not offered to a Windows guest (flag, default off; not run on hardware)
+
+Branch `claude/hide-untabled-classes-20261115`, draft PR against `next`. Design, rule and falsifier:
+[`design/V3_VIDEO_ENGINES.md`](design/V3_VIDEO_ENGINES.md), 2026-11-15 amendment.
+- CODE READ + GPU-free tests: the Windows guest kernel's OFA ring (class `0xC9FA`) dies `ForeignClass` on its first method
+  because no OFA table exists (no public header defines one), and the guest's GPU watchdog fires about 9 s later on every
+  frame-generation boot. Owner ruling 2026-11-15 (as relayed): no OFA table entry, no capture, no forged completion.
+- CODE: `KF3_WIN_HIDE_UNTABLED_VIDEO=1` (Windows run profile, default off) leaves every video engine whose classes have no
+  table out of the served engine list (`kf_rm::hostquery::hide_untabled_video`), so FIFO rows, `engineCaps`, falcons,
+  interrupt table and PRI bases omit it together. One list, `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES`, feeds the filter and
+  the coverage audit (`crates/kf-chan/tests/video_class_coverage.rs`); they cannot drift. Not the default, because the OFA
+  engine is what gives a Linux guest `VK_NV_optical_flow` through a table-free passthrough twin (measured 2026-09-26).
+- NOT measured: how the Windows KMD and DLSS-G behave on a GPU with no OFA. Next step is the PC run in the amendment (Wukong,
+  frame generation requested, first launch + relaunch, 3 sequences): no M1 marker, no watchdog after relaunch, frame
+  generation unavailable in the game. If the guest does not boot without the engine, the flag stays off and an OFA table needs the
+  owner ruling.
 
 ## UPDATE 2026-11-04 — Windows is required on the gpu-vast master gate (lane 2)
 

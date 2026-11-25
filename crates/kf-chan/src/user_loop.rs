@@ -1,10 +1,10 @@
-//! ★ 2026-10-14 — **the USER-ring relay as an event loop** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
+//! **The USER-ring relay as an event loop** (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
 //!
 //! The pure vocabulary the relay's turn (`crates/kf-qemu/src/userpump.rs`), the worker loop
 //! ([`crate::worker`]) and the exhaustive model (`tests/user_loop_model.rs`) share. No I/O, no clock
 //! in any decision.
 //!
-//! The owner's rule: correctness and performance never depend on timing. A turn that cannot go on
+//! Correctness and performance never depend on timing. A turn that cannot go on
 //! says WHAT it waits for ([`Need`] -> [`Wait`]) and the worker learns of it from an event: the
 //! doorbell eventfd, the engine's non-stall event the batch marker raises, or (only where no event
 //! can exist) a bounded spin and the [`BACKSTOP_MS`] safety net, whose every firing that finds work
@@ -107,7 +107,7 @@ pub enum Peek {
     Backstop,
 }
 
-/// ★ 2026-10-20 (owner design): what a relay can hold that the worker must not sleep through, and what will announce it. A relay that lost a
+/// What a relay can hold that the worker must not sleep through, and what will announce it. A relay that lost a
 /// `try_lock` (a busy `pt` map, USERD / RM-graph admission, source swap) is NOT re-rung by any look, on a budget or otherwise: that would be a
 /// poll. It registers with the lock holder ([`crate::handoff::Handoff`]) BEFORE giving up and the holder rings it after releasing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -131,7 +131,7 @@ pub enum WakeSource {
     LockHolder,
 }
 
-/// One row of the sleep-safety table (owner, 2026-10-20): never block while an obligation could change in a way that needs handling and
+/// From the sleep-safety table: never block while an obligation could change in a way that needs handling and
 /// no NON-MISSABLE wake source covers that change. Wake moments are a SUPERSET of the moments processing is needed; an eventfd is never
 /// ground truth (every wake re-reads the state) but it may not MISS (it is armed before the state is evaluated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,7 +190,7 @@ pub fn may_block(held: impl IntoIterator<Item = Obligation>) -> bool {
 
 /// Whether a look by `why` has any reason to touch a relay at all.
 ///
-/// ★ The doorbell contract (owner, 2026-10-17): the last doorbell covers every `GP_PUT` write before
+/// The doorbell contract: the last doorbell covers every `GP_PUT` write before
 /// it, and nothing else announces `GP_PUT`. So a look is warranted by a recorded private-word wait
 /// (`waiting`: a marker or carried wait) and by nothing else. `demand` (contention a lost `try_lock` left) is NOT a reason for any look,
 /// the safety net included: it belongs to the lock holder (hand-off). The backstop timer finding an idle relay must do nothing and
@@ -295,10 +295,10 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
-    /// ★ 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
+    /// The USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
     /// line (`USER_RING_LIFECYCLE SUMMARY`).
     pub life: crate::user_lifecycle::LifecycleStats,
-    /// ★ 2026-10-17: lazy observe's counters (`crate::user_lazy`), printed on their own line
+    /// Lazy observe's counters (`crate::user_lazy`), printed on their own line
     /// (`USER_RING_LAZY_OBSERVE SUMMARY`).
     pub lazy: crate::user_lazy::LazyStats,
 }

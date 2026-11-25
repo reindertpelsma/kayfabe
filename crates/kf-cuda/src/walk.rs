@@ -27,7 +27,7 @@
 //!   bounded harness-only `poll(2)` between queries. No `cuCtxSynchronize` is added;
 //!   [`WalkKernel::ctx_sync_calls`] is the counter gate 8 reads to prove it.
 //!
-//! # ★★★★★ 2026-09-25 — THE WALK EMITS A DIFF, COMMITTED ON ACK
+//! THE WALK EMITS A DIFF, COMMITTED ON ACK
 //!
 //! Owner design + ruling (COMMIT-ON-ACK), `crate::diffmodel` for the full statement: the GPU
 //! holds, per VA-space object (a **slot**), the placements the host confirmed it made; every walk
@@ -48,8 +48,8 @@ use crate::abi::{
     KfReportHeader, KfSlot,
 };
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, GraphExecHandle,
-    GraphHandle, GraphNode, PinnedBuf, StreamHandle,
+    Capture, CompletionFd, CtxHandle, Cuda, CudaError, DevBuf, DevSpan, EventHandle, Func,
+    GraphExecHandle, GraphHandle, GraphNode, PinnedBuf, StreamHandle,
 };
 
 /// ★★★ **The committed PTX.** Built from `cuda/walk/kf_walk.cu` by
@@ -95,6 +95,177 @@ const KF_SCAN_BLOCK: u32 = 1024;
 const KF_WARP: u32 = 32;
 const KF_MAX_ENT: u32 = 512;
 const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
+/// The two VER3 PCF enumerants the committed kernel COMPILES
+/// (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `KF_VER3_PDE_PCF_SPARSE_BIT` in `kf_walk.cu`, tied to
+/// ogkm's `gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py`; pinned to the `.cu` here by
+/// `tests/walk_abi_matches_the_cu.rs`). A VER3 descriptor must carry exactly these
+/// ([`check_format`]): the kernel reads the defines, so a descriptor that says otherwise would be
+/// silently ignored.
+pub const KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE: u8 = 0x3;
+/// See [`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`].
+pub const KF_VER3_PDE_PCF_SPARSE_BIT: u8 = 0x1;
+
+/// The descriptor's GEOMETRY and
+/// field positions, checked on the host before CUDA is opened — the Rust port of the kernel's
+/// `kf_dev_format_ok` (#387), rule for rule, plus the VER3 PCF values the kernel compiles. ⊘ The
+/// bring-up used to check only `abi_version`: a family row with a dual level above
+/// `KF_SHWORDS / 2` entries, or a big table above `KF_SHWORDS - KF_MAX_ENT`, would have made a warp
+/// decode its neighbour's shared-memory snapshot, and a bit position of 64 or more is an undefined
+/// shift. The descriptor is host-authored (never guest data); this is defence in depth, so the
+/// kernel's own check (which aborts the walk) and this one (which refuses the bring-up, by name)
+/// each hold alone.
+///
+/// # Errors
+/// The first rule the descriptor breaks, by name.
+pub fn check_format(f: &KfFormat) -> Result<(), String> {
+    use crate::abi::{KF_PS_NONE, KF_TBL_VER3};
+    let pow2 = |x: u32| x.is_power_of_two();
+    let field = |name: &str, k: &crate::abi::KfField| {
+        if k.lo < 64 && k.bits < 64 && u32::from(k.lo) + u32::from(k.bits) <= 64 && k.shift < 64 {
+            Ok(())
+        } else {
+            Err(format!("field {name} {k:?} leaves the 64-bit entry"))
+        }
+    };
+    if f.abi_version != KF_ABI_VERSION {
+        return Err(format!(
+            "abi_version {} is not {KF_ABI_VERSION}",
+            f.abi_version
+        ));
+    }
+    if f.table_version != KF_TBL_VER2 && f.table_version != KF_TBL_VER3 {
+        return Err(format!(
+            "table_version {} is neither VER2 nor VER3",
+            f.table_version
+        ));
+    }
+    for (k, l) in f.dir.iter().enumerate() {
+        if k < usize::from(f.first_dir) {
+            if l.active != 0 {
+                return Err(format!(
+                    "dir[{k}] is active above first_dir {}",
+                    f.first_dir
+                ));
+            }
+            continue;
+        }
+        if l.active == 0 {
+            return Err(format!(
+                "dir[{k}] at or below first_dir {} is not active",
+                f.first_dir
+            ));
+        }
+        // the deepest slot is the DUAL level (two words per entry); every other level one word
+        let wpe: u32 = if k == KF_DIRS as usize - 1 { 2 } else { 1 };
+        if u32::from(l.entry_bytes) != 8 * wpe {
+            return Err(format!(
+                "dir[{k}] entry_bytes {} is not {}",
+                l.entry_bytes,
+                8 * wpe
+            ));
+        }
+        let n = u32::from(l.entries);
+        if n > KF_MAX_ENT || !pow2(n) {
+            return Err(format!(
+                "dir[{k}] entries {n} is not a power of two <= {KF_MAX_ENT}"
+            ));
+        }
+        if n * wpe > KF_SHWORDS {
+            return Err(format!(
+                "dir[{k}] {n} entries x {wpe} words overrun the {KF_SHWORDS}-word snapshot"
+            ));
+        }
+        if l.va_lo >= 64 {
+            return Err(format!("dir[{k}] va_lo {} >= 64", l.va_lo));
+        }
+        if l.leaf_ps != KF_PS_NONE && l.leaf_ps > 3 {
+            return Err(format!(
+                "dir[{k}] leaf_ps {} is no page-size code",
+                l.leaf_ps
+            ));
+        }
+    }
+    let (small, big) = (u32::from(f.small_entries), u32::from(f.big_entries));
+    if small > KF_MAX_ENT || !pow2(small) {
+        return Err(format!(
+            "small_entries {small} is not a power of two <= {KF_MAX_ENT}"
+        ));
+    }
+    if big > KF_SHWORDS - KF_MAX_ENT || !pow2(big) {
+        return Err(format!(
+            "big_entries {big} is not a power of two <= {} (the leaf snapshot)",
+            KF_SHWORDS - KF_MAX_ENT
+        ));
+    }
+    if f.small_entry_bytes != 8 || f.big_entry_bytes != 8 {
+        return Err("a leaf table entry is not 8 bytes".into());
+    }
+    if f.big_va_lo <= f.small_va_lo || f.big_va_lo - f.small_va_lo > 4 || f.big_va_lo >= 64 {
+        return Err(format!(
+            "big_va_lo {} / small_va_lo {} are not 1..=4 bits apart below 64",
+            f.big_va_lo, f.small_va_lo
+        ));
+    }
+    if big << (f.big_va_lo - f.small_va_lo) != small {
+        return Err(format!(
+            "big_entries {big} and small_entries {small} cover different spans"
+        ));
+    }
+    if f.small_ps > 3 || f.big_ps > 3 {
+        return Err("a leaf page-size code is not 0..=3".into());
+    }
+    if !pow2(f.root_align) {
+        return Err(format!(
+            "root_align {:#x} is not a power of two",
+            f.root_align
+        ));
+    }
+    if f.ap_bits == 0 || f.ap_bits > 2 || f.ap_lo > 62 {
+        return Err(format!(
+            "aperture field {}:{} is not 1..=2 bits below 64",
+            f.ap_lo, f.ap_bits
+        ));
+    }
+    for (name, b) in [
+        ("valid_bit", f.valid_bit),
+        ("bit_volatile", f.bit_volatile),
+        ("bit_privilege", f.bit_privilege),
+        ("bit_read_only", f.bit_read_only),
+        ("bit_atomic_disable", f.bit_atomic_disable),
+    ] {
+        if b >= 64 {
+            return Err(format!("{name} {b} >= 64"));
+        }
+    }
+    field("addr_local", &f.addr_local)?;
+    field("addr_sys", &f.addr_sys)?;
+    field("big_addr_local", &f.big_addr_local)?;
+    field("big_addr_sys", &f.big_addr_sys)?;
+    field("pcf", &f.pcf)?;
+    field("kind", &f.kind)?;
+    if f.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {
+        return Err(format!(
+            "ps_log2 {:?} names a size outside 2^12..2^40",
+            f.ps_log2
+        ));
+    }
+    let pcf = if f.table_version == KF_TBL_VER3 {
+        (
+            KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE,
+            KF_VER3_PDE_PCF_SPARSE_BIT,
+        )
+    } else {
+        (0, 0)
+    };
+    if (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit) != pcf {
+        return Err(format!(
+            "PCF enumerants (no-valid-4K {:#x}, PDE sparse bit {:#x}) are not the {:#x?} the \
+             committed kernel compiles for table_version {}",
+            f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit, pcf, f.table_version
+        ));
+    }
+    Ok(())
+}
 /// ★ P4b: `used` (the staging cursor) holds one slot PER LEVEL plus one for the leaf pass, all
 /// zeroed by ONE memset at the start of the walk — instead of a reset node after every level.
 /// Slot `KF_DIRS` is the leaf pass's; slots `0..KF_DIRS` the expand levels'.
@@ -166,6 +337,13 @@ impl Default for WalkCfg {
         // report **truncate** — which the shadow refuses by name, so the symptom would be a
         // permanently VACUOUS census with the cause one indirection away.
         //
+        // ★ 2026-11-15 (M4), above the text it corrects: a diff LARGER than `run_capacity` is no longer
+        // refused. `kf_diff_emit` reports a window of it (`KFWR_HF_CUT`, entries `KFWR_V_CUT`; the spec is
+        // `diffmodel::cut_report`), the host applies and acknowledges the window, and the rest comes on the
+        // next walk; the split completes on the walk whose diff is empty. Only one overlap-connected clump
+        // of runs larger than the report is still refused (`walk report TRUNCATED`). ⊘ The text below
+        // (the `FRAME_MAX` wire) appears to predate the pinned report, which is read in place; at 32 B a
+        // run, `run_capacity` 2^18 is 8 MiB of pinned memory.
         // ⚠ **`run_capacity` is bounded from ABOVE by the wire, and that bound is real.** The
         // report crosses as one `Reply::Payload` and the isolate protocol's `FRAME_MAX` is
         // 1 MiB; a `KfMapRun` is 32 bytes. 16 384 runs is 512 KiB — half the frame, with room
@@ -298,6 +476,39 @@ pub enum ReportError {
         /// The header flags seen.
         flags: u16,
     },
+    /// The header's format version is not [`crate::abi::KFWR_VERSION`].
+    BadVersion(u16),
+    /// The header's page-size table names a size outside 4 KiB..1 TiB, so
+    /// no alignment below could be checked against it.
+    BadPageSizes([u8; 4]),
+    /// More refusal samples claimed than the header carries.
+    TooManySamples(u32),
+    /// A run whose op is not MAP, UNMAP or REMAP.
+    BadOp {
+        /// Which run.
+        index: usize,
+        /// The op it carried.
+        op: u16,
+    },
+    /// A run whose page-size code is not one of the format's four.
+    BadPageSize {
+        /// Which run.
+        index: usize,
+        /// The code it carried.
+        code: u8,
+    },
+    /// A run whose VA, length, or (for a mapping) GPGA is not a multiple
+    /// of its own page size — a mapping no MMU could install as described.
+    Misaligned {
+        /// Which run.
+        index: usize,
+        /// `"va"`, `"len"` or `"gpga"`.
+        field: &'static str,
+        /// The value.
+        value: u64,
+        /// The page size it had to be a multiple of.
+        page: u64,
+    },
 }
 
 impl core::fmt::Display for ReportError {
@@ -342,6 +553,32 @@ impl core::fmt::Display for ReportError {
                 "not a diff report (flags={flags:#x}): the kernel does not speak the \
                  commit-on-ack protocol this host applies"
             ),
+            ReportError::BadVersion(v) => {
+                write!(f, "report version {v} is not {}", crate::abi::KFWR_VERSION)
+            }
+            ReportError::BadPageSizes(t) => {
+                write!(f, "page-size table {t:?} names a size outside 2^12..2^40")
+            }
+            ReportError::TooManySamples(n) => write!(
+                f,
+                "sample_count {n} > the {} samples a report carries",
+                crate::abi::KF_REFUSAL_SAMPLES
+            ),
+            ReportError::BadOp { index, op } => {
+                write!(f, "run[{index}] has op {op}, not MAP/UNMAP/REMAP")
+            }
+            ReportError::BadPageSize { index, code } => {
+                write!(f, "run[{index}] has page-size code {code}, not 0..=3")
+            }
+            ReportError::Misaligned {
+                index,
+                field,
+                value,
+                page,
+            } => write!(
+                f,
+                "run[{index}] {field} {value:#x} is not a multiple of its page size {page:#x}"
+            ),
         }
     }
 }
@@ -361,6 +598,19 @@ impl Report {
         let h = &self.header;
         if h.magic != KFWR_MAGIC {
             return Err(ReportError::BadMagic(h.magic));
+        }
+        // The properties the `.cu`'s own
+        // `kf_validate_report` checks and this one did not — format version, sample count, op,
+        // page-size code and alignment. The page sizes come from the REPORT's own table (the
+        // header carries `ps_log2` so the host needs no format knowledge), bounded first.
+        if h.version != crate::abi::KFWR_VERSION {
+            return Err(ReportError::BadVersion(h.version));
+        }
+        if h.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {
+            return Err(ReportError::BadPageSizes(h.ps_log2));
+        }
+        if h.sample_count as usize > crate::abi::KF_REFUSAL_SAMPLES {
+            return Err(ReportError::TooManySamples(h.sample_count));
         }
         if h.pdb_count > h.pdb_capacity {
             return Err(ReportError::PdbOverflow {
@@ -397,6 +647,28 @@ impl Report {
             }
             if r.len == 0 {
                 return Err(ReportError::ZeroLenRun(i));
+            }
+            if !matches!(
+                r.op,
+                crate::abi::KFWR_OP_MAP | KFWR_OP_UNMAP | crate::abi::KFWR_OP_REMAP
+            ) {
+                return Err(ReportError::BadOp { index: i, op: r.op });
+            }
+            let code = r.page_size();
+            let Some(&log2) = h.ps_log2.get(usize::from(code)) else {
+                return Err(ReportError::BadPageSize { index: i, code });
+            };
+            let page = 1u64 << log2;
+            let gpga = (r.op != KFWR_OP_UNMAP).then_some(r.gpga);
+            for (field, value) in [("va", Some(r.va)), ("len", Some(r.len)), ("gpga", gpga)] {
+                if let Some(value) = value.filter(|v| v % page != 0) {
+                    return Err(ReportError::Misaligned {
+                        index: i,
+                        field,
+                        value,
+                        page,
+                    });
+                }
             }
             // ★★★★★ §39(c) CONTAINMENT — the one property here about ESCALATION rather than
             // well-formedness. An UNMAP names a VA being retired and carries no gpga, so it is
@@ -516,19 +788,15 @@ impl PinLayout {
 struct InFlight {
     gpga_len: u64,
     submitted: std::time::Instant,
-    /// ★ w829: the window walked, so a fixable capacity refusal can re-submit the same walk.
-    gpga: CUdeviceptr,
+    /// ★ w829: the window walked (its kernel address), so a fixable capacity refusal can
+    /// re-submit the same walk. ⊘ A kernel-parameter value only (`DevSpan::kernel_addr`): no copy
+    /// or set takes it.
+    gpga: u64,
 }
 
-/// A device allocation, freed on drop.
-///
-/// ⊘ It holds a **clone of nothing** — the freeing goes through the owner's [`Cuda`], so this
-/// type deliberately cannot free itself. `WalkKernel` frees them, or neutralises them and
-/// lets `cuCtxDestroy` reclaim the lot; see its `Drop`.
-#[derive(Debug, Clone, Copy)]
-struct DevBuf {
-    ptr: CUdeviceptr,
-}
+// The walker's own `DevBuf { ptr }` (Copy, address only) is gone; its buffers are
+// the driver perimeter's `DevBuf` (address + length, not Copy). They are never freed one by one:
+// `cuCtxDestroy` reclaims the lot (see `Drop for WalkKernel`).
 
 /// One kernel launch of the captured walk graph, with the parameters it currently carries in
 /// the instantiated graph — kept so a per-walk parameter change is ONE setter call per node,
@@ -655,7 +923,7 @@ pub struct WalkKernel {
     events: Vec<String>,
     /// ★ §13: the imported store, `(device pointer, length)` — never handed out;
     /// [`WalkKernel::write_store`] / [`WalkKernel::read_store`] bound every access by it.
-    store: Option<(CUdeviceptr, u64)>,
+    store: Option<DevBuf>,
     hdr: DevBuf,
     rpdb: DevBuf,
     rrun: DevBuf,
@@ -683,22 +951,14 @@ pub enum WalkDevice<'a> {
 ///
 /// ⊘ A copy and not a cast: `launch` needs `&mut [u8]`, and handing it a view over a live
 /// `KfArgs` would alias. The copy is 216 bytes once per launch.
-fn param_bytes<T: Copy>(v: &T) -> Vec<u8> {
-    let n = core::mem::size_of::<T>();
-    let mut out = vec![0u8; n];
-    // ⊘ A byte-wise copy through a `[u8]` view of ONE value, written with safe code so this
-    // file stays free of `unsafe`. `KfArgs` is a `#[repr(C)]` aggregate of integers, so its
-    // bytes are all initialised and none of them is a pointer Rust tracks.
-    let src: &[u8] = bytes_of(v);
-    out.copy_from_slice(src);
-    out
+fn param_bytes<T: crate::driver_unsafe::AbiField>(v: &T) -> Vec<u8> {
+    // Field by field (`abi_bytes`), padding zero; no view over the value is formed.
+    crate::driver_unsafe::abi_bytes(v)
 }
 
-/// A `&[u8]` over one `Copy` `#[repr(C)]` value.
-fn bytes_of<T: Copy>(v: &T) -> &[u8] {
-    // ⊘ `core::slice::from_raw_parts` is the usual spelling and it is `unsafe`. This crate
-    // keeps `unsafe` in `driver_unsafe.rs`, so the conversion goes through the audited file.
-    crate::driver_unsafe::view_bytes(v)
+/// The bytes of one ABI value (see [`param_bytes`]).
+fn bytes_of<T: crate::driver_unsafe::AbiField>(v: &T) -> Vec<u8> {
+    crate::driver_unsafe::abi_bytes(v)
 }
 
 impl WalkKernel {
@@ -725,6 +985,17 @@ impl WalkKernel {
         cfg: WalkCfg,
         fmt: KfFormat,
         on: WalkDevice<'_>,
+    ) -> Result<WalkKernel, CudaError> {
+        Self::bring_up_with(cfg, fmt, on, Cuda::open)
+    }
+
+    /// [`Self::bring_up_on`] over a binding `open` returns (the tests' fake driver). ⊘ `open`
+    /// runs AFTER the ABI gates, as `Cuda::open` always did.
+    pub(crate) fn bring_up_with(
+        cfg: WalkCfg,
+        fmt: KfFormat,
+        on: WalkDevice<'_>,
+        open: impl FnOnce() -> Result<Cuda, CudaError>,
     ) -> Result<WalkKernel, CudaError> {
         let t0 = std::time::Instant::now();
         // ★★★★★ THE ABI GATE, and it is FIRST — before `dlopen`, so a skew can never be
@@ -757,12 +1028,18 @@ impl WalkKernel {
         // descriptor is pinned byte for byte against the `.cu` (`kf_format_ver3`), every field
         // re-checked against ogkm-580's `hopper/gh100/dev_mmu.h`, and `kf-gate7` walks REAL VER3
         // tables on any GPU — the walker decodes guest bytes; the host's own MMU never sees them.
-        // ⚠ KNOWN GAP (w826): the .cu's big-PTE veto (`kf_big_pte_unmapped`, the w826 ct4 fix) is
-        // VER2-only. VER3 spells "no valid 4 KiB page under this big PTE" as `PCF = 0x3`
-        // (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `gh100/dev_mmu.h:140`), which the kernel does
-        // not yet test — a Hopper guest mixing big and small pages in one 2 MiB slot is the case.
+        // The "KNOWN GAP (w826)" note that stood here (the big-PTE veto was VER2-only)
+        // is closed by #386 (`kf_big_pte_unmapped` / `kf_pde_sparse` have VER3 arms); the two PCF
+        // values those arms use are carried in the descriptor and checked just below.
+        // The whole descriptor, before CUDA is opened.
+        if let Err(name) = check_format(&fmt) {
+            return Err(refused(
+                "the walk kernel's setup data (KfFormat)",
+                format!("{name}; REFUSED at launch, by name"),
+            ));
+        }
 
-        let cu = Cuda::open()?;
+        let cu = open()?;
         cu.init()?;
         let count = cu.device_count()?;
         if count < 1 {
@@ -779,7 +1056,16 @@ impl WalkKernel {
             WalkDevice::PciBusId(bdf) => cu.device_by_pci_bus_id(bdf)?,
         };
         let device_name = cu.device_name(dev_ord);
-        let ctx = cu.ctx_create(dev_ord)?;
+        // ★ F-7 / S1-05 (2026-11-14): logged once, as the display context does
+        eprintln!(
+            "kf-cuda: walk device {device_name} pageable_memory_access={} (yes: the walker's \
+             store and pool bounds are host-memory-safety obligations, OWNER_RULINGS S1-05)",
+            cu.pageable_memory_access(dev_ord)
+                .map_or("unknown", |p| if p { "yes" } else { "no" })
+        );
+        // Guarded — a `?` below, before the walker owns
+        // the context, destroys it and everything made in it instead of leaking them.
+        let ctx = cu.ctx_create_guarded(dev_ord)?;
 
         // ★★★ THE PTX JIT RUNS HERE. Timed on its own because it is the single most expensive
         // lazy path CUDA has, and §w724d's argument is that it must happen while paths exist.
@@ -794,15 +1080,21 @@ impl WalkKernel {
         };
         let jit_us = u64::try_from(tj.elapsed().as_micros()).unwrap_or(u64::MAX);
 
-        let f_begin = cu.module_function(module, SYM_BEGIN)?;
-        let f_walk = cu.module_function(module, SYM_WALK)?;
-        let f_diff_slots = cu.module_function(module, SYM_DIFF_SLOTS)?;
-        let f_diff_emit = cu.module_function(module, SYM_DIFF_EMIT)?;
-        let f_commit = cu.module_function(module, SYM_COMMIT)?;
-        let mut f_par = [f_begin; 9];
-        for (i, sym) in SYM_PAR.iter().enumerate() {
-            f_par[i] = cu.module_function(module, sym)?;
+        let f_begin = cu.module_function(&module, SYM_BEGIN)?;
+        let f_walk = cu.module_function(&module, SYM_WALK)?;
+        let f_diff_slots = cu.module_function(&module, SYM_DIFF_SLOTS)?;
+        let f_diff_emit = cu.module_function(&module, SYM_DIFF_EMIT)?;
+        let f_commit = cu.module_function(&module, SYM_COMMIT)?;
+        let mut par_fns = Vec::with_capacity(SYM_PAR.len());
+        for sym in SYM_PAR {
+            par_fns.push(cu.module_function(&module, sym)?);
         }
+        let f_par: [Func; 9] = par_fns.try_into().map_err(|_| {
+            refused(
+                "WalkKernel::bring_up",
+                "the parallel walk needs nine entries".to_string(),
+            )
+        })?;
 
         // ★ The diff's scratch reuses the walk's run stage: 4 × runs_per_pdb runs per entry, and
         // the class partition packs counts in 16 bits.
@@ -831,9 +1123,7 @@ impl WalkKernel {
         })?;
         let tbl_runs = walk_pool;
         let a = |bytes: usize, what: &'static str| -> Result<DevBuf, CudaError> {
-            Ok(DevBuf {
-                ptr: cu.mem_alloc_zeroed(bytes, what)?,
-            })
+            cu.mem_alloc_zeroed(bytes, what)
         };
         let dev = a(core::mem::size_of::<KfDev>(), "cuMemAlloc(KfDev)")?;
         let walk = a(
@@ -884,7 +1174,7 @@ impl WalkKernel {
             max_slots: cfg.max_slots,
             ..h
         };
-        cu.memcpy_h2d(dev.ptr, bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
+        cu.memcpy_h2d(dev.whole(), &bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
 
         // ★ P4: the asynchronous half, brought up here with everything else lazy (§w724d).
         let stream = cu.stream_create()?;
@@ -894,38 +1184,32 @@ impl WalkKernel {
         let mut pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report + stages)")?;
         // Zeroed: the commit node's first read of "the previous report" must find no magic.
         pin.write(0, &vec![0u8; pin_at.total]);
-        let pdbs = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
-        };
-        let slots = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.slots)?,
-        };
-        let ack = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.ack)?,
-        };
-        let ack_code = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)?,
-        };
-        let lay = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.lay)?,
-        };
+        // Each device view is exactly its region of the pinned buffer (D-02).
+        let view = |off: usize, len: usize| cu.pinned_device_view(&pin, off, len);
+        let pdbs = view(pin_at.pdbs, KF_MAX_PDB * 8)?;
+        let slots = view(pin_at.slots, KF_MAX_PDB * 4)?;
+        let ack = view(pin_at.ack, core::mem::size_of::<KfAck>())?;
+        let ack_code = view(pin_at.ack_code, cfg.run_capacity as usize)?;
+        let lay = view(pin_at.lay, core::mem::size_of::<crate::abi::KfLayout>())?;
         // ★ 2026-09-25: the REPORT lives in the pinned buffer too — the diff kernels write it
         // straight into host memory, so a walk moves only the bytes its diff has (a one-run diff
         // is a few hundred bytes) and needs no read-back node. `[measured gate9, 50a6c9a9]` the
         // capacity-sized copy it replaces was 512 KiB of PCIe on every walk. The commit node reads
         // the previous report back from here (its entries' runs only).
         let (hdr, rpdb, rrun) = (
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.hdr)?,
-            },
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.rpdb)?,
-            },
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.rrun)?,
-            },
+            view(pin_at.hdr, core::mem::size_of::<KfReportHeader>())?,
+            view(
+                pin_at.rpdb,
+                cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>(),
+            )?,
+            view(
+                pin_at.rrun,
+                cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>(),
+            )?,
         );
         let done_fd = CompletionFd::new()?;
+        // the walker owns the context from here (its `Drop` destroys it)
+        let ctx = ctx.disarm();
 
         let mut k = WalkKernel {
             cu,
@@ -990,9 +1274,9 @@ impl WalkKernel {
     /// ⊘ The wait is `poll(2)` on the fd, at bring-up — not a context synchronize, and not on
     /// the walk path.
     fn warm_up(&self) -> Result<(), CudaError> {
-        let s = self.stream;
+        let s = &self.stream;
         if let Some(g) = &self.graph {
-            self.cu.graph_upload(g.exec, s)?;
+            self.cu.graph_upload(&g.exec, s)?;
         }
         self.cu.launch_host_signal(s, &self.done_fd)?;
         if !self.done_fd.wait_readable(10_000) || self.done_fd.drain() == 0 {
@@ -1014,13 +1298,12 @@ impl WalkKernel {
         if !self.cu.has_graph_api() {
             return Ok(None);
         }
-        let s = self.stream;
         let args = self.args_for(0, 0, 0);
-        self.cu.stream_begin_capture(s)?;
+        let cap = self.cu.stream_begin_capture(&self.stream)?;
         let mut rec = Some(Vec::new());
-        let queued = self.enqueue_walk(&args, 0, &mut rec);
+        let queued = self.enqueue_walk(&args, 0, &mut rec, Some(&cap));
         // ⊘ End the capture on EVERY path: a stream left capturing records every later walk.
-        let ended = self.cu.stream_end_capture(s);
+        let ended = self.cu.stream_end_capture(cap);
         let graph = match (queued, ended) {
             (Ok(()), Ok(g)) => g,
             (Err(e), Ok(g)) => {
@@ -1029,7 +1312,7 @@ impl WalkKernel {
             }
             (Err(e), Err(_)) | (Ok(()), Err(e)) => return Err(e),
         };
-        let exec = match self.cu.graph_instantiate(graph) {
+        let exec = match self.cu.graph_instantiate(&graph) {
             Ok(e) => e,
             Err(e) => {
                 self.cu.graph_destroy(graph);
@@ -1046,7 +1329,7 @@ impl WalkKernel {
         }))
     }
 
-    fn args_for(&self, gpga: CUdeviceptr, gpga_len: u64, npdb: u32) -> KfArgs {
+    fn args_for(&self, gpga: u64, gpga_len: u64, npdb: u32) -> KfArgs {
         // ★★★★★ **w761a — ZEROED FIRST, THEN ASSIGNED. The padding is the point.**
         //
         // ⊘⊘⊘ `KfArgs` carries **8 uninitialised padding bytes** (`npdb`→`scopes` and
@@ -1073,23 +1356,26 @@ impl WalkKernel {
             span: gpga_len,
         };
         a.fmt = self.fmt;
-        a.dev = self.dev.ptr;
-        a.walk = self.walk.ptr;
-        a.com = self.com.ptr;
-        a.slot = self.slot.ptr;
-        a.pdbs = self.pdbs.ptr;
-        a.slots = self.slots.ptr;
+        // ★ kernel-parameter values of whole allocations (`DevSpan::kernel_addr`; the kernels bound
+        // their accesses by the capacities in `KfDev`/`KfLayout`, review 2 D-12)
+        let at = |b: &DevBuf| b.whole().kernel_addr();
+        a.dev = at(&self.dev);
+        a.walk = at(&self.walk);
+        a.com = at(&self.com);
+        a.slot = at(&self.slot);
+        a.pdbs = at(&self.pdbs);
+        a.slots = at(&self.slots);
         a.npdb = npdb;
         a.key_perm = self.cfg.key_perm;
-        a.ack = self.ack.ptr;
-        a.ack_code = self.ack_code.ptr;
+        a.ack = at(&self.ack);
+        a.ack_code = at(&self.ack_code);
         // ⊘ The walk's run stage: done with before the diff runs, free before the commit runs.
-        a.scratch = self.par.runstage.ptr;
-        a.iscratch = self.iscratch.ptr;
-        a.hdr = self.hdr.ptr;
-        a.rpdb = self.rpdb.ptr;
-        a.rrun = self.rrun.ptr;
-        a.lay = self.lay.ptr;
+        a.scratch = at(&self.par.runstage);
+        a.iscratch = at(&self.iscratch);
+        a.hdr = at(&self.hdr);
+        a.rpdb = at(&self.rpdb);
+        a.rrun = at(&self.rrun);
+        a.lay = at(&self.lay);
         a
     }
 
@@ -1106,7 +1392,11 @@ impl WalkKernel {
     /// flight, when no store was imported, when more than [`KF_MAX_PDB`] entries are asked for,
     /// or when a slot is out of range or repeated (two entries may never commit into one slot).
     pub fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), CudaError> {
-        let Some((gpga, gpga_len)) = self.store else {
+        let Some((gpga, gpga_len)) = self
+            .store
+            .as_ref()
+            .map(|b| (b.whole().kernel_addr(), b.len() as u64))
+        else {
             return Err(refused(
                 "WalkKernel::submit",
                 "no store imported (import_store first)".to_string(),
@@ -1126,12 +1416,13 @@ impl WalkKernel {
         entries: &[WalkEntry],
     ) -> Result<(), CudaError> {
         self.retries_left = CAPACITY_RETRIES;
-        self.submit_over(img.ptr, img.len, entries)
+        let (gpga, len) = (img.buf.whole().kernel_addr(), img.buf.len() as u64);
+        self.submit_over(gpga, len, entries)
     }
 
     fn submit_over(
         &mut self,
-        gpga: CUdeviceptr,
+        gpga: u64,
         gpga_len: u64,
         entries: &[WalkEntry],
     ) -> Result<(), CudaError> {
@@ -1176,7 +1467,7 @@ impl WalkKernel {
             self.events.push(format!("capacity ceiling: {name}"));
             refused("WalkKernel::submit (capacity)", name)
         })?;
-        self.pin.write(self.pin_at.lay, bytes_of(&lay));
+        self.pin.write(self.pin_at.lay, &bytes_of(&lay));
         let npdb = u32::try_from(entries.len()).unwrap_or(0);
         let mut pdb_bytes = Vec::with_capacity(entries.len() * 8);
         let mut slot_bytes = Vec::with_capacity(entries.len() * 4);
@@ -1184,7 +1475,6 @@ impl WalkKernel {
             pdb_bytes.extend_from_slice(&e.pdb.to_le_bytes());
             slot_bytes.extend_from_slice(&e.slot.to_le_bytes());
         }
-        let s = self.stream;
         let at = self.pin_at;
         // The stages the graph reads in place; the previous walk has been collected (checked
         // above), so nothing is still reading them.
@@ -1204,22 +1494,22 @@ impl WalkKernel {
             ack.reset[i] = r;
         }
         ack.nreset = u32::try_from(nres).unwrap_or(0);
-        self.pin.write(at.ack, bytes_of(&ack));
+        self.pin.write(at.ack, &bytes_of(&ack));
         let args = self.args_for(gpga, gpga_len, npdb);
         if let Some(mut g) = self.graph.take() {
             // ★ P4b: one graph launch for the walk, followed by its completion event; setters
             // run only when the store or entry count changed since the last walk.
             let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
-                .and_then(|()| self.cu.graph_launch(g.exec, s));
+                .and_then(|()| self.cu.graph_launch(&g.exec, &self.stream));
             self.graph = Some(g);
             r?;
         } else {
-            self.enqueue_walk(&args, npdb, &mut None)?;
+            self.enqueue_walk(&args, npdb, &mut None, None)?;
         }
         // A fresh host-side record captures THIS launch, replacing the previous event state.
         // Keeping this outside capture avoids relying on when a replayed record node resets
         // a reused event. No host callback and no wait; the report precedes it on the stream.
-        if let Err(e) = self.cu.event_record(self.ev_done, s) {
+        if let Err(e) = self.cu.event_record(&self.ev_done, &self.stream) {
             // Work already reached the GPU. Never reuse its pinned storage without proof;
             // only context teardown may reclaim this walker after a failed tail record.
             self.completion_failed = true;
@@ -1294,7 +1584,7 @@ impl WalkKernel {
         if self.inflight.is_none() {
             return Ok(true);
         }
-        self.cu.event_query(self.ev_done)
+        self.cu.event_query(&self.ev_done)
     }
 
     /// Whether a walk is queued and not yet collected.
@@ -1309,7 +1599,7 @@ impl WalkKernel {
         crate::completion::poll_ms(self.in_flight())
     }
 
-    /// ★ 2026-11-03: the VA worker's event-loop sleep, in **microseconds**, before it next
+    /// The VA worker's event-loop sleep, in **microseconds**, before it next
     /// queries this walk's GPU event: on the walk's own time scale while one is pending
     /// (50 us..1 ms, `completion::poll_us`), the 50 ms idle backstop otherwise. Replaces the
     /// fixed 1 ms pending wait that put ~0.9 ms on every walk (Ada lane, 2026-11-03).
@@ -1360,7 +1650,7 @@ impl WalkKernel {
             return Ok(None);
         };
         let ready = crate::completion::ready(self.done_fd.drain() != 0, || {
-            self.cu.event_query(self.ev_done)
+            self.cu.event_query(&self.ev_done)
         });
         match ready {
             Ok(false) => return Ok(None),
@@ -1376,7 +1666,7 @@ impl WalkKernel {
             u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
         let gpu_us = self
             .cu
-            .event_elapsed_us(self.ev_start, self.ev_copied)
+            .event_elapsed_us(&self.ev_start, &self.ev_copied)
             .unwrap_or(0);
         let at = self.pin_at;
         // ★ One decoder per report struct (`abi.rs`, `offset_of!`), shared with every other reader.
@@ -1418,10 +1708,11 @@ impl WalkKernel {
     ///   the slot GROWS — a new region, the committed placements copied device-to-device on the
     ///   walk stream (ordered before the re-walk's commit and diff), the old region freed.
     ///
-    /// ⊘ Not fixable, and returned to the caller to refuse by name: a walk abort (budget,
-    /// frontier), a report-level truncation (more runs than the report carries, more spaces than
-    /// its `PdbEntry` array), a need past the ceiling, or a need that keeps moving
-    /// ([`CAPACITY_RETRIES`] re-walks).
+    /// ⊘ Not fixable, and returned to the caller to refuse by name: a walk abort (a budget or
+    /// frontier refusal no entry owns), a report-level truncation (more runs than the report
+    /// carries, more spaces than its `PdbEntry` array), a need past the ceiling, or a need that
+    /// keeps moving ([`CAPACITY_RETRIES`] re-walks). ★ 2026-11-14: a space CUT at its own budget
+    /// or frontier share fails only itself — the others' fixable refusals are still re-walked.
     ///
     /// ⊘ Runs on the thread that collects (the VA manager's), never a vCPU; the device copy is
     /// queued, not waited for.
@@ -1431,13 +1722,25 @@ impl WalkKernel {
             KFWR_V_PARTIAL,
         };
         let h = &r.header;
-        let aborted = h.refuse_mask & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP | KFWR_R_PDB_CAP) != 0;
+        // A space at its
+        // own limit is CUT — KFWR_R_BUDGET / KFWR_R_FRONTIER_CAP in ITS entry bits (and in the
+        // header's mask, which ORs every refusal), its diff withheld — and the walk goes on for the
+        // others. Only a refusal NO entry owns is a walk abort (a shared ceiling, the report's
+        // PdbEntry capacity). ⊘ Was "any of these bits in the header's mask aborts", so one cut
+        // space stopped every other space's fixable capacity refusal from being re-walked.
+        let entry_bits = r.pdbs.iter().fold(0u32, |a, p| a | p.refused_bits());
+        let walk_level = KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP | KFWR_R_PDB_CAP;
+        let aborted = h.refuse_mask & walk_level & !entry_bits != 0;
         let mut fix = false;
         let mut walk_cut = false;
         let mut moves = Vec::new();
         for p in &r.pdbs {
             let s = p.slot();
             let need = p.need();
+            // a CUT space stays cut on a re-walk (its limit is fixed): nothing of it to fix
+            if p.refused_bits() & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP) != 0 {
+                continue;
+            }
             if p.refused_bits() & KFWR_R_RUN_CAP != 0 {
                 walk_cut = true;
                 match self.cap.walk_needed(s, need) {
@@ -1461,6 +1764,14 @@ impl WalkKernel {
                     }
                     Err(e) => {
                         self.events.push(format!("capacity ceiling: {e}"));
+                        // The pool's geometry at the ceiling,
+                        // bounded to the first 16 ceilings of the walker.
+                        if self.cap.stats.ceilings <= 16 {
+                            self.events.push(format!(
+                                "capacity ceiling geometry: {}",
+                                self.cap.slot_geometry(s, need)
+                            ));
+                        }
                         return Ok(false);
                     }
                 }
@@ -1483,13 +1794,17 @@ impl WalkKernel {
         let run = core::mem::size_of::<KfMapRun>() as u64;
         for m in &moves {
             // Copy the whole old region: the counts (in `KfSlot`) say how much of it is live.
-            self.cu.memcpy_d2d_async(
-                self.stream,
-                self.com.ptr + u64::from(m.to.off) * run,
-                self.com.ptr + u64::from(m.from.off) * run,
-                (u64::from(m.from.cap) * run) as usize,
-                "cuMemcpyDtoDAsync(slot growth)",
-            )?;
+            // Growth in place (the free run after the slot) has no copy to issue:
+            // `Move::copy` is `None` and the placements stay where they are.
+            if let Some((dst, src, runs)) = m.copy() {
+                let n = (u64::from(runs) * run) as usize;
+                self.cu.memcpy_d2d_async(
+                    &self.stream,
+                    self.com.span(u64::from(dst) * run, n),
+                    self.com.span(u64::from(src) * run, n),
+                    "cuMemcpyDtoDAsync(slot growth)",
+                )?;
+            }
             self.events.push(format!(
                 "capacity: slot {} grown {} → {} runs",
                 m.slot, m.from.cap, m.to.cap
@@ -1617,9 +1932,9 @@ impl WalkKernel {
                 k.grid = npdb.div_ceil(128).max(1);
             }
             cu.graph_exec_kernel_set(
-                g.exec,
-                k.node,
-                k.f,
+                &g.exec,
+                &k.node,
+                &k.f,
                 k.grid,
                 k.block,
                 k.shm,
@@ -1642,17 +1957,15 @@ impl WalkKernel {
         args: &KfArgs,
         npdb: u32,
         rec: &mut Option<Vec<GraphKernel>>,
+        cap: Option<&Capture<'_>>,
     ) -> Result<(), CudaError> {
-        let s = self.stream;
-        let at = self.pin_at;
-        self.record(self.ev_start, rec.is_some())?;
+        self.record(&self.ev_start, cap.is_some())?;
         // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
         // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
         self.cu.memset_d8_async(
-            s,
-            self.par.used.ptr,
+            &self.stream,
+            self.par.used.span(0, KF_USED_SLOTS * 4),
             0,
-            KF_USED_SLOTS * 4,
             "cuMemsetD8Async(used)",
         )?;
         // ★ COMMIT-ON-ACK first: the previous report and its verdict, before anything is walked
@@ -1660,7 +1973,8 @@ impl WalkKernel {
         let grid = u32::try_from(KF_MAX_PDB).unwrap_or(64);
         self.kl(
             rec,
-            self.f_commit,
+            cap,
+            &self.f_commit,
             grid,
             KF_DIFF_BLOCK,
             0,
@@ -1669,7 +1983,8 @@ impl WalkKernel {
         )?;
         self.kl(
             rec,
-            self.f_begin,
+            cap,
+            &self.f_begin,
             1,
             1,
             0,
@@ -1679,12 +1994,13 @@ impl WalkKernel {
         // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
         // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
-        let _ = self.f_walk;
-        self.run_parallel(args, npdb, rec)?;
+        let _ = &self.f_walk;
+        self.run_parallel(args, npdb, rec, cap)?;
         // ★ The diff against the committed placements (one block per entry), then the dense report.
         self.kl(
             rec,
-            self.f_diff_slots,
+            cap,
+            &self.f_diff_slots,
             grid,
             KF_DIFF_BLOCK,
             0,
@@ -1693,7 +2009,8 @@ impl WalkKernel {
         )?;
         self.kl(
             rec,
-            self.f_diff_emit,
+            cap,
+            &self.f_diff_emit,
             grid,
             256,
             0,
@@ -1701,20 +2018,18 @@ impl WalkKernel {
             "cuLaunchKernel(kf_diff_emit)",
         )?;
         // ⊘ No read-back: the report was written into pinned host memory by the kernels.
-        let _ = (s, at);
-        let capturing = rec.is_some();
-        self.record(self.ev_copied, capturing)?;
+        self.record(&self.ev_copied, cap.is_some())?;
         // The completion event is recorded explicitly after launch, outside this graph.
         // A replay needs no host callback; real CUDA completion remains the sole proof.
         Ok(())
     }
 
     /// `cuEventRecord`, or — under capture — the external record that becomes a graph node.
-    fn record(&self, e: EventHandle, capturing: bool) -> Result<(), CudaError> {
+    fn record(&self, e: &EventHandle, capturing: bool) -> Result<(), CudaError> {
         if capturing {
-            self.cu.event_record_external(e, self.stream)
+            self.cu.event_record_external(e, &self.stream)
         } else {
-            self.cu.event_record(e, self.stream)
+            self.cu.event_record(e, &self.stream)
         }
     }
 
@@ -1723,7 +2038,8 @@ impl WalkKernel {
     fn kl(
         &self,
         rec: &mut Option<Vec<GraphKernel>>,
-        f: Func,
+        cap: Option<&Capture<'_>>,
+        f: &Func,
         grid: u32,
         block: u32,
         shm: u32,
@@ -1731,19 +2047,19 @@ impl WalkKernel {
         what: &'static str,
     ) -> Result<(), CudaError> {
         self.cu
-            .launch_args(self.stream, f, grid, block, shm, &mut params, what)?;
-        if let Some(v) = rec {
-            let node = self.cu.capture_leaf(self.stream)?;
+            .launch_args(&self.stream, f, grid, block, shm, &mut params, what)?;
+        if let (Some(v), Some(cap)) = (rec, cap) {
+            let node = self.cu.capture_leaf(cap)?;
             v.push(GraphKernel {
                 node,
-                f,
+                f: f.clone(),
                 grid,
                 block,
                 shm,
                 params,
                 what,
-                takes_args: f != self.f_par[2],
-                seed: f == self.f_par[0],
+                takes_args: *f != self.f_par[2],
+                seed: *f == self.f_par[0],
             });
         }
         Ok(())
@@ -1754,8 +2070,11 @@ impl WalkKernel {
         a: &KfArgs,
         npdb: u32,
         rec: &mut Option<Vec<GraphKernel>>,
+        cap: Option<&Capture<'_>>,
     ) -> Result<(), CudaError> {
-        let p = |v: u64| v.to_le_bytes().to_vec();
+        // a whole buffer, or one u32 counter of it, as a kernel parameter
+        let p = |b: &DevBuf| b.whole().kernel_arg();
+        let c = |b: &DevBuf, off: u64| b.span(off, 4).kernel_arg();
         let u = |v: u32| v.to_le_bytes().to_vec();
         let ab = || param_bytes(a);
         let par = &self.par;
@@ -1770,30 +2089,33 @@ impl WalkKernel {
             f_bases,
             f_emit,
             f_join,
-        ] = self.f_par;
+        ] = &self.f_par;
         self.kl(
             rec,
+            cap,
             f_seed,
             npdb.div_ceil(128).max(1),
             128,
             0,
-            vec![ab(), p(par.fr[0].ptr), p(par.nfr.ptr), p(par.used.ptr)],
+            vec![ab(), p(&par.fr[0]), p(&par.nfr), p(&par.used)],
             "cuLaunchKernel(kf_par_seed)",
         )?;
         let mut src = 0usize;
         // The last level's output count IS the task count; it is read where it lies (no copy).
-        let mut ntask = par.nfr.ptr;
+        // (offsets into `par.nfr`, whose u32 counters the kernels read and write)
+        let mut ntask = 0u64;
         for k in u32::from(self.fmt.first_dir)..KF_DIRS {
-            let used = par.used.ptr + u64::from(k) * 4;
-            let nin = par.nfr.ptr + (src as u64) * 4;
-            let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
+            let used = c(&par.used, u64::from(k) * 4);
+            let nin = (src as u64) * 4;
+            let nout = ((src ^ 1) as u64) * 4;
             let dst = if k + 1 < KF_DIRS {
-                par.fr[src ^ 1].ptr
+                &par.fr[src ^ 1]
             } else {
-                par.task.ptr
+                &par.task
             };
             self.kl(
                 rec,
+                cap,
                 f_expand,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
@@ -1801,38 +2123,45 @@ impl WalkKernel {
                 vec![
                     ab(),
                     u(k),
-                    p(par.fr[src].ptr),
-                    p(nin),
-                    p(par.stage.ptr),
+                    p(&par.fr[src]),
+                    c(&par.nfr, nin),
+                    p(&par.stage),
                     u(KF_MAX_FRONTIER as u32),
-                    p(used),
-                    p(par.start.ptr),
-                    p(par.cnt.ptr),
+                    used,
+                    p(&par.start),
+                    p(&par.cnt),
                 ],
                 "cuLaunchKernel(kf_par_expand)",
             )?;
             self.kl(
                 rec,
+                cap,
                 f_scan,
                 1,
                 KF_SCAN_BLOCK,
                 0,
-                vec![p(par.cnt.ptr), p(nin), p(par.off.ptr), p(nout)],
+                vec![
+                    p(&par.cnt),
+                    c(&par.nfr, nin),
+                    p(&par.off),
+                    c(&par.nfr, nout),
+                ],
                 "cuLaunchKernel(kf_par_scan)",
             )?;
             self.kl(
                 rec,
+                cap,
                 f_compact,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
                 0,
                 vec![
                     ab(),
-                    p(par.stage.ptr),
-                    p(par.start.ptr),
-                    p(par.cnt.ptr),
-                    p(par.off.ptr),
-                    p(nin),
+                    p(&par.stage),
+                    p(&par.start),
+                    p(&par.cnt),
+                    p(&par.off),
+                    c(&par.nfr, nin),
                     p(dst),
                     u(KF_MAX_FRONTIER as u32),
                 ],
@@ -1846,92 +2175,98 @@ impl WalkKernel {
         }
         self.kl(
             rec,
+            cap,
             f_leaf,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             shm,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(ntask),
-                p(par.runstage.ptr),
+                p(&par.task),
+                c(&par.nfr, ntask),
+                p(&par.runstage),
                 u(KF_MAX_SCRATCH as u32),
-                p(par.used.ptr + u64::from(KF_DIRS) * 4),
-                p(par.sum.ptr),
+                c(&par.used, u64::from(KF_DIRS) * 4),
+                p(&par.sum),
             ],
             "cuLaunchKernel(kf_par_leaf)",
         )?;
         self.kl(
             rec,
+            cap,
             f_heads,
             KF_PAR_GRID,
             128,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.cnt.ptr),
-                p(par.head.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.cnt),
+                p(&par.head),
             ],
             "cuLaunchKernel(kf_par_heads)",
         )?;
         self.kl(
             rec,
+            cap,
             f_scan,
             1,
             KF_SCAN_BLOCK,
             0,
             vec![
-                p(par.cnt.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.nfr.ptr + 12),
+                p(&par.cnt),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                c(&par.nfr, 12),
             ],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.kl(
             rec,
+            cap,
             f_bases,
             1,
             1,
             0,
-            vec![ab(), p(par.pdbbase.ptr)],
+            vec![ab(), p(&par.pdbbase)],
             "cuLaunchKernel(kf_par_bases)",
         )?;
         self.kl(
             rec,
+            cap,
             f_emit,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.head.ptr),
-                p(par.pdbbase.ptr),
-                p(par.runstage.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                p(&par.head),
+                p(&par.pdbbase),
+                p(&par.runstage),
             ],
             "cuLaunchKernel(kf_par_emit)",
         )?;
         self.kl(
             rec,
+            cap,
             f_join,
             KF_PAR_GRID,
             128,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.head.ptr),
-                p(par.pdbbase.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                p(&par.head),
+                p(&par.pdbbase),
             ],
             "cuLaunchKernel(kf_par_join)",
         )
@@ -1947,7 +2282,7 @@ impl WalkKernel {
     /// # Errors
     /// [`CudaError`].
     pub fn make_current(&self) -> Result<(), CudaError> {
-        self.cu.ctx_set_current(self.ctx)
+        self.cu.ctx_set_current(&self.ctx)
     }
 
     /// Copy a host image into fresh device memory.
@@ -1956,11 +2291,11 @@ impl WalkKernel {
     /// [`CudaError`].
     pub fn upload(&self, bytes: &[u8]) -> Result<DeviceImage, CudaError> {
         let p = self.cu.mem_alloc_zeroed(bytes.len(), "cuMemAlloc(gpga)")?;
-        self.cu.memcpy_h2d(p, bytes, "cuMemcpyHtoD(gpga)")?;
-        Ok(DeviceImage {
-            ptr: p,
-            len: bytes.len() as u64,
-        })
+        if let Err(e) = self.cu.memcpy_h2d(p.whole(), bytes, "cuMemcpyHtoD(gpga)") {
+            self.cu.mem_free(p);
+            return Err(e);
+        }
+        Ok(DeviceImage { buf: p })
     }
 
     /// ★★★ **Import an RM-exported object into THIS kernel's context** and map it whole.
@@ -2002,7 +2337,7 @@ impl WalkKernel {
                 code: 0,
                 name,
             })?;
-        self.store = Some((p, bytes));
+        self.store = Some(p);
         Ok(())
     }
 
@@ -2016,22 +2351,23 @@ impl WalkKernel {
     /// The imported store's length, if one was imported.
     #[must_use]
     pub fn store_len(&self) -> Option<u64> {
-        self.store.map(|(_, l)| l)
+        self.store.as_ref().map(|b| b.len() as u64)
     }
 
     /// The store address of `[off, off+len)`, refused by name unless wholly inside the store.
-    fn store_at(&self, off: u64, len: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
-        let Some((base, bytes)) = self.store else {
+    fn store_at(&self, off: u64, len: usize, what: &'static str) -> Result<DevSpan<'_>, CudaError> {
+        let Some(store) = self.store.as_ref() else {
             return Err(refused(what, "no store imported".to_string()));
         };
-        let end = off.checked_add(len as u64);
-        if end.is_none_or(|e| e > bytes) {
-            return Err(refused(
+        store.try_span(off, len).ok_or_else(|| {
+            refused(
                 what,
-                format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store"),
-            ));
-        }
-        Ok(base + off)
+                format!(
+                    "[{off:#x}, +{len:#x}) leaves the {:#x}-byte store",
+                    store.len()
+                ),
+            )
+        })
     }
 
     /// ★ §13: write `bytes` at store offset `off` — bounds-checked against the store's length.
@@ -2045,7 +2381,7 @@ impl WalkKernel {
         self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_store)")
     }
 
-    /// ★ 2026-10-18 (the scrub, `kf-qemu`'s `scrub` module): QUEUE a device-side zero of store
+    /// QUEUE a device-side zero of store
     /// `[off, off+len)` — `cuMemsetD8` on the store's own device mapping, no host buffer and no
     /// PCIe traffic (the GPU's memory bandwidth bounds it). Bounds-checked against the store.
     /// ⊘ NOT complete when this returns: the memset is ordered on the legacy stream but a CUDA
@@ -2058,8 +2394,7 @@ impl WalkKernel {
         let n = usize::try_from(len)
             .map_err(|_| refused("WalkKernel::zero_store_queued", format!("{len:#x}")))?;
         let dst = self.store_at(off, n, "WalkKernel::zero_store_queued")?;
-        self.cu
-            .memset_d8(dst, 0, n, "cuMemsetD8(zero_store_queued)")
+        self.cu.memset_d8(dst, 0, "cuMemsetD8(zero_store_queued)")
     }
 
     /// ★ The completion of every zero queued so far (`cuCtxSynchronize`): when this returns `Ok`
@@ -2102,7 +2437,15 @@ impl WalkKernel {
             ));
         };
         let mut buf = vec![0u8; reg.cap as usize * KfMapRun::BYTES];
-        let at = self.walk.ptr + u64::from(reg.off) * KfMapRun::BYTES as u64;
+        let at = self
+            .walk
+            .try_span(u64::from(reg.off) * KfMapRun::BYTES as u64, buf.len())
+            .ok_or_else(|| {
+                refused(
+                    "WalkKernel::debug_walk_runs",
+                    format!("entry {entry}: the region leaves the walk table"),
+                )
+            })?;
         self.cu
             .memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
         Ok(KfMapRun::decode_all(&buf))
@@ -2113,17 +2456,13 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn read_image(&self, img: &DeviceImage, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
-        if off
-            .checked_add(buf.len() as u64)
-            .is_none_or(|e| e > img.len)
-        {
+        let Some(src) = img.buf.try_span(off, buf.len()) else {
             return Err(refused(
                 "WalkKernel::read_image",
                 format!("[{off:#x}, +{:#x}) leaves the image", buf.len()),
             ));
-        }
-        self.cu
-            .memcpy_d2h(buf, img.ptr + off, "cuMemcpyDtoH(read_image)")
+        };
+        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_image)")
     }
 
     /// Write `bytes` into an uploaded image at `off`, bounds-checked against it.
@@ -2131,22 +2470,19 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn write_image(&self, img: &DeviceImage, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
-        if off
-            .checked_add(bytes.len() as u64)
-            .is_none_or(|e| e > img.len)
-        {
+        let Some(dst) = img.buf.try_span(off, bytes.len()) else {
             return Err(refused(
                 "WalkKernel::write_image",
                 format!("[{off:#x}, +{:#x}) leaves the image", bytes.len()),
             ));
-        }
-        self.cu
-            .memcpy_h2d(img.ptr + off, bytes, "cuMemcpyHtoD(write_image)")
+        };
+        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_image)")
     }
 
-    /// Release an image returned by [`WalkKernel::upload`].
+    /// Release an image returned by [`WalkKernel::upload`]. ★ Consumes it (D-04): an image cannot
+    /// be released twice or used after.
     pub fn release(&self, img: DeviceImage) {
-        self.cu.mem_free(img.ptr);
+        self.cu.mem_free(img.buf);
     }
 
     /// ★★ **A launch that must FAIL** — probe (b) of `THE_CONSTRAINTS.md` §w724d.
@@ -2161,7 +2497,7 @@ impl WalkKernel {
     pub fn probe_failed_launch(&mut self) -> Option<String> {
         let args = self.args_for(0, 0, 0);
         let mut p = param_bytes(&args);
-        let r = self.cu.launch_raw(self.f_walk, 1, 2048, &mut p);
+        let r = self.cu.launch_raw(&self.f_walk, 1, 2048, &mut p);
         if r == crate::driver_unsafe::CUDA_SUCCESS {
             // ⊘ Drain it, so a surprising success cannot leave work in flight that the next
             // probe would then be blamed for.
@@ -2186,34 +2522,26 @@ impl Drop for WalkKernel {
         //
         // ★ And the fix is not "free them first": `cuCtxDestroy` reclaims every allocation
         // made in the context, so freeing them individually as well would be the double-free.
-        // ⇒ the buffers are NEUTRALISED and the context is destroyed once.
-        self.dev.ptr = 0;
-        self.walk.ptr = 0;
-        self.com.ptr = 0;
-        self.slot.ptr = 0;
-        self.iscratch.ptr = 0;
-        self.pdbs.ptr = 0;
-        self.slots.ptr = 0;
-        self.ack.ptr = 0;
-        self.ack_code.ptr = 0;
-        self.store = None;
-        self.hdr.ptr = 0;
-        self.rpdb.ptr = 0;
-        self.rrun.ptr = 0;
+        // ⇒ the buffers are never freed one by one (a `DevBuf` does not free itself on drop) and
+        // the context is destroyed once; its token then refuses every one of them.
+        //
         // ★ P4: the stream and events are destroyed explicitly (the context would reclaim them
-        // too); `ctx_destroy` then drains anything still queued — including a host function
-        // that names `done_fd` — BEFORE the `CompletionFd` field closes the fd.
+        // too); `ctx_destroy` then drains anything still queued. ★ D-07: a queued host function
+        // owns its own reference to the completion fd, so the order of the fd's close no longer
+        // matters for soundness.
         let _ = self.make_current();
         if let Some(g) = self.graph.take() {
             self.cu.graph_exec_destroy(g.exec);
             self.cu.graph_destroy(g.graph);
         }
-        self.cu.event_destroy(self.ev_start);
-        self.cu.event_destroy(self.ev_copied);
-        self.cu.event_destroy(self.ev_done);
-        self.cu.stream_destroy(self.stream);
-        self.cu.ctx_destroy(self.ctx);
-        self.ctx = CtxHandle::null();
+        for ev in [&mut self.ev_start, &mut self.ev_copied, &mut self.ev_done] {
+            let e = core::mem::replace(ev, EventHandle::null());
+            self.cu.event_destroy(e);
+        }
+        let s = core::mem::replace(&mut self.stream, StreamHandle::null());
+        self.cu.stream_destroy(s);
+        let ctx = core::mem::replace(&mut self.ctx, CtxHandle::null());
+        self.cu.ctx_destroy(ctx);
     }
 }
 
@@ -2221,23 +2549,576 @@ impl Drop for WalkKernel {
 ///
 /// ⚠ **Not freed on drop**, and that is deliberate: freeing needs the [`Cuda`] that allocated
 /// it, and a guard holding a borrow of the kernel could not coexist with `&mut self` on
-/// `refresh`. Hand it to [`WalkKernel::release`], or let `cuCtxDestroy` reclaim it — which is
-/// always correct here, because the context outlives every image by construction.
-#[derive(Debug, Clone, Copy)]
+/// `refresh`. Hand it to [`WalkKernel::release`], or let `cuCtxDestroy` reclaim it.
+/// Not `Copy`/`Clone` — `release` consumes it, so it cannot be released
+/// twice or written after release; and it refuses once the walker's context is destroyed.
+#[derive(Debug)]
 pub struct DeviceImage {
-    ptr: CUdeviceptr,
-    len: u64,
+    buf: DevBuf,
 }
 
 impl DeviceImage {
     /// Its length.
     #[must_use]
     pub fn len(&self) -> u64 {
-        self.len
+        self.buf.len() as u64
     }
     /// Whether it is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.buf.is_empty()
+    }
+}
+
+/// ★★★ Security review 2 (2026-11-13): the WHOLE walk submission over the fake driver — every
+/// launch's parameter list checked against the committed PTX (D-01), every buffer range against its
+/// allocation (D-02), with no GPU. A host list that drifted from a `.cu` signature fails here.
+#[cfg(test)]
+mod fake_driver_tests {
+    use super::*;
+    use crate::driver_unsafe::fake;
+
+    fn walk_over_the_fake(fmt: KfFormat) -> usize {
+        let mut k =
+            WalkKernel::bring_up_with(WalkCfg::default(), fmt, WalkDevice::FirstOrdinal, || {
+                Ok(Cuda::fake())
+            })
+            .expect("bring-up over the fake driver");
+        assert!(
+            !k.submits_as_graph(),
+            "the fake has no graph API: launch by launch"
+        );
+        let img = k.upload(&vec![0u8; 1 << 16]).unwrap();
+        let _ = fake::calls();
+        k.submit_image(
+            &img,
+            &[
+                WalkEntry { pdb: 0, slot: 0 },
+                WalkEntry {
+                    pdb: 0x1000,
+                    slot: 1,
+                },
+            ],
+        )
+        .expect("a walk over the fake driver");
+        let n = fake::launches();
+        // the image is bounded: a write past it is refused by name, not passed on
+        assert!(k.write_image(&img, (1 << 16) - 3, &[0u8; 4]).is_err());
+        assert!(k.write_image(&img, u64::MAX, &[0u8; 1]).is_err());
+        k.write_image(&img, 0, &[1u8; 16]).unwrap();
+        k.release(img);
+        // the deliberately malformed probe still passes the parameter check (one 264-byte KfArgs)
+        let _ = k.probe_failed_launch();
+        n
+    }
+
+    #[test]
+    fn every_ver2_walk_launch_matches_its_ptx_signature() {
+        // commit, begin, seed, 4 directory levels x (expand, scan, compact), leaf, heads, scan,
+        // bases, emit, join, diff_slots, diff_emit
+        assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver2()), 23);
+    }
+
+    #[test]
+    fn every_ver3_walk_launch_matches_its_ptx_signature() {
+        // VER3 expands one more directory level
+        assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver3()), 26);
+    }
+
+    /// ★★ D-15 (2026-11-14): a bring-up that fails AFTER its context exists destroys it (and
+    /// with it every allocation made so far) — a bad pool size refused after the JIT, and a driver
+    /// refusing an event. ⊘ Before, the context and every allocation leaked for the process's life.
+    #[test]
+    fn d15_a_failed_bring_up_destroys_its_context() {
+        let bring = |cfg: WalkCfg| {
+            let _ = fake::calls();
+            let r = WalkKernel::bring_up_with(
+                cfg,
+                crate::abi::kf_format_ver2(),
+                WalkDevice::FirstOrdinal,
+                || Ok(Cuda::fake()),
+            );
+            (r.is_err(), fake::calls())
+        };
+        let bad_pool = WalkCfg {
+            walk_pool: 0,
+            ..WalkCfg::default()
+        };
+        let (failed, calls) = bring(bad_pool);
+        assert!(failed, "walk_pool 0 is refused");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        fake::fail("cuEventCreate");
+        let (failed, calls) = bring(WalkCfg::default());
+        fake::succeed_all();
+        assert!(failed, "an event the driver refused");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        // the control: a bring-up that succeeds keeps its context until the walker drops
+        let (failed, calls) = bring(WalkCfg::default());
+        assert!(!failed);
+        assert!(!calls.contains(&fake::Call::CtxDestroy), "{calls:?}");
+    }
+
+    /// A walker over the fake driver with a 1 MiB store imported.
+    fn fake_walker() -> WalkKernel {
+        let mut k = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        k.import_store(3, 1 << 20).unwrap();
+        let _ = fake::calls();
+        k
+    }
+
+    /// ★★ S1-65 (security review 3 F-11, 2026-11-14): hostile SUBMISSIONS on the production
+    /// launch path (`submit` -> `submit_over` -> `run_parallel`) are refused by name before any
+    /// launch — more entries than the kernel's arrays, a slot out of range, one slot named twice
+    /// (two blocks would race one committed region), a second walk while one is in flight, a walk
+    /// with no store. Each refusal has its control (the same walk, well formed, launches).
+    #[test]
+    fn s165_hostile_submissions_are_refused_before_any_launch() {
+        let mut k = fake_walker();
+        let max = WalkCfg::default().max_slots;
+        let e = |slot: u32| WalkEntry { pdb: 0, slot };
+        let too_many: Vec<WalkEntry> = (0..=KF_MAX_PDB as u32).map(e).collect();
+        let hostile: [(&str, Vec<WalkEntry>); 4] = [
+            ("65 entries", too_many),
+            ("slot out of range", vec![e(max)]),
+            ("slot u32::MAX", vec![e(u32::MAX)]),
+            ("one slot twice", vec![e(1), e(2), e(1)]),
+        ];
+        for (name, entries) in hostile {
+            assert!(k.submit(&entries).is_err(), "{name}");
+            assert_eq!(fake::launches(), 0, "{name}: {:?}", fake::calls());
+        }
+        // the controls: 64 distinct entries walk
+        let full: Vec<WalkEntry> = (0..KF_MAX_PDB as u32).map(e).collect();
+        k.submit(&full).unwrap();
+        assert!(fake::launches() > 0);
+        let _ = fake::calls();
+        assert!(k.submit(&[e(0)]).is_err(), "a walk is in flight");
+        assert_eq!(fake::launches(), 0);
+        let mut bare = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        let _ = fake::calls();
+        assert!(bare.submit(&[e(0)]).is_err(), "no store imported");
+        assert_eq!(fake::launches(), 0);
+    }
+
+    /// Write `h` and `pdbs` into the walker's pinned report, as the diff kernels would.
+    fn plant_report(k: &mut WalkKernel, h: &KfReportHeader, pdbs: &[KfPdbEntry]) {
+        let at = k.pin_at;
+        k.pin.write(at.hdr, &h.encode());
+        for (i, p) in pdbs.iter().enumerate() {
+            k.pin.write(at.rpdb + i * KfPdbEntry::BYTES, &p.encode());
+        }
+    }
+
+    /// ★★ S1-65: a HOSTILE REPORT coming back from the GPU (counts far past every capacity, a
+    /// need of `u32::MAX`) is read within the pinned capacities, never re-walked past the pool
+    /// ceiling, and refused by the validator production consults — no panic, no overrun.
+    #[test]
+    fn s165_a_hostile_report_is_clamped_on_collect_and_refused_by_validate() {
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let cfg = WalkCfg::default();
+        let h = KfReportHeader {
+            magic: KFWR_MAGIC,
+            version: crate::abi::KFWR_VERSION,
+            flags: KFWR_HF_TRUNCATED | KFWR_HF_DIFF,
+            pdb_count: u32::MAX,
+            pdb_capacity: cfg.pdb_capacity,
+            run_count: u32::MAX,
+            run_capacity: cfg.run_capacity,
+            refuse_mask: crate::abi::KFWR_R_RUN_CAP,
+            ps_log2: [12, 16, 21, 29],
+            ..KfReportHeader::default()
+        };
+        // entry 0 claims a walk cut at its region with a need no pool can hold
+        let p = KfPdbEntry {
+            reserved2: u64::from(crate::abi::KFWR_R_RUN_CAP) | (u64::from(u32::MAX) << 32),
+            ..KfPdbEntry::default()
+        };
+        plant_report(&mut k, &h, &[p]);
+        let _ = fake::calls();
+        let c = k
+            .try_collect()
+            .unwrap()
+            .expect("not re-walked: the need is past the ceiling");
+        assert_eq!(fake::launches(), 0, "no re-walk was queued");
+        assert_eq!(c.report.pdbs.len(), cfg.pdb_capacity as usize);
+        assert_eq!(c.report.runs.len(), cfg.run_capacity as usize);
+        assert!(
+            k.take_capacity_events()
+                .iter()
+                .any(|e| e.starts_with("capacity ceiling")),
+            "the ceiling is named"
+        );
+        assert!(matches!(
+            c.report.validate(),
+            Err(ReportError::PdbOverflow { .. })
+        ));
+        // the walker is not wedged: the next walk is accepted
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+    }
+
+    /// ★★ F-10 host half (2026-11-14): both shipped descriptors pass [`check_format`], and a
+    /// descriptor breaking any ONE rule of the kernel's `kf_dev_format_ok` (or carrying VER3 PCF
+    /// values the kernel does not compile) is refused at bring-up, by name, BEFORE CUDA is opened.
+    fn f10_refuses_every_break_of(base: KfFormat) {
+        use crate::abi::KfField;
+        assert_eq!(check_format(&base), Ok(()));
+        type Break = fn(&mut KfFormat);
+        let breaks: Vec<(&str, Break)> = vec![
+            ("table version", |f| f.table_version = 4),
+            ("an inactive level below first_dir", |f| f.dir[4].active = 0),
+            ("an active level above first_dir", |f| {
+                f.first_dir = 1;
+                f.dir[0].active = 1;
+            }),
+            ("dual level entry bytes", |f| f.dir[4].entry_bytes = 8),
+            ("entries not a power of two", |f| f.dir[2].entries = 384),
+            ("entries above KF_MAX_ENT", |f| f.dir[2].entries = 1024),
+            ("a dual level overrunning the snapshot", |f| {
+                f.dir[4].entries = 512
+            }),
+            ("va_lo", |f| f.dir[3].va_lo = 64),
+            ("leaf page size", |f| f.dir[4].leaf_ps = 4),
+            ("small entries", |f| f.small_entries = 1024),
+            // 128 big entries two VA bits above 512 small ones: a consistent span, but 128 words
+            // overrun the 64-word leaf snapshot
+            ("big entries overrunning the leaf snapshot", |f| {
+                f.big_entries = 128;
+                f.small_entries = 512;
+                f.big_va_lo = f.small_va_lo + 2;
+            }),
+            ("leaf entry bytes", |f| f.big_entry_bytes = 16),
+            ("big/small va", |f| f.big_va_lo = f.small_va_lo),
+            ("big/small span", |f| f.big_entries /= 2),
+            ("leaf ps", |f| f.big_ps = 4),
+            ("root align", |f| f.root_align = 0x3000),
+            ("aperture bits", |f| f.ap_bits = 3),
+            ("aperture lo", |f| f.ap_lo = 63),
+            ("valid bit", |f| f.valid_bit = 64),
+            ("privilege bit", |f| f.bit_privilege = 200),
+            ("addr field", |f| {
+                f.addr_local = KfField {
+                    lo: 60,
+                    bits: 8,
+                    shift: 0,
+                    pad: 0,
+                }
+            }),
+            ("kind field", |f| f.kind.shift = 64),
+            ("pcf field", |f| f.pcf.bits = 64),
+            ("page-size table", |f| f.ps_log2[3] = 41),
+            ("no-valid-4K value", |f| f.pte_pcf_no_valid_4k ^= 1),
+            ("PDE sparse bit", |f| f.pde_pcf_sparse_bit ^= 2),
+        ];
+        {
+            for (name, brk) in &breaks {
+                let mut f = base;
+                brk(&mut f);
+                assert!(
+                    check_format(&f).is_err(),
+                    "table {}: {name} accepted",
+                    base.table_version
+                );
+                let mut opened = false;
+                let r = WalkKernel::bring_up_with(
+                    WalkCfg::default(),
+                    f,
+                    WalkDevice::FirstOrdinal,
+                    || {
+                        opened = true;
+                        Ok(Cuda::fake())
+                    },
+                );
+                assert!(r.is_err(), "{name}");
+                assert!(!opened, "{name}: refused BEFORE the library is opened");
+            }
+        }
+    }
+
+    #[test]
+    fn f10_a_ver2_descriptor_breaking_one_rule_is_refused_before_cuda_opens() {
+        f10_refuses_every_break_of(crate::abi::kf_format_ver2());
+    }
+
+    #[test]
+    fn f10_a_ver3_descriptor_breaking_one_rule_is_refused_before_cuda_opens() {
+        f10_refuses_every_break_of(crate::abi::kf_format_ver3());
+    }
+
+    /// A planted collect: `pdbs` and a header naming `refuse_mask` / `flags`.
+    fn collect_planted(
+        k: &mut WalkKernel,
+        refuse_mask: u32,
+        flags: u16,
+        pdbs: &[KfPdbEntry],
+    ) -> Option<Collected> {
+        let cfg = WalkCfg::default();
+        let h = KfReportHeader {
+            magic: KFWR_MAGIC,
+            flags: flags | KFWR_HF_DIFF,
+            pdb_count: u32::try_from(pdbs.len()).unwrap(),
+            pdb_capacity: cfg.pdb_capacity,
+            run_capacity: cfg.run_capacity,
+            refuse_mask,
+            ps_log2: [12, 16, 21, 29],
+            ..KfReportHeader::default()
+        };
+        let at = k.pin_at;
+        k.pin.write(at.hdr, &h.encode());
+        for (i, p) in pdbs.iter().enumerate() {
+            k.pin.write(at.rpdb + i * KfPdbEntry::BYTES, &p.encode());
+        }
+        let _ = fake::calls();
+        k.try_collect().unwrap()
+    }
+
+    fn entry(slot: u32, bits: u32, need: u32, vas: u32) -> KfPdbEntry {
+        KfPdbEntry {
+            reserved: slot,
+            vas_flags: vas,
+            reserved2: u64::from(bits) | (u64::from(need) << 32),
+            ..KfPdbEntry::default()
+        }
+    }
+
+    /// ★★ F-2 host half (2026-11-14, with #387's per-space budget): one space CUT at its own
+    /// budget (its entry bits, KFWR_V_REFUSED) no longer stops another space's fixable capacity
+    /// refusal from being re-walked; a budget refusal NO entry owns (a walk abort) still does, as
+    /// does the report's PdbEntry capacity. ⊘ RED before: any budget bit in the header's mask
+    /// aborted the retry for every space.
+    fn f2_cut_by(cut: u32) {
+        use crate::abi::{KFWR_R_PDB_CAP, KFWR_R_RUN_CAP, KFWR_V_REFUSED};
+        {
+            let mut k = fake_walker();
+            k.submit(&[
+                WalkEntry { pdb: 0, slot: 0 },
+                WalkEntry {
+                    pdb: 0x1000,
+                    slot: 1,
+                },
+            ])
+            .unwrap();
+            let pdbs = [
+                entry(0, cut, 0, KFWR_V_REFUSED),
+                entry(1, KFWR_R_RUN_CAP, 20_000, 0),
+            ];
+            let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &pdbs);
+            assert!(got.is_none(), "{cut:#x}: re-walked for space 1");
+            assert!(fake::launches() > 0, "the re-walk was queued");
+            assert!(
+                k.take_capacity_events()
+                    .iter()
+                    .any(|e| e.contains("re-walk")),
+                "named"
+            );
+        }
+        // a walk abort: the budget bit is in the mask but no entry owns it
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let pdbs = [entry(0, KFWR_R_RUN_CAP, 20_000, 0)];
+        let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &pdbs);
+        assert!(got.is_some(), "an aborted walk is not re-walked");
+        assert_eq!(fake::launches(), 0);
+        // the report's PdbEntry capacity (header-level only): not re-walked
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let got = collect_planted(
+            &mut k,
+            KFWR_R_PDB_CAP | KFWR_R_RUN_CAP,
+            KFWR_HF_TRUNCATED,
+            &pdbs,
+        );
+        assert!(got.is_some());
+        assert_eq!(fake::launches(), 0);
+        // a cut space alone, even one whose walk region was also cut: its limit is fixed, so
+        // re-walking cannot help — handed to the caller, no re-walk
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let lone = [entry(0, cut | KFWR_R_RUN_CAP, 20_000, KFWR_V_REFUSED)];
+        let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &lone);
+        assert!(got.is_some(), "a cut space is not re-walked");
+        assert_eq!(fake::launches(), 0);
+    }
+
+    #[test]
+    fn f2_one_space_cut_at_its_budget_does_not_stop_the_others_retry() {
+        f2_cut_by(crate::abi::KFWR_R_BUDGET);
+    }
+
+    #[test]
+    fn f2_one_space_cut_at_its_frontier_share_does_not_stop_the_others_retry() {
+        f2_cut_by(crate::abi::KFWR_R_FRONTIER_CAP);
+    }
+
+    #[test]
+    fn the_store_is_bounded_and_dies_with_the_walker() {
+        let mut k = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        assert!(k.import_store(-1, 1 << 20).is_err(), "a negative fd");
+        k.import_store(3, 1 << 20).unwrap();
+        assert!(k.write_store((1 << 20) - 1, &[0u8; 2]).is_err());
+        assert!(k.zero_store_queued(u64::MAX, 2).is_err());
+        let mut b = [0u8; 8];
+        assert!(k.read_store(1 << 20, &mut b).is_err());
+        k.write_store(0, &[0u8; 64]).unwrap();
+        let _ = fake::calls();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        assert_eq!(fake::launches(), 23);
+        drop(k);
+        assert!(
+            fake::calls().contains(&fake::Call::CtxDestroy),
+            "the walker destroys its context once"
+        );
+    }
+}
+
+/// ★★ S1-69 (security review 3 F-11, 2026-11-14): a property sweep of [`Report::validate`]. A
+/// well-formed diff report of mixed page sizes is generated many times; it must validate, and each
+/// single corruption of one property the `.cu`'s `kf_validate_report` checks must be refused by
+/// name. Every check therefore has this killer beside its named test in `tests/report_containment.rs`.
+#[cfg(test)]
+mod validate_sweep {
+    use super::*;
+    use crate::abi::{KFWR_OP_MAP, KFWR_OP_REMAP, KFWR_VERSION, RF_PS};
+
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            self.0 >> 33
+        }
+    }
+
+    const PS_LOG2: [u8; 4] = [12, 16, 21, 29];
+
+    fn good(rng: &mut Lcg) -> Report {
+        let header = KfReportHeader {
+            magic: KFWR_MAGIC,
+            version: KFWR_VERSION,
+            flags: KFWR_HF_DIFF,
+            pdb_count: 2,
+            pdb_capacity: 8,
+            run_count: 6,
+            run_capacity: 64,
+            sample_count: (rng.next() % 9) as u32,
+            ps_log2: PS_LOG2,
+            ..KfReportHeader::default()
+        };
+        let runs: Vec<KfMapRun> = (0..6)
+            .map(|i| {
+                let code = (rng.next() % 3) as u32; // 4 KiB, 64 KiB, 2 MiB
+                let page = 1u64 << PS_LOG2[code as usize];
+                KfMapRun {
+                    va: (1 + rng.next() % 1024) * page,
+                    gpga: (rng.next() % 4) * page,
+                    len: (1 + rng.next() % 2) * page,
+                    flags: RF_PS.put(code),
+                    op: [KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_OP_REMAP][(rng.next() % 3) as usize],
+                    pdb_index: u16::from(i >= 3),
+                }
+            })
+            .collect();
+        let pdb = |first: u32| KfPdbEntry {
+            first_run: first,
+            run_count: 3,
+            ..KfPdbEntry::default()
+        };
+        Report {
+            header,
+            pdbs: vec![pdb(0), pdb(3)],
+            runs,
+            gpga_span: 1 << 40,
+        }
+    }
+
+    #[test]
+    fn every_single_corruption_of_a_checked_property_is_refused() {
+        let mut rng = Lcg(0x5169);
+        for _ in 0..500 {
+            let base = good(&mut rng);
+            assert_eq!(base.validate(), Ok(()), "{base:?}");
+            let i = (rng.next() % 6) as usize;
+            let mut c = base.clone();
+            c.header.version = KFWR_VERSION + 1 + (rng.next() % 7) as u16;
+            assert!(matches!(c.validate(), Err(ReportError::BadVersion(_))));
+            let mut c = base.clone();
+            c.header.ps_log2[(rng.next() % 4) as usize] =
+                [0, 11, 41, 255][(rng.next() % 4) as usize];
+            assert!(matches!(c.validate(), Err(ReportError::BadPageSizes(_))));
+            let mut c = base.clone();
+            c.header.sample_count = 9 + (rng.next() % 100) as u32;
+            assert!(matches!(c.validate(), Err(ReportError::TooManySamples(_))));
+            let mut c = base.clone();
+            c.runs[i].op = [0, 4, 5, u16::MAX][(rng.next() % 4) as usize];
+            assert!(matches!(c.validate(), Err(ReportError::BadOp { index, .. }) if index == i));
+            let mut c = base.clone();
+            c.runs[i].flags = RF_PS.put(4 + (rng.next() % 12) as u32);
+            assert!(
+                matches!(c.validate(), Err(ReportError::BadPageSize { index, .. }) if index == i)
+            );
+            // misalign one field by a sub-page amount (a 4 KiB run cannot be misaligned by 4 KiB
+            // multiples, so the offset is below 4 KiB)
+            let off = 1 + rng.next() % 0xfff;
+            let mut c = base.clone();
+            c.runs[i].va += off;
+            assert!(matches!(
+                c.validate(),
+                Err(ReportError::Misaligned { field: "va", .. })
+            ));
+            let mut c = base.clone();
+            c.runs[i].len += off;
+            assert!(matches!(
+                c.validate(),
+                Err(ReportError::Misaligned { field: "len", .. })
+            ));
+            let mut c = base.clone();
+            c.runs[i].gpga += off;
+            if c.runs[i].op == KFWR_OP_UNMAP {
+                assert_eq!(
+                    c.validate(),
+                    Ok(()),
+                    "an UNMAP's gpga is not a mapping target"
+                );
+            } else {
+                assert!(matches!(
+                    c.validate(),
+                    Err(ReportError::Misaligned { field: "gpga", .. })
+                ));
+            }
+        }
     }
 }

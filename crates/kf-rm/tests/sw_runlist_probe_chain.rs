@@ -1,6 +1,9 @@
-//! The real served chain, with opt-in isolated in child processes (no unsafe set_var).
+//! The real served chain, one arm per child process (no unsafe set_var): the Windows profile's
+//! software-runlist metadata is keyed on the declared identity.
 #[path = "support/ga106.rs"]
 mod ga106;
+#[path = "support/windows_fn1.rs"]
+mod support;
 
 use kf_arch::{
     ClientKind,
@@ -9,39 +12,50 @@ use kf_arch::{
 use kf_gsp::{RpcCommand, RpcFunction};
 use kf_rm::rmgraph::{AllocFacts, RmEvent};
 
+/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_SW_RUNLIST_PROBE=0|1`): the software-runlist allocation
+/// metadata is served to a guest that declared the measured Windows build with `windows-support` on, and
+/// to NO other: a Linux declaration, no declaration, and `windows-support=off` with a Windows declaration
+/// take the default path, exactly as with no probe installed. Each arm runs in a child process so the
+/// diagnostic's stderr lines can be read.
 #[test]
 fn full_chain_in_separate_environment() {
-    for enabled in ["0", "1"] {
+    for (arm, served) in [
+        ("windows", true),
+        ("linux", false),
+        ("undeclared", false),
+        ("windows-support-off", false),
+    ] {
         let result = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "child_case", "--nocapture"])
-            .env("KF_RUNLIST_CHAIN_TEST", enabled)
-            .env("KF3_SW_RUNLIST_PROBE", enabled)
-            .env_remove("KF3_GFX_POOL_PROBE")
+            .env("KF_RUNLIST_CHAIN_ARM", arm)
             .output()
             .unwrap();
         assert!(
             result.status.success(),
-            "child {enabled}: {} {}",
+            "child {arm}: {} {}",
             String::from_utf8_lossy(&result.stdout),
             String::from_utf8_lossy(&result.stderr)
         );
         let log = String::from_utf8_lossy(&result.stderr);
         assert_eq!(
             log.contains("diagnostic control=0x20801111 params_bytes=40"),
-            enabled == "1"
+            served,
+            "{arm}"
         );
         assert_eq!(
             log.contains("ALLOC_MEMORY payload_bytes=56 prefix_only=true"),
-            enabled == "1"
+            served,
+            "{arm}"
         );
     }
 }
 
 #[test]
 fn child_case() {
-    let Ok(enabled) = std::env::var("KF_RUNLIST_CHAIN_TEST") else {
+    let Ok(arm) = std::env::var("KF_RUNLIST_CHAIN_ARM") else {
         return;
     };
+    let enabled = if arm == "windows" { "1" } else { "0" };
     let driver = *kf_abi::versions::table_for(kf_abi::DriverVersion {
         major: 580,
         minor: 65,
@@ -92,6 +106,13 @@ fn child_case() {
         channels: Some(std::sync::Arc::new(|statement| {
             panic!("unexpected channel action: {statement:?}")
         })),
+        // A Windows guest needs the display plane (`winprofile::WindowsNeedsDisplay`).
+        display: Some((&kf_chip::display::AMPERE).into()),
+        windows: if arm == "windows-support-off" {
+            kf_rm::winprofile::WindowsProfile::off()
+        } else {
+            kf_rm::winprofile::WindowsProfile::on()
+        },
         ..Default::default()
     };
     let mut policy = kf_rm::served_policy(
@@ -110,33 +131,16 @@ fn child_case() {
         elements: 1,
         delivered: Vec::new(),
     };
-    use kf_abi::guestsysinfo::*;
-    let twin = kf_abi::generated::windows_twins::WINDOWS_TWINS
-        .iter()
-        .find(|t| t.win_name == "580.88")
-        .unwrap();
-    let mut identity = vec![0; SET_GUEST_SYSTEM_INFO_SIZE];
-    let vgx = driver.vgx_version().unwrap();
-    for (off, value) in [
-        (VGX_MAJOR_OFF, vgx.major),
-        (VGX_MINOR_OFF, vgx.minor),
-        (GUEST_CL_NUM_OFF, twin.win_cl),
-    ] {
-        identity[off..off + 4].copy_from_slice(&value.to_le_bytes());
+    // The guest's fn 1 for this arm: the Windows 580.88 build, the Linux build of the same wire, or
+    // nothing.
+    let declaration = match arm.as_str() {
+        "windows" | "windows-support-off" => Some(support::windows(&driver)),
+        "linux" => Some(support::linux(&driver)),
+        _ => None,
+    };
+    if let Some(fn1) = declaration {
+        assert_eq!(policy.respond(&fn1).unwrap().rpc_result, 0);
     }
-    for (off, value) in [
-        (GUEST_DRIVER_VERSION_OFF, twin.win_name),
-        (GUEST_VERSION_OFF, twin.win_branch),
-    ] {
-        identity[off..off + value.len()].copy_from_slice(value.as_bytes());
-    }
-    assert_eq!(
-        policy
-            .respond(&command(RpcFunction::SetGuestSystemInfo, identity))
-            .unwrap()
-            .rpc_result,
-        0
-    );
     let mut alloc = vec![0; 44];
     for (off, value) in [(0, 1u32), (4, 3), (8, 4), (12, 0xb297), (20, 12), (32, 1)] {
         alloc[off..off + 4].copy_from_slice(&value.to_le_bytes());
@@ -158,12 +162,16 @@ fn child_case() {
         }
         payload[wire.params_off..wire.params_off + 4].copy_from_slice(&4u32.to_le_bytes());
         // A declined complete chain is NV_ERR_NOT_SUPPORTED at GspFsm::answer
-        // (kf-gsp/src/boot.rs); no link may claim these with NV_OK.
-        assert!(
-            policy
-                .respond(&command(RpcFunction::RmControl, payload))
-                .is_none_or(|reply| reply.rpc_result != 0),
-            "control {control:#x} must still refuse"
+        // (kf-gsp/src/boot.rs); no link may claim these with NV_OK. ★ 2026-11-15: except the one the
+        // Windows profile owns — the software-runlist submit `0x20801111` (host-owned scheduling, a
+        // fabricated NV_OK with the request echoed), and only for a declared Windows guest.
+        let answered = policy
+            .respond(&command(RpcFunction::RmControl, payload))
+            .is_some_and(|reply| reply.rpc_result == 0);
+        assert_eq!(
+            answered,
+            arm == "windows" && control == 0x2080_1111,
+            "{arm}: control {control:#x}"
         );
     }
 }

@@ -96,6 +96,12 @@ for (const dry of [false, true])
         'OWNER_GITHUB_ID:' + OWNER,
         '--var',
         'DENIED_COUNTRIES:["CU","IR"]',
+        // Review F8: the Worker's self-reported bundle hash is set from the verified bytes.
+        '--var',
+        'DEPLOYED_BUNDLE_SHA256:' +
+          createHash('sha256')
+            .update(await readFile(f.emitted))
+            .digest('hex'),
       ]);
       for (const call of r.calls) {
         assert.equal(call.cwd, f.site);

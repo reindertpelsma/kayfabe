@@ -1,0 +1,28 @@
+[xid-watch] tag=ci5ef8286a3e4b0f55_cuda_guest  host=ubuntu  utc=2026-11-19T23:13:03Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh guest ci5ef8286a3e4b0f55 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=1213  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10675 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10756 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=18 trapped=10879 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f52]
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=509.30
+CUDA_LADDER_STARTED=2026-11-19T23:13:04+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=7fb1c98a
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10675 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10756 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=18 trapped=10879 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f52]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=17 trapped=11485 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f210 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f206 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f53]
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.156 med_ms=0.079 p90_ms=0.153 min_ms=0.077 max_ms=0.187 gflops=0.104 batch_per_launch_ms=0.085 batch_gflops=0.096 h2d_ms=16.631 d2h_med_ms=0.079 submit_med_ms=0.073 sync_med_ms=0.006 sync_cpu_med_ms=0.005 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.077 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=3.708 med_ms=3.670 p90_ms=3.702 min_ms=3.661 max_ms=3.715 gflops=4680.560 batch_per_launch_ms=3.637 batch_gflops=4723.766 h2d_ms=8.709 d2h_med_ms=3.627 submit_med_ms=0.091 sync_med_ms=3.587 sync_cpu_med_ms=3.586 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.096 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=8390.52
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=3042.01
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=509.30
+CUDA_LADDER_DONE=2026-11-19T23:23:01+00:00
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1213 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5ef8286a3e4b0f55_cuda_guest.log

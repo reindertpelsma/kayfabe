@@ -1052,6 +1052,208 @@
    }
   },
   {
+   "id": "dxsamples_execute_indirect",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 7200,
+   "expect_s": 600,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_execute_indirect keys=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D",
+    "pdh:Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the supervisor's; never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.json'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "D3D12ExecuteIndirect: a compute shader culls and fills indirect arguments, ExecuteIndirect draws them; SPACE toggles culling twice",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "proof_all": true,
+   "cmd": "kfopen.py run dxsamples_execute_indirect (D3D12ExecuteIndirect.exe driven 40 s)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "dxsamples_hdr",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 7200,
+   "expect_s": 600,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_hdr keys=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D"
+   ],
+   "difficulty": "high",
+   "why": "Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the supervisor's; never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.json'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "D3D12HDR (optional): swap-chain format switches (Page Up/Down) on a display without HDR; HDR output itself needs a real display and is not asserted",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run dxsamples_hdr (D3D12HDR.exe, Page Up/Down format switches)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "dxsamples_multiadapter",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 3,
+   "timeout_s": 120,
+   "expect_s": 3,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_multiadapter$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:needs-two-gpus"
+   ],
+   "difficulty": "high",
+   "why": "NOT_RUN by design: D3D12HeterogeneousMultiadapter and D3D12LinkedGpus are in the pinned tree and need two GPUs or two adapters; a kayfabe guest has one",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.none'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "always prints KFNOTRUN needs-two-gpus; the row exists so that reports name the reason",
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run dxsamples_multiadapter (NOT_RUN: needs two GPUs)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "dxsamples_nbody_async",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 7200,
+   "expect_s": 600,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_nbody_async keys=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D",
+    "pdh:Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the supervisor's; never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.json'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "D3D12nBodyGravity: a compute queue runs the simulation while the direct queue draws it; both engines are required (proof_all)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "proof_all": true,
+   "cmd": "kfopen.py run dxsamples_nbody_async (D3D12nBodyGravity.exe driven 40 s: window captures, close, exit code)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "dxsamples_reserved_resources",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 7200,
+   "expect_s": 600,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_reserved_resources keys=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D"
+   ],
+   "difficulty": "high",
+   "why": "Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the supervisor's; never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.json'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "D3D12ReservedResources: 24 UpdateTileMappings steps (UP/DOWN keys) over a 9-mip reserved texture, a VA-mapping stress; the title 'Mip Level: N' is checked",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run dxsamples_reserved_resources (D3D12ReservedResources.exe, 24 posted UP/DOWN keys, title check)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "dxsamples_work_graphs",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 3,
+   "timeout_s": 7200,
+   "expect_s": 400,
+   "rx": "^KFOPEN VERDICT PASS row=dxsamples_work_graphs uav=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the supervisor's; never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.json'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "D3D12 HelloWorkGraphs (console): dispatches a three-node work graph and prints 8 UAV values; NOT_RUN when the adapter reports no work graph tier",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run dxsamples_work_graphs (D3D12HelloWorkGraphs.exe, console)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
    "id": "dxva2_h264",
    "category": "video",
    "linux": [],
@@ -2272,7 +2474,7 @@
    "rx": "tg64",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:CUDA|NVIDIA",
+    "out:\\| CUDA +\\| +[1-9][0-9]* \\|",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
@@ -2310,7 +2512,7 @@
    "rx": "^OUTSHA llama_cpp ",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0: NVIDIA",
+    "out:offloaded ([1-9][0-9]*)/\\1 layers to GPU",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
@@ -2387,7 +2589,7 @@
    "rx": "tg64",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:Vulkan|NVIDIA",
+    "out:ggml_vulkan: [0-9]+ = NVIDIA",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
@@ -4108,6 +4310,105 @@
    }
   },
   {
+   "id": "vkglcts_gl46",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 14400,
+   "expect_s": 5400,
+   "rx": "^KFOPEN VERDICT PASS row=vkglcts_gl46 cases=\\d+ equal-to-control$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Conformance breadth through the user-mode GL/Vulkan driver, per-case results compared with the same binary on native Windows on the same die; unverified: built in the guest from pinned upstream sources, never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.tsv'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "glcts.exe from VK-GL-CTS vulkan-cts-1.4.7.1, 494 committed KHR-GL46 cases (compute, tessellation, FBO and texture formats, SPIR-V, sparse); PASS needs the native control; without it the row is NOT_RUN (discovery) and keeps the per-case results",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run vkglcts_gl46 (glcts.exe, 494 KHR-GL46 cases in chunks, per-case results equal to the native control)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "vkglcts_gl_dual_soak",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 3600,
+   "expect_s": 900,
+   "rx": "^KFOPEN VERDICT PASS row=vkglcts_gl_dual_soak seconds=\\d+ share=\\d+$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "One process, two OpenGL 4.6 contexts and threads (compute, tessellation, FBO, fences) for 10 minutes, then the event log is searched for the nvoglv64.dll crash signature of the Resolve runs; unverified",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.none'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "kf_gldual.c, built with the MSVC of the lane; targets the DaVinci Resolve crash class (nvoglv64.dll 3 of 3, 3-4 min after load)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run vkglcts_gl_dual_soak (kf_gldual.exe: two GL 4.6 contexts in one process, 600 s, event-log crash check)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
+   "id": "vkglcts_vk",
+   "category": "vulkan",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 3,
+   "timeout_s": 14400,
+   "expect_s": 5400,
+   "rx": "^KFOPEN VERDICT PASS row=vkglcts_vk cases=\\d+ equal-to-control$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Conformance breadth through the user-mode GL/Vulkan driver, per-case results compared with the same binary on native Windows on the same die; unverified: built in the guest from pinned upstream sources, never run",
+   "ps": "$kfopen = 'C:\\kf\\open_rows\\kfopen.py'\n$a = @('run', '@@ID@@', '--root', 'C:\\kfopen', '--out', $OUT)\n$ctl = 'C:\\kfopen\\control\\@@ID@@.tsv'\nif (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }\nif (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }\nInvoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "deqp-vk.exe from the same pin, 375 committed dEQP-VK cases (ray query and pipeline, mesh shaders, sparse, synchronization2, DGC, shader objects, ...); video excluded (DEQP_DISABLE_VK_VIDEO_TESTS=ON)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kfopen.py run vkglcts_vk (deqp-vk.exe, 375 dEQP-VK cases in chunks, per-case results equal to the native control)",
+   "requires": {
+    "official_fetch": [
+     "vc_redist"
+    ]
+   }
+  },
+  {
    "id": "vkpeak",
    "category": "vulkan",
    "linux": [
@@ -4468,6 +4769,8 @@
  },
  "no_equivalent": {
   "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
-  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
+  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
+  "nvcodec_matrix": "Linux ffmpeg capability matrix (open Linux row, 2026-11-17); the Windows NVENC/NVDEC rows are the existing ffmpeg and gate rows, a Windows matrix is not built yet",
+  "nvml_dcgm": "DCGM is a Linux data-centre tool and the NVML field sweep is the Linux guest's nvidia-smi surface; the Windows NVAPI/NVML readers are a separate candidate (hardware monitors), not this row"
  }
 }

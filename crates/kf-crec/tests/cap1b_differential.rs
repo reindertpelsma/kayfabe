@@ -363,7 +363,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     //
     // ⚠ **They are not uncovered, they are covered by a DIFFERENT artifact.** All three are
     // byte-compared against the C's captured GA106 init-control table in
-    // `kayfabe-abi/tests/gr_static_info.rs`, which is a different recording of the same
+    // `kf-abi/tests/gr_static_info.rs`, which is a different recording of the same
     // real hardware. What they lack is *reply-plane* coverage — nothing checks that this
     // port's answer reaches the guest's queue in the right envelope — and that is a real
     // gap, stated rather than closed.
@@ -421,7 +421,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `BusGetPcieSupportedGpuAtomics` are exercised through `InitTablePolicy::respond` in
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_pcie_supported_gpu_atomics}.rs`,
     // envelope and inner status included. `BusGetInfoV2` had **none** — §14.30 landed it with
-    // `kayfabe-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
+    // `kf-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
     // boundary — so `kayfabe-device/tests/bus_get_info_v2.rs` was written here to make this
     // admission true rather than merely quiet.
     // ⚠⚠⚠ §14.32 adds a TENTH, `GpuInfoV2`'s kind again — **a different demander**.
@@ -496,7 +496,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `kf-rm/tests/host_facts_query_ga106.rs::gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none`
         // (the row is the host's own reply word for word; engine 0 only).
         WantedTable::GrZcullInfo,
-        // ⚠ 2026-09-26: `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
+        // `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
         // closure limit. ★ Covered by the host's own client reply at realize
         // (`HostFacts::gr_sm_issue_rate_modifier`), engine 0 only; `[measured GB203]` libcuda's
         // `cuInit` needs the guest's client control served from it.
@@ -610,13 +610,13 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::CudartInit9064,
         WantedTable::CudartInit9A001,
         WantedTable::CudartPerfLevelInfoV2,
-        // ★ 2026-09-26 (`v3-families`): `BiosGetInfoV2` (`0x20800810`) — served from the HOST's
+        // `BiosGetInfoV2` (`0x20800810`) — served from the HOST's
         // VBIOS version so guest `nvidia-smi` shows the real one. `[measured by this test]` the
         // replay never reaches it on `cap1b`'s queue (the C never served it, so the guest's
         // `nvidia-smi` ask is not in the envelope this file judges). Its reply is pinned in
         // `kf-rm/tests/init_tables.rs::bios_get_info_v2_is_the_hosts_version_or_refused`.
         WantedTable::BiosGetInfoV2,
-        // ★ 2026-09-26 (`v3-mapfix` 56032c46): `McServiceInterrupts` (`0x20801702`) — asked only
+        // `McServiceInterrupts` (`0x20801702`) — asked only
         // by a runtime WAITER after 1 s with no interrupt (clpeak's `clFinish`), never by the cold
         // boot this capture records, so the replay cannot reach it. Refusing it forged the end of
         // the guest's wait (`kf_abi::mcintr`); its reply is pinned in

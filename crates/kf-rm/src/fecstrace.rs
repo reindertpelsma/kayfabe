@@ -1,13 +1,13 @@
-//! ★ 2026-10-07 (Windows Code43, run42): `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
+//! `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE`
 //! answered as the feature-absent state: `bEnable = NV_FALSE`.
 //!
 //! What the guest asks: whether FECS context-switch logging is enabled for its GR engine. The GSP
 //! body answers `kgraphicsIsCtxswLoggingEnabled` (`ogkm-580.65.06:
 //! src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:4390-4414`). kayfabe gives a guest no FECS
 //! context-switch trace: the trace is FECS firmware state of the HOST's GR engine, enabled and read
-//! by the host's RM, and nothing of it reaches the guest's trace buffer. So the truthful answer is
-//! "disabled" — the profiler class of OWNER_RULINGS §H ("capability absent"), not an invented
-//! value. vfio-10 (2026-10-05) answers `1` because there the guest's own GSP owns the engine.
+//! by the host's RM. It never reaches the guest's trace buffer, so "disabled" encodes an absent
+//! profiler capability.
+//! vfio-10 (2026-10-05) answers `1` because there the guest's own GSP owns the engine.
 //!
 //! What follows on the guest side (read, not run): `fecsBufferReset` then tries to enable logging
 //! — `SET_FECS_TRACE_WR_OFFSET`, `SET_FECS_TRACE_RD_OFFSET`, `SET_FECS_TRACE_HW_ENABLE`

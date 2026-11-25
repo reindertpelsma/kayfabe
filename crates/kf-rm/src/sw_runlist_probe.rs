@@ -33,6 +33,11 @@ pub(crate) struct Probe {
     allocation: Option<sw_runlist::AllocationCell>,
     identity: Arc<AtomicBool>,
     engines: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
+    /// The probe exists for a declared Windows guest only.
+    /// While the profile is inactive ([`crate::winprofile::WindowsProfile::active`]: a Linux
+    /// declaration, nothing declared, or `windows-support=off`) the probe does not see the allocation
+    /// at all, so the alloc takes the default path exactly as with no probe installed.
+    profile: crate::winprofile::WindowsProfile,
 }
 
 pub(crate) struct IdentityObserver {
@@ -47,6 +52,7 @@ impl Probe {
         driver: DriverAbiTable,
         engines: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
         die: kf_chip::DieId,
+        profile: crate::winprofile::WindowsProfile,
     ) -> (Self, IdentityObserver) {
         let identity = Arc::new(AtomicBool::new(false));
         let allocation = sw_runlist::allocation_cell(
@@ -61,6 +67,7 @@ impl Probe {
                 allocation,
                 identity: identity.clone(),
                 engines,
+                profile,
             },
             IdentityObserver {
                 driver,
@@ -76,7 +83,7 @@ impl Probe {
             return None;
         }
         let req = self.driver.decode_rpc_alloc(cmd.wire_body()).ok()?;
-        if !sw_runlist::is_probe_class(req.class) {
+        if !sw_runlist::is_probe_class(req.class) || !self.profile.active() {
             return None;
         }
         let decode = || {
@@ -347,13 +354,25 @@ mod tests {
     fn fixture() -> (Probe, IdentityObserver, RpcCommand) {
         fixture_for(driver(), "580.88")
     }
+    /// A profile whose Windows identity has been declared (the probe's own identity is checked on top).
+    fn active_profile() -> crate::winprofile::WindowsProfile {
+        let p = crate::winprofile::WindowsProfile::on();
+        p.declare(true);
+        p
+    }
+
     fn fixture_for(
         driver: DriverAbiTable,
         windows_name: &str,
     ) -> (Probe, IdentityObserver, RpcCommand) {
         let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
         engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
-        let (probe, mut observer) = Probe::new(driver, engines, kf_chip::DieId::new(0x190, 2));
+        let (probe, mut observer) = Probe::new(
+            driver,
+            engines,
+            kf_chip::DieId::new(0x190, 2),
+            active_profile(),
+        );
         observer.respond(&identity_for(driver, windows_name));
         // Independent nvos.h layout: engineId@0, maxTSGs@4, qosIntrEnableMask@8.
         let mut p = vec![0; 44];
@@ -661,6 +680,71 @@ mod tests {
         assert_eq!(g.node(key(1, 4)), Some(&previous));
     }
 
+    /// While the Windows profile is inactive (a Linux
+    /// declaration, nothing declared, `windows-support=off`) the probe does not see the allocation at all,
+    /// so the alloc takes the default path exactly as with no probe installed; the SAME probe, with the
+    /// profile active and the probe's own identity observed, decodes it.
+    #[test]
+    fn the_probe_is_invisible_unless_the_windows_profile_is_active() {
+        let (probe, mut observer, cmd) = fixture();
+        assert!(probe.decode(&cmd).unwrap().is_ok(), "active: decoded");
+        for (name, profile) in [
+            ("nothing declared", crate::winprofile::WindowsProfile::on()),
+            ("windows-support=off", {
+                let p = crate::winprofile::WindowsProfile::off();
+                p.declare(true);
+                p
+            }),
+        ] {
+            let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
+            engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+            let (p, mut obs) =
+                Probe::new(driver(), engines, kf_chip::DieId::new(0x190, 2), profile);
+            obs.respond(&identity_for(driver(), "580.88"));
+            assert!(
+                p.decode(&cmd).is_none(),
+                "{name}: not a probe request at all"
+            );
+        }
+        let _ = &mut observer;
+    }
+
+    /// With the profile inactive the probe is installed but answers EXACTLY as an object
+    /// policy that never had one — the same reply bytes, the same counters — so a Linux guest that sends
+    /// this class sees no difference.
+    #[test]
+    fn an_inactive_profile_answers_exactly_as_no_probe_at_all() {
+        let (_, _, cmd) = fixture();
+        let make = || {
+            ObjectPolicy::over(
+                &driver(),
+                kf_abi::GuestOs::Linux,
+                Box::new({
+                    let mut objects = GraphObjects::new(kf_chip::Family::Ada);
+                    objects.graph = graph();
+                    objects
+                }),
+                Default::default(),
+            )
+        };
+        let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
+        engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        let (probe, mut observer) = Probe::new(
+            driver(),
+            engines,
+            kf_chip::DieId::new(0x190, 2),
+            crate::winprofile::WindowsProfile::on(),
+        );
+        observer.respond(&identity_for(driver(), "580.88"));
+        let (mut with, mut without) = (make().with_sw_runlist_probe(probe), make());
+        assert_eq!(
+            format!("{:?}", with.respond(&cmd)),
+            format!("{:?}", without.respond(&cmd))
+        );
+        assert_eq!(with.applied(), without.applied());
+        assert_eq!(with.applied(), 0, "nothing was accepted");
+    }
+
     #[test]
     fn object_policy_default_denies_and_optin_accepts_without_control_widening() {
         let (probe, _, cmd) = fixture();
@@ -771,6 +855,7 @@ mod tests {
                 driver,
                 engines,
                 kf_chip::DieId::new(architecture, implementation),
+                active_profile(),
             );
             observer.respond(&identity_for(driver, "581.51"));
             assert!(

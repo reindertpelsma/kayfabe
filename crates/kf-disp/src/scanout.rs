@@ -93,7 +93,7 @@ pub struct YuvFormat {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (`Y8___V8U8`), else U then V.
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage — [`YUV_SEMI_PLANAR_8`], [`YUV_SEMI_PLANAR_16`], [`YUV_PACKED_YUYV`],
+    /// The storage — [`YUV_SEMI_PLANAR_8`], [`YUV_SEMI_PLANAR_16`], [`YUV_PACKED_YUYV`],
     /// [`YUV_PACKED_UYVY`].
     pub layout: u32,
 }
@@ -114,6 +114,19 @@ impl YuvFormat {
         match self.layout {
             YUV_SEMI_PLANAR_8 => 1,
             _ => 2,
+        }
+    }
+    /// The bytes of one plane-0 row the
+    /// kernel may read for luma columns `[0, x_end)`. Semi-planar: `x_end` luma samples. Packed
+    /// 4:2:2: whole 4-byte macropixels, `x_end.div_ceil(2) * 4` — the chroma of the last luma
+    /// pixel is in the second half of its macropixel, so with an odd `x_end` the kernel's chroma
+    /// read reaches 2 bytes past `x_end * 2`. ⊘ Was `x_end * 2` for every layout, which let that
+    /// read leave the checked extent (and the context DMA) by up to 2 bytes.
+    #[must_use]
+    pub fn plane0_row_bytes(self, x_end: u64) -> u64 {
+        match self.layout {
+            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end.div_ceil(2) * 4,
+            _ => x_end * self.luma_bytes(),
         }
     }
     /// Bytes per chroma pair in plane 1 (0: packed, no plane 1).
@@ -150,7 +163,7 @@ impl ScanFormats {
         ];
         // ★ derived from the class's own names, like the RGB table: a family without one simply
         // has no console YUV format (and the window is left out of the console copy, by name)
-        // ★ 2026-10-14 (the Linux plane oracle): plus the 10/12-bit semi-planar formats (P010 ...)
+        // Plus the 10/12-bit semi-planar formats (P010 ...)
         // and the packed 4:2:2 ones (YUY2/UYVY) — everything a semi-planar-capable page lets NVKMS
         // offer (`caps::page`); 3-plane formats stay out (left out by name).
         let yuv_names = [
@@ -704,7 +717,7 @@ pub struct YuvPlan {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (after `SWAP_UV`).
     pub vu_first: bool,
-    /// ★ 2026-10-14: the storage ([`YuvFormat::layout`]).
+    /// The storage ([`YuvFormat::layout`]).
     pub layout: u32,
     /// 0 = nearest, 1 = bilinear (chosen when the window scales).
     pub filter: u32,
@@ -813,8 +826,7 @@ pub fn plan_yuv(
                  dma: &CtxDma,
                  base: u64,
                  pitch_units: u32,
-                 bytes_per_px: u64,
-                 x_end: u64,
+                 row_bytes: u64,
                  y_end: u64|
      -> Result<(u64, u64, u32), String> {
         if dma.block_linear {
@@ -825,10 +837,9 @@ pub fn plan_yuv(
                 ));
             }
             let gobs = u64::from(pitch_units);
-            if gobs == 0 || x_end * bytes_per_px > gobs * 64 {
+            if gobs == 0 || row_bytes > gobs * 64 {
                 return Err(format!(
-                    "{plane}: {} bytes leave the {gobs}-GOB-wide surface",
-                    x_end * bytes_per_px
+                    "{plane}: {row_bytes} bytes leave the {gobs}-GOB-wide surface"
                 ));
             }
             let block_rows = y_end.div_ceil(8u64 << bh);
@@ -842,13 +853,12 @@ pub fn plan_yuv(
             Ok((src, extent, pitch_units))
         } else {
             let pitch = u64::from(pitch_units) * 64;
-            if x_end * bytes_per_px > pitch {
+            if row_bytes > pitch {
                 return Err(format!(
-                    "{plane}: a {}-byte row is wider than the {pitch}-byte pitch",
-                    x_end * bytes_per_px
+                    "{plane}: a {row_bytes}-byte row is wider than the {pitch}-byte pitch"
                 ));
             }
-            let extent = (y_end - 1) * pitch + x_end * bytes_per_px;
+            let extent = (y_end - 1) * pitch + row_bytes;
             let src = dma.span(base, extent).ok_or_else(|| {
                 format!(
                     "{plane}: [{base:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
@@ -867,8 +877,7 @@ pub fn plan_yuv(
         y_dma,
         s.offset,
         s.pitch,
-        f.luma_bytes(),
-        x_end,
+        f.plane0_row_bytes(x_end),
         y_end,
     )
     .map_err(refuse)?;
@@ -929,8 +938,7 @@ pub fn plan_yuv(
         c_dma,
         chroma_off,
         s.pitch1,
-        f.chroma_bytes(),
-        cx_end,
+        cx_end * f.chroma_bytes(),
         cy_end,
     )
     .map_err(refuse)?;
@@ -1247,7 +1255,7 @@ pub const CURSOR_LAYER: u32 = u32::MAX - 1;
 /// frame on every side; blended by `HEAD_SET_CONTROL_CURSOR_COMPOSITION` with the window factor
 /// numbering. `Ok(None)` when it lies wholly outside the frame.
 ///
-/// ★ **`MODE_XOR`** (2026-10-04, `OWNER_RULINGS.md` §O: "the compose kernel gains an XOR blend") is
+/// ★ **`MODE_XOR`** is
 /// composed with [`COMPOSE_XOR`]: `out = below XOR colour`, alpha and the factors ignored. ⊘ This
 /// is a DEFINITION, not a measurement, and here is why it had to be one: NVKMS never programs it.
 /// Its cursor composition table (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6646-6702`, the
@@ -1597,7 +1605,7 @@ fn cursor_blend(c: &CursorScan) -> Option<((i32, i32), (i32, i32))> {
     Some((factor(cur_sel, k1, 0)?, factor(vp_sel, k1, 0)?))
 }
 
-/// ★★ **The host cursor** (`OWNER_RULINGS.md` §O, hover mode; `docs/design/V3_DISPLAY.md` §8.12):
+/// ★★ **The host cursor**:
 /// head `c.head`'s WHOLE cursor image as the host pointer's — the store span to copy (never clipped
 /// to a frame: the host pointer may be anywhere) and the blend that turns its pixels into
 /// premultiplied `ARGB8888` ([`HostCursorSrc::image`]). The GPU copies the span into a buffer the
@@ -2187,7 +2195,7 @@ mod tests {
         );
         assert!(f.of(0x38).is_none(), "not an RGB console format");
         assert!(f.yuv_of(0xE6).is_none());
-        // ★ 2026-10-14: 16-bit-container semi-planar (P010 = Y10___V10U10_N420, 0x58) and packed
+        // 16-bit-container semi-planar (P010 = Y10___V10U10_N420, 0x58) and packed
         // 4:2:2 (YUY2 0x28, UYVY 0x29), by the class's own names; 3-plane (0x3B) stays out
         let t = crate::class::for_version("580.159.04").unwrap();
         let v = |n: &str| t.v(0xC67E, n).unwrap();
@@ -2242,7 +2250,7 @@ mod tests {
                 .unwrap()
                 .vu_first
         );
-        // ⊘ 2026-10-14: the destination keeps its size past the frame edge (the kernel skips the
+        // The destination keeps its size past the frame edge (the kernel skips the
         // writes outside the frame; clipping it here squeezed the scale); a window past the frame is none;
         // it scales (720x1280 -> 1295x986), so it is filtered
         let clipped = plan_yuv(&s, yf, &dma, &dma, 800, 600).unwrap().unwrap();
@@ -2361,6 +2369,107 @@ mod tests {
             .is_err()
         );
         assert!(plan_yuv(&Scanout { pitch: 11, ..sb }, yf, &bl, &bl, 1920, 1080).is_err());
+    }
+
+    /// A packed 4:2:2 window whose right
+    /// edge `x + width` is ODD. The kernel reads the last pixel's chroma from the second half of
+    /// its 4-byte macropixel, 2 bytes past `x_end * 2`. The plan's extent covers whole macropixels
+    /// and a context DMA that ends at `x_end * 2` is refused (the review's model example: x 37,
+    /// width 32, y 11, height 4, 256-byte pitch). ⊘ RED before: the extent was `14 * 256 + 138`.
+    #[test]
+    fn a_packed_window_with_an_odd_right_edge_is_bounded_in_whole_macropixels() {
+        let f = formats();
+        let t = crate::class::for_version("580.159.04").unwrap();
+        for name in [
+            "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+            "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+        ] {
+            let code = t.v(0xC67E, name).unwrap();
+            let yf = f.yuv_of(code).unwrap();
+            assert_eq!(yf.plane0_row_bytes(69), 140, "{name}: 35 macropixels");
+            assert_eq!(yf.plane0_row_bytes(68), 136, "{name}: even edge unchanged");
+            let s = Scanout {
+                window: 4,
+                format: code,
+                x: 37,
+                y: 11,
+                width: 32,
+                height: 4,
+                surface_width: 128,
+                surface_height: 16,
+                pitch: 256 / 64,
+                offset: 0,
+                out_x: 0,
+                out_y: 0,
+                out_width: 0,
+                out_height: 0,
+                ..fb1080()
+            };
+            let roomy = vid(0x4000_0000, 1 << 20);
+            let p = plan_yuv(&s, yf, &roomy, &roomy, 1920, 1080)
+                .unwrap()
+                .unwrap();
+            assert_eq!(p.y_extent, 14 * 256 + 140, "{name}");
+            assert_eq!(p.c_extent, p.y_extent, "{name}: one plane");
+            // a context DMA that ends where the old `x_end * 2` formula ended is refused
+            let tight = vid(0x4000_0000, 14 * 256 + 138);
+            assert!(
+                plan_yuv(&s, yf, &tight, &tight, 1920, 1080).is_err(),
+                "{name}: the last chroma byte is outside the context DMA"
+            );
+            let exact = vid(0x4000_0000, p.y_extent);
+            assert!(plan_yuv(&s, yf, &exact, &exact, 1920, 1080).is_ok());
+        }
+    }
+
+    /// ★ F-6 / D-09, the reference half: `yuv_reference` (the kernel's CPU model) handed EXACTLY
+    /// the plan's extent of bytes for an odd-edged packed window reads inside it, nearest and
+    /// bilinear. ⊘ RED before: the plan's extent stopped 2 bytes short and the reference refused
+    /// its own last chroma read.
+    #[test]
+    fn the_yuv_reference_of_an_odd_packed_window_reads_inside_the_planned_extent() {
+        let f = formats();
+        let t = crate::class::for_version("580.159.04").unwrap();
+        for name in [
+            "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+            "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+        ] {
+            let code = t.v(0xC67E, name).unwrap();
+            let yf = f.yuv_of(code).unwrap();
+            let s = Scanout {
+                window: 4,
+                format: code,
+                x: 37,
+                y: 11,
+                width: 32,
+                height: 4,
+                surface_width: 128,
+                surface_height: 16,
+                pitch: 256 / 64,
+                offset: 0,
+                out_x: 0,
+                out_y: 0,
+                out_width: 0,
+                out_height: 0,
+                ..fb1080()
+            };
+            let roomy = vid(0x4000_0000, 1 << 20);
+            let p = plan_yuv(&s, yf, &roomy, &roomy, 1920, 1080)
+                .unwrap()
+                .unwrap();
+            let bytes: Vec<u8> = (0..p.y_extent).map(|i| (i * 7 + 3) as u8).collect();
+            let mut frame = vec![0u8; 64 * 8 * 4];
+            for filter in [0, 1] {
+                let pl = YuvPlan {
+                    filter,
+                    dw: if filter == 0 { 32 } else { 61 },
+                    dh: if filter == 0 { 4 } else { 7 },
+                    ..p
+                };
+                yuv_reference(&pl, &bytes, &bytes, &mut frame, 64, 8)
+                    .unwrap_or_else(|e| panic!("{name} filter {filter}: {e:?}"));
+            }
+        }
     }
 
     fn vid(base: u64, bytes: u64) -> CtxDma {
@@ -3017,7 +3126,7 @@ mod tests {
         assert!(h.image(&raw[1..]).unwrap_err().0.contains("bytes copied"));
     }
 
-    // ---- 2026-10-15: A1R5G5B5 cursors (Windows' text I-beam) ----
+    // A1R5G5B5 cursors (Windows' text I-beam)
 
     /// A 16-bit pixel: alpha bit, then 5-bit red, green, blue.
     fn px16(a: u16, r: u16, g: u16, b: u16) -> u16 {

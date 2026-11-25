@@ -7,6 +7,12 @@ from __future__ import annotations
 from ..spec import Spec
 
 REASON = "managed-memory paging not supported"
+# The host-RAM rule of the row (named 2026-11-20): the managed allocation is VRAM x OVERSUB_FACTOR and must fit in
+# OVERSUB_HOST_RAM_FRACTION of MemAvailable, else NOT_RUN. The Worker's offer policy (ci/vast-broker/src/policy.js, rule
+# RAM_BELOW_VRAM_RULE) derives its listed-RAM floor from these two numbers; ci/vast-broker/test/offer-ram-vram.test.js
+# reads them from here and fails when the two sides differ. Change them here and in policy.js together.
+OVERSUB_FACTOR = 1.25
+OVERSUB_HOST_RAM_FRACTION = 0.6
 
 
 def _precheck(env, environ):
@@ -46,6 +52,17 @@ def _host_avail_gb():
     return 0.0
 
 
+def require_host_ram(total, avail_gb=None):
+    """The oversubscribed allocation in bytes, or NOT_RUN (code HOST_RAM_TOO_SMALL) when it does not fit the host's RAM rule; `avail_gb` is
+    MemAvailable, read here when omitted."""
+    from ..errors import NotRun
+    want = int(total * OVERSUB_FACTOR)
+    limit = _host_avail_gb() * OVERSUB_HOST_RAM_FRACTION if avail_gb is None else avail_gb * OVERSUB_HOST_RAM_FRACTION
+    if want / 2**30 > limit:
+        raise NotRun("host RAM too small to oversubscribe VRAM by 25%", code="HOST_RAM_TOO_SMALL")
+    return want
+
+
 def run(ctx):
     import os
     import torch
@@ -62,9 +79,7 @@ def run(ctx):
         ext = cpp_extension.load_inline(name="kfml_managed_" + cc.replace(".", "_"), cpp_sources=CPP, cuda_sources=CUDA,
                                         functions=["managed_empty"], build_directory=build)
         total = torch.cuda.get_device_properties(0).total_memory
-        want = int(total * 1.25)
-        if want / 2**30 > _host_avail_gb() * 0.6:
-            raise NotRun("host RAM too small to oversubscribe VRAM by 25%")
+        want = require_host_ram(total)
         chunk = 256 * 2**20 // 4
         tensors, got = [], 0
         while got < want:

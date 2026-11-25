@@ -1,12 +1,36 @@
 # docs/ — a map
 
-**STATUS: LIVE, 2026-11-07.** The map of what is published, what is current and what is history.
+**STATUS: LIVE, 2026-11-24 (repository map re-checked against the tree).** The map of what is published, what is current and what is history.
+
+## Where things are (repository map)
+
+| You want | Go to |
+|---|---|
+| The product code | [`crates/`](../crates/README.md) (`kf-*` crates are v3; `kayfabe-*` are frozen), the QEMU device in `qemu/hw/misc/kf3/`, the walk kernel in `cuda/walk/`, the display broker in `broker/`, the boot-display driver in `firmware/` |
+| The user manual | [`docs/howto/`](howto/index.md) and [`docs/FAQ.md`](FAQ.md), built into [kayfabe.dev](https://kayfabe.dev/) by `site/`. The only part of `docs/` that is published |
+| What is current | [`docs/STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md), [`docs/OWNER_RULINGS.md`](OWNER_RULINGS.md) (binding), [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`docs/design/`](design/README.md) (index by status) |
+| Evidence | [`traces/`](../traces/INDEX.md), one directory per run; bulk files of old runs are in archives ([`traces/EVIDENCE_ARCHIVE.md`](../traces/EVIDENCE_ARCHIVE.md)); claims and their checklists in [`docs/RELEASE_CLAIMS.md`](RELEASE_CLAIMS.md) |
+| CI | [`.github/workflows/`](../.github/workflows), the gates in [`scripts/ci/`](../scripts/ci/README.md), the Cloudflare Workers in [`ci/`](../ci/README.md); what each gate is: [`docs/CI_V3.md`](CI_V3.md) |
+| Bench scripts and tools | [`scripts/`](../scripts/README.md), [`tools/`](../tools/README.md) |
+| History, not current | [`docs/history/`](history/), [`docs/archive/`](archive/), [`archive/`](../archive/README.md), the `HANDOFF_*` and `RESUME_*` files in `docs/`; the sections below say which documents are which |
 
 ## Published
 
 - **The user manual** is `docs/howto/` plus `docs/FAQ.md`. It is the only part of `docs/` that is
-  published (https://kayfabe.dev; see `site/README.md`). `docs/howto/SUMMARY.md` is its navigation,
-  and `docs/FAQ.md` is appended last by the site build.
+  published (https://kayfabe.dev; see `site/README.md`). `docs/howto/SUMMARY.md` is its navigation, and
+  `docs/FAQ.md` is appended last by the site build. It has three parts: **Part 1, Use kayfabe** (install, run a
+  Linux or Windows guest, display and the broker, the command-line reference, troubleshooting, report a
+  problem, security), **Part 2, Test it yourself** (what runs out of the box, bring-your-own images) and
+  **Part 3, Run your own CI (operators)**, whose pages live under `docs/howto/ops/`. A new page is listed in
+  `SUMMARY.md` and, in Parts 1 and 2, in the "Pages" tables of `docs/howto/index.md` (the site takes each page's
+  one-line description from those tables). The eleven operator pages moved from `docs/howto/` to `docs/howto/ops/`; the old flat URLs are not redirected, which the owner accepted on 2026-11-24 because nothing links to them yet (`OWNER_RULINGS.md` §BK).
+- **The command-line reference** `docs/howto/cli-reference.md` has a device-property table that is
+  generated from `qemu/hw/misc/kf3/kf3.c` (`python3 scripts/ci/doc_cli_reference.py write`; the check is
+  in `docs/CI_V3.md`). Do not edit that table by hand.
+- **User pages carry no evidence labels.** CODE READ, MEASURED, NOT RUN, dated process notes and revisions belong in
+  the internal documents (`docs/RELEASE_CLAIMS.md` keeps the claims that were moved out of the manual). A user page
+  says the status in words (supported, experimental, not yet run on hardware, not verified); the `<!-- src: -->`
+  comments name the sources. The operator pages (Part 3) keep their labels because their readers deploy and audit.
 - **Everything else under `docs/` is internal**: design documents, status and handoff records, owner
   rulings, audits, references and archives. It is for contributors, is not part of the manual, and
   the site build refuses a manual page that links into it.

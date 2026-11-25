@@ -87,22 +87,37 @@ pub enum BudgetError {
     /// The VM serves no host-driven engine, so there is nothing to ask.
     NoRunlists,
     /// The host reports a runlist with no channels.
-    NoChannels { engine: u32 },
+    NoChannels {
+        /// The engine whose runlist has no channels.
+        engine: u32,
+    },
     /// `channel-budget` is below [`MIN_CHANNEL_BUDGET`].
-    BelowMinimum { asked: u32 },
+    BelowMinimum {
+        /// The `channel-budget` the user asked for.
+        asked: u32,
+    },
     /// `channel-budget` is above what the host can give.
     AboveLimit {
+        /// The `channel-budget` the user asked for.
         asked: u32,
+        /// The most the host can give on the limiting runlist.
         limit: u32,
+        /// The engine whose runlist limits the budget.
         engine: u32,
+        /// Channels that runlist has in all.
         total: u32,
+        /// Channels already in use on it.
         in_use: u32,
     },
     /// No `channel-budget` and the host has less than the minimum to give after its reserve.
     HostTooFull {
+        /// The derived budget, below the minimum.
         derived: u32,
+        /// The engine whose runlist is too full.
         engine: u32,
+        /// Channels that runlist has in all.
         total: u32,
+        /// Channels already in use on it.
         in_use: u32,
     },
 }

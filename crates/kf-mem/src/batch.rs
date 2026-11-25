@@ -18,7 +18,7 @@
 use crate::ledger::{Desired, HostVas, MapTarget, Mapped, SkedRow};
 use std::collections::BTreeMap;
 
-/// ★ 2026-10-09 — **the host verbs of ONE host VA space**, as [`BatchedVas`] uses them. Production
+/// **The host verbs of ONE host VA space**, as [`BatchedVas`] uses them. Production
 /// is [`HostVas`] (the in-process host RM); the GPU-free tests drive the same [`BatchedVas`] code
 /// against a simulated host RM (`crate::sim`) that implements `ogkm-595.84 rs_server.c:2419-2520`
 /// and `virt_mem_allocator_gm107.c:1531-1638` exactly, foreign mappings included.
@@ -67,7 +67,7 @@ pub trait SpaceVerbs {
     /// ★ Whether host RM can SPLIT a mapping lying in `[va, va+len)` (a range unmap that covers
     /// part of it) without damaging the part it keeps — see [`BatchedVas::unmap_range`].
     fn splits_safely(&self, va: u64, len: u64) -> bool;
-    /// ★ 2026-10-09: reserve `[va, va+len)` with a lazy FIXED `NV50_MEMORY_VIRTUAL` (a "micro
+    /// Reserve `[va, va+len)` with a lazy FIXED `NV50_MEMORY_VIRTUAL` (a "micro
     /// reservation"); returns its handle (an `hDma`). Freed with [`SpaceVerbs::free`].
     ///
     /// # Errors
@@ -367,6 +367,47 @@ pub enum BookRefusal {
 /// inserts and removals go in chunks of this size, the structure consistent between chunks.
 pub const LEDGER_CHUNK: usize = 2048;
 
+/// ★ 2026-11-15 (Wukong stalls, `WUKONG_STALLS_20261115.md` §B): the most ledger entries — our host
+/// mappings, one per placed run piece — ONE host unmap RM call may cover. ⊘ Was unbounded: one
+/// maximal owned span was one `NVOS47` range unmap however long (`[measured, f4a b20fd84b]` 120 930
+/// runs in TWO calls, 1 502 ms, about 4 µs per run), and the channel that asked for the split waited
+/// for all of it, which at Windows' default 2 s `TdrDelay` coincides with a TDR. Now a span longer
+/// than this is issued as several calls, cut BETWEEN ledger entries (never inside one of our
+/// mappings, so no split that the whole span would not have made), each recorded in the ledger as
+/// it lands: a failure in call k leaves calls `0..k` cut and call k and the rest untouched, exactly
+/// what the ledger says. The total effect is the same. At 4 µs per run a call costs about 16 ms.
+/// Map calls are already bounded the same way (`apply::BATCH_MAX_RUNS` = 4 096 per batch, one run
+/// per single map).
+pub const UNMAP_CALL_MAX_ENTRIES: usize = 4096;
+
+/// One host unmap call that took at least this long is named in the log (bounded by
+/// [`SLOW_UNMAP_LOG_CAP`] lines per process). The apply as a whole has the `SLOW-APPLY` line
+/// (`vasmgr::SLOW_APPLY_MS`).
+pub const SLOW_UNMAP_CALL_MS: u64 = 250;
+
+/// The most [`SLOW_UNMAP_CALL_MS`] lines one process prints (the count keeps going).
+pub const SLOW_UNMAP_LOG_CAP: u32 = 16;
+
+/// The line for one slow host unmap call, or `None` below [`SLOW_UNMAP_CALL_MS`] or past the cap
+/// (`logged` counts the lines already printed). Pure apart from the counter, so a test can pin it.
+pub(crate) fn slow_unmap_line(
+    entries: usize,
+    elapsed: std::time::Duration,
+    logged: &std::sync::atomic::AtomicU32,
+) -> Option<String> {
+    if elapsed < std::time::Duration::from_millis(SLOW_UNMAP_CALL_MS) {
+        return None;
+    }
+    let n = logged.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    (n < SLOW_UNMAP_LOG_CAP).then(|| {
+        format!(
+            "kf-mem: SLOW host unmap call: {entries} ledger entr(ies) in {} ms (budget {SLOW_UNMAP_CALL_MS} ms; calls are cut at {UNMAP_CALL_MAX_ENTRIES} entries; line {} of {SLOW_UNMAP_LOG_CAP})",
+            elapsed.as_millis(),
+            n.saturating_add(1)
+        )
+    })
+}
+
 /// ★ Review 3 item 2: the most host calls ONE steer hull (one claim) may cost — see
 /// [`BatchedVas::hand_to_host`]. At 84-123 µs per unmap `[measured earlier, vast 52624429,
 /// 2026-09-26]` a hull holds its claim for ≲ 2 ms.
@@ -623,7 +664,7 @@ impl BatchBook {
     }
 }
 
-/// ★ 2026-10-09 — one host mapping WE made in this space: a per-run row (or one `hDma` piece of
+/// One host mapping WE made in this space: a per-run row (or one `hDma` piece of
 /// one), a SKED row, a batch object's mapping, or a remnant host RM kept when one of ours was split
 /// by an exact (reservation) range unmap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -636,7 +677,7 @@ pub struct OwnMap {
     pub via: Option<u32>,
 }
 
-/// ★★★ 2026-10-09 — **the ledger of OUR OWN host mappings in one space, at host-mapping
+/// **The ledger of OUR OWN host mappings in one space, at host-mapping
 /// granularity** (`va → OwnMap`). It answers the questions a range unmap must never guess: *which
 /// bytes of `[va, end)` are ours* (a range unmap goes over exactly those, never over a gap: host RM
 /// removes whatever of this client's mappings lies in a range, foreign ones included,
@@ -811,7 +852,7 @@ impl OwnMaps {
     }
 }
 
-/// ★ 2026-10-09: batching outside the guest reservations is worth its fixed cost (a micro
+/// Batching outside the guest reservations is worth its fixed cost (a micro
 /// reservation alloc + free, a descriptor alloc + free, the view's stitch/munmap) only from this
 /// many runs up (`V3_BATCHED_MAP.md` §8.4: per-run ≈ 20 µs map + one unmap per run; the batch's
 /// fixed part ≈ 4 RM calls + 2 mm syscalls) — below it the rows go per run.
@@ -834,7 +875,7 @@ pub const BATCH_TOTAL_CAPPED: &str = "the batches of this space already span BAT
 /// ★ Review 2 item 7: why [`BatchedVas::place`] refused a batch for its VA extent.
 pub const BATCH_EXTENT_CAPPED: &str = "batch spans more VA than BATCH_MAX_EXTENT (64 GiB): its liveness bitmap would be sized by a guest-chosen extent — refused by name, the rows go per run";
 
-/// ★ 2026-10-09: the most host mappings ONE row is split into outside a reservation — a bound on
+/// The most host mappings ONE row is split into outside a reservation — a bound on
 /// host calls per row, never sized by an unchecked guest value.
 ///
 /// ★ D1 (2026-10-10, `V3_BATCHED_MAP.md` §8.8): the unit counted is the 4 KiB GRAIN, the grain every
@@ -1059,7 +1100,7 @@ type Seg = (Option<u32>, u64, u64);
 ///    `virt_mem_allocator_gm107.c:1578-1633`): a guest reservation, or a MICRO reservation made
 ///    over exactly the batch's VA ([`BatchedVas::low_reserve`], default ON).
 /// 3. **No remap, ever.** A VA whose guest mapping did not change is never transiently unmapped
-///    (owner, 2026-10-09): partial unmaps are made exact instead.
+///    because partial unmaps are made exact instead.
 ///
 /// ★ D2 — **the locks.** `book`, `own` and `micro` are taken by the VA thread AND by the act thread
 /// ([`BatchedVas::hand_to_host`]). The act thread taking them is accepted (a steer request answered
@@ -1097,6 +1138,9 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     pub unsafe_splits: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10: the per-row bound ([`MAX_LEAF_PIECES`]; tests lower it).
     pub max_leaf_pieces: u64,
+    /// The most ledger entries one host unmap call covers
+    /// ([`UNMAP_CALL_MAX_ENTRIES`]; tests lower it; 0 is read as 1).
+    pub unmap_call_cap: usize,
     /// ★ Review fix 2026-10-10: rows refused by [`HUGE_ROW_OUTSIDE_RESERVATION`].
     pub huge_refused: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10: mappings of ours found where a NEW row was about to be mapped (a
@@ -1264,6 +1308,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             micro_refused: std::sync::atomic::AtomicU64::new(0),
             unsafe_splits: std::sync::atomic::AtomicU64::new(0),
             max_leaf_pieces: MAX_LEAF_PIECES,
+            unmap_call_cap: UNMAP_CALL_MAX_ENTRIES,
             huge_refused: std::sync::atomic::AtomicU64::new(0),
             strays_removed: std::sync::atomic::AtomicU64::new(0),
             held_ours: std::sync::atomic::AtomicU64::new(0),
@@ -1626,7 +1671,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         }
     }
 
-    /// ★★★ 2026-10-09 — **[`BatchedVas::segments`], then every unreserved part placed so that a
+    /// **[`BatchedVas::segments`], then every unreserved part placed so that a
     /// later partial change is EXACT** (rule 2).
     ///
     /// ★ D1 (2026-10-10): outside every VA-reserving `hDma` (the `NV01` range) a mapping of ours is
@@ -1696,7 +1741,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 let mut made: Vec<Seg> = Vec::with_capacity(cores.len());
                 let mut refused = false;
                 for &(cs, ce) in &cores {
-                    match self.vas.reserve(cs, ce.saturating_sub(cs)) {
+                    match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                        self.vas.reserve(cs, ce.saturating_sub(cs))
+                    }) {
                         Ok(h) => {
                             self.add_micro(cs, ce, h);
                             made.push((Some(h), cs, ce));
@@ -1842,7 +1889,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     e.saturating_sub(s)
                 ));
             }
-            match self.vas.reserve(cur, leaf) {
+            match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                self.vas.reserve(cur, leaf)
+            }) {
                 Ok(h) => {
                     self.add_micro(cur, next, h);
                     fresh.push((Some(h), cur, next));
@@ -2155,9 +2204,13 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Whole-mapping unmap of one OWN entry, by its routing.
     fn unmap_entry(&self, s: u64, m: OwnMap, defer: bool) -> Result<(), String> {
         match m.via {
-            Some(h) => self.vas.unmap_in(h, s, 0, defer),
+            Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_in(h, s, 0, defer)
+            }),
             // By ROW: a row straddling a guest-reservation edge is one host mapping per `hDma`.
-            None => self.vas.unmap_row(s, m.len, defer),
+            None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_row(s, m.len, defer)
+            }),
         }
     }
 
@@ -2212,8 +2265,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
             for &(via, s, e) in runs.iter().rev() {
                 let r = match via {
-                    Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer),
-                    None => self.vas.unmap_range(s, e.saturating_sub(s), defer),
+                    Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                        self.vas.unmap_in(h, s, e.saturating_sub(s), defer)
+                    }),
+                    None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                        self.vas.unmap_range(s, e.saturating_sub(s), defer)
+                    }),
                 };
                 if let Err(r) = r {
                     // ★ Review fix 2026-10-10: the pieces are still OURS on the host — recorded, so
@@ -2273,8 +2330,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 ..*d
             };
             match via {
-                Some(h) => self.vas.map_row_in(h, &piece, defer),
-                None => self.vas.map_row(&piece, defer),
+                Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_row_in(h, &piece, defer)
+                }),
+                None => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_row(&piece, defer)
+                }),
             }
         })
     }
@@ -2301,8 +2362,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 ..*sk
             };
             match via {
-                Some(h) => self.vas.map_sked_in(h, &piece, defer),
-                None => self.vas.map_sked_row(&piece, defer),
+                Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_sked_in(h, &piece, defer)
+                }),
+                None => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_sked_row(&piece, defer)
+                }),
             }
         })
     }
@@ -2311,7 +2376,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// object. `Ok` ⇔ every row is our mapping; `Err` ⇔ none is (an object the book cannot
     /// account for is freed — which unmaps it — before the refusal returns).
     ///
-    /// ★ 2026-10-09 (rule 2): a batch lives inside ONE VA-reserving `hDma`: wholly inside a guest
+    /// A batch lives inside ONE VA-reserving `hDma`: wholly inside a guest
     /// reservation; or wholly inside one live micro reservation (a batch re-using its dead pages);
     /// or, with [`BatchedVas::low_reserve`] and at least [`LOW_RANGE_MIN_RUNS`] rows, inside a NEW
     /// micro reservation made over exactly its VA. Anything else answers
@@ -2363,14 +2428,16 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         // Pieces of the rows OUTSIDE the core, placed per run after the batch.
         let mut outside: Vec<Desired> = Vec::new();
         let mapped: Result<(u32, Option<u32>), String> = match segs.as_slice() {
-            [(None, ..)] if self.vas.splits_safely(va, len) => self
-                .vas
-                .map_scattered(ram_fd, rows, defer)
-                .map(|h| (h, None)),
-            [(Some(h), ..)] => self
-                .vas
-                .map_scattered_in(*h, ram_fd, rows, defer)
-                .map(|o| (o, Some(*h))),
+            [(None, ..)] if self.vas.splits_safely(va, len) => {
+                kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_scattered(ram_fd, rows, defer)
+                })
+                .map(|h| (h, None))
+            }
+            [(Some(h), ..)] => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                self.vas.map_scattered_in(*h, ram_fd, rows, defer)
+            })
+            .map(|o| (o, Some(*h))),
             [(None, ..)] if self.low_reserve && rows.len() >= LOW_RANGE_MIN_RUNS => {
                 // ★ Held-hole fix: host RM rounds a reservation to 64 KiB / 2 MiB ([`reserve_exact`]).
                 // The reservation is made over the run's aligned HULL when nothing of ours lies in
@@ -2392,7 +2459,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                         continue;
                     }
                     tried = Some((rs, re));
-                    match self.vas.reserve(rs, re.saturating_sub(rs)) {
+                    match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                        self.vas.reserve(rs, re.saturating_sub(rs))
+                    }) {
                         Ok(h) => {
                             self.add_micro(rs, re, h);
                             pinned.push((Some(h), rs, re));
@@ -2400,10 +2469,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                             outside = clip_rows(rows, va, ms);
                             outside.extend(clip_rows(rows, me, end));
                             (bva, blen) = (ms, me.saturating_sub(ms));
-                            result = self
-                                .vas
-                                .map_scattered_in(h, ram_fd, &core_rows, defer)
-                                .map(|o| (o, Some(h)));
+                            result = kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                                self.vas.map_scattered_in(h, ram_fd, &core_rows, defer)
+                            })
+                            .map(|o| (o, Some(h)));
                             break;
                         }
                         // Refused (the hull may touch a guest reservation or a host buffer): the
@@ -2524,7 +2593,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 m.len
             ));
         }
-        let mut open: Option<(u64, u64, Option<u32>)> = None;
+        // A span is cut at `unmap_call_cap` entries (between entries, never inside
+        // one of our mappings); `open` carries (lo, hi, via, entries so far).
+        let cap = self.unmap_call_cap.max(1);
+        let mut open: Option<(u64, u64, Option<u32>, usize)> = None;
         let mut cur = va;
         while cur < end {
             let chunk = self.hold(&self.own, |o| {
@@ -2537,10 +2609,13 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 let e = s.saturating_add(m.len);
                 let (cs, ce) = (s.max(va), e.min(end));
                 match open.as_mut() {
-                    Some((_, oe, via)) if *oe == cs && *via == m.via => *oe = ce,
+                    Some((_, oe, via, n)) if *oe == cs && *via == m.via && *n < cap => {
+                        *oe = ce;
+                        *n = n.saturating_add(1);
+                    }
                     _ => {
-                        if let Some(span) = open.replace((cs, ce, m.via)) {
-                            self.unmap_span(span, defer)?;
+                        if let Some((lo, hi, via, n)) = open.replace((cs, ce, m.via, 1)) {
+                            self.unmap_span((lo, hi, via), n, defer)?;
                         }
                     }
                 }
@@ -2550,20 +2625,44 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 break;
             }
         }
-        if let Some(span) = open {
-            self.unmap_span(span, defer)?;
+        if let Some((lo, hi, via, n)) = open {
+            self.unmap_span((lo, hi, via), n, defer)?;
         }
         Ok(())
     }
 
-    /// One maximal owned span: the host call (no lock held), then the ledger and the book.
-    fn unmap_span(&self, (s, e, via): (u64, u64, Option<u32>), defer: bool) -> Result<(), String> {
-        match via {
-            Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer)?,
-            None => self.vas.unmap_range(s, e.saturating_sub(s), defer)?,
+    /// One owned span of at most `unmap_call_cap` entries: the host call (no lock held), then the
+    /// ledger and the book. A call at or over [`SLOW_UNMAP_CALL_MS`] is named in the log.
+    fn unmap_span(
+        &self,
+        (s, e, via): (u64, u64, Option<u32>),
+        entries: usize,
+        defer: bool,
+    ) -> Result<(), String> {
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let t0 = std::time::Instant::now();
+        let r = match via {
+            Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_in(h, s, e.saturating_sub(s), defer)
+            }),
+            None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_range(s, e.saturating_sub(s), defer)
+            }),
+        };
+        if let Some(line) = slow_unmap_line(entries, t0.elapsed(), &LOGGED) {
+            eprintln!("{line}");
         }
+        r?;
+        // The ledger's share, the frees it makes excluded.
+        let t_led = std::time::Instant::now();
+        let freed0 = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree);
         self.cut_own(s, e);
         self.retired(s, e.saturating_sub(s));
+        let freed = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree).saturating_sub(freed0);
+        kf_host::phase::record(
+            kf_host::phase::Phase::LedgerRetire,
+            kf_host::phase::ns_since(t_led).saturating_sub(freed),
+        );
         Ok(())
     }
 
@@ -2749,7 +2848,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     /// Free one micro reservation; `true` when host RM freed it.
     fn free_micro(&self, h: u32) -> bool {
-        match self.vas.free(h) {
+        match kf_host::phase::timed(kf_host::phase::Phase::RmFree, || self.vas.free(h)) {
             Ok(()) => {
                 bump(&self.micro_freed);
                 true
@@ -2789,7 +2888,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     fn free(&self, handles: Vec<u32>) {
         for h in handles {
-            match self.vas.free(h) {
+            match kf_host::phase::timed(kf_host::phase::Phase::RmFree, || self.vas.free(h)) {
                 Ok(()) => bump(&self.frees),
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
                 // its pinned pages live on — named. ★ Review fix 2026-10-10: and TRACKED
@@ -2915,7 +3014,7 @@ mod tests {
         assert_eq!(b.len(), 2, "two handles may start at one VA");
     }
 
-    /// ★ 2026-10-09: a range plans only OUR bytes — maximal owned spans per `hDma`, never a gap —
+    /// A range plans only OUR bytes — maximal owned spans per `hDma`, never a gap —
     /// and names the mappings it would split.
     #[test]
     fn own_maps_plan_owned_spans_and_name_splits() {
@@ -3513,7 +3612,7 @@ mod tests {
 
     /// ★ Review item 4 — amplification is bounded: with the refresh armed, a row that would cost a
     /// million host calls at 4 KiB grain (a reservation refused) is refused by name with at most
-    /// the one reservation attempt; a row inside the budget is taken down by ONE range call, and
+    /// the one reservation attempt; a row inside the budget is taken down by one range call per `UNMAP_CALL_MAX_ENTRIES` entries, and
     /// rolled back by one range call when a piece fails; the next refresh starts afresh.
     #[test]
     fn host_call_amplification_is_bounded_per_refresh() {
@@ -3539,9 +3638,12 @@ mod tests {
         let before = host.inner.host_calls.load(Relaxed);
         assert_eq!(bv.unmap_run(va, Some(len), true), Ok(()));
         let used = host.inner.host_calls.load(Relaxed) - before;
+        // ★ 2026-11-15: ⊘ was `used <= 2` (one range call). A call now covers at most
+        // `UNMAP_CALL_MAX_ENTRIES` entries, so 65 536 entries are 16 calls (+1 for the free).
+        let calls = 65_536 / UNMAP_CALL_MAX_ENTRIES as u64;
         assert!(
-            used <= 2,
-            "unmap_run issued {used} host calls for 65 536 entries"
+            (2..=calls + 2).contains(&used),
+            "unmap_run issued {used} host calls for 65 536 entries (expected about {calls})"
         );
         assert!(bv.own.lock().unwrap().is_empty());
         // (3) a piece fails mid-row: the placed pieces go in ONE range call.
@@ -4340,7 +4442,7 @@ mod tests {
     }
 
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a
-    /// debug build on a loaded SHARED box (a 30 ms bound failed once under another agent's load; 6-12 ms
+    /// debug build on a loaded shared box (a 30 ms bound failed under concurrent load; 6-12 ms
     /// is the unloaded figure; the unfixed code waited 670 ms, so 60 ms still discriminates).
     const ACT_WAIT_BOUND_US: u64 = 60_000;
 

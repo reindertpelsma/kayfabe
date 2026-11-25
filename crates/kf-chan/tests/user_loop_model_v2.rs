@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **Exhaustive interleaving model v2 of the Windows USER-ring relay's worker loop**: the REAL per-entry
+//! **Exhaustive interleaving model v2 of the Windows USER-ring relay's worker loop**: the REAL per-entry
 //! turn (`kf_chan::user_turn::Relay` through `lifecycle_support::Relay`, lazy observe with the production defaults, the
 //! real `Lifecycle` in Pointer mode) under a worker/token/wake/peek model, several channels, cross-channel semaphores,
 //! the disable/enable act window and the private doorbell. GPU-free, deterministic, no wall-clock: a timer is a
@@ -1263,7 +1263,7 @@ fn unannounced(w: &World) -> bool {
 fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
     match w.pc {
         Pc::Top0 => {
-            // ★ the ONE evaluation per iteration (owner, 2026-10-20): drain the ready fds, evaluate every relay's recorded wait
+            // ★ the ONE evaluation per iteration: drain the ready fds, evaluate every relay's recorded wait
             let mut n = w.clone();
             n.moved = false;
             if n.ch.iter().any(|c| c.env.ev) {
@@ -2031,7 +2031,7 @@ fn pointer_without_markers_is_carried_by_the_spin_only() {
 }
 
 /// ... and without ANY spin budget or safety net: a carried wait (Pointer markers off) has no wake source, so the worker never blocks on
-/// it; the one loop keeps evaluating and the guest's write-back happens (owner, 2026-10-20). Pops arrive one at a time (`pop_depth` 1),
+/// it; the one loop keeps evaluating and the guest's write-back happens. Pops arrive one at a time (`pop_depth` 1),
 /// after the worker's last evaluation, which is the case a blocking worker would sleep through.
 #[test]
 fn pointer_without_markers_is_carried_by_the_one_loop_not_by_blocking() {

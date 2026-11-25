@@ -1,0 +1,30 @@
+RUN3_START 2026-11-13T23:09:51+00:00
+STEP gates_bounds start 2026-11-13T23:09:51+00:00
+STEP gates_bounds rc=1 2026-11-13T23:10:06+00:00
+GATE1_VERDICT=FAIL
+GATE2_VERDICT=FAIL
+GATE3_VERDICT=FAIL
+GATE4_VERDICT=FAIL
+GATE5_VERDICT=FAIL
+GATE6_VERDICT=FAIL
+GATE7_VERDICT=FAIL
+GATE8_VERDICT=FAIL
+GATE9_VERDICT=PASS
+GATE10_VERDICT=FAIL
+V3_GATES_SUMMARY pass=1 fail=8 gate10=FAIL failed: kf-gate1(rc=1,verdict=FAIL) kf-gate2(rc=1,verdict=FAIL) kf-gate3(rc=1,verdict=FAIL) kf-gate4(rc=1,verdict=FAIL) kf-gate5(rc=1,verdict=FAIL) kf-gate6(rc=1,verdict=FAIL) kf-gate7(rc=1,verdict=FAIL) kf-gate8(rc=1,verdict=FAIL)
+V3_GATES_EXIT pass=1 fail=8 births_ok=0 gate10=FAIL 2026-11-13T23:10:06+00:00
+STEP gates_next start 2026-11-13T23:10:07+00:00
+STEP gates_next rc=1 2026-11-13T23:10:22+00:00
+GATE1_VERDICT=FAIL
+GATE2_VERDICT=FAIL
+GATE3_VERDICT=FAIL
+GATE4_VERDICT=FAIL
+GATE5_VERDICT=FAIL
+GATE6_VERDICT=FAIL
+GATE7_VERDICT=FAIL
+GATE8_VERDICT=FAIL
+GATE9_VERDICT=PASS
+GATE10_VERDICT=FAIL
+V3_GATES_SUMMARY pass=1 fail=8 gate10=FAIL failed: kf-gate1(rc=1,verdict=FAIL) kf-gate2(rc=1,verdict=FAIL) kf-gate3(rc=1,verdict=FAIL) kf-gate4(rc=1,verdict=FAIL) kf-gate5(rc=1,verdict=FAIL) kf-gate6(rc=1,verdict=FAIL) kf-gate7(rc=1,verdict=FAIL) kf-gate8(rc=1,verdict=FAIL)
+V3_GATES_EXIT pass=1 fail=8 births_ok=0 gate10=FAIL 2026-11-13T23:10:22+00:00
+RUN3_EXIT 2026-11-13T23:10:22+00:00

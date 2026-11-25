@@ -1,5 +1,4 @@
-//! The driver-version table: nvproxy's inherit-then-mutate model, and the
-//! **exact** version boundaries it turns on.
+//! The driver-version table, and the **exact** version boundaries it turns on.
 //!
 //! # Why exact boundaries and not majors
 //!
@@ -7,9 +6,8 @@
 //! (`nvidia-gpu-passthrough/src/common/nvkvm_abi.h:112-121`,
 //! `nvkvm_abi_id_for_major`). That is too coarse and demonstrably so: the
 //! `NVOS46_PARAMETERS` growth lands at **580.65.06**, not at 580.0
-//! (`gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1059` switches to
-//! `NVOS46_PARAMETERS_V580` at exactly that entry), and `NVOS47_PARAMETERS`
-//! grew at **550.54.04** (`gvisor/pkg/abi/nvgpu/frontend.go:707-710`), mid-major
+//! (the measured driver matrix, `crate::generated::matrix`), and `NVOS47_PARAMETERS`
+//! grew at **550.54.04**, mid-major
 //! in both cases. A major-only key cannot express either, so it is right by
 //! luck for the releases that happen to exist and wrong for the ones that do
 //! not.
@@ -29,10 +27,7 @@
 //! 550.54.04 are refused rather than decoded with a layout that is wrong by 8
 //! bytes in the middle of the struct.
 
-use crate::capability::{
-    CAPS_550_54_04, CAPS_550_90_07, CAPS_555_42_02, CAPS_560_28_03, CAPS_570_86_15, CAPS_575_51_02,
-    CAPS_580_65_06, CAPS_610_43_02, CapabilityTable,
-};
+use crate::capability::CapabilityTable;
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
 use kf_arch::UserdMem;
@@ -257,9 +252,7 @@ impl GspInitArgsWire {
 
 /// One driver version's ABI table.
 ///
-/// nvproxy's `driverABI` is four handler maps
-/// (`version.go:100-107`); this is the same idea at the size this slice needs —
-/// one entry per versioned layout, and nothing for the layouts that do not vary.
+/// One entry per versioned layout, and nothing for the layouts that do not vary.
 /// Adding a versioned struct means adding a field here and a line to each table,
 /// which is the ~14-51-line delta `mode2_abi_agnostic_layer.md` §2.1 measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -354,9 +347,6 @@ pub struct DriverAbiTable {
     /// ([`RmControlWire`]). The header is 24 bytes through 570.x and 40 from 575.51.02, so a
     /// fixed offset mis-slices every control of every guest on one side of that boundary.
     rm_control: RmControlWire,
-    /// The capability row's justification (nvproxy boundary) — kept in the data so a reader
-    /// sees why this version gets that allowlist without leaving the file.
-    pub note: &'static str,
 }
 
 /// ★★★ `rpc_gsp_rm_control_v` — the body of every `GSP_RM_CONTROL` (fn 76), as MEASURED at
@@ -383,121 +373,21 @@ pub struct RmControlWire {
     pub status_off: usize,
 }
 
-/// ★★★ The **capability allowlist's** version boundaries — the one hand-maintained row set
-/// left in this module, and why it is legitimately hand-maintained.
-///
-/// Until 2026-09-26 this was `TABLES`, one hand row per boundary carrying EVERY versioned
-/// fact (wire shapes, the VGX pair, the channel-alloc offsets) — eight rows, 550.54.04 up,
-/// with `vgx`/`channel_*` `None` on six of them and every guest below the floor refused.
-/// `docs/design/V3_DRIVER_MATRIX.md` §3 replaced the layout half with MEASURED data
-/// ([`crate::matrix`]): those facts are now read per exact driver tag out of
-/// [`crate::generated::matrix`], and [`table_for`] assembles a table for any measured tag.
-///
-/// ⊘ What stays here is **policy, not layout**: which controls and classes a guest at a
-/// given version may name at all. Its source is gVisor nvproxy's per-version registry
-/// (`gvisor/pkg/sentry/devices/nvproxy/version.go`), a security allowlist a human reviews,
-/// and it is keyed on nvproxy's own boundaries ("newest row ≤ version" — an allowlist row
-/// is valid until the next one changes it, which is what nvproxy's inherit-then-mutate
-/// means). ⚠ Below the oldest row (535.x, 545.x) there is no reviewed allowlist in this
-/// port; [`table_for`] refuses those versions by name ([`AbiError::NoCapabilityRow`]) rather
-/// than handing them the 550 surface. nvproxy has 535.104.05 and 545.23.06 blocks
-/// (`version.go:159`, `:837`) — porting them is the named follow-on (§6).
-#[derive(Debug, Clone, Copy)]
-struct CapsRow {
-    from: DriverVersion,
-    caps: &'static CapabilityTable,
-    note: &'static str,
-}
-
-const fn dv(major: u16, minor: u16, patch: u16) -> DriverVersion {
-    DriverVersion {
-        major,
-        minor,
-        patch,
-    }
-}
-
-/// Ascending. See [`CapsRow`].
-const CAPS_ROWS: &[CapsRow] = &[
-    // ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] the two rows below admit 535/545
-    // guests (nvproxy's v535_104_05 / v545_23_06 blocks; `crate::capability`).
-    CapsRow {
-        from: dv(535, 104, 5),
-        caps: &crate::capability::CAPS_535_104_05,
-        note: "[OWNER APPROVED 2026-09-28] nvproxy's oldest ABI (version.go:159): the 550.54.04 surface \
-               minus what 545.23.06 and 550.40.07 added",
-    },
-    CapsRow {
-        from: dv(545, 23, 6),
-        caps: &crate::capability::CAPS_545_23_06,
-        note: "[OWNER APPROVED 2026-09-28] + GPU_GET_ACTIVE_DEVICE_IDS, NV00DE REQUEST_DATA_POLL (version.go:837-846)",
-    },
-    CapsRow {
-        from: dv(550, 54, 4),
-        caps: &CAPS_550_54_04,
-        note: "oldest reviewed allowlist (NVOS47 gained `size` here — \
-               gvisor/pkg/abi/nvgpu/frontend.go:707-710)",
-    },
-    CapsRow {
-        from: dv(550, 90, 7),
-        caps: &CAPS_550_90_07,
-        note: "+NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE (version.go:906)",
-    },
-    CapsRow {
-        from: dv(555, 42, 2),
-        caps: &CAPS_555_42_02,
-        note: "purely SUBTRACTIVE: nvproxy deletes NVC36F_CTRL_GET_CLASS_ENGINEID (version.go:933)",
-    },
-    CapsRow {
-        from: dv(560, 28, 3),
-        caps: &CAPS_560_28_03,
-        note: "+8 allocation classes, +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL \
-               (version.go:945-977)",
-    },
-    CapsRow {
-        from: dv(570, 86, 15),
-        caps: &CAPS_570_86_15,
-        note: "+6 allocation classes, the DRAM-encryption controls at their PRE-575 numbers \
-               (version.go:990-1027)",
-    },
-    CapsRow {
-        from: dv(575, 51, 2),
-        caps: &CAPS_575_51_02,
-        note: "the REPLACING boundary: two DRAM-encryption controls renumbered, \
-               THERMAL_SYSTEM_EXECUTE_V2 added (version.go:1036-1053)",
-    },
-    CapsRow {
-        from: dv(580, 65, 6),
-        caps: &CAPS_580_65_06,
-        note: "+2 allocation classes (version.go:1057-1078)",
-    },
-    CapsRow {
-        from: dv(610, 43, 2),
-        caps: &CAPS_610_43_02,
-        note: "the 610 control set (version.go:1182-1243)",
-    },
-];
-
-/// The capability allowlist for `version` — the newest nvproxy row at or below it, or `None`
-/// below the oldest row. Policy lookup only; [`table_for`] adds the measured-tag rule.
+/// The guest-ingress gate for exactly `version` ([`crate::capability`]), or `None` when the
+/// generated table has no such tag. Policy lookup only; [`table_for`] adds the rule for tags that have a host gate.
 #[must_use]
 pub fn capabilities_for(version: DriverVersion) -> Option<&'static CapabilityTable> {
-    CAPS_ROWS
-        .iter()
-        .rev()
-        .find(|r| r.from <= version)
-        .map(|r| r.caps)
+    CapabilityTable::for_version(version)
 }
 
-/// Every capability allowlist a version can be admitted against, in boundary order — the
-/// universe `crate::capability`'s structural tests quantify over.
+/// Every gate a version can be admitted against, in tag order.
 pub fn capability_tables() -> impl Iterator<Item = &'static CapabilityTable> {
-    CAPS_ROWS.iter().map(|r| r.caps)
+    CapabilityTable::all()
 }
 
 /// ★★ The facts a guest has CONSUMED by the time it sends fn 1 (`SET_GUEST_SYSTEM_INFO`), as
 /// two driver versions state them — the precondition for re-selecting a device's table at fn 1
-/// (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6, 2026-09-26).
+///.
 ///
 /// Before fn 1 is answered the guest has: booted the GSP through the queue framing
 /// (`GSP_MSG_QUEUE_ELEMENT`, `MESSAGE_QUEUE_INIT_ARGUMENTS`, the element size maximum), read
@@ -616,16 +506,11 @@ fn off(
 fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
     use crate::generated::matrix as m;
 
-    let caps_row =
-        CAPS_ROWS
-            .iter()
-            .rev()
-            .find(|r| r.from <= v)
-            .ok_or(AbiError::NoCapabilityRow {
-                major: v.major,
-                minor: v.minor,
-                patch: v.patch,
-            })?;
+    let caps = CapabilityTable::for_version(v).ok_or(AbiError::NoCapabilityRow {
+        major: v.major,
+        minor: v.minor,
+        patch: v.patch,
+    })?;
 
     // NVOS46: the two shapes this crate decodes, told apart by the measured `status` offset
     // (the field whose misplacement was the C artifact's bug #81).
@@ -768,7 +653,7 @@ fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
         gsp_element,
         gsp_init_args,
         gsp_static_info,
-        caps: caps_row.caps,
+        caps,
         vbios: VbiosWire::Tu102Bit,
         vgx,
         channel_notifier,
@@ -776,7 +661,6 @@ fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
         channel_userd_mem,
         channel_engine,
         rm_control,
-        note: caps_row.note,
     })
 }
 
@@ -901,8 +785,7 @@ impl DriverAbiTable {
             handle: p.h_object_new,
             class: p.h_class,
             params_ptr: p.p_alloc_parms,
-            // Declared absent, exactly as nvproxy declares it
-            // (`frontend.go:322-324` returns 0 rather than panicking).
+            // Declared absent: `NVOS21` has no rights field, so it reads as 0.
             rights_requested: 0,
             params_size: p.params_size,
             wire: AllocWire::V1,
@@ -929,8 +812,8 @@ impl DriverAbiTable {
     }
 
     /// Decode `NV_ESC_RM_ALLOC` by the size the **ioctl** declared, which is how
-    /// RM itself and nvproxy discriminate the two shapes
-    /// (`gvisor/pkg/abi/nvgpu/frontend.go:290-295`, `GetRmAllocParamObj(isNVOS64)`).
+    /// RM itself discriminates the two shapes (the `NV_ESC_RM_ALLOC` ioctl size selects
+    /// `NVOS21_PARAMETERS` or `NVOS64_PARAMETERS`).
     ///
     /// The discriminator is the ioctl's own size word, **not** `bytes.len()`:
     /// the buffer may legitimately be longer, and choosing the shape from a
@@ -2263,15 +2146,14 @@ impl DriverAbi for DriverAbiTable {
     ///
     /// ★ `NV01_ROOT` / `NV01_ROOT_CLIENT` are deliberately **absent**, and the
     /// absence is the honest answer rather than a gap: `NV0000_ALLOC_PARAMETERS`
-    /// is 120 bytes in ogkm 610.43.02 and has **no second oracle** — neither
-    /// nvproxy nor the C artifact models it — so its size at 575/580 is
+    /// is 120 bytes in ogkm 610.43.02 and has **no second oracle** — the C
+    /// artifact does not model it — so its size at 575/580 is
     /// unverified. Reporting 120 would be exactly the guessed size this table
     /// exists to prevent. The client-kind path does not need it: it reads the
     /// 8-byte prefix contract (`decode_client_alloc_facts`).
     ///
-    /// `NV01_DEVICE_0` is present because its 56 bytes are confirmed three ways
-    /// (ogkm 610.43.02, `gvisor/pkg/abi/nvgpu/classes.go:198-211`, and the C
-    /// artifact's `abi_parity_test.go:120`).
+    /// `NV01_DEVICE_0` is present because its 56 bytes are confirmed two ways
+    /// (ogkm 610.43.02 and the C artifact's `abi_parity_test.go:120`).
     fn alloc_param_size(&self, class: ClassId) -> Option<usize> {
         if class.0 == classes::NV01_DEVICE_0 {
             Some(classes::Nv0080AllocParameters::SIZE)
@@ -2291,14 +2173,6 @@ mod tests {
             minor,
             patch,
         })
-    }
-
-    /// The capability rows are ascending — "newest row ≤ version" is only right if they are.
-    #[test]
-    fn the_caps_rows_are_strictly_ascending() {
-        for w in CAPS_ROWS.windows(2) {
-            assert!(w[0].from < w[1].from, "{:?} !< {:?}", w[0].from, w[1].from);
-        }
     }
 
     /// ★★★ Exact membership: a version that was never measured is refused by name — one
@@ -2324,21 +2198,15 @@ mod tests {
         );
     }
 
-    /// Below the oldest reviewed allowlist is its own named refusal — a measured version with
-    /// no capability surface, never admitted against the 550 one.
+    /// Every tag in the table has its own gate, and a version that is no tag has none.
     #[test]
-    fn below_the_oldest_capability_row_is_refused_by_name() {
-        // ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] the oldest row is now nvproxy's
-        // 535.104.05, so every measured tag has a capability surface; the refusal arm stays
-        // for a version below it (none is measured).
-        assert_eq!(
-            at(535, 309, 1).map(|t| t.capabilities().note),
-            Ok(crate::capability::CAPS_535_104_05.note)
-        );
-        assert_eq!(
-            at(545, 23, 8).map(|t| t.capabilities().note),
-            Ok(crate::capability::CAPS_545_23_06.note)
-        );
+    fn every_measured_tag_has_its_own_gate() {
+        for v in crate::generated::matrix::MEASURED {
+            assert_eq!(capabilities_for(*v).map(|g| g.version()), Some(*v));
+            if let Ok(t) = at(v.major, v.minor, v.patch) {
+                assert_eq!(t.capabilities().version(), *v);
+            }
+        }
         assert!(
             capabilities_for(DriverVersion {
                 major: 535,

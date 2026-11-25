@@ -1,0 +1,9 @@
+{
+ "up": true,
+ "gpu_text": "",
+ "events": [],
+ "gpu_after_idle": "",
+ "qemu_returncode_before_stop": 0,
+ "stop": "not running",
+ "refusal_lines": 435
+}

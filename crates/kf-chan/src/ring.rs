@@ -57,7 +57,7 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
-    /// ★ OWNER_RULINGS §U: a software method on a subchannel bound to one of the channel's own
+    /// A software method on a subchannel bound to one of the channel's own
     /// software objects. Like a split: everything before it must COMPLETE before its action runs,
     /// and nothing after it is fetched into the host ring until the action is done.
     Sw {
@@ -129,7 +129,7 @@ pub enum RingRefusal {
 /// ★ DIAGNOSTIC (2026-10-07, Windows run30): the most words of a refused segment logged. A
 /// refusal kills the channel ([`RingRefusal`] is terminal for the ring), so this runs at most once
 /// per channel and prints at most this many guest words: bounded however the guest writes.
-/// ⊘ 2026-10-07 (run32 setup): raised from 32 to 128 — run31's GR segment had 46 words and the
+/// Raised from 32 to 128 — run31's GR segment had 46 words and the
 /// last 14 were not seen. Still bounded per channel (one refusal kills the ring).
 const REFUSED_SEGMENT_LOG_WORDS: usize = 128;
 
@@ -220,7 +220,7 @@ impl TranslatedRing {
         r
     }
 
-    /// ★ Owner rulings 2026-10-07: the kernel-GR tier and the software-subchannel rule for this
+    /// The kernel-GR tier and software-subchannel configuration for this
     /// T-mode ring ([`crate::tmode::GrConfig`]). No effect on a ring that is not in T-mode.
     pub fn set_gr(&mut self, gr: crate::tmode::GrConfig) {
         if let Some((st, _)) = self.tmode.as_deref_mut() {
@@ -228,7 +228,7 @@ impl TranslatedRing {
         }
     }
 
-    /// ★ 2026-10-19: the CE class this guest-KERNEL copy-engine ring's own host channel holds
+    /// The CE class this guest-KERNEL copy-engine ring's own host channel holds
     /// ([`crate::tmode::TState::ce_object`]); `0` (the default) keeps the strict `NoCeObject`
     /// refusal. Derived by the caller from the host ring, never from the guest. No effect on a
     /// ring that is not in T-mode.
@@ -246,7 +246,7 @@ impl TranslatedRing {
             .map_or((0, 0), |(st, _)| (st.gr_methods, st.inert_binds))
     }
 
-    /// ★ OWNER_RULINGS §U: software-object binds accepted so far (T-mode only).
+    /// Software-object binds accepted so far (T-mode only).
     #[must_use]
     pub fn swobj_binds(&self) -> u64 {
         self.tmode.as_deref().map_or(0, |(st, _)| st.swobj_binds)

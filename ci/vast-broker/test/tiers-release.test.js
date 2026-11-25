@@ -41,6 +41,8 @@ function allowed(cfg, die, { id, machine, host, price = 0.2, country = 'US' }) {
     // Matrix v2: alternate vendors by id (odd = AMD, even = Intel), so a plan can cover both (src/release.js).
     cpu_name: id % 2 ? 'AMD EPYC 7B13' : 'Intel(R) Xeon(R) Gold 6338',
     compute_cap: cc,
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     country,
     dph_total: price,
     pricing: { computeStorage: price, bandwidth: 0, effective: price, total: price * hours(cfg) },
@@ -201,6 +203,7 @@ test('KF_SPEC (the SPECviewperf lane) is sent only when asked for, only for rele
 test('the Worker sends no SPECviewperf stage and no lane by default', () => {
   assert.deepEqual(DEFAULTS.releaseStages, []);
   assert.equal(DEFAULTS.stageSlots.specviewperf.state, 'PLUMBING');
+  assert.equal(DEFAULTS.stageSlots.specviewperf.required, false);
   assert.deepEqual(planRelease(market(cfgOf()), cfgOf()).required_stage_rows_per_die, {});
 });
 test('plan: per family one LARGE die (two Windows runs) and one MIDDLE die (one run), one box per die', () => {

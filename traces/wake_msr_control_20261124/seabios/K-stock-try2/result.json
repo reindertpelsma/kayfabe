@@ -1,0 +1,46 @@
+{
+ "variant": "K-stock",
+ "cpu": "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash",
+ "seeded": true,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "status_before_wake": "suspended",
+   "host_mono_suspended": 678.648270721,
+   "host_realtime_wake": 1795480697.1271,
+   "host_mono_wake": 683.653579092,
+   "wakeup_reply": {
+    "return": {}
+   },
+   "ssh_back_s": 6.305415868759155,
+   "host_realtime_after": 1795480703.7106616,
+   "host_mono_after": 690.237139725,
+   "trace_counts": {
+    "kvm_msr": 40,
+    "kvm_write_tsc_offset": 2,
+    "kvm_hv_synic_set_msr": 40,
+    "kvm_hv_stimer_set_config": 8,
+    "kvm_hv_stimer_set_count": 8
+   }
+  },
+  {
+   "n": 2,
+   "status_before_wake": "running",
+   "verdict": "no suspend"
+  },
+  {
+   "n": 3,
+   "status_before_wake": "running",
+   "verdict": "no suspend"
+  }
+ ],
+ "boot_ssh_s": 19.168027639389038,
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_synic_set_msr": 86,
+  "kvm_hv_stimer_set_config": 18,
+  "kvm_hv_stimer_set_count": 18,
+  "kvm_msr": 13
+ }
+}

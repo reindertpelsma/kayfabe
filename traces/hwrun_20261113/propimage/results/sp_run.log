@@ -1,0 +1,17 @@
+rect 448,220,1024,640 screen {X=0,Y=0,Width=1920,Height=1080}
+clicked 1375,822
+t=25 procs=launcher,superposition
+t=50 procs=launcher,superposition
+t=75 procs=launcher,superposition
+t=100 procs=launcher,superposition
+t=125 procs=launcher,superposition
+t=150 procs=launcher,superposition
+t=175 procs=launcher,superposition
+t=200 procs=launcher,superposition
+t=225 procs=launcher,superposition
+t=250 procs=launcher,superposition
+t=275 procs=launcher
+t=300 procs=launcher
+FILE C:\Users\kfimage\Superposition\launcher_log.html 6646
+FILE C:\Users\kfimage\Superposition\log.html 8446
+done

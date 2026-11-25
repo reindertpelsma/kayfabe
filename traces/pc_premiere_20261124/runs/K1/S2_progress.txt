@@ -1,0 +1,18 @@
+1795500949184 begin 27.0.0 mode=sed clip=sintel_trailer_1080p.mp4
+1795500949594 project created
+1795500949715 imported sintel_trailer_1080p.mp4
+1795500949720 creating sequence
+1795500951649 sequence created; setting active
+1795500951752 sequence active and selected; holding 45 s
+1795500951760 running scene edit detection
+1795500960858 scene edit detection returned; holding 45 s
+1795500965893 hold 5 s
+1795500970929 hold 10 s
+1795500975967 hold 15 s
+1795500981002 hold 20 s
+1795500986034 hold 25 s
+1795500991064 hold 30 s
+1795500996094 hold 35 s
+1795501001127 hold 40 s
+1795501006156 hold 45 s
+1795501006167 done clips=1 frame=1920x1080 sed_return=true sed_ms=9106 clips_after=11 held=45s

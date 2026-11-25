@@ -1,0 +1,11 @@
+=== llama_vulkan side=host start=2026-11-24T00:31:04+00:00 host=ubuntu cmd: ${KF_VK_ENV:+env $KF_VK_ENV }python3 -B -I /opt/apps/bundle/share/open_rows/llama_vulkan_row.py run --out /opt/apps/out/host/llama_vulkan --bundle /opt/apps/bundle --data /opt/apps/data --ngl ${KF_NGL:-99}
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = NVIDIA GeForce RTX 4090 (NVIDIA) | uma: 0 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: NV_coopmat2
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |  99 |           pp512 |     28191.95 ± 64.20 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |  99 |            tg64 |        546.32 ± 8.24 |
+
+build: 4b1a27f (1)
+LLAMA_VULKAN_SUMMARY status=PASS reason=ok device=NVIDIA_GeForce_RTX_4090 coopmat=NV_coopmat2 pp512_tps=28191.95 tg64_tps=546.32 ngl=99 secs=1 gpu_use=PROVEN
+=== end rc=0 secs=1 2026-11-24T00:31:05+00:00

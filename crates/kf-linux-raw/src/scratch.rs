@@ -112,7 +112,7 @@ pub const SCRATCH_TILES_MAX: u64 = 1024;
 /// `min(window, max(2 MiB, next_pow2(ceil(window / 1024))))`. 0 for an empty window.
 ///
 /// A window smaller than 2 MiB is its own tile, so every placement inside it is ONE piece. PRAMIN
-/// (1 MiB) relies on that: its trap re-points it with ONE `mmap` (owner ruling 2026-09-25).
+/// (1 MiB) relies on that: its trap re-points it with ONE `mmap`.
 #[must_use]
 pub const fn scratch_tile_len(window: u64) -> u64 {
     let per_tile = window.div_ceil(SCRATCH_TILES_MAX);
@@ -732,7 +732,7 @@ mod tests {
         );
     }
 
-    /// ★ PRAMIN's invariant (owner ruling 2026-09-25): every re-point of a 1 MiB window is ONE
+    /// ★ PRAMIN's invariant: every re-point of a 1 MiB window is ONE
     /// `mmap`, so its tile must be the whole window and any run inside it ONE piece.
     #[test]
     fn a_pramin_sized_window_is_its_own_tile_and_every_sink_is_one_mmap() {

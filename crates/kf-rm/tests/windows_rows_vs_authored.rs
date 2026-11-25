@@ -1,4 +1,4 @@
-//! Lane C 2026-10-14 (resumed): the Windows-capture rows of the published table against what kayfabe AUTHORS (matrix D-1).
+//! The Windows-capture rows of the published table against what kayfabe AUTHORS (matrix D-1).
 //! The real Windows driver's GSP, on a GA106 under six GSP branches (570..610) and on a GA104 at 595, states the same GMMU fault-buffer
 //! sizes and CE fault-method buffer size that `authored.rs` states "equal to a stock GA106 GSP". This pins that equality (it is a
 //! measurement of two Ampere dies, NOT of every die: the AD104 states 0x54000/0x220c20) so a change to either side is seen.

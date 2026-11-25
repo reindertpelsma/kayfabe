@@ -60,7 +60,7 @@ const SCAN_LINE_STEP: Duration = Duration::from_micros(250);
 /// …and how often it looks for a running raster when none runs.
 const SCAN_LINE_IDLE: Duration = Duration::from_millis(20);
 
-/// ★ 2026-10-08 EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
+/// EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
 /// `NV_PDISP_FE_EVT_STAT_HEAD_TIMING(h)`. ⚠ NOT in ogkm's published `dev_disp.h` (v03_00 names only
 /// LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6), so it is named here by hand, from:
 /// nouveau `nvkm/engine/disp/gv100.c` `gv100_disp_intr_head_timing` ("`/* LAST_DATA, LOADV. */`",
@@ -114,34 +114,22 @@ fn armed_defaults_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
 }
 
-/// ⚠ EXPERIMENTS (default off, 2026-10-09, H-mirror; `KF3_DISPLAY_LUT_MIRROR=1`,
-/// `KF3_DISPLAY_ILUT_OFFSET_256=1`, read once; `traces/windows_reset_20261009/`). `[measured,
-/// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
-/// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
-/// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
-/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
-/// flag changes and why it is exact.
-fn color_experiments() -> kf_disp::color::Experiments {
-    static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
-    *X.get_or_init(|| {
-        let on = |n: &str| std::env::var(n).is_ok_and(|v| v == "1");
-        let x = kf_disp::color::Experiments {
-            lut_mirror: on("KF3_DISPLAY_LUT_MIRROR"),
-            ilut_offset_256: on("KF3_DISPLAY_ILUT_OFFSET_256"),
-        };
-        if x.lut_mirror {
-            eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
-            );
-        }
-        if x.ilut_offset_256 {
-            eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)"
-            );
-        }
-        x
-    })
-}
+/// the
+/// two colour decoder behaviours of the Windows SDR colour path, formerly the default-off experiments
+/// `KF3_DISPLAY_LUT_MIRROR` and `KF3_DISPLAY_ILUT_OFFSET_256` (H-mirror, 2026-10-09;
+/// `traces/windows_reset_20261009/`). `[measured, runs 98/99 vs 100, RTX 4070]` Windows' first colour
+/// program (window 0 ILUT and head 0 OLUT, control `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is
+/// refused by the SDR decoder without them, the refusal halts every display channel, no later flip or
+/// core update is consumed, and ~17.5 s later the guest resets the display and bugchecks 0x116. See
+/// `kf_disp::color::Experiments` for what each changes and why it is exact.
+///
+/// ⊘ Only the SDR colour path reads this, and that path is reached only while the profile is active
+/// ([`DisplayPlane::sdr`]): a guest that has not declared the Windows identity never decodes a colour
+/// program at all, so neither behaviour is reachable by it.
+const COLOR_EXPERIMENTS: kf_disp::color::Experiments = kf_disp::color::Experiments {
+    lut_mirror: true,
+    ilut_offset_256: true,
+};
 
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
@@ -199,7 +187,7 @@ fn frame_edge_out(
     if let Some((lb, ls)) = dp.map.loadv {
         store(lb + h as u64 * ls, f);
     }
-    // ★ 2026-10-14: the raster is at the start of its vertical blank now — the scan-line words read
+    // The raster is at the start of its vertical blank now — the scan-line words read
     // so (VBLANK, line BLANK_START.Y) before the interrupt the guest reads them in.
     let now = dp.ports.now_ns();
     dp.ports.note_frame_edge_at(h, now);
@@ -218,7 +206,7 @@ fn frame_edge_out(
     irq
 }
 
-/// ★ 2026-10-14 — **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
+/// **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
 /// `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` (normal latency) from `kHeadVblankCount[head]` in the
 /// display shared-data page it handed physical RM (`MAP_SHARED_DATA`; ogkm
 /// `disp_common_kern_ctrl_minimal.c:401-410`, `kern_disp.c:557-627`), and physical RM keeps it. kf3 is
@@ -576,6 +564,12 @@ impl RegMap {
         out
     }
 
+    /// The display aperture (`NV_PDISP`): its first and last byte offsets, inclusive.
+    #[must_use]
+    pub fn aperture(&self) -> (u64, u64) {
+        (self.lo, self.hi)
+    }
+
     /// Is BAR0 offset `off` in the display aperture (`NV_PDISP`)?
     #[must_use]
     pub fn owns(&self, off: u64) -> bool {
@@ -883,6 +877,10 @@ const SLOTS: usize = kf_broker::slots::MAX_SLOTS;
 pub struct FrameView {
     /// Host address of the first pixel (page-locked memory the worker owns for the process).
     pub addr: usize,
+    /// ★ C-04 / S1-03 (2026-11-13): bytes readable at `addr` (the host frame's `Frame::len`, 0 with
+    /// no host frame). It crosses with `addr` to [`crate::ffi_unsafe::kf3_display_frame`], which
+    /// refuses a geometry that does not fit it — the C console no longer trusts geometry alone.
+    pub len: usize,
     /// Width in pixels.
     pub width: u32,
     /// Height in pixels.
@@ -912,6 +910,8 @@ pub struct ConsoleShare {
     ring: Arc<kf_broker::FrameRing>,
     /// Per slot: the host address of its current frame (the console's view of the pixels).
     addrs: [AtomicUsize; SLOTS],
+    /// Per slot: the bytes readable at `addrs[slot]` (C-04).
+    lens: [AtomicUsize; SLOTS],
     /// Per slot: the [`kf_disp::scanout::PixelFormat`] code of its frame.
     formats: [AtomicU32; SLOTS],
     /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
@@ -959,6 +959,7 @@ impl ConsoleShare {
         ConsoleShare {
             ring,
             addrs: core::array::from_fn(|_| AtomicUsize::new(0)),
+            lens: core::array::from_fn(|_| AtomicUsize::new(0)),
             formats: core::array::from_fn(|_| AtomicU32::new(0)),
             demand_ms: AtomicU64::new(0),
             broker_ms: AtomicU64::new(0),
@@ -1094,6 +1095,7 @@ impl ConsoleShare {
         let cursor = self.cursors.took(slot);
         Some(FrameView {
             addr: self.addrs[slot].load(Ordering::Acquire),
+            len: self.lens[slot].load(Ordering::Acquire),
             width: g.width,
             height: g.height,
             stride: g.stride,
@@ -1117,6 +1119,7 @@ impl ConsoleShare {
         }
         if host {
             self.addrs[i].store(f.addr, Ordering::Release);
+            self.lens[i].store(f.len, Ordering::Release);
             self.formats[i].store(f.format, Ordering::Release);
         }
         // ★ the bit belongs to the frame whichever backing carries it: the console reads it with the
@@ -1192,11 +1195,11 @@ enum Shown {
     Armed(Composition),
     /// The boot layer, until the guest arms its first head (`gop=on`).
     Boot(LayerPlan, (u32, u32)),
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the scanout the guest freed its channels from
+    /// The scanout the guest freed its channels from
     /// with `PRESERVE_HW` (NVKMS, after restoring the console, `nvkms-rm.c:2990-3017`) — planned
     /// layers of the last armed composition, kept: the hardware keeps scanning them.
     Preserved(Vec<LayerPlan>, (u32, u32)),
-    /// ★ 2026-10-03 (B5): nothing is scanned (no head lit, or a lit head with no window): the
+    /// Nothing is scanned (no head lit, or a lit head with no window): the
     /// monitor shows black, never the last frame.
     Blank((u32, u32)),
 }
@@ -1392,7 +1395,7 @@ fn resolve_window_colors(
 ) -> Result<(), String> {
     let (t, win, _core) = sdr;
     let armed = |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0);
-    let lut = kf_disp::color::input(t, win, armed, color_experiments()).map_err(str::to_owned)?;
+    let lut = kf_disp::color::input(t, win, armed, COLOR_EXPERIMENTS).map_err(str::to_owned)?;
     let life = engine
         .generation(so.chn)
         .ok_or("no colour window incarnation")?;
@@ -1787,7 +1790,7 @@ impl VramWorker {
 /// lay the read's words over the derived page — every group, or the groups named in
 /// `KF3_DISPLAY_CAPS_OVERLAY_GROUPS` (`sys,bwexist,unnamed,…`) plus the offsets in
 /// `KF3_DISPLAY_CAPS_OVERLAY_WORDS` (`0x030,0x034`). A read of any other PCI id refuses the realize
-/// (OWNER_RULINGS §AH: never a neighbour's page). Unset: the page is returned unchanged.
+///. Unset: the page is returned unchanged.
 fn caps_overlay_diagnostic(
     caps: kf_disp::caps::CapsPage,
     bdf: &str,
@@ -1898,8 +1901,10 @@ pub struct DisplayPlane {
     pub ports: Arc<Ports>,
     /// Resolved registers.
     pub map: RegMap,
-    /// The caps page, published at seal.
-    caps: kf_disp::caps::CapsPage,
+    /// The SDR colour path, its caps page and the
+    /// Windows profile that selects them, in ONE value ([`ColorPath`]) whose methods are the only readers of
+    /// the gate: [`DisplayPlane::sdr`], [`DisplayPlane::static_words`] and [`DisplayPlane::sync_caps_page`].
+    color: ColorPath<(&'static kf_disp::class::ClassTable, u32, u32)>,
     wake: Arc<Notifier>,
     init: Mutex<Option<WorkerInit>>,
     /// Per head: the cursor's posted PIO methods.
@@ -1916,9 +1921,6 @@ pub struct DisplayPlane {
     scan: Option<ScanVocab>,
     /// Bound for address-named ISO reads, independent of guest method values.
     store_bytes: u64,
-    /// Bounded SDR colour implementation, enabled for verification independently of
-    /// constructor probes. Those probes still refuse all display methods.
-    sdr_color: Option<(&'static kf_disp::class::ClassTable, u32, u32)>,
     /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
     /// family's table lacks one — its cursor is not composed).
     cursor_vocab: Option<kf_disp::engine::CursorVocab>,
@@ -1941,14 +1943,158 @@ pub struct DisplayPlane {
     /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
     /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
     unloads: AtomicU64,
-    /// ★ 2026-10-18: whether store `[0, G)` may be shown as the boot picture
+    /// How many S3 wakes kept the guest's display life ([`DisplayPlane::kept_wake`]); the worker
+    /// logs each DMA channel's first PUT after each.
+    kept_wakes: AtomicU64,
+    /// Whether store `[0, G)` may be shown as the boot picture
     /// ([`crate::bootclean`]). Tainted by a guest RM life, the seed's retirement and a device
     /// reset; cleaned only by a scrub that completed.
     pub boot_clean: crate::bootclean::BootClean,
 }
 
+/// Whether the SDR colour path is wanted: the Windows profile is active, or the explicit lab
+/// override (`KF3_DISPLAY_SDR_COLOR=1`) forces it. Pure.
+fn sdr_wanted(forced: bool, profile_active: bool) -> bool {
+    forced || profile_active
+}
+
+/// The SDR colour path is reached only while it is wanted (the Windows profile is active, or
+/// the explicit lab override forces it). Pure; the one place that rule lives ([`DisplayPlane::sdr`]).
+fn sdr_for<T>(profile_active: bool, built: Option<T>) -> Option<T> {
+    if profile_active { built } else { None }
+}
+
+/// The SDR colour path as ONE value — the profile that selects it, the
+/// lab override, the path itself (built unless a constructor probe replaced the engine) and the two caps
+/// pages. Every reader of the gate is a method here, so the tests exercise the real use site with the real
+/// [`kf_rm::winprofile::WindowsProfile`] (a Linux declaration, nothing declared, `windows-support=off` and a
+/// declared Windows guest), not only the truth table of a helper.
+struct ColorPath<T> {
+    windows: kf_rm::winprofile::WindowsProfile,
+    forced: bool,
+    built: Option<T>,
+    caps: CapsVariants,
+}
+
+impl<T: Copy> ColorPath<T> {
+    fn new(
+        windows: kf_rm::winprofile::WindowsProfile,
+        forced: bool,
+        built: Option<T>,
+        caps: CapsVariants,
+    ) -> ColorPath<T> {
+        ColorPath {
+            windows,
+            forced,
+            built,
+            caps,
+        }
+    }
+
+    /// Whether the SDR path (and its caps page) is wanted now.
+    fn wanted(&self) -> bool {
+        sdr_wanted(self.forced, self.windows.active())
+    }
+
+    /// The colour path, if it is wanted and was built: the worker's one gate.
+    fn sdr(&self) -> Option<T> {
+        sdr_for(self.wanted(), self.built)
+    }
+
+    /// The caps words to seed the shadow with (seal, device reset).
+    fn seal(&self) -> Vec<(u64, u32)> {
+        self.caps.seal(self.wanted())
+    }
+
+    /// Re-publish the caps page when the declaration changed which one the guest should see.
+    fn sync(&self, store: &dyn Fn(u64, u32)) {
+        self.caps.sync(self.wanted(), store);
+    }
+}
+
+/// The caps page the guest sees, in its two variants — the BASE page
+/// (what every guest always saw) and the SDR-colour page (what a declared Windows guest sees; was
+/// `KF3_DISPLAY_SDR_COLOR=1`). Realize precedes any guest declaration, so both pages are derived there
+/// and the shadow holds the base page until the drainer sees the declaration ([`CapsVariants::sync`]).
+/// A guest that never declares Windows is never shown the SDR page.
+#[derive(Debug)]
+struct CapsVariants {
+    base: kf_disp::caps::CapsPage,
+    sdr: Option<kf_disp::caps::CapsPage>,
+    /// Which variant the shadow holds now.
+    shown_sdr: std::sync::atomic::AtomicBool,
+}
+
+impl CapsVariants {
+    fn new(base: kf_disp::caps::CapsPage, sdr: Option<kf_disp::caps::CapsPage>) -> CapsVariants {
+        CapsVariants {
+            base,
+            sdr,
+            shown_sdr: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    /// Whether an SDR variant exists (the colour path is built only with it).
+    fn has_sdr(&self) -> bool {
+        self.sdr.is_some()
+    }
+
+    /// A single page (the constructor probes' own).
+    fn only(page: kf_disp::caps::CapsPage) -> CapsVariants {
+        CapsVariants::new(page, None)
+    }
+
+    /// The variant `want_sdr` selects: the SDR page only if one was derived.
+    fn page(&self, want_sdr: bool) -> &kf_disp::caps::CapsPage {
+        match (&self.sdr, want_sdr) {
+            (Some(p), true) => p,
+            _ => &self.base,
+        }
+    }
+
+    fn words(page: &kf_disp::caps::CapsPage) -> Vec<(u64, u32)> {
+        page.words
+            .iter()
+            .map(|(o, w)| (page.base + u64::from(*o), *w))
+            .collect()
+    }
+
+    /// The words to seed the shadow with (seal, device reset): the variant `want_sdr` selects, and it
+    /// is recorded as the one shown.
+    fn seal(&self, want_sdr: bool) -> Vec<(u64, u32)> {
+        let p = self.page(want_sdr);
+        self.shown_sdr
+            .store(self.sdr.is_some() && want_sdr, Ordering::Release);
+        Self::words(p)
+    }
+
+    /// Show the variant `want_sdr` selects: when it differs from the one shown, store every word where
+    /// the two pages differ (a word absent from the new page is stored as 0). No-op otherwise.
+    fn sync(&self, want_sdr: bool, store: &dyn Fn(u64, u32)) {
+        let want = self.sdr.is_some() && want_sdr;
+        if self.shown_sdr.swap(want, Ordering::AcqRel) == want {
+            return;
+        }
+        let (from, to) = (self.page(!want), self.page(want));
+        let mut offs: Vec<u32> = from
+            .words
+            .iter()
+            .chain(to.words.iter())
+            .map(|(o, _)| *o)
+            .collect();
+        offs.sort_unstable();
+        offs.dedup();
+        for o in offs {
+            let (a, b) = (from.word(o), to.word(o));
+            if a != b {
+                store(to.base + u64::from(o), b);
+            }
+        }
+    }
+}
+
 impl DisplayPlane {
-    /// 2026-10-23: capability construction shared by production and GPU-free tests.
+    /// Capability construction shared by production and GPU-free tests.
     ///
     /// # Errors
     /// Missing public vocabulary, incomplete constants or unsupported host scope refuse.
@@ -1998,6 +2144,24 @@ impl DisplayPlane {
     pub fn rm_unloaded(&self) {
         self.unloads.fetch_add(1, Ordering::AcqRel);
         let _ = self.wake.signal();
+    }
+
+    /// The BAR0 offsets of DMA channel `chn`'s PUT and GET words (`None`: no DMA channel has that
+    /// number).
+    #[must_use]
+    pub fn chan_put_get(&self, chn: u32) -> Option<(u64, u64)> {
+        let (kind, inst) = chan_of(chn)?;
+        if kind == ChannelKind::Cursor || inst >= self.map.windows.max(1) {
+            return None;
+        }
+        let b = self.map.user_base(kind, inst);
+        Some((b + self.map.put, b + self.map.get))
+    }
+
+    /// An S3 wake kept the guest's display life: the worker logs each DMA channel's first PUT
+    /// after it, with the GET the engine holds and the GET word the guest reads.
+    pub fn kept_wake(&self) {
+        self.kept_wakes.fetch_add(1, Ordering::AcqRel);
     }
 
     /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
@@ -2096,6 +2260,7 @@ impl DisplayPlane {
     ///
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         (row, die, host_caps, host_driver): (
             &'static kf_chip::display::DisplayRow,
@@ -2109,6 +2274,7 @@ impl DisplayPlane {
         store_bytes: u64,
         broker: Option<BrokerVram>,
         max_fps: u32,
+        windows: kf_rm::winprofile::WindowsProfile,
     ) -> Result<DisplayPlane, String> {
         kf_disp::pace::check(true, max_fps)?;
         let version = table.driver_version().to_string();
@@ -2145,14 +2311,16 @@ impl DisplayPlane {
         } else {
             kf_disp::caps::page
         };
-        let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
-        if sdr_color {
-            // read (and confirm in the log) the decoder experiments at birth, not at first use
-            let _ = color_experiments();
-        }
-        if sdr_color && constructor_probe {
-            return Err(
-                "display=on: SDR processing cannot be combined with constructor-only probes".into(),
+        // (was `KF3_DISPLAY_SDR_COLOR=1`, with `KF3_DISPLAY_LUT_MIRROR` and
+        // `KF3_DISPLAY_ILUT_OFFSET_256`): the SDR colour path is part of the Windows profile. It is built
+        // here, at realize, but it is only USED, and its caps page only SHOWN, while the guest's declared
+        // identity is Windows ([`DisplayPlane::sdr`], [`CapsVariants`]): realize precedes any
+        // declaration, and a Linux guest must see exactly the page and the compose path it always saw.
+        // A constructor probe replaces the engine and refuses every display method, so it has no colour path.
+        let sdr_color = !constructor_probe;
+        if constructor_probe {
+            eprintln!(
+                "kf3: display: a constructor probe is on: the SDR colour path (Windows profile) is not built"
             );
         }
         // ★ 2026-10-15 (H01): the page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
@@ -2160,41 +2328,58 @@ impl DisplayPlane {
         // The captured AD104 page that `KF3_DISPLAY_CAPS_PROBE` served is gone; it is a test oracle.
         // The constructor-only diagnostics keep their own nested pages.
         let caps = if constructor_probe {
-            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
-                .map_err(|e| format!("display=on: caps page: {}", e.0))?
+            CapsVariants::only(caps_overlay_diagnostic(
+                caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
+                    .map_err(|e| format!("display=on: caps page: {}", e.0))?,
+                bdf,
+            )?)
         } else {
             let branch = version.split('.').next().unwrap_or("").to_string();
-            let d = Self::caps_for(
-                &kf_rm::precomp::Context {
-                    table: t,
-                    regs: &regs,
-                    row,
-                    die,
-                    host_driver,
-                },
-                sdr_color,
-                &host_caps,
-            )
-            .map_err(|e| format!("display=on: caps page: {}", e.0))?;
-            for (off, why) in &d.unmeasured {
+            let derive = |sdr: bool| {
+                let d = Self::caps_for(
+                    &kf_rm::precomp::Context {
+                        table: t,
+                        regs: &regs,
+                        row,
+                        die,
+                        host_driver,
+                    },
+                    sdr,
+                    &host_caps,
+                )
+                .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+                for (off, why) in &d.unmeasured {
+                    eprintln!(
+                        "kf3: display: ⚠ NO MEASURED caps word {off:#05x} for die arch {:#x} impl {:#x}, driver branch {branch}: the authored page stays clean and a Windows guest's display may not come up ({why}). Read the die's word with tools/read_display_caps_page.py and add a row to crates/kf-disp/data/caps_measured.tsv (OWNER_RULINGS §AH: a value measured on one die is never served to another)",
+                        die.architecture, die.implementation
+                    );
+                }
+                let tiers = |x: kf_disp::capsderive::Tier| {
+                    d.provenance.iter().filter(|p| p.tier == x).count()
+                };
                 eprintln!(
-                    "kf3: display: ⚠ NO MEASURED caps word {off:#05x} for die arch {:#x} impl {:#x}, driver branch {branch}: the authored page stays clean and a Windows guest's display may not come up ({why}). Read the die's word with tools/read_display_caps_page.py and add a row to crates/kf-disp/data/caps_measured.tsv (OWNER_RULINGS §AH: a value measured on one die is never served to another)",
-                    die.architecture, die.implementation
+                    "kf3: display: caps page derived (sdr={sdr}) — {} words: {} T1 rule, {} T2 host, {} T3 measured ({} unmeasured)",
+                    d.page.words.len(),
+                    tiers(kf_disp::capsderive::Tier::Rule),
+                    tiers(kf_disp::capsderive::Tier::Host),
+                    tiers(kf_disp::capsderive::Tier::Measured),
+                    d.unmeasured.len()
                 );
-            }
-            let tiers =
-                |x: kf_disp::capsderive::Tier| d.provenance.iter().filter(|p| p.tier == x).count();
-            eprintln!(
-                "kf3: display: caps page derived — {} words: {} T1 rule, {} T2 host, {} T3 measured ({} unmeasured)",
-                d.page.words.len(),
-                tiers(kf_disp::capsderive::Tier::Rule),
-                tiers(kf_disp::capsderive::Tier::Host),
-                tiers(kf_disp::capsderive::Tier::Measured),
-                d.unmeasured.len()
-            );
-            d.page
+                caps_overlay_diagnostic(d.page, bdf)
+            };
+            // BOTH pages are derived at realize; the guest is shown the base page until it
+            // declares the Windows identity, then the SDR page ([`CapsVariants`]).
+            // ★ review of PR #438 F8: the SDR page is the Windows profile's, so a refusal to derive it
+            // must never refuse `display=on` for a Linux guest: it is logged and the SDR variant is absent.
+            let sdr = derive(true)
+                .map_err(|e| {
+                    eprintln!(
+                        "kf3: display: the SDR caps page is NOT derived ({e}); no SDR variant"
+                    )
+                })
+                .ok();
+            CapsVariants::new(derive(false)?, sdr)
         };
-        let caps = caps_overlay_diagnostic(caps, bdf)?;
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
@@ -2203,7 +2388,7 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
-        // ★ 2026-10-10: a WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
+        // A WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
         // display writes it BEGUN when it performs the flip, `ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:
         // 1925-1952`; `kf_disp::engine::Effect::Notify`); the core's completion notifier is FINISHED
         // (`nvkms-evo3.c:6224-6243`)
@@ -2229,7 +2414,7 @@ impl DisplayPlane {
             );
         }
         let ports = model.ports.clone();
-        // ★ 2026-10-09 EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
+        // EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
         // value `NV_PDISP_FE_RM_INTR_EN_HEAD_TIMING(h)` (0x611D80) reads back before the guest writes it.
         // `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08/09, traces/windows_reset_20261009
         // README §13.1 point 3]` real hardware reads `0x3f0060` (firmware's enabled RG_LINE_A/B and
@@ -2295,7 +2480,12 @@ impl DisplayPlane {
             model,
             ports,
             map,
-            caps,
+            color: ColorPath::new(
+                windows,
+                std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1"),
+                (sdr_color && caps.has_sdr()).then_some((t, classes.window, classes.core)),
+                caps,
+            ),
             wake,
             init: Mutex::new(Some(WorkerInit {
                 engine,
@@ -2317,11 +2507,11 @@ impl DisplayPlane {
             broker,
             scan,
             store_bytes,
-            sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
             life_reset: crate::reset::Ack::default(),
             unloads: AtomicU64::new(0),
+            kept_wakes: AtomicU64::new(0),
             boot_clean: crate::bootclean::BootClean::new(),
             formats,
             boot: None,
@@ -2370,15 +2560,32 @@ impl DisplayPlane {
         self.boot.as_ref()
     }
 
+    /// ★★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR=1`): the SDR colour path, `Some`
+    /// ONLY while the Windows profile is active (`windows-support=on` and the guest's fn-1 declaration is
+    /// the measured Windows build) and the path was built. Every colour decision of the worker goes
+    /// through here, so a Linux guest, an undeclared guest and `windows-support=off` take the plain
+    /// compose path they always took ([`sdr_for`]). The one exception is the host operator's explicit
+    /// lab override `KF3_DISPLAY_SDR_COLOR=1` (the Linux colour audit): never guest-reachable, unset in
+    /// every launcher.
+    #[must_use]
+    pub fn sdr(&self) -> Option<(&'static kf_disp::class::ClassTable, u32, u32)> {
+        self.color.sdr()
+    }
+
+    /// Re-publish the caps page when the guest's declared identity changed which page it
+    /// should see. Called by the register drainer at the top of every pass (an atomic compare when
+    /// nothing changed), so the page is right before the guest's next RPC is served — display init reads
+    /// it long after fn 1. `store` writes one shadow word (BAR0 offset, value); the vCPU never calls this.
+    pub fn sync_caps_page(&self, store: &dyn Fn(u64, u32)) {
+        self.color.sync(store);
+    }
+
     /// The caps page's `(BAR0 offset, value)` words, and each cursor's `Free` (what the shadow holds
-    /// from the start: static register values of the engine we present).
+    /// from the start: static register values of the engine we present). ★ 2026-11-15: the page of the
+    /// guest's CURRENT declared identity ([`CapsVariants::seal`]); at seal and at a device reset that is
+    /// the base page: a rebuilt chain starts a life with no declaration (`kf_rm::served_chain`).
     pub fn static_words(&self) -> Vec<(u64, u32)> {
-        let mut v: Vec<(u64, u32)> = self
-            .caps
-            .words
-            .iter()
-            .map(|(o, w)| (self.caps.base + u64::from(*o), *w))
-            .collect();
+        let mut v = self.color.seal();
         for h in 0..self.map.heads {
             // `Free` counts the PIO slots the FE has for methods: never full (NVKMS waits for non-zero)
             v.push((
@@ -2963,12 +3170,14 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
-        // ★ 2026-10-10: a head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
+        // A head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
         let mut gate = crate::vblankgate::VblankGate::default();
         let mut edge_frame = [0u32; MAX_HEADS];
         let mut forced_logged = 0u64;
         let mut put_head = 0u64;
         let mut put_dropped = 0u64;
+        // (kept wakes seen, DMA channels whose first PUT after the last of them was logged)
+        let mut wake_seen = (0u64, 0u128);
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -3084,7 +3293,7 @@ impl Device {
                 .map(|mut g| g.take_statements())
                 .unwrap_or_default();
             for s in st {
-                eprintln!("kf3: display: {s:?}");
+                kf_arch::rate_eprintln!("kf3: display: {s:?}");
                 match s {
                     Statement::SharedData(page) => {
                         shared_data = page;
@@ -3188,6 +3397,21 @@ impl Device {
                 };
                 if put == decoded || dp.ports.generation(chn) != life {
                     return;
+                }
+                let w = dp.kept_wakes.load(Ordering::Acquire);
+                if w != wake_seen.0 {
+                    wake_seen = (w, 0);
+                }
+                let bit = 1u128.checked_shl(chn).unwrap_or(0);
+                if w != 0 && bit != 0 && wake_seen.1 & bit == 0 {
+                    wake_seen.1 |= bit;
+                    let word = dp
+                        .chan_put_get(chn)
+                        .map_or(u32::MAX, |(_, g)| self.shadow_word(g));
+                    kf_arch::rate_eprintln!(
+                        "kf3: display: after the S3 wake, chn {chn} PUT {put:#x}: engine decoded {decoded:#x}, published GET {:#x}, GET word the guest reads {word:#x}",
+                        dp.ports.get(chn)
+                    );
                 }
                 match io.pushbuffer(pb) {
                     Ok(bytes) => {
@@ -3486,7 +3710,7 @@ impl Device {
                 // only the composition shown right before a preserving free is kept
                 _ => scan.last_plan = None,
             }
-            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): every change of WHAT the console shows,
+            // Every change of WHAT the console shows,
             // timed — the boot layer, a head's windows, black, the preserved scanout, or no new frame
             // and why. Keyed without what a flip changes; bounded.
             let key = shown_key(shown.as_ref(), &held, boot_done);
@@ -3568,7 +3792,7 @@ impl Device {
             }
             scan.nonflip.request(dp.console.refresh_requested());
             for e in effects {
-                if dp.sdr_color.is_some()
+                if dp.sdr().is_some()
                     && matches!(e, Effect::CoreArmed(_))
                     && matches!(shown, Some(Shown::Armed(_)))
                 {
@@ -3590,7 +3814,7 @@ impl Device {
                         if let Some(so) = so {
                             let t_res = dp.counters.lat_resolve.stamp();
                             scan.resolve_now(&mut io, &so);
-                            if let Some(sdr) = dp.sdr_color {
+                            if let Some(sdr) = dp.sdr() {
                                 // the colour path: its LUT / TMO context DMAs are resolved now too (a refusal is never kept)
                                 let _ = resolve_window_colors(
                                     &mut scan.colors,
@@ -3840,7 +4064,7 @@ impl Device {
                                     kf_disp::class::put(0, fld, if active { awake } else { sleep }),
                                 );
                             }
-                            eprintln!("kf3: display: {}", a.line(cap));
+                            kf_arch::rate_eprintln!("kf3: display: {}", a.line(cap));
                         }
                     }
                     Effect::Latched { window } => {
@@ -3857,7 +4081,9 @@ impl Device {
                     Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
                         dp.counters.exceptions.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
+                        kf_arch::rate_eprintln!(
+                            "kf3: display: channel {chn} STOPPED at {at:#x}: {what}"
+                        );
                     }
                 }
             }
@@ -4324,7 +4550,7 @@ struct ScanState {
     /// preserving free that follows the unbind in NVKMS's teardown kept nothing. Windows now
     /// resolve through [`LatchedDmas`]: such a copy is whole and this keeps the console.
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
-    /// ★ 2026-10-04: each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
+    /// Each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
     latched: LatchedDmas,
     colors: ColorDmas,
     /// ★ The GPU-copy rung's worker half (§8.11).
@@ -4804,6 +5030,7 @@ impl ScanState {
             slot,
             FrameView {
                 addr: host.map_or(0, Frame::addr),
+                len: host.map_or(0, Frame::len),
                 width: w,
                 height: h,
                 stride: w * 4,
@@ -5132,7 +5359,7 @@ impl ScanState {
         };
         // A preserving free retains the already transformed console frame; it must not
         // read a freed LUT/handle or compose the old windows without their colour program.
-        if dp.sdr_color.is_some() && matches!(shown, Shown::Preserved(..)) {
+        if dp.sdr().is_some() && matches!(shown, Shown::Preserved(..)) {
             self.finish(dp, n, req);
             return;
         }
@@ -5159,13 +5386,13 @@ impl ScanState {
                 .console_windows_left_out
                 .fetch_add(1, Ordering::Relaxed);
         }
-        let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr_color, shown) {
+        let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr(), shown) {
             let program = (|| -> Result<_, String> {
                 // ★ a window the console cannot compose (planned.refused, already counted and named)
                 // is simply not among `planned.layers`: the colour frame is composed without it.
                 // It used to fail the whole copy, and `failed` halted the guest's display.
                 let mut inputs = Vec::new();
-                let x = color_experiments();
+                let x = COLOR_EXPERIMENTS;
                 let mut matrices = Vec::new();
                 let mut ilut_mirror = false;
                 for layer in &planned.layers {
@@ -5964,7 +6191,251 @@ mod tests {
         assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
 
-    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row. The GB206
+    /// (flag cleanup, Stage 1; was `KF3_DISPLAY_SDR_COLOR` + `KF3_DISPLAY_LUT_MIRROR` +
+    /// `KF3_DISPLAY_ILUT_OFFSET_256`): the SDR colour path is reached only while it is wanted. A guest that
+    /// has not declared the Windows identity (every Linux guest, an undeclared one, a `windows-support=off`
+    /// VM) does not want it, and gets `None`: the plain compose path it always had.
+    #[test]
+    fn a_guest_that_did_not_declare_windows_has_no_sdr_colour_path() {
+        use kf_rm::winprofile::WindowsProfile;
+        let linux = WindowsProfile::on();
+        linux.declare(false);
+        let off = WindowsProfile::off();
+        off.declare(true);
+        for (name, p) in [
+            ("a Linux declaration", linux),
+            ("nothing declared", WindowsProfile::on()),
+            ("windows-support=off", off),
+        ] {
+            assert!(!sdr_wanted(false, p.active()), "{name}");
+            assert_eq!(
+                sdr_for(sdr_wanted(false, p.active()), Some("sdr")),
+                None,
+                "{name}"
+            );
+        }
+    }
+
+    /// ★ A declared Windows guest wants it, and gets the built path; a path that was not built (a
+    /// constructor probe replaced the engine) is never invented.
+    #[test]
+    fn a_declared_windows_guest_gets_the_sdr_colour_path_when_it_was_built() {
+        use kf_rm::winprofile::WindowsProfile;
+        let windows = WindowsProfile::on();
+        windows.declare(true);
+        assert!(sdr_wanted(false, windows.active()));
+        assert_eq!(
+            sdr_for(sdr_wanted(false, windows.active()), Some("sdr")),
+            Some("sdr")
+        );
+        assert_eq!(sdr_for::<&str>(true, None), None, "not built");
+        // The decoder behaviours the path needs are the two switches that H-mirror runs 98-100 needed (see `COLOR_EXPERIMENTS`), both on.
+        let x = std::hint::black_box(COLOR_EXPERIMENTS);
+        assert!(x.lut_mirror && x.ilut_offset_256);
+    }
+
+    /// The whole matrix of the colour path: wanted by the override or the declaration; reached only if built.
+    #[test]
+    fn the_sdr_colour_path_matrix() {
+        for forced in [false, true] {
+            for active in [false, true] {
+                for built in [None, Some(7u8)] {
+                    let want = forced || active;
+                    assert_eq!(sdr_wanted(forced, active), want);
+                    assert_eq!(
+                        sdr_for(sdr_wanted(forced, active), built),
+                        built.filter(|_| want)
+                    );
+                }
+            }
+        }
+        let x = std::hint::black_box(COLOR_EXPERIMENTS);
+        assert!(
+            x.lut_mirror && x.ilut_offset_256,
+            "the two measured decoder behaviours"
+        );
+    }
+
+    fn color_path(
+        on: bool,
+        declared: bool,
+        forced: bool,
+        built: bool,
+    ) -> (ColorPath<u8>, kf_rm::winprofile::WindowsProfile) {
+        let profile = kf_rm::winprofile::WindowsProfile::new(on);
+        profile.declare(declared);
+        let (base, sdr) = {
+            let v = variants().0;
+            (v.base, v.sdr)
+        };
+        let caps = CapsVariants::new(base, sdr);
+        (
+            ColorPath::new(profile.clone(), forced, built.then_some(7u8), caps),
+            profile,
+        )
+    }
+
+    /// The worker's gate and the shadow's page, through the REAL
+    /// [`ColorPath`] and the real profile. A guest that did not declare the Windows identity — a Linux
+    /// declaration, nothing declared, a Windows declaration on a `windows-support=off` VM — gets no SDR
+    /// colour path and the base caps page.
+    #[test]
+    fn a_guest_that_did_not_declare_windows_gets_no_sdr_path_through_the_real_color_path() {
+        for (name, on, declared) in [
+            ("a Linux declaration", true, false),
+            ("windows-support=off", false, true),
+        ] {
+            let (c, _) = color_path(on, declared, false, true);
+            assert_eq!(c.sdr(), None, "{name}");
+            assert_eq!(c.seal().len(), 3, "{name}: the base page");
+        }
+    }
+
+    /// ... and a declared Windows guest gets the path (when it was built) and the SDR page.
+    #[test]
+    fn a_declared_windows_guest_gets_the_sdr_path_through_the_real_color_path() {
+        let (c, _) = color_path(true, true, false, true);
+        assert_eq!(c.sdr(), Some(7));
+        assert_eq!(c.seal().len(), 4, "the SDR page");
+        let (not_built, _) = color_path(true, true, false, false);
+        assert_eq!(
+            not_built.sdr(),
+            None,
+            "a path that was not built is never invented"
+        );
+    }
+
+    /// The gate follows the declaration LIVE: a later Linux declaration takes the path away, and the
+    /// drainer's sync restores the base page in the shadow.
+    #[test]
+    fn the_color_path_follows_the_declaration_live_and_the_sync_restores_the_base_page() {
+        let (c, profile) = color_path(true, true, false, true);
+        assert_eq!(c.sdr(), Some(7));
+        c.seal();
+        profile.declare(false);
+        assert_eq!(c.sdr(), None);
+        assert_eq!(
+            collect_color(&c).len(),
+            2,
+            "the two differing words go back"
+        );
+        profile.declare(true);
+        assert_eq!(collect_color(&c).len(), 2, "and forward again");
+    }
+
+    /// A guest that did not declare Windows has its caps page left alone by the drainer's sync: nothing is
+    /// stored (the shadow already holds the base page), however often the drainer asks.
+    #[test]
+    fn the_drainers_sync_leaves_a_non_windows_guests_caps_page_alone() {
+        for (on, declared) in [(true, false), (false, true)] {
+            let (c, _) = color_path(on, declared, false, true);
+            c.seal();
+            assert!(collect_color(&c).is_empty(), "on={on} declared={declared}");
+            assert!(collect_color(&c).is_empty(), "on={on} declared={declared}");
+        }
+    }
+
+    /// The lab override forces the path for any guest and also its caps page.
+    #[test]
+    fn the_lab_override_forces_the_real_color_path() {
+        let (c, _) = color_path(true, false, true, true);
+        assert_eq!(c.sdr(), Some(7));
+        assert_eq!(c.seal().len(), 4);
+    }
+
+    fn collect_color(c: &ColorPath<u8>) -> Vec<(u64, u32)> {
+        let stored = std::cell::RefCell::new(Vec::new());
+        c.sync(&|o, w| stored.borrow_mut().push((o, w)));
+        stored.into_inner()
+    }
+
+    /// ★ The explicit lab override (`KF3_DISPLAY_SDR_COLOR=1`, the Linux colour audit) forces the path for
+    /// any guest; it is the only thing besides the declaration that does.
+    #[test]
+    fn the_lab_override_forces_the_sdr_colour_path_for_any_guest() {
+        assert!(sdr_wanted(true, false));
+        assert!(sdr_wanted(true, true));
+        assert!(!sdr_wanted(false, false));
+    }
+
+    fn page(words: &[(u32, u32)]) -> kf_disp::caps::CapsPage {
+        kf_disp::caps::CapsPage {
+            base: 0x64_0000,
+            words: words.to_vec(),
+        }
+    }
+
+    fn variants() -> (CapsVariants, kf_disp::caps::CapsPage) {
+        let base = page(&[(0, 1), (4, 2), (0x780, 0x10)]);
+        let sdr = page(&[(0, 1), (4, 3), (0x784, 0x20), (0x780, 0x10)]);
+        (CapsVariants::new(base, Some(sdr.clone())), sdr)
+    }
+
+    fn collect(v: &CapsVariants, want_sdr: bool) -> Vec<(u64, u32)> {
+        let stored = std::cell::RefCell::new(Vec::new());
+        v.sync(want_sdr, &|o, w| stored.borrow_mut().push((o, w)));
+        stored.into_inner()
+    }
+
+    /// ★ Sealing for a guest that did not declare Windows shows the BASE page, and a sync for it stores
+    /// nothing (the shadow already holds the base page).
+    #[test]
+    fn the_caps_page_is_the_base_page_until_windows_is_declared() {
+        let (v, _) = variants();
+        assert_eq!(
+            v.seal(false),
+            vec![(0x64_0000, 1), (0x64_0004, 2), (0x64_0780, 0x10)]
+        );
+        assert!(collect(&v, false).is_empty(), "no change, no store");
+    }
+
+    /// ★ The Windows declaration stores exactly the words that differ, once.
+    #[test]
+    fn a_windows_declaration_publishes_only_the_differing_words_once() {
+        let (v, _) = variants();
+        v.seal(false);
+        assert_eq!(collect(&v, true), vec![(0x64_0004, 3), (0x64_0784, 0x20)]);
+        assert!(
+            collect(&v, true).is_empty(),
+            "idempotent while the identity stands"
+        );
+    }
+
+    /// ★ A later Linux declaration restores the base page (an SDR-only word goes back to 0).
+    #[test]
+    fn a_later_linux_declaration_restores_the_base_page() {
+        let (v, _) = variants();
+        v.seal(false);
+        let _ = collect(&v, true);
+        assert_eq!(collect(&v, false), vec![(0x64_0004, 2), (0x64_0784, 0)]);
+    }
+
+    /// ★ A device reset re-seeds the page for the identity that stands, and records which one the shadow holds.
+    #[test]
+    fn a_reseal_records_which_page_the_shadow_holds() {
+        let (v, sdr) = variants();
+        assert_eq!(v.seal(true), CapsVariants::words(&sdr));
+        assert!(
+            collect(&v, true).is_empty(),
+            "seal recorded the SDR page as shown"
+        );
+        assert_eq!(
+            collect(&v, false).len(),
+            2,
+            "and a Linux sync then restores the base"
+        );
+    }
+
+    /// ★ A page set with no SDR variant (the constructor probes' own page) is never switched.
+    #[test]
+    fn a_single_page_is_never_switched() {
+        let only = page(&[(0, 1), (4, 2)]);
+        let v = CapsVariants::only(only.clone());
+        assert!(collect(&v, true).is_empty());
+        assert_eq!(v.seal(true), CapsVariants::words(&only));
+    }
+
+    /// Every piece of the GPU-free realize path resolves for every display row. The GB206
     /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
     /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
     #[test]
@@ -7190,6 +7661,76 @@ mod tests {
         }
     }
 
+    /// ★ Falsifier: a register the display plane publishes or decodes lies outside the `NV_PDISP`
+    /// aperture of its family, for any guest branch and display row. A kept S3 wake keeps the
+    /// aperture's shadow words and restores the rest, so such a register would come back as its
+    /// realize value while the display engine kept its state: a half-kept display.
+    #[test]
+    fn every_resolved_display_offset_is_inside_the_aperture() {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
+            let t = kf_disp::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                let m = RegMap::resolve(&regs, t, row).unwrap();
+                let heads = u64::from(m.heads);
+                let windows = u64::from(m.windows);
+                let mut offs: Vec<(&str, u64)> = vec![
+                    ("core user area", m.core_assy),
+                    ("core user area end", m.core_assy + m.core_len - 4),
+                    ("core armed", m.core_armed),
+                    ("evt awaken win", m.evt_awaken_win),
+                    ("evt awaken other", m.evt_awaken_other),
+                    ("rm intr dispatch", m.rm_intr_dispatch),
+                    ("rm ctrl disp", m.rm_ctrl_disp),
+                ];
+                for (name, (b, st), n) in [
+                    ("window user area", m.win, windows),
+                    ("window-imm user area", m.winim, windows),
+                    ("cursor user area", m.curs, heads),
+                ] {
+                    offs.push((name, b));
+                    offs.push((name, b + (n - 1) * st + m.user_len - 4));
+                }
+                for (name, (b, st)) in [
+                    ("evt head timing", m.evt_head_timing),
+                    ("rm intr stat head timing", m.rm_intr_stat_head_timing),
+                    ("rg dpca", (m.rg_dpca.0, m.rg_dpca.1)),
+                ] {
+                    offs.push((name, b));
+                    offs.push((name, b + (heads - 1) * st));
+                }
+                for (name, o) in [
+                    ("rm intr en head timing", m.rm_intr_en_head_timing),
+                    ("loadv", m.loadv),
+                    ("core head state", m.core_head_state.map(|c| (c.0, c.1))),
+                ] {
+                    if let Some((b, st)) = o {
+                        offs.push((name, b));
+                        offs.push((name, b + (heads - 1) * st));
+                    }
+                }
+                offs.extend(m.evt_sem_win.map(|o| ("evt sem win", o)));
+                offs.extend(m.evt_dispatch.map(|(o, _)| ("evt dispatch", o)));
+                for k in 0..4 {
+                    let n = [1, windows, windows, heads][k];
+                    for (name, (b, st)) in [("chnctl", m.chnctl[k]), ("chnstatus", m.chnstatus[k])]
+                    {
+                        offs.push((name, b));
+                        offs.push((name, b + (n - 1) * st));
+                    }
+                }
+                for (name, off) in offs {
+                    assert!(
+                        m.owns(off),
+                        "{version} {}: {name} {off:#x} outside the aperture {:#x?}",
+                        row.chips,
+                        m.aperture()
+                    );
+                }
+            }
+        }
+    }
+
     /// ★ The vCPU decode on GA10x: each DMA channel's PUT, its read-only GET and ARMED half, the
     /// cursor PIO window and its read-only `Free`, the W1C event registers, the derived summaries.
     #[test]
@@ -7325,6 +7866,7 @@ mod tests {
     fn frame(addr: usize, serial: u64) -> FrameView {
         FrameView {
             addr,
+            len: 7680 * 1080,
             width: 1920,
             height: 1080,
             stride: 7680,
@@ -7424,7 +7966,7 @@ mod tests {
         assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
     }
 
-    /// ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): when a guest life
+    /// When a guest life
     /// ends — the guest's RM unloads (fn 47 without a PM transition), or the device is reset — the
     /// console goes back to the BOOT LAYER (store `[0, G)`, what BAR1 `[0, G)` shows again), from
     /// every state the old life left: an armed scanout lost, a `PRESERVE_HW` scanout, black. Without
@@ -7549,7 +8091,7 @@ mod tests {
         );
     }
 
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is
+    /// A head's scanout that WAS shown and is lost is
     /// black (box run b5 kept the last fbcon frame after `rmmod nvidia_drm`) — at once when no head
     /// is lit, after [`WINDOWLESS_HOLD`] when a lit head has no window — and a scanout freed with
     /// `PRESERVE_HW` stays until a head is armed again.
@@ -7638,7 +8180,7 @@ mod tests {
         }
     }
 
-    /// ★★ 2026-10-04 — B5 arm (a2) on box vmb, failed 5 of 5 runs with the candidate's and
+    /// B5 arm (a2) on box vmb, failed 5 of 5 runs with the candidate's and
     /// master's code (`traces/v3_candidates/cand1_20261003/display/`). NVKMS's teardown after X
     /// restores the console (window 6 latches context DMA `0x10088`), frees the console surface —
     /// RM clears `0x10088` from display instance memory while window 6 stays armed on it — and only
@@ -8018,6 +8560,33 @@ mod tests {
         assert_eq!(
             shown_key(None, &unlit, false),
             shown_key(None, &brief, false)
+        );
+    }
+
+    /// ★ C-04 / S1-03 (PR #384): the bytes readable at a frame's address travel with the address, from
+    /// the worker's `publish` to the console's `take`. `kf3_display_frame` refuses a geometry that does
+    /// not fit that length, so a `take` that returned `len: 0` would turn every real frame into "no
+    /// frame" and the console would stay black, with nothing else wrong. Each slot keeps its own
+    /// length, and a later frame replaces it.
+    #[test]
+    fn the_console_take_carries_the_length_of_the_slot_it_returns() {
+        let c = ConsoleShare::default();
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        let shown = c.take().unwrap();
+        assert_eq!((shown.addr, shown.len), (0x1000, 7680 * 1080));
+        // a second frame in another slot has another length; the console gets that one, not slot a's
+        let b = c.free_slot().unwrap();
+        assert_ne!(a, b);
+        let mut f = frame(0x2000, 2);
+        f.len = 7680 * 1080 + 4096;
+        c.publish(b, f, true, None);
+        let shown = c.take().unwrap();
+        assert_eq!((shown.addr, shown.len), (0x2000, 7680 * 1080 + 4096));
+        // the geometry the console checks it against is the one that crossed with it
+        assert!(
+            crate::ffi_unsafe::CheckedFrame::of(&shown).is_some(),
+            "a frame taken from the share fits its own length"
         );
     }
 

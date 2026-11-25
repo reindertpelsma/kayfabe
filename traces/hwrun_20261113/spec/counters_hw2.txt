@@ -1,0 +1,7 @@
+/workspace/winvm/kfwin/logs/spec_hw2_run2_b1_qemu.log
+channels_reported=174 {'segments_streamed': 0, 'stream_restarts': 0, 'stream_publish_retries': 0, 'refused_scan_budget': 0, 'refused_staged_span_budget': 0, 'entries_pointer': 18188676, 'entries_scan': 361158, 'entries_window': 351540} {'stream_parts_max': 0, 'stream_restarts_max': 0, 'window_entry_max_bytes': 65524, 'pointer_entry_max_bytes': 81384} {'USER_RING_REFUSED': 0, 'SCAN_BUDGET': 0, 'USER_RING_SUMMARY': 0}
+0
+ISPLAY_SDR_COLOR=1 KF3_GFX_POOL_PROBE=1 KF3_KERNEL_GR_CE=1 KF3_KERNEL_GR_WORK=1 KF3_MEMORY_LIST_PROBE=1 KF3_PREEMPT_BIND_PROBE=1 KF3_RPC_TRACE=1 KF3_SW_RUNLIST_HOST_OWNED=1 KF3_SW_RUNLIST_PROBE=1 KF3_
+[2026-11-13T00:12:21Z] QEMU_START tag=spec_hw2_run2 boot=1 pid=123326 log=logs/spec_hw2_run2_b1_qemu.log
+[2026-11-13T01:08:23Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=49171 host_xid=0
+[2026-11-13T01:08:23Z] WINVM_RUN_END tag=spec_hw2_run2 boots=1 reason=guest-shutdown

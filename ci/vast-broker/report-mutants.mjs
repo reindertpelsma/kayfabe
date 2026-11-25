@@ -1,14 +1,15 @@
 // Mutation check for the public log, the run report and their publisher (src/publiclog.js,
 // src/runreport.js, src/publish.js and their wiring in src/index.js, src/ledger.js, src/routes.js),
-// GPU-free. Each mutant is applied in place (exact-once replacements), the three test files run, and
+// GPU-free. Each mutant is applied in a temporary copy (exact-once replacements), the three test files run, and
 // every file is restored before the next mutant (also on error). Every mutant must make at least
 // TWO named tests fail. Run with no other test running here:
 //   node ci/vast-broker/report-mutants.mjs [name ...]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { tempCopy } from './mutant-copy.mjs';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
+// Every edit is made in a temporary COPY of the tree (mutant-copy.mjs), never in the checkout.
+const here = tempCopy();
 const TESTS = [
   here + 'test/public-log.test.js',
   here + 'test/run-report.test.js',
@@ -394,15 +395,21 @@ const MUTANTS = [
   ],
   [
     'run report not a box route',
-    [[T, '/^\\/(?:report|run-report|kill|evidence)\\/', '/^\\/(?:report|kill|evidence)\\/']],
+    [
+      [
+        T,
+        '/^\\/(?:report|run-report|kill|evidence|instruction)\\/',
+        '/^\\/(?:report|kill|evidence|instruction)\\/',
+      ],
+    ],
   ],
   [
     'run report not authorised at the gateway',
     [
       [
         I,
-        '/^\\/(?:report|run-report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
-        '/^\\/(?:report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
+        '/^\\/(?:report|run-report|kill|blob-url|bench-data|instruction|evidence)\\//.test(path)) {',
+        '/^\\/(?:report|kill|blob-url|bench-data|instruction|evidence)\\//.test(path)) {',
       ],
     ],
   ],
@@ -604,8 +611,8 @@ const MUTANTS = [
     [
       [
         P,
-        'for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])',
-        'for (const nonce of [entry.nonce])',
+        '    ...prior.map((nonce, i) => [nonce, expiries.length === prior.length ? [expiries[i]] : known]),\n',
+        '',
       ],
     ],
   ],

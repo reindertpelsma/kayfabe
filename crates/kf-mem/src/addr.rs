@@ -32,12 +32,13 @@ pub struct Gva(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HostToken(pub u64);
 
+/// The 4 KiB page size every address in this crate is aligned and counted against.
 pub const PAGE: u64 = 0x1000;
 
 /// ★ Round a range out to page boundaries.
 ///
 /// ⊘ A host map is page-granular (a FIXED slice map rounds to at least 4 KiB), so any range we
-/// hand RM must cover whole pages. `CLAUDE.md` records the cost of not doing so: a port that bound
+/// hand RM must cover whole pages. A port that bound
 /// at a declared, non-page-aligned length left *"2 560 bytes our own resolve answers Miss for
 /// inside a page the guest has mapped."*
 #[must_use]

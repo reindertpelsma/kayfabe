@@ -228,7 +228,7 @@ pub fn table_for(version: &str) -> Option<&'static RegTable> {
             V580_159_04
                 .get_or_init(|| RegTable::parse(include_str!("../data/regs-580.159.04.tsv"))),
         ),
-        // ★ 2026-10-04 (v3-windows): 580.65.06, the Linux twin of Windows 580.88 (same changelist
+        // 580.65.06, the Linux twin of Windows 580.88 (same changelist
         // 36308443). Derived by tools/derive_display_regs.sh from ogkm 580.65.06; the rows are
         // identical to 580.159.04's apart from VERSION.
         "580.65.06" => Some(

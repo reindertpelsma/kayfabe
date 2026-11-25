@@ -1,4 +1,4 @@
-//! 2026-10-20 -- **Adversarial model v3: the Windows USER-ring relay in POINTER mode** (the production default since
+//! **Adversarial model v3: the Windows USER-ring relay in POINTER mode** (the production default since
 //! 2026-10-16/17: lifecycle Scan -> Pointer, lazy observe interval 16 + PUT cache, Pointer markers at observed `GP_PUT`
 //! boundaries or none when the VM-wide latch is set). Breaker brief: find interleavings that strand or DELAY a client.
 //!

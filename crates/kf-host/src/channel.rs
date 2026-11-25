@@ -103,13 +103,102 @@ pub const GUEST_VA_RANGES: [(u64, u64); 2] =
     [((1 << 32) + (1 << 29), HOST_HOLE_LO), (1 << 40, 1 << 47)];
 /// The start of host RM's hole — 64 GiB below `1 TiB`. A guest reaches it only after its RM heap has
 /// handed out ~1 TiB of VA; a guest row there is mapped through the range object as before (and a
-/// collision is still named `HeldByHost`).
+/// collision is still named `HeldByHost`; inside the reserved ranges a `0x51` is
+/// [`VA_RESERVED_MAP_REFUSED`] instead).
 pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 
 /// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
 const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
-const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+///
+/// (sparse residency RCA, `V3_SPARSE_RESIDENCY_RCA.md`): NOT `_SPARSE`
+/// ([`NVOS32_ALLOC_FLAGS_SPARSE`]), so an unmapped VA inside a reservation is INVALID on the host (a
+/// fault), never the guest's SPARSE "reads zero" (`ogkm-580 gpu_vaspace.c:1577-1600`, `2279-2289`),
+/// unless the VM opted into [`GuestVaFill::Zero`] for its static guest ranges. Public so the host model (`kf-mem` `sim`) derives the reservation's unmapped state from it.
+pub const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+/// `NVOS32_ALLOC_FLAGS_SPARSE` (`ogkm-580 nvos.h:1472`; semantics `nvos.h:1415-1419`: "an unmapped
+/// virtual address range should not fault but simply return 0's").
+pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
+
+/// What an UNMAPPED VA of the static guest ranges ([`GUEST_VA_RANGES`] and the low range) reads as on
+/// the host twin. The kf3 device sets it from its `unmapped-reads-zero` property, per mirror start
+/// ([`GuestVaFillByStart`]; `V3_SPARSE_RESIDENCY_RCA.md` §5, option B). Only a
+/// [`HostRm`] that nobody configures (the harness, the raw client, the kf-mem model) keeps
+/// [`GuestVaFill::default`], the fault, so a bare-metal reference run still sees the host's own behaviour.
+///
+/// Only the static guest ranges take it: micro reservations ([`HostRm::reserve_va`]) and bare spaces
+/// keep [`NVOS32_RESERVE_FLAGS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GuestVaFill {
+    /// INVALID: a GPU access to an unmapped guest VA faults (an RC, which reaches the guest). The
+    /// default of an unconfigured [`HostRm`], and what `unmapped-reads-zero=off` gives a guest. A
+    /// guest's SPARSE pages (Vulkan sparse residency) fault too: those cases hang.
+    #[default]
+    Fault,
+    /// SPARSE: a GPU read of any unmapped guest VA returns zero and a write is dropped, with no
+    /// fault. The guest's sparse pages then behave as on bare metal, but so does every other
+    /// unmapped VA: a read the guest expects to fault (unserviced managed-memory demand paging, an
+    /// application bug) silently reads zero.
+    Zero,
+}
+
+impl GuestVaFill {
+    /// The `NVOS32` flags of a static guest-range reservation with this fill.
+    #[must_use]
+    pub const fn reserve_flags(self) -> u32 {
+        match self {
+            Self::Fault => NVOS32_RESERVE_FLAGS,
+            Self::Zero => NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE,
+        }
+    }
+}
+
+/// The fill of the static guest ranges per mirror start: one value for a space that starts at host
+/// RM's default ([`MirrorVaStart::HostDefault`]: every Linux guest, and every guest that has not
+/// declared the Windows build) and one for a floor-started space ([`MirrorVaStart::GuestFloor`]: a
+/// guest under the Windows support profile).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GuestVaFillByStart {
+    /// The fill of a default-start space.
+    pub host_default: GuestVaFill,
+    /// The fill of a floor-started space.
+    pub guest_floor: GuestVaFill,
+}
+
+impl GuestVaFillByStart {
+    /// The same fill for every space.
+    #[must_use]
+    pub const fn uniform(fill: GuestVaFill) -> Self {
+        Self {
+            host_default: fill,
+            guest_floor: fill,
+        }
+    }
+
+    /// The fill of a space that starts at `start`.
+    #[must_use]
+    pub const fn for_start(self, start: MirrorVaStart) -> GuestVaFill {
+        match start {
+            MirrorVaStart::HostDefault => self.host_default,
+            MirrorVaStart::GuestFloor => self.guest_floor,
+        }
+    }
+}
+
+/// The static guest-range reservations of a mirror space that starts at `start`, in
+/// the order [`VaSpace::guest`] holds them: `(lo, hi, NVOS32 flags)`. Every range takes `fill`
+/// ([`GuestVaFill::reserve_flags`]). [`HostRm::alloc_vaspace_at`] reserves exactly these.
+pub fn guest_range_plan(
+    start: MirrorVaStart,
+    fill: GuestVaFill,
+) -> impl Iterator<Item = (u64, u64, u32)> {
+    let flags = fill.reserve_flags();
+    GUEST_VA_RANGES
+        .iter()
+        .copied()
+        .chain(start.low_range())
+        .map(move |(lo, hi)| (lo, hi, flags))
+}
 
 impl VaSpace {
     /// ★ **STATUS (2026-10-09): this is the ONE-handle form; a straddling row is no longer refused
@@ -199,6 +288,13 @@ impl VaSpace {
             .iter()
             .any(|g| g.handle != 0 && va >= g.lo && end <= g.hi)
     }
+
+    /// Whether `h_dma` is the handle of a LIVE guest reservation of this space (never the space's
+    /// own [`VaSpace::range`], where host RM places its own objects too).
+    #[must_use]
+    pub fn is_guest_reservation(&self, h_dma: u32) -> bool {
+        h_dma != 0 && h_dma != self.range && self.guest.iter().any(|g| g.handle == h_dma)
+    }
 }
 
 /// A FIXED map that straddles the edge of a [`GuestVaRange`] — refused by [`VaSpace::dma_for`] (the
@@ -218,8 +314,52 @@ pub const VA_PIECES_MAX: usize = 2 * 3 + 1;
 pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B77;
 /// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
 pub const VA_ROW_WRAPS: u32 = 0x4B78;
+/// A FIXED map routed THROUGH a VA reservation of ours (a live [`GuestVaRange`] or a reservation the
+/// caller made with [`HostRm::reserve_va`]) that host RM answered `0x51` (`NV_ERR_NO_MEMORY`).
+///
+/// Inferred from the host RM source, not measured: RM's own allocator places nothing inside a
+/// reservation of ours (the reserved VA is allocated to the `NV50_MEMORY_VIRTUAL` object, which is
+/// why [`GuestVaRange`] exists), so inside one the answer is not another owner's mapping. It is
+/// host capacity (RM could not allocate a page-table level for the map) or a mapping of ours that
+/// is still there, for example a piece whose rollback unmap was refused. In neither case has this
+/// call placed the row, and the memory plane has no host mapping it could name as the owner, so
+/// the map is refused by name. It is never reported as [`crate::VA_ALREADY_MAPPED`], which the
+/// memory plane acknowledges as satisfied by a host mapping: that acknowledgement would hide a
+/// missing row, and under [`GuestVaFill::Zero`] a missing row reads zero with no fault. The
+/// caller's ledger is not consulted: `kf-mem` removes every mapping of ours it has on record
+/// before it maps a row, so what is left is not on record.
+pub const VA_RESERVED_MAP_REFUSED: u32 = 0x4B7B;
 
-/// ★ 2026-10-08 (Windows walls, task A) — **where a guest-mirror twin's host VA space starts.**
+/// The answer of a FIXED map that was routed through `h_dma`, a reservation of ours:
+/// [`crate::VA_ALREADY_MAPPED`] becomes [`VA_RESERVED_MAP_REFUSED`] (named once per rate window);
+/// every other answer is returned as it is.
+pub(crate) fn own_reservation_answer(
+    r: Result<u64, RmError>,
+    h_dma: u32,
+    at: u64,
+    len: u64,
+) -> Result<u64, RmError> {
+    match r {
+        Err(RmError::Other(crate::VA_ALREADY_MAPPED)) => {
+            kf_arch::rate_eprintln!(
+                "kf-host: map {at:#x}+{len:#x} through our reservation {h_dma:#x}: host RM answered 0x51 (no memory). Host RM places nothing inside a reservation of ours, so this is host capacity or a mapping of ours still there: REFUSED, not held by the host"
+            );
+            Err(RmError::Other(VA_RESERVED_MAP_REFUSED))
+        }
+        other => other,
+    }
+}
+
+/// One FIXED map through `h_dma`, a reservation of ours ([`own_reservation_answer`]).
+pub(crate) fn map_through_reservation<V: DmaVerbs + ?Sized>(
+    v: &V,
+    h_dma: u32,
+    p: MapPiece,
+) -> Result<u64, RmError> {
+    own_reservation_answer(v.map_one(h_dma, p), h_dma, p.at, p.len)
+}
+
+/// **Where a guest-mirror twin's host VA space starts.**
 ///
 /// The rule. A twin's host space mirrors the guest's page tables, so it must accept every VA those
 /// tables can name — and that is NOT bounded by any RM's allocator start:
@@ -248,12 +388,26 @@ pub const VA_ROW_WRAPS: u32 = 0x4B78;
 /// guest input — and lies wholly below host RM's default start, so the space's host-side layout is
 /// otherwise unchanged.
 ///
-/// Default OFF: applied only when a twin can run in a `SHARED_MANAGEMENT` space at all, i.e. under
-/// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (Windows per-process work, `OWNER_RULINGS.md` §V). Linux
-/// guests keep host RM's default start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
+/// applied
+/// only to the spaces of a guest that DECLARED the measured Windows build at fn 1 with `windows-support`
+/// on: the caller states it ([`HostRm::alloc_vaspace_at`],
+/// [`MirrorVaStart::select`]); nothing here reads the environment. Linux guests keep host RM's default
+/// start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
 pub const TWIN_VA_FLOOR: u64 = 0x1_0000;
 /// Host RM's default VA-space start (`gvaspaceGetReservedVaspaceBase`, 1 MiB on a non-MIG GPU).
 pub const HOST_DEFAULT_VA_START: u64 = 0x10_0000;
+
+/// The start a host space is really allocated at: the caller's `start`
+/// only for a space that reserves the guest's ranges (a mirror); a bare (T-space) allocation never takes the
+/// floor, whatever the caller asked. Pure, so the rule is tested where it is applied.
+#[must_use]
+pub const fn effective_start(reserve_guest: bool, start: MirrorVaStart) -> MirrorVaStart {
+    if reserve_guest {
+        start
+    } else {
+        MirrorVaStart::HostDefault
+    }
+}
 
 /// Where a guest-mirror host space starts ([`TWIN_VA_FLOOR`] explains the rule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,17 +420,8 @@ pub enum MirrorVaStart {
 
 impl MirrorVaStart {
     /// The rule's switch: [`MirrorVaStart::GuestFloor`] iff Windows per-process work may run on twins
-    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off).
-    #[must_use]
-    pub fn from_env() -> Self {
-        // Read once: this runs on the VA thread for every mirror-space alloc (an env-lock round trip each).
-        static CACHED: std::sync::OnceLock<MirrorVaStart> = std::sync::OnceLock::new();
-        *CACHED.get_or_init(|| {
-            Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
-        })
-    }
-
-    /// Pure form of [`MirrorVaStart::from_env`].
+    /// of this guest (`windows_user_twins`: the guest declared the Windows 580.88 build and
+    /// `windows-support` is on; [`kf_rm`'s `WindowsProfile::active`]).
     #[must_use]
     pub const fn select(windows_user_twins: bool) -> Self {
         if windows_user_twins {
@@ -379,8 +524,18 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
     rollback_flags: u32,
 ) -> Result<u64, RmError> {
     let pieces = space.dma_pieces(row.at, row.len)?;
+    // A piece inside a live guest reservation answers through [`map_through_reservation`]: there a
+    // `0x51` is a refusal, never "held by the host". A piece in the space's own range keeps the
+    // host's answer, because host RM places its own objects there.
+    let map_piece = |h: u32, p: MapPiece| {
+        if space.is_guest_reservation(h) {
+            map_through_reservation(v, h, p)
+        } else {
+            v.map_one(h, p)
+        }
+    };
     if let [(h, _, len)] = pieces.as_slice() {
-        return v.map_one(*h, MapPiece { len: *len, ..row });
+        return map_piece(*h, MapPiece { len: *len, ..row });
     }
     // Checked once, so no piece offset below can overflow (`piece.va - at < len`).
     row.offset
@@ -393,12 +548,13 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
             at: va,
             ..row
         };
-        if let Err(e) = v.map_one(h, piece) {
+        if let Err(e) = map_piece(h, piece) {
             for &(h0, va0, _) in pieces[..i].iter().rev() {
                 if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf-host: split map {:#x}+{:#x}: piece {va:#x} refused ({e:?}); rolling back piece {va0:#x} was refused too ({r:?})",
-                        row.at, row.len
+                        row.at,
+                        row.len
                     );
                 }
             }
@@ -491,6 +647,7 @@ pub struct RingSpec {
 /// `ADMIN` and the reply check must refuse **every** birth: the knob can only make births fail,
 /// never let a privileged channel live. It exists to show the check fires on a real RM reply
 /// (a check that has only ever reported zero has not shown it can report one).
+#[cfg(feature = "negctl")]
 fn negctl_skip_cap_bracket() -> bool {
     static SKIP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *SKIP.get_or_init(|| {
@@ -503,6 +660,12 @@ fn negctl_skip_cap_bracket() -> bool {
         }
         on
     })
+}
+
+/// Without the `negctl` feature (the release build) the capability bracket is never skipped.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_skip_cap_bracket() -> bool {
+    false
 }
 
 /// ★ The `NV_CHANNEL_ALLOC_PARAMS` request every kf3 channel birth sends.
@@ -674,7 +837,55 @@ impl HostRm {
     /// # Errors
     /// The host's refusal; a half-built space is freed.
     pub fn alloc_vaspace(&self) -> Result<VaSpace, RmError> {
-        self.alloc_vaspace_with(std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none())
+        self.alloc_vaspace_at(MirrorVaStart::HostDefault)
+    }
+
+    /// Set what an unmapped VA of the static guest ranges reads as in every space allocated AFTER
+    /// this call ([`GuestVaFill`]), whatever its start. For a host that wants one fill for every
+    /// space (the probes); the kf3 device calls [`HostRm::set_guest_va_fill_by_start`].
+    pub fn set_guest_va_fill(&self, fill: GuestVaFill) {
+        self.set_guest_va_fill_by_start(GuestVaFillByStart::uniform(fill));
+    }
+
+    /// Set the fill per mirror start ([`GuestVaFillByStart`]) for every space allocated AFTER this
+    /// call. Called once at device realize from the `unmapped-reads-zero` property; never from the
+    /// environment.
+    pub fn set_guest_va_fill_by_start(&self, fill: GuestVaFillByStart) {
+        self.guest_va_zero.store(
+            fill.host_default == GuestVaFill::Zero,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.guest_va_zero_floor.store(
+            fill.guest_floor == GuestVaFill::Zero,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// The fills [`HostRm::set_guest_va_fill_by_start`] set ([`GuestVaFill::Fault`] for both if
+    /// never set).
+    #[must_use]
+    pub fn guest_va_fill_by_start(&self) -> GuestVaFillByStart {
+        let load = |z: &std::sync::atomic::AtomicBool| {
+            if z.load(std::sync::atomic::Ordering::Relaxed) {
+                GuestVaFill::Zero
+            } else {
+                GuestVaFill::Fault
+            }
+        };
+        GuestVaFillByStart {
+            host_default: load(&self.guest_va_zero),
+            guest_floor: load(&self.guest_va_zero_floor),
+        }
+    }
+
+    /// [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
+    /// DECLARED identity ([`MirrorVaStart::select`]). A Linux guest's spaces are always
+    /// [`MirrorVaStart::HostDefault`]; the floor is a Windows-profile behaviour (see [`TWIN_VA_FLOOR`]).
+    ///
+    /// # Errors
+    /// The host's refusal; a half-built space is freed.
+    pub fn alloc_vaspace_at(&self, start: MirrorVaStart) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_with(std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none(), start)
     }
 
     /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2.1): a fresh host VA space with NONE of the
@@ -686,22 +897,43 @@ impl HostRm {
     /// # Errors
     /// The host's refusal; a half-built space is freed.
     pub fn alloc_vaspace_bare(&self) -> Result<VaSpace, RmError> {
-        self.alloc_vaspace_with(false)
+        self.alloc_vaspace_with(false, MirrorVaStart::HostDefault)
     }
 
-    fn alloc_vaspace_with(&self, reserve_guest: bool) -> Result<VaSpace, RmError> {
+    /// PROBE ONLY (`kf-va-fence-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §7): a bare space
+    /// (no guest-range reservations) allocated with the caller's `NV_VASPACE_ALLOCATION_FLAGS_*`.
+    /// Production never calls it.
+    ///
+    /// # Errors
+    /// The host's refusal; a half-built space is freed.
+    pub fn alloc_vaspace_probe_flags(&self, flags: u32) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_flags(false, MirrorVaStart::HostDefault, flags)
+    }
+
+    fn alloc_vaspace_with(
+        &self,
+        reserve_guest: bool,
+        start: MirrorVaStart,
+    ) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_flags(reserve_guest, start, 0)
+    }
+
+    fn alloc_vaspace_flags(
+        &self,
+        reserve_guest: bool,
+        start: MirrorVaStart,
+        flags: u32,
+    ) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
-        // ★ 2026-10-08 (task A): a guest-mirror space starts where the guest's page tables can map
+        // A guest-mirror space starts where the guest's page tables can map
         // ([`TWIN_VA_FLOOR`] states the rule and its evidence). ⊘ Replaces the run70-72 diagnostic
         // `KF3_TWIN_VA_BASE=<hex>` (a guest-independent but operator-chosen base, with NO reservation
         // keeping host RM's own buffers out of the low range it opened).
-        let start = if reserve_guest {
-            MirrorVaStart::from_env()
-        } else {
-            MirrorVaStart::HostDefault
-        };
+        // A bare (T-space) allocation never takes the floor: no guest row lands there.
+        let start = effective_start(reserve_guest, start);
         NvVaspaceAllocationParameters {
             va_base: start.va_base(),
+            flags,
             ..NvVaspaceAllocationParameters::default()
         }
         .encode_into(&mut params)
@@ -744,13 +976,14 @@ impl HostRm {
                 };
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
-                // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
+                // Plus the low guest range of a floor-started space (slot 2).
                 if reserve_guest {
-                    let ranges = GUEST_VA_RANGES.iter().copied().chain(start.low_range());
-                    for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
-                        match self.reserve_va(space, lo, hi - lo) {
+                    let plan =
+                        guest_range_plan(start, self.guest_va_fill_by_start().for_start(start));
+                    for (slot, (lo, hi, flags)) in vas.guest.iter_mut().zip(plan) {
+                        match self.reserve_va_flags(space, lo, hi - lo, flags) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
-                            Err(e) => eprintln!(
+                            Err(e) => kf_arch::rate_eprintln!(
                                 "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
                             ),
                         }
@@ -770,6 +1003,12 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
+        self.reserve_va_flags(space, at, len, NVOS32_RESERVE_FLAGS)
+    }
+
+    /// [`HostRm::reserve_va`] with explicit `NVOS32` flags: [`NVOS32_RESERVE_FLAGS`], or
+    /// [`GuestVaFill::reserve_flags`] for a static guest range.
+    fn reserve_va_flags(&self, space: u32, at: u64, len: u64, flags: u32) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
             owner: self.client.raw(),
@@ -782,7 +1021,7 @@ impl HostRm {
         }
         .encode_into(&mut p)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
+        p[8..12].copy_from_slice(&flags.to_le_bytes());
         p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
         p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
         let want = self.mint();
@@ -890,7 +1129,7 @@ impl HostRm {
         let extra = extra | perm.nvos46_flags();
         let shared = backing == MapBacking::SharedSlice;
         match at {
-            // ★ 2026-10-09: a FIXED map is one map per `hDma` it touches ([`map_pieces`]).
+            // A FIXED map is one map per `hDma` it touches ([`map_pieces`]).
             Some(a) => map_pieces(
                 self,
                 space,
@@ -986,7 +1225,7 @@ impl HostRm {
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, unmap_flags(defer))
     }
 
-    /// ★ 2026-10-09: unmap the ONE row `[va, va+len)` that a [`HostRm::map`] placed — every piece of
+    /// Unmap the ONE row `[va, va+len)` that a [`HostRm::map`] placed — every piece of
     /// it ([`VaSpace::dma_pieces`]), each by its exact start (the whole-mapping unmap, which every
     /// host driver carries). A row inside one object is exactly [`HostRm::unmap`]. Every piece is
     /// attempted even if one is refused; the first refusal is returned. `len` must be the length the
@@ -1041,13 +1280,14 @@ impl HostRm {
         unmap_pieces(self, space, va, len, true, unmap_flags(defer))
     }
 
-    /// ★ 2026-10-09: ONE FIXED map of `[offset, offset+len)` of `memory` at `at` THROUGH `h_dma`
+    /// ONE FIXED map of `[offset, offset+len)` of `memory` at `at` THROUGH `h_dma`
     /// — a reservation the caller made over that VA ([`HostRm::reserve_va`]; `kf_mem::batch`'s
     /// micro reservations). No piece routing: the caller guarantees `[at, at+len)` lies inside
     /// `h_dma` (RM asserts it, `dma.c:155-159`). Flags as [`HostRm::map_kind`].
     ///
     /// # Errors
-    /// The host's refusal, or [`RmError::PlacementRefused`].
+    /// The host's refusal, or [`RmError::PlacementRefused`]. A `0x51` answer is
+    /// [`VA_RESERVED_MAP_REFUSED`], never [`crate::VA_ALREADY_MAPPED`]: `h_dma` is a reservation of ours.
     #[allow(clippy::too_many_arguments)]
     pub fn map_in(
         &self,
@@ -1071,15 +1311,18 @@ impl HostRm {
         } else {
             0
         } | perm.nvos46_flags();
-        self.raw_map_dma_slice(
+        map_through_reservation(
+            self,
             h_dma,
-            memory,
-            offset,
-            len,
-            Some(at),
-            extra,
-            backing == MapBacking::SharedSlice,
-            u32::from(kind),
+            MapPiece {
+                memory,
+                offset,
+                len,
+                at,
+                extra,
+                shared: backing == MapBacking::SharedSlice,
+                kind: u32::from(kind),
+            },
         )
     }
 
@@ -1108,7 +1351,7 @@ impl HostRm {
         )
     }
 
-    /// ★ 2026-10-09: ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
+    /// ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
     /// mapping keyed by its exact start, else every mapping intersecting `[va, va+size)` — exact
     /// inside an `NV50_MEMORY_VIRTUAL` reservation (`virt_mem_allocator_gm107.c:1578-1633`).
     ///
@@ -1153,7 +1396,7 @@ impl HostRm {
         self.map_scattered_through(space, None, fd, pieces, at, defer, kind, perm)
     }
 
-    /// ★ 2026-10-09: [`HostRm::map_scattered`] mapped THROUGH `through` (a reservation the caller
+    /// [`HostRm::map_scattered`] mapped THROUGH `through` (a reservation the caller
     /// made with [`HostRm::reserve_va`] over the batch's VA, `kf_mem::batch` "micro reservation")
     /// instead of the space's own routing — so a later partial unmap is exact (see
     /// [`HostRm::unmap_range`]). `None` is [`HostRm::map_scattered`].
@@ -1201,6 +1444,11 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
+        // The three host-side steps before the map.
+        let ns = |d: std::time::Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        crate::phase::record(crate::phase::Phase::Stitch, ns(t_stitch));
+        crate::phase::record(crate::phase::Phase::Descriptor, ns(t_desc - t_stitch));
+        crate::phase::record(crate::phase::Phase::Reap, ns(t_drop - t_desc));
         let r = match through {
             None => self.map_kind(
                 space,
@@ -1452,6 +1700,10 @@ impl HostRm {
             },
         )?;
         let chan = born.handle;
+        // ⊘ NOT rate-limited (security review 1, F-13, 2026-11-13): the merge bar's privilege
+        // census (`scripts/bench/box/birth_census.sh`, `scripts/p1p2/tspace_log_gate.py`) checks
+        // EVERY birth line. Bounding this volume needs the census to read a counter instead; that
+        // is a coordinated change, not this one. Live user channels are capped (`userquota`).
         eprintln!(
             "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
              PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={}",
@@ -1637,7 +1889,7 @@ impl HostRm {
     /// (`0x5080`) under `chan`, with NO params (`RS_OPTIONAL(NV5080_ALLOC_PARAMS)`,
     /// `ogkm-595.84: resource_list.h:1524-1528`; `notifyCompletion` stays false) and nothing
     /// registered on it — the only thing it can do is be found by a `SET_OBJECT` on the channel's
-    /// software subchannel. Unprivileged class (`RS_FLAGS_ALLOC_NON_PRIVILEGED`, OWNER_RULINGS §U.1).
+    /// software subchannel. Unprivileged class.
     ///
     /// # Errors
     /// The host's refusal.
@@ -2308,6 +2560,172 @@ fn encode_deferred_channel_update(
 }
 
 #[cfg(test)]
+mod guest_va_fill_tests {
+    use super::*;
+
+    /// The default is FAULT: the reservation flags are exactly the pre-2026-11-18 ones, without
+    /// `_SPARSE` (S2 of `V3_SPARSE_RESIDENCY_RCA.md`).
+    #[test]
+    fn the_default_fill_faults_and_keeps_the_reserve_flags() {
+        assert_eq!(GuestVaFill::default(), GuestVaFill::Fault);
+        assert_eq!(GuestVaFill::Fault.reserve_flags(), NVOS32_RESERVE_FLAGS);
+        assert_eq!(
+            GuestVaFill::Fault.reserve_flags() & NVOS32_ALLOC_FLAGS_SPARSE,
+            0
+        );
+    }
+
+    /// ZERO adds exactly `_SPARSE` (`nvos.h:1472`) to the same three flags (`nvos.h:1448-1464`).
+    #[test]
+    fn zero_adds_exactly_the_sparse_flag() {
+        assert_eq!(NVOS32_ALLOC_FLAGS_SPARSE, 0x0400_0000);
+        assert_eq!(
+            GuestVaFill::Zero.reserve_flags(),
+            0x0000_0010 | 0x0000_0400 | 0x0008_0000 | 0x0400_0000
+        );
+    }
+
+    /// The plan reserves the same ranges under either fill, and every range carries the fill.
+    #[test]
+    fn the_plan_carries_the_fill_on_every_static_range() {
+        for start in [MirrorVaStart::HostDefault, MirrorVaStart::GuestFloor] {
+            let fault: Vec<_> = guest_range_plan(start, GuestVaFill::Fault).collect();
+            let zero: Vec<_> = guest_range_plan(start, GuestVaFill::Zero).collect();
+            let ranges: Vec<_> = GUEST_VA_RANGES
+                .iter()
+                .copied()
+                .chain(start.low_range())
+                .collect();
+            assert_eq!(
+                fault.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(),
+                ranges
+            );
+            assert_eq!(
+                zero.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(),
+                ranges
+            );
+            assert!(
+                fault.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS),
+                "{start:?}"
+            );
+            assert!(
+                zero.iter()
+                    .all(|&(.., f)| f == NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE),
+                "{start:?}"
+            );
+        }
+    }
+
+    /// The ZERO plan differs from the FAULT plan in exactly one bit per range: `_SPARSE`.
+    #[test]
+    fn the_zero_plan_differs_from_fault_by_exactly_sparse() {
+        let fault = guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Fault);
+        let zero = guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Zero);
+        for ((fl, fh, ff), (zl, zh, zf)) in fault.zip(zero) {
+            assert_eq!((fl, fh), (zl, zh));
+            assert_eq!(ff ^ zf, NVOS32_ALLOC_FLAGS_SPARSE, "{fl:#x}");
+        }
+    }
+
+    /// A per-start fill gives each start its own value, and the plan of each start carries it: the
+    /// two starts can differ (ZERO for a default-start space, FAULT for a floor-started one, and
+    /// the reverse).
+    #[test]
+    fn a_fill_by_start_gives_each_start_its_own_fill() {
+        let by = GuestVaFillByStart {
+            host_default: GuestVaFill::Zero,
+            guest_floor: GuestVaFill::Fault,
+        };
+        assert_eq!(by.for_start(MirrorVaStart::HostDefault), GuestVaFill::Zero);
+        assert_eq!(by.for_start(MirrorVaStart::GuestFloor), GuestVaFill::Fault);
+        let rev = GuestVaFillByStart {
+            host_default: GuestVaFill::Fault,
+            guest_floor: GuestVaFill::Zero,
+        };
+        assert_eq!(
+            rev.for_start(MirrorVaStart::HostDefault),
+            GuestVaFill::Fault
+        );
+        assert_eq!(rev.for_start(MirrorVaStart::GuestFloor), GuestVaFill::Zero);
+        for (by, start, sparse) in [
+            (by, MirrorVaStart::HostDefault, true),
+            (by, MirrorVaStart::GuestFloor, false),
+            (rev, MirrorVaStart::HostDefault, false),
+            (rev, MirrorVaStart::GuestFloor, true),
+        ] {
+            let plan: Vec<_> = guest_range_plan(start, by.for_start(start)).collect();
+            assert!(!plan.is_empty());
+            assert!(
+                plan.iter()
+                    .all(|&(.., f)| (f & NVOS32_ALLOC_FLAGS_SPARSE != 0) == sparse),
+                "{by:?} {start:?}"
+            );
+        }
+    }
+
+    /// A uniform fill is the same for both starts, and the default (an unconfigured host) faults
+    /// for both.
+    #[test]
+    fn a_uniform_fill_by_start_is_the_same_for_both_starts() {
+        for fill in [GuestVaFill::Fault, GuestVaFill::Zero] {
+            let by = GuestVaFillByStart::uniform(fill);
+            assert_eq!(by.for_start(MirrorVaStart::HostDefault), fill);
+            assert_eq!(by.for_start(MirrorVaStart::GuestFloor), fill);
+        }
+        assert_eq!(
+            GuestVaFillByStart::default(),
+            GuestVaFillByStart::uniform(GuestVaFill::Fault)
+        );
+    }
+
+    /// The Linux guest's space (host-default start, no floor, no Windows profile) takes the ZERO fill
+    /// like a Windows-profile one when both are asked for: the plan carries what it is given.
+    #[test]
+    fn the_zero_fill_reaches_a_host_default_space_like_a_floor_space() {
+        let linux: Vec<_> =
+            guest_range_plan(MirrorVaStart::HostDefault, GuestVaFill::Zero).collect();
+        let windows: Vec<_> =
+            guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Zero).collect();
+        assert!(!linux.is_empty());
+        assert!(
+            linux
+                .iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0)
+        );
+        assert!(
+            windows
+                .iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0)
+        );
+        assert_eq!(
+            linux
+                .iter()
+                .map(|&(.., f)| f)
+                .collect::<std::collections::BTreeSet<_>>(),
+            windows
+                .iter()
+                .map(|&(.., f)| f)
+                .collect::<std::collections::BTreeSet<_>>(),
+            "one flag word for both profiles"
+        );
+    }
+
+    /// A HostRm-free stand-in for an unconfigured host (`GuestVaFill::default()`, as the harness and
+    /// the raw client run): its plan of a floor-started space has no `_SPARSE` range. The kf3 device
+    /// default is the opposite and is tested in kf-qemu (`config_tests`).
+    #[test]
+    fn the_unconfigured_plan_has_no_sparse_range() {
+        let plan: Vec<_> =
+            guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::default()).collect();
+        assert_eq!(plan.len(), 3);
+        assert!(
+            plan.iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0)
+        );
+    }
+}
+
+#[cfg(test)]
 mod deferred_update_probe_tests {
     use super::*;
 
@@ -2518,6 +2936,48 @@ mod twin_va_start_tests {
 
     /// ★ Task A: the rule is OFF by default (Linux keeps host RM's start, nothing reserved low), and
     /// ON it starts at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved — constants, not inputs.
+    /// The start actually used. A mirror takes what the caller derived
+    /// from the guest's declaration; a bare (T-space) allocation never takes the floor.
+    #[test]
+    fn a_bare_space_never_takes_the_floor() {
+        use super::{MirrorVaStart, effective_start};
+        assert_eq!(
+            effective_start(false, MirrorVaStart::GuestFloor),
+            MirrorVaStart::HostDefault
+        );
+        assert_eq!(
+            effective_start(false, MirrorVaStart::HostDefault),
+            MirrorVaStart::HostDefault
+        );
+    }
+
+    /// The whole table of the rule.
+    #[test]
+    fn the_effective_start_table() {
+        use super::{MirrorVaStart as M, effective_start};
+        for (reserve, asked, want) in [
+            (false, M::HostDefault, M::HostDefault),
+            (false, M::GuestFloor, M::HostDefault),
+            (true, M::HostDefault, M::HostDefault),
+            (true, M::GuestFloor, M::GuestFloor),
+        ] {
+            assert_eq!(effective_start(reserve, asked), want, "{reserve} {asked:?}");
+        }
+    }
+
+    #[test]
+    fn a_mirror_space_takes_the_start_its_caller_derived() {
+        use super::{MirrorVaStart, effective_start};
+        assert_eq!(
+            effective_start(true, MirrorVaStart::GuestFloor),
+            MirrorVaStart::GuestFloor
+        );
+        assert_eq!(
+            effective_start(true, MirrorVaStart::HostDefault),
+            MirrorVaStart::HostDefault
+        );
+    }
+
     #[test]
     fn the_start_is_host_default_unless_windows_user_twins_are_enabled() {
         assert_eq!(MirrorVaStart::select(false), MirrorVaStart::HostDefault);
@@ -2565,6 +3025,8 @@ mod twin_va_start_tests {
             VA_BELOW_TWIN_FLOOR,
             VA_ROW_WRAPS,
             super::VA_PIECE_UNPLACEABLE,
+            super::VA_RESERVED_MAP_REFUSED,
+            crate::HOST_HANDLES_EXHAUSTED,
         ];
         let mut sorted = codes.to_vec();
         sorted.sort_unstable();
@@ -3008,6 +3470,172 @@ mod split_row_tests {
             extra: 0x40,
             shared: true,
             kind: 6,
+        }
+    }
+
+    /// A host that answers `0x51` (reported as `VA_ALREADY_MAPPED`) for every map through one
+    /// `hDma`, and places every other map.
+    struct Occupied {
+        h: u32,
+        log: RefCell<Vec<String>>,
+    }
+
+    impl DmaVerbs for Occupied {
+        fn map_one(&self, h: u32, p: MapPiece) -> Result<u64, RmError> {
+            self.log
+                .borrow_mut()
+                .push(format!("map {h:#x} {:#x}", p.at));
+            if h == self.h {
+                Err(RmError::Other(crate::VA_ALREADY_MAPPED))
+            } else {
+                Ok(p.at)
+            }
+        }
+        fn unmap_one(&self, h: u32, va: u64, _size: u64, _flags: u32) -> Result<(), RmError> {
+            self.log.borrow_mut().push(format!("unmap {h:#x} {va:#x}"));
+            Ok(())
+        }
+    }
+
+    /// The Windows guest kernel's flat framebuffer alias (`0x120000000`, 3.74 GiB) lies inside the
+    /// first guest reservation. Host RM answering `0x51` for it is a refusal by name: nothing of
+    /// host RM's can be inside the reservation, so the row is never reported as already mapped
+    /// (which the memory plane would acknowledge as held by the host and leave absent).
+    #[test]
+    fn a_0x51_inside_a_guest_reservation_is_refused_not_already_mapped() {
+        let s = floor_space();
+        let alias = row(0, 0xefa0_0000, 0x1_2000_0000);
+        assert!(s.guest_reserved(alias.at, alias.len));
+        let host = Occupied {
+            h: 0x100,
+            log: RefCell::default(),
+        };
+        assert_eq!(
+            map_pieces(&host, s, alias, 8),
+            Err(RmError::Other(super::VA_RESERVED_MAP_REFUSED))
+        );
+        assert_eq!(*host.log.borrow(), ["map 0x100 0x120000000"]);
+    }
+
+    /// Every live guest reservation answers the same way: the low range of a floor-started space
+    /// and the high range too.
+    #[test]
+    fn every_live_guest_reservation_refuses_a_0x51() {
+        let s = floor_space();
+        for (h, at) in [(0x100, 0x1_2000_0000), (0x101, 1u64 << 40), (LOW, 0x1_0000)] {
+            let host = Occupied {
+                h,
+                log: RefCell::default(),
+            };
+            assert_eq!(
+                map_pieces(&host, s, row(0, 0x1000, at), 8),
+                Err(RmError::Other(super::VA_RESERVED_MAP_REFUSED)),
+                "hDma {h:#x}"
+            );
+        }
+    }
+
+    /// Outside every reservation (the space's own range, where host RM places its own objects) a
+    /// `0x51` keeps its name, so a real host placement at a guest VA is still reported as held.
+    #[test]
+    fn a_0x51_in_the_space_range_is_still_already_mapped() {
+        let s = floor_space();
+        let host = Occupied {
+            h: RANGE,
+            log: RefCell::default(),
+        };
+        assert!(!s.guest_reserved(0x400_0000, 0x1_0000));
+        assert_eq!(
+            map_pieces(&host, s, row(0, 0x1_0000, 0x400_0000), 8),
+            Err(RmError::Other(crate::VA_ALREADY_MAPPED))
+        );
+    }
+
+    /// A range whose reservation was refused (handle 0) is not a reservation: its rows go through
+    /// the space's range and keep the host's answer.
+    #[test]
+    fn an_unreserved_guest_range_keeps_the_host_answer() {
+        let s = custom(&[(0x100, GUEST_VA_RANGES[0].0, GUEST_VA_RANGES[0].1)]);
+        let host = Occupied {
+            h: RANGE,
+            log: RefCell::default(),
+        };
+        assert!(!s.is_guest_reservation(RANGE));
+        assert!(!s.is_guest_reservation(0));
+        assert!(s.is_guest_reservation(0x100));
+        assert_eq!(
+            map_pieces(&host, s, row(0, 0x1000, 1u64 << 40), 8),
+            Err(RmError::Other(crate::VA_ALREADY_MAPPED))
+        );
+    }
+
+    /// A straddling row whose reservation piece is refused rolls back the piece already placed in
+    /// the space's range and returns the refusal.
+    #[test]
+    fn a_refused_reservation_piece_rolls_back_the_placed_piece() {
+        let s = floor_space();
+        let (lo, _) = GUEST_VA_RANGES[0];
+        let host = Occupied {
+            h: 0x100,
+            log: RefCell::default(),
+        };
+        assert_eq!(
+            map_pieces(&host, s, row(0, 0x2000, lo - 0x1000), 8),
+            Err(RmError::Other(super::VA_RESERVED_MAP_REFUSED))
+        );
+        assert_eq!(
+            *host.log.borrow(),
+            [
+                format!("map {RANGE:#x} {:#x}", lo - 0x1000),
+                format!("map 0x100 {lo:#x}"),
+                format!("unmap {RANGE:#x} {:#x}", lo - 0x1000),
+            ]
+        );
+    }
+
+    /// `HostRm::map_in` (a map through a reservation the caller made) needs a host RM to run, so its
+    /// one line is held as source text: it answers through [`super::map_through_reservation`].
+    #[test]
+    fn map_in_answers_through_the_reservation_seam() {
+        let text = include_str!("channel.rs");
+        let body = text
+            .split("pub fn map_in(")
+            .nth(1)
+            .and_then(|t| t.split("pub fn map_in_ro_4k(").next())
+            .expect("map_in");
+        let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("map_through_reservation( self, h_dma, MapPiece {"),
+            "map_in must answer through map_through_reservation"
+        );
+        assert!(!flat.contains("self.raw_map_dma_slice("));
+    }
+
+    /// A map through a reservation the caller made itself (a micro reservation) answers the same
+    /// way, and every other answer passes through unchanged.
+    #[test]
+    fn a_map_through_a_callers_reservation_refuses_a_0x51() {
+        let host = Occupied {
+            h: 0x900,
+            log: RefCell::default(),
+        };
+        assert_eq!(
+            super::map_through_reservation(&host, 0x900, row(0, 0x1000, 0x400_0000)),
+            Err(RmError::Other(super::VA_RESERVED_MAP_REFUSED))
+        );
+        assert_eq!(
+            super::map_through_reservation(&host, 0x901, row(0, 0x1000, 0x400_0000)),
+            Ok(0x400_0000)
+        );
+        for other in [
+            RmError::NoMemory,
+            RmError::Other(0x77),
+            RmError::PlacementRefused { want: 1, got: 2 },
+        ] {
+            assert_eq!(
+                super::own_reservation_answer(Err(other), 0x900, 0, 0x1000),
+                Err(other)
+            );
         }
     }
 
@@ -3496,5 +4124,24 @@ mod reaper_tests {
             }
         }
         assert_eq!(got, vec![0, 1, 2, 3]);
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(!super::negctl_skip_cap_bracket());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(!super::negctl_skip_cap_bracket());
     }
 }

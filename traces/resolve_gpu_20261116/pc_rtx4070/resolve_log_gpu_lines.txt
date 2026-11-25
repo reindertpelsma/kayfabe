@@ -1,0 +1,150 @@
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,348 | Starting GPUDetect 1.2_10-a3
+[0x00002c3c] | GPUDetect            | ERROR | 2026-11-12 16:25:12,522 | NVML Error Unknown Error (999): Querying device current PCI link width
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 | Done in 178 ms.
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 | Detected System:
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 |   - OS: Windows 11 Pro (Build 26200)
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 |   - Model: kayfabe propimage
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 |   - System ID: ID
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,526 |   - CPU: AMD Virtual, 8 threads, x86-64
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,527 |   - RAM: 4.8 GiB used of 7.9 GiB
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,527 |   - NVIDIA GPU Driver: 580.88, supports CUDA 13.0
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,527 | Detected 1 GPUs:
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 |   - "NVIDIA " (gpu:ID) <- Main Display GPU
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 |     Discrete, 1.1 GiB used of 3.6 GiB VRAM, PCI:0:4 (x0)
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 |     Matches: CUDA, DirectX, NVAPI, NVML, OpenCL, Win32
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 | Detected 1 monitors:
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 |   - "Generic PnP Monitor" <- Main Monitor
+[0x00002c3c] | GPUDetect            | INFO  | 2026-11-12 16:25:12,528 |     2032x1155, connected to "NVIDIA " (gpu:ID)
+[0x00002c3c] | Main.GPUConfig       | INFO  | 2026-11-12 16:25:12,529 | Compute API set to automatic, defaulting to CUDA.
+[0x00002c3c] | Main.GPUConfig       | INFO  | 2026-11-12 16:25:12,529 | Selected compute API: CUDA
+[0x00002c3c] | Main.GPUConfig       | INFO  | 2026-11-12 16:25:12,529 | Automatic GPU Selection:
+[0x00002c3c] | Main.GPUConfig       | INFO  | 2026-11-12 16:25:12,529 |   - "NVIDIA " (gpu:ID)
+[0x00002c3c] | IO                   | INFO  | 2026-11-12 16:25:13,056 | R3DAPI 9.2.2-c729019 (20260915 Wx86S) R3DSDK 9.2.2-c729019 (20260915 Wx86D C3B3) RED CUDA 9.2.2-8d654bd (20260915) [C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Libraries\] init is successful
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,712 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,716 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,719 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,723 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,735 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,735 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,735 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10
+[0x0000352c] | IO                   | INFO  | 2026-11-12 16:25:13,738 | Nvidia GPU (0) is initialised as decoding and encoding device.
+[0x00002c3c] | IO                   | INFO  | 2026-11-12 16:25:13,933 | WMF encoder cnt for SW (hvc1) is (1)
+[0x00002c3c] | IO                   | INFO  | 2026-11-12 16:25:14,369 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00002c3c] | IO                   | INFO  | 2026-11-12 16:25:14,383 | WMF encoder cnt for SW (hvc1) is (0)
+[0x00002c3c] | IO                   | INFO  | 2026-11-12 16:25:14,721 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00002c3c] | UI.GLContext         | INFO  | 2026-11-12 16:25:15,574 | Creating shared OpenGL context for this thread (1 total).
+[0x00002c3c] | UI.GLContext         | INFO  | 2026-11-12 16:25:15,619 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'
+[0x00001bd8] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 16:25:15,684 | Let There Be CUDA Light!
+[0x00001bd8] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 16:25:15,684 | Initializing CUDA board manager for Main Display GPU gpu:ID.
+[0x00001d40] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 16:25:15,741 | Board manager thread for "NVIDIA " (gpu:ID) is ready.
+[0x00001bd8] | UI.GLInterop         | INFO  | 2026-11-12 16:25:15,741 | OpenGL interop was initialized.
+[0x00001bd8] | UI.GLInterop         | INFO  | 2026-11-12 16:25:15,741 | OpenGL interop was initialized.
+[0x00001bd8] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 16:25:15,741 | Enabled CUDA pinned memory.
+[0x00001e24] | UI.GLContext         | INFO  | 2026-11-12 16:25:21,105 | Creating shared OpenGL context for this thread (2 total).
+[0x00001e24] | UI.GLIO              | INFO  | 2026-11-12 16:25:21,396 | Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002c3c] | UI.GLIO              | INFO  | 2026-11-12 16:25:21,396 | MainPlayer: OpenGL I/O setup done.
+[0x00002c38] | UI.GLContext         | INFO  | 2026-11-12 16:25:21,397 | Creating shared OpenGL context for this thread (3 total).
+[0x00002c38] | UI.GLIO              | INFO  | 2026-11-12 16:25:21,684 | Initialized AuxPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002c3c] | UI.GLIO              | INFO  | 2026-11-12 16:25:21,685 | AuxPlayer: OpenGL I/O setup done.
+[0x00002f00] | UI.GLContext         | INFO  | 2026-11-12 16:25:21,686 | Creating shared OpenGL context for this thread (4 total).
+[0x00002f00] | UI.Scopes            | INFO  | 2026-11-12 16:25:21,972 | Initialized GPU Scopes Manager on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,501 | Starting GPUDetect 1.2_10-a3
+[0x00002f34] | GPUDetect            | ERROR | 2026-11-12 17:52:23,889 | NVML Error Unknown Error (999): Querying device current PCI link width
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 | Done in 392 ms.
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 | Detected System:
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - OS: Windows 11 Pro (Build 26200)
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - Model: kayfabe propimage
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - System ID: ID
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - CPU: AMD Virtual, 8 threads, x86-64
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - RAM: 3.6 GiB used of 7.9 GiB
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - NVIDIA GPU Driver: 580.88, supports CUDA 13.0
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 | Detected 1 GPUs:
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - "NVIDIA " (gpu:ID) <- Main Display GPU
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |     Discrete, 471 MiB used of 3.6 GiB VRAM, PCI:0:4 (x0)
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |     Matches: CUDA, DirectX, NVAPI, NVML, OpenCL, Win32
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 | Detected 1 monitors:
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |   - "Generic PnP Monitor" <- Main Monitor
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 |     1920x1080, connected to "NVIDIA " (gpu:ID)
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Compute API set to automatic, defaulting to CUDA.
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Selected compute API: CUDA
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Automatic GPU Selection:
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 |   - "NVIDIA " (gpu:ID)
+[0x00002f34] | IO                   | INFO  | 2026-11-12 17:52:24,346 | R3DAPI 9.2.2-c729019 (20260915 Wx86S) R3DSDK 9.2.2-c729019 (20260915 Wx86D C3B3) RED CUDA 9.2.2-8d654bd (20260915) [C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Libraries\] init is successful
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,114 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,116 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,119 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,121 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,214 | Nvidia GPU (0) is initialised as decoding and encoding device.
+[0x00002f34] | IO                   | INFO  | 2026-11-12 17:52:25,519 | WMF encoder cnt for SW (hvc1) is (1)
+[0x00002f34] | IO                   | INFO  | 2026-11-12 17:52:25,984 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00002f34] | IO                   | INFO  | 2026-11-12 17:52:26,017 | WMF encoder cnt for SW (hvc1) is (0)
+[0x00002f34] | IO                   | INFO  | 2026-11-12 17:52:26,327 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00002f34] | UI.GLContext         | INFO  | 2026-11-12 17:52:27,474 | Creating shared OpenGL context for this thread (1 total).
+[0x00002f34] | UI.GLContext         | INFO  | 2026-11-12 17:52:27,502 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'
+[0x00001408] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:52:27,674 | Let There Be CUDA Light!
+[0x00001408] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:52:27,674 | Initializing CUDA board manager for Main Display GPU gpu:ID.
+[0x00000b30] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 17:52:27,905 | Board manager thread for "NVIDIA " (gpu:ID) is ready.
+[0x00001408] | UI.GLInterop         | INFO  | 2026-11-12 17:52:27,907 | OpenGL interop was initialized.
+[0x00001408] | UI.GLInterop         | INFO  | 2026-11-12 17:52:27,907 | OpenGL interop was initialized.
+[0x00001408] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:52:27,909 | Enabled CUDA pinned memory.
+[0x00002888] | UI.GLContext         | INFO  | 2026-11-12 17:52:31,056 | Creating shared OpenGL context for this thread (2 total).
+[0x00002888] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,302 | Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002f34] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,302 | MainPlayer: OpenGL I/O setup done.
+[0x00002908] | UI.GLContext         | INFO  | 2026-11-12 17:52:31,303 | Creating shared OpenGL context for this thread (3 total).
+[0x00002908] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,544 | Initialized AuxPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002f34] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,544 | AuxPlayer: OpenGL I/O setup done.
+[0x000024b4] | UI.GLContext         | INFO  | 2026-11-12 17:52:31,545 | Creating shared OpenGL context for this thread (4 total).
+[0x000024b4] | UI.Scopes            | INFO  | 2026-11-12 17:52:31,770 | Initialized GPU Scopes Manager on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00000b30] | UI.GLContext         | INFO  | 2026-11-12 18:01:24,666 | Creating shared OpenGL context for this thread (5 total).
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,845 | Starting GPUDetect 1.2_10-a3
+[0x00001e40] | GPUDetect            | ERROR | 2026-11-12 18:20:11,978 | NVML Error Unknown Error (999): Querying device current PCI link width
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 | Done in 137 ms.
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 | Detected System:
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - OS: Windows 11 Pro (Build 26200)
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - Model: kayfabe propimage
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - System ID: ID
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - CPU: AMD Virtual, 8 threads, x86-64
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - RAM: 3.3 GiB used of 7.9 GiB
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - NVIDIA GPU Driver: 580.88, supports CUDA 13.0
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 | Detected 1 GPUs:
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - "NVIDIA " (gpu:ID) <- Main Display GPU
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |     Discrete, 396 MiB used of 3.6 GiB VRAM, PCI:0:4 (x0)
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |     Matches: CUDA, DirectX, NVAPI, NVML, OpenCL, Win32
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 | Detected 1 monitors:
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |   - "Generic PnP Monitor" <- Main Monitor
+[0x00001e40] | GPUDetect            | INFO  | 2026-11-12 18:20:11,984 |     1920x1080, connected to "NVIDIA " (gpu:ID)
+[0x00001e40] | Main.GPUConfig       | INFO  | 2026-11-12 18:20:11,986 | Compute API set to automatic, defaulting to CUDA.
+[0x00001e40] | Main.GPUConfig       | INFO  | 2026-11-12 18:20:11,986 | Selected compute API: CUDA
+[0x00001e40] | Main.GPUConfig       | INFO  | 2026-11-12 18:20:11,986 | Automatic GPU Selection:
+[0x00001e40] | Main.GPUConfig       | INFO  | 2026-11-12 18:20:11,986 |   - "NVIDIA " (gpu:ID)
+[0x00001e40] | IO                   | INFO  | 2026-11-12 18:20:12,434 | R3DAPI 9.2.2-c729019 (20260915 Wx86S) R3DSDK 9.2.2-c729019 (20260915 Wx86D C3B3) RED CUDA 9.2.2-8d654bd (20260915) [C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Libraries\] init is successful
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,824 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,828 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,832 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,834 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,891 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,891 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,891 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10
+[0x00002724] | IO                   | INFO  | 2026-11-12 18:20:12,897 | Nvidia GPU (0) is initialised as decoding and encoding device.
+[0x00001e40] | UI.GLContext         | INFO  | 2026-11-12 18:20:14,081 | Creating shared OpenGL context for this thread (1 total).
+[0x00001e40] | UI.GLContext         | INFO  | 2026-11-12 18:20:14,107 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'
+[0x00001e40] | IO                   | INFO  | 2026-11-12 18:20:14,285 | WMF encoder cnt for SW (hvc1) is (1)
+[0x00001e40] | IO                   | INFO  | 2026-11-12 18:20:14,696 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00001e40] | IO                   | INFO  | 2026-11-12 18:20:14,718 | WMF encoder cnt for SW (hvc1) is (0)
+[0x00001e40] | IO                   | INFO  | 2026-11-12 18:20:15,043 | WMF encoder cnt for HW (hvc1) is (1)
+[0x00000788] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 18:20:15,093 | Let There Be CUDA Light!
+[0x00000788] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 18:20:15,093 | Initializing CUDA board manager for Main Display GPU gpu:ID.
+[0x00000ba4] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 18:20:15,213 | Board manager thread for "NVIDIA " (gpu:ID) is ready.
+[0x00000788] | UI.GLInterop         | INFO  | 2026-11-12 18:20:15,213 | OpenGL interop was initialized.
+[0x00000788] | UI.GLInterop         | INFO  | 2026-11-12 18:20:15,213 | OpenGL interop was initialized.
+[0x00000788] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 18:20:15,213 | Enabled CUDA pinned memory.
+[0x00002f34] | UI.GLContext         | INFO  | 2026-11-12 18:20:16,723 | Creating shared OpenGL context for this thread (2 total).
+[0x00002f34] | UI.GLIO              | INFO  | 2026-11-12 18:20:16,905 | Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00001e40] | UI.GLIO              | INFO  | 2026-11-12 18:20:16,905 | MainPlayer: OpenGL I/O setup done.
+[0x000017c8] | UI.GLContext         | INFO  | 2026-11-12 18:20:16,906 | Creating shared OpenGL context for this thread (3 total).
+[0x000017c8] | UI.GLIO              | INFO  | 2026-11-12 18:20:17,164 | Initialized AuxPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00001e40] | UI.GLIO              | INFO  | 2026-11-12 18:20:17,164 | AuxPlayer: OpenGL I/O setup done.
+[0x00001784] | UI.GLContext         | INFO  | 2026-11-12 18:20:17,165 | Creating shared OpenGL context for this thread (4 total).

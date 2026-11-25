@@ -24,7 +24,7 @@ Research. It runs real programs, but there is no installer, no public binary, no
 ## Licence
 
 <!-- src: README.md, docs/howto/credits.md "Licence" -->
-Dual-licensed Apache-2.0 OR GPL-2.0-or-later. The repository's [`LICENSE`](https://github.com/reindertpelsma/kayfabe/blob/master/LICENSE) lists the exceptions, and a QEMU binary built from the tree is not yet distributable under the GPL. Read [Credits and notices](/@docs/credits.html) before you redistribute anything.
+Dual-licensed Apache-2.0 OR GPL-2.0-or-later. The repository's [`LICENSE`](https://github.com/reindertpelsma/kayfabe/blob/master/LICENSE) lists the exceptions. The files derived from gVisor are available under Apache-2.0 only and are not part of the QEMU device. The device's allowlist is generated from NVIDIA's open-gpu-kernel-modules, so the licence is not what holds a binary back; a legal check before the first public binary is recommended. Whether and when a binary is published is the project owner's decision. Read [Credits and notices](/@docs/credits.html) before you redistribute anything.
 
 ## Related projects
 

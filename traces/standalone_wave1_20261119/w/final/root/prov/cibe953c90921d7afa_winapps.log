@@ -1,0 +1,15 @@
+WINAPPS_START tag=cibe953c90921d7afa rev=7fb1c98a source=/workspace/kf-ci-src 2026-11-19T23:55:18+00:00 profile=mid gate_tag=gate_cibe953c90921d7afa per_guest=8
+WINAPPS_REQUESTED=1
+APPS_STAGE preflight 2026-11-19T23:55:18+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 68560(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 68560(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 68607(bash) uid_root 0/0/0/0
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=195 disk_free_gb=295 apps=10 budget_s=3600
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct,edge_webgl,dxprobe_d3d12
+APPS_STAGE app_disk 2026-11-19T23:55:21+00:00
+WINAPPS_RETRY action=rerun-on-a-fresh-box class=MEDIA profile=mid stage=app_disk why="fetch of winapps-open.iso failed (fetch_bundle.txt): PUBLIC_BUNDLE_FAIL (no credentials or provider body logged)" rev=7fb1c98a gpu="NVIDIA GeForce RTX 4090" hostref=unrun/unrun secs=50
+WINAPPS_EXIT rc=3 2026-11-19T23:56:08+00:00

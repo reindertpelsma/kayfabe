@@ -1,0 +1,56 @@
+== gate_fp2_b1
+kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)
+kf-host: space 0xcafe0016: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]
+kf-host: space 0xcafe001a: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#2, rate-limited]
+kf-host: space 0xcafe001e: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#3, rate-limited]
+== gate_fp2_b2
+kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)
+kf-host: space 0xcafe0016: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]
+kf-host: space 0xcafe001a: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#2, rate-limited]
+kf-host: space 0xcafe001e: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#3, rate-limited]
+kf-host: space 0xcafe0022: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#4, rate-limited]
+kf-mem: leaf 0x120000000+0x1efc00000 (store 0x0) CLIPPED at the firmware carve-out 0x1efbe0000: 0x120000000+0x1efbe0000 placed, 0x30fbe0000+0x20000 left absent (§Q)
+kf3: mem leaf 0x120000000+0x1efa00000 HELD BY HOST (host RM placed its own buffer there)
+kf-mem: HELD-BY-HOST guest row 0x120000000+0x1efa00000 (ram=false) — host RM already maps that VA
+kf-host: space 0xcafe0037: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#5, rate-limited]
+kf-host: space 0xcafe0051: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#6, rate-limited]
+kf-host: space 0xcafe009b: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#7, rate-limited]
+kf-host: space 0xcafe00b9: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#8, rate-limited]
+== fp_don_b1
+kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)
+kf-host: space 0xcafe0016: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]
+kf-host: space 0xcafe001a: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#2, rate-limited]
+kf-host: space 0xcafe001e: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#3, rate-limited]
+kf-host: space 0xcafe0022: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#4, rate-limited]
+kf-mem: leaf 0x120000000+0xefc00000 (store 0x0) CLIPPED at the firmware carve-out 0xefbe0000: 0x120000000+0xefbe0000 placed, 0x20fbe0000+0x20000 left absent (§Q)
+kf3: mem leaf 0x120000000+0xefa00000 HELD BY HOST (host RM placed its own buffer there)
+kf-mem: HELD-BY-HOST guest row 0x120000000+0xefa00000 (ram=false) — host RM already maps that VA
+kf-host: space 0xcafe0038: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#5, rate-limited]
+kf-host: space 0xcafe0052: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#6, rate-limited]
+kf-host: space 0xcafe009b: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#7, rate-limited]
+kf-host: space 0xcafe00b9: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#8, rate-limited]
+== fp_doff_b1
+kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)
+kf-host: space 0xcafe0016: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]
+kf-host: space 0xcafe001a: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#2, rate-limited]
+kf-host: space 0xcafe001e: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#3, rate-limited]
+kf-host: space 0xcafe0022: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#4, rate-limited]
+kf-mem: leaf 0x120000000+0xefc00000 (store 0x0) CLIPPED at the firmware carve-out 0xefbe0000: 0x120000000+0xefbe0000 placed, 0x20fbe0000+0x20000 left absent (§Q)
+kf3: mem leaf 0x120000000+0xefa00000 HELD BY HOST (host RM placed its own buffer there)
+kf-mem: HELD-BY-HOST guest row 0x120000000+0xefa00000 (ram=false) — host RM already maps that VA
+kf-host: space 0xcafe0038: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#5, rate-limited]
+kf-host: space 0xcafe0052: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#6, rate-limited]
+kf-host: space 0xcafe009c: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#7, rate-limited]
+kf-host: space 0xcafe00c0: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#8, rate-limited]
+== fp_donF_b1
+2026-11-24T20:17:51.809046Z qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.213c5853.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+2026-11-24T20:17:51.809185Z qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.213c5853.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+2026-11-24T20:17:51.809221Z qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.213c5853.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+kf-mem: leaf 0x120000000+0xefc00000 (store 0x0) CLIPPED at the firmware carve-out 0xefbe0000: 0x120000000+0xefbe0000 placed, 0x20fbe0000+0x20000 left absent (§Q)
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler

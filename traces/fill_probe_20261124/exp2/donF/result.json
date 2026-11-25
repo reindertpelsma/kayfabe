@@ -1,0 +1,203 @@
+{
+ "label": "donF",
+ "display": "on",
+ "up": true,
+ "up_after_s": 70,
+ "polls": [
+  {
+   "t_since_up_s": 40,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 75,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 108,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 142,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 175,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 209,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 242,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 275,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  },
+  {
+   "t_since_up_s": 309,
+   "qemu_status": "running",
+   "guest_rc": 0,
+   "events": [
+    "2026-11-24T19:44:58.0205886+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5728648+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:52:16.0065211+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:52:03.8170392+00:00 1074 User32 ",
+    "2026-11-24T19:45:07.0483076+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.6010262+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:48:44.8012369+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-24T19:48:36.4957494+00:00 1074 User32 ",
+    "2026-11-24T19:44:51.0689811+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-24T19:44:22.5622003+00:00 153 Microsoft-Windows-Kernel-Boot ",
+    "2026-11-24T19:44:24.3568480+00:00 13 Microsoft-Windows-Kernel-General ",
+    "2026-11-25T03:37:20.6556093+00:00 14 Microsoft-Windows-Wininit ",
+    "2026-11-25T03:37:04.3196508+00:00 153 Microsoft-Windows-Kernel-Boot"
+   ]
+  }
+ ],
+ "gpu_at_up": "ADAPTER NVIDIA GeForce RTX 4090 code=0\nNVSMI NVIDIA GeForce RTX 4090, 580.88",
+ "final_status": "running",
+ "qemu_alive_at_end": true,
+ "qmp_event_names": [
+  "KF_LOGGER_ATTACHED",
+  "RTC_CHANGE",
+  "RTC_CHANGE",
+  "NIC_RX_FILTER_CHANGED"
+ ],
+ "guest_panicked": [],
+ "dmesg_mmuwalk": 0,
+ "dmesg_xid": 0,
+ "kf3_alias_lines": 9,
+ "n153": 4,
+ "died": false
+}

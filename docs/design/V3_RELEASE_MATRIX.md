@@ -5,6 +5,11 @@ every blocker in `release-matrix.json` (driver choices, minima, the sub-run exec
 
 ## Release shape v2 (owner CONFIRMED 2026-11-12)
 
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BE; supersedes the "required only when a release touches a core path" part of the 2026-11-23 correction below):** a PR runs the Rust, CUDA and repo tests, the Windows boot, the small app probes and exactly one middle run; propimages run only in the release run, not per PR. §AZ item 5 is waived for the batch and PR flow; the first release still runs every propimage on every family (§AZ). CODE READ on 2026-11-24 at `next` `4f376f3db`: `ci/vast-broker/src/tier.js` (`additionalStages` of the release profile: `specviewperf`, `llm_parity`) and the release-matrix data (`ci/vast-broker/release-matrix.json`) still encode the earlier tiers; changing them is a separate code change that alters the Worker bundle pin, and this note changes no code. ⊘ **Superseded 2026-11-25:** the RC1 branch implements this change (`ci/vast-broker/src/tier.js`, `ci/vast-broker/defaults.json`; `docs/CI_V3.md`, "What a PR runs"); it is not in a deployed Worker.
+
+⊘ **Correction 2026-11-23 (against `OWNER_RULINGS.md` §AZ, 2026-11-18):** the owner took SPECviewperf and every proprietary image (propimage) out of the required release gate; they run as an invoked app lane, required only when a release touches a core path (§AZ items 2 to 5), and the release record lists their last run as information. The rental counts below (12 with SPEC, 8 without) are the 2026-11-12 plan; the "8 without SPEC" case is the one §AZ points at. CODE READ on 2026-11-23 at `next` `92a7f2782`: the propimage stages are in `MANUAL_ONLY_STAGES` (`scripts/ci/vast_payload.py`), and the release profile in `ci/vast-broker/src/tier.js` still lists `specviewperf` in `additionalStages`; this note changes no code. ⊘ **Superseded 2026-11-25:** the RC1 branch implements this change (`ci/vast-broker/src/tier.js`, `ci/vast-broker/defaults.json`; `docs/CI_V3.md`, "What a PR runs"); it is not in a deployed Worker. Where the text below puts SPEC or a propimage into the release tier or the release criteria, §AZ governs.
+
+
 A release does ONE large run per die family (Turing, Ampere, Ada, Blackwell): the **flagship die runs the full LARGE profile**, the **second die
 runs the MIDDLE profile** (small as a sub-run): 4 large + 4 middle. The large run's SPECviewperf is split over two boxes (lane A and lane B on
 separate rentals, 2 SPEC legs per large die, `requiresSeparateRentals`), so a release is 4 x 2 large boxes + 4 middle boxes = **12 rentals** with
@@ -33,6 +38,7 @@ tests only. Every cost number is a planner estimate (a worst case priced at the 
 - Not built here (still blockers, unchanged): the driver sub-run executor, the payload side of a middle leg inside a release batch (the payload refuses
   every `KF_RELEASE_*` environment while the matrix is proposed), the proprietary-image CPU-profile interaction (AuthenticAMD guest profile: proprietary
   stages only on AMD large boxes, `NOT_RUN` with `CPU_VENDOR` on the Intel one; DESIGN-ONLY, `/root/night/RELEASE_GATE_READINESS.md`).
+  2026-11-15: the stage side is `scripts/ci/propimage_apps.py` (`docs/design/V3_PROPIMAGE_APPS_STAGE.md`): AMD only, `NOT_RUN` `CPU_VENDOR` otherwise, GPU-free tested, run on no box.
 
 ## Superseded in part (2026-11-12)
 

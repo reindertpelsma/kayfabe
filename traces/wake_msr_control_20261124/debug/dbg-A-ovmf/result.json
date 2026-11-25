@@ -1,0 +1,67 @@
+{
+ "variant": "dbg-A-ovmf",
+ "cpu": "host,-vmx",
+ "seeded": false,
+ "qemu_version": "QEMU emulator version 10.2.4 (wakemsr-stock)\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers",
+ "cycles": [
+  {
+   "n": 1,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [
+    [
+     1795481458.1389315,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481458.138942,
+     "RTC_CHANGE"
+    ],
+    [
+     1795481458.1389506,
+     "NIC_RX_FILTER_CHANGED"
+    ],
+    [
+     1795481486.7120209,
+     "RTC_CHANGE"
+    ]
+   ],
+   "verdict": "no suspend",
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ]
+  },
+  {
+   "n": 2,
+   "acpi_io_before": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ],
+   "status_before_wake": "running",
+   "qmp_events_before_wake": [],
+   "verdict": "no suspend",
+   "acpi_io_after": [
+    "00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io",
+    "0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt",
+    "0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt",
+    "0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr"
+   ]
+  }
+ ],
+ "boot_ssh_s": 20.570080518722534,
+ "boot_trace": {
+  "kvm_write_tsc_offset": 6,
+  "kvm_hv_stimer_set_config": 16,
+  "kvm_hv_stimer_set_count": 16
+ }
+}

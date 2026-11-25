@@ -1,0 +1,64 @@
+[10454.281999] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[10943.726673] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001aa0000-0x2001b8ffff]
+[10951.268293] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001c90000-0x2001d7ffff]
+[10951.346857] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001a90000-0x2001b7ffff]
+[10959.525916] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001c60000-0x2001d4ffff]
+[10959.654567] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001e60000-0x2001f4ffff]
+[10959.723958] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001a60000-0x2001b4ffff]
+[10965.389434] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002060000-0x200214ffff]
+[10969.477777] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001860000-0x200194ffff]
+[10975.888282] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002360000-0x200244ffff]
+[10976.139844] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001b60000-0x2001c4ffff]
+[10976.174992] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002160000-0x200224ffff]
+[10980.679361] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001960000-0x2001a4ffff]
+[10981.115340] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001d60000-0x2001e4ffff]
+[10981.134463] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001f60000-0x200204ffff]
+[10983.001940] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[10983.002215] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[10983.002223] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[10983.002232] NVRM: dmaMapBuffer_GM107: vaspaceAlloc failed
+[10983.002236] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgraphicsMapCtxBuffer(pGpu, pKernelGraphics, pMemDesc, pKernelChannel->pVAS, &pEngCtx->vaList, NV_FALSE, NV_FALSE) @ kernel_graphics_context.c:1634
+[10983.002251] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxMapCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:218
+[10983.006135] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[10983.006146] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[10983.006162] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[10983.006171] NVRM: dmaMapBuffer_GM107: vaspaceAlloc failed
+[10983.006175] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgraphicsMapCtxBuffer(pGpu, pKernelGraphics, pMemDesc, pKernelChannel->pVAS, &pEngCtx->vaList, NV_FALSE, NV_FALSE) @ kernel_graphics_context.c:1634
+[10983.006182] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxMapCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:218
+[10983.263771] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001c40000-0x2001d2ffff]
+[10983.278865] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001e40000-0x2001f2ffff]
+[10988.294563] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002440000-0x200252ffff]
+[10988.616867] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001a40000-0x2001b2ffff]
+[10988.858364] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002240000-0x200232ffff]
+[10993.414400] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001840000-0x200192ffff]
+[10993.439536] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002640000-0x200272ffff]
+[10993.826841] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002040000-0x200212ffff]
+[11002.060619] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002140000-0x200222ffff]
+[11002.251904] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002740000-0x200282ffff]
+[11002.432622] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002540000-0x200262ffff]
+[11002.609412] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001f40000-0x200202ffff]
+[11002.661106] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002940000-0x2002a2ffff]
+[11002.701704] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001d40000-0x2001e2ffff]
+[11007.043295] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001940000-0x2001a2ffff]
+[11007.631521] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002340000-0x200242ffff]
+[11007.711132] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001b40000-0x2001c2ffff]
+[11010.044839] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[11010.044856] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[11010.044864] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[11010.044878] NVRM: dmaMapBuffer_GM107: vaspaceAlloc failed
+[11010.044882] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgraphicsMapCtxBuffer(pGpu, pKernelGraphics, pMemDesc, pKernelChannel->pVAS, &pEngCtx->vaList, NV_FALSE, NV_FALSE) @ kernel_graphics_context.c:1634
+[11010.044889] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxMapCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:218
+[11010.292108] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002500000-0x20025effff]
+[11017.746887] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002b00000-0x2002beffff]
+[11017.834085] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002700000-0x20027effff]
+[11017.843576] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001d00000-0x2001deffff]
+[11018.179553] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002300000-0x20023effff]
+[11018.248048] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002d00000-0x2002deffff]
+[11018.296936] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001f00000-0x2001feffff]
+[11018.553579] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002900000-0x20029effff]
+[11018.564784] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002f00000-0x2002feffff]
+[11022.617393] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001900000-0x20019effff]
+[11023.117499] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2002100000-0x20021effff]
+[11023.252946] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x2001b00000-0x2001beffff]
+[11026.398780] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x20019a0000-0x2001a8ffff]
+[11271.693576] x86/PAT: kf3-vamgr:141068 freeing invalid memtype [mem 0x20018a0000-0x200198ffff]

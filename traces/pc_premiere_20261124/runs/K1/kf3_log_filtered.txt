@@ -1,0 +1,13 @@
+# kf3 log of run K1: 78301 lines
+walk per-space CEILING   0
+walk report CUT          0
+DEAD                     0
+VA_SLOW                  0
+refuse_mask=0x400        0
+refuse_mask=0x1000       0
+CLEARED OVER ABSENCE     3
+Xid                      0
+# matching lines (hex runs masked, first 40)
+kf3: mem invalidate seq 86 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 90 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 91 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT

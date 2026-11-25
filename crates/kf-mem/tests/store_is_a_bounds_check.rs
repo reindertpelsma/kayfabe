@@ -1,3 +1,5 @@
+//! `Store` is a bounds check, not an allocator: every range outside the object is refused.
+
 use kf_mem::*;
 
 #[test]

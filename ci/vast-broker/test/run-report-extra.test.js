@@ -1746,6 +1746,111 @@ test(
   },
 );
 
+// A replacement leg's deadlines move (src/provider-policy.js replacementExtension), so the token of each leg expires at its own time.
+async function chain(h, legs, legacy = false) {
+  const records = [];
+  for (let leg = 0; leg < legs; leg++) {
+    const r = await h.storage.get('record:123-1');
+    records.push(r);
+    if (leg === legs - 1) break;
+    const token = callbackToken(r, h.bindings.RUN_TOKEN_SECRET);
+    h.cloud.instances.get(r.id).actual_status = 'created';
+    h.cloud.instances.get(r.id).status_msg =
+      'GPU error, unable to start instance leg' + leg + ' frag ' + token.slice(-24);
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
+    await h.call();
+    if (legacy && leg === 0) {
+      // a leg rented by a Worker that did not move deadlines: it has the first leg's expiry
+      const next = await h.storage.get('record:123-1');
+      await h.storage.put('record:123-1', { ...next, reportExpiry: r.reportExpiry });
+    }
+  }
+  return records;
+}
+const offers = (h, n) => {
+  Object.assign(h.cloud.offer, { host_id: 100 });
+  h.cloud.contracts = [900, 901, 902];
+  h.cloud.extraOffers = Array.from({ length: n }, (_, i) => ({
+    ...h.cloud.offer,
+    id: 6 + i,
+    machine_id: 100002 + i,
+    host_id: 200 + i * 100,
+    price: 0.1,
+  }));
+};
+const publish = async (h, beforePublish = async () => {}) => {
+  h.time.value += 11 * 60000;
+  await cron(h, 3);
+  await beforePublish();
+  await h.service.publishRuns();
+  h.time.value += 11 * 60000;
+  await h.service.publishRuns();
+};
+
+test(
+  "an extended replacement leg's own token is redacted from its published log",
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await harness();
+    offers(h, 1);
+    await h.call();
+    await cron(h, 2);
+    const [first] = await chain(h, 1);
+    await chain(h, 2);
+    const leg = await h.storage.get('record:123-1');
+    assert.ok(leg.deadlineExtension > 0, 'the replacement leg has its own, later expiry');
+    assert.notEqual(leg.reportExpiry, first.reportExpiry);
+    const own = callbackToken(leg, h.bindings.RUN_TOKEN_SECRET);
+    await h.report({ seq: 1, kind: 'log', text: 'box echoes ' + own.slice(-24) + '\n' });
+    await h.report({
+      seq: 2,
+      kind: 'result',
+      result: { nonce: leg.nonce, verdict: 'PASS', suites: pass, hardware },
+    });
+    await publish(h);
+    const published = bucket.objects.get('vast-123-1-1/log.txt');
+    assert.ok(published.includes('box echoes'));
+    assert.ok(!published.includes(own.slice(-20)));
+  },
+);
+
+test(
+  'a chain that began before the expiry list existed redacts every earlier token',
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await harness();
+    offers(h, 2);
+    await h.call();
+    await cron(h, 2);
+    const records = await chain(h, 3, true);
+    const tokens = records.slice(0, 2).map((r) => callbackToken(r, h.bindings.RUN_TOKEN_SECRET));
+    assert.equal(records[0].reportExpiry, records[1].reportExpiry);
+    const last = await h.storage.get('record:123-1');
+    assert.notEqual(last.reportExpiry, records[0].reportExpiry, 'the third leg has a later expiry');
+    await h.report({
+      seq: 1,
+      kind: 'result',
+      result: { nonce: last.nonce, verdict: 'PASS', suites: pass, hardware },
+    });
+    // The third leg was rented by a Worker that kept the list only from its own leg on: the list is shorter than the nonces.
+    await publish(h, async () => {
+      const name = 'plogq:123-1:2';
+      const entry = await h.storage.get(name);
+      assert.equal(entry.priorNonces.length, 2);
+      await h.storage.put(name, {
+        ...entry,
+        priorReportExpiries: entry.priorReportExpiries.slice(1),
+      });
+    });
+    const published = bucket.objects.get('vast-123-1-2/log.txt');
+    assert.ok(published.includes('leg0 frag') && published.includes('leg1 frag'));
+    for (const token of tokens) assert.ok(!published.includes(token.slice(-20)));
+  },
+);
+
 test(
   'values the box held at rent time are redacted even after they are rotated',
   { skip: d1Skip },

@@ -1,5 +1,5 @@
 //! ★ Windows Code43 batch, 2026-10-07 — **subdevice controls answered per VM and never
-//! forwarded**: RC-recovery policy as a STUB under owner ruling §S (`docs/OWNER_RULINGS.md`,
+//! forwarded**: a stub for the RC-recovery policy (documented
 //! 2026-10-07), and the power source the way NVIDIA's own virtual-GPU guest RM answers it.
 //!
 //! ⊘ *Superseded 2026-10-07 (owner ruling §S, after DIAGNOSTIC run26):* the table row and the
@@ -62,7 +62,7 @@ const NV_OK: u32 = 0;
 const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
 const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 
-/// ★ 2026-10-07 (audit `docs/audits/2026-10-07-code43-gr-derive-compliance.md` S4/S5): the three
+/// (audit `docs/audits/2026-10-07-code43-gr-derive-compliance.md` S4/S5): the three
 /// controls' ids, params sizes and values at the GUEST's driver version, read from the driver
 /// matrix (`kf_abi::generated::matrix`, measured per ogkm tag by `tools/drivermatrix`) instead of
 /// typed by hand. The status word's offset is the version's `rm_control_wire().status_off`.
@@ -121,7 +121,7 @@ impl VfGuestIds {
 pub enum RcRecovery {
     /// No robust-channel recovery is performed on the VM's behalf.
     Disabled,
-    /// ⚠ STUB under owner ruling §S (2026-10-07): the guest's recorded policy is ENABLED. kayfabe
+    /// The RC-recovery stub records the guest's policy as ENABLED. kayfabe
     /// performs no per-VM robust-channel recovery on its account and touches no host policy; the
     /// setting is privileged host management with no compute or display effect on the guest.
     Enabled,
@@ -150,7 +150,7 @@ pub struct VfGuestPolicy {
 }
 
 impl VfGuestPolicy {
-    /// A fresh per-VM link: RC recovery recorded `ENABLED` (stub, owner ruling §S).
+    /// A fresh per-VM link: the RC-recovery stub records `ENABLED`.
     #[must_use]
     pub fn new(driver: kf_abi::versions::DriverAbiTable) -> VfGuestPolicy {
         VfGuestPolicy {
@@ -188,8 +188,7 @@ impl VfGuestPolicy {
         let Some(ids) = self.ids.filter(|_| self.claims(cmd)) else {
             return Err(NV_ERR_NOT_SUPPORTED);
         };
-        // ⚠ STUB (owner ruling §S, power is host-owned — the AC reading is ASSUMED from that
-        // ruling, owner to confirm; `docs/OWNER_RULINGS.md` §S): the vGPU-guest body's constant
+        // Power is host-owned. The stub assumes an AC reading from the vGPU-guest body's constant
         // (`kern_perf_ctrl.c:293-308`), never a host reading.
         if let Some((c, size, ac)) = ids.powerstate
             && cmd == c
@@ -219,7 +218,7 @@ impl VfGuestPolicy {
         if v == ids.rc_disabled {
             self.rc = RcRecovery::Disabled;
         } else if v == ids.rc_enabled {
-            // ⚠ STUB (owner ruling §S): recorded, no host action, no recovery promised.
+            // The stub records the policy without taking host action or promising recovery.
             self.rc = RcRecovery::Enabled;
         } else {
             self.rc_refused += 1;
@@ -364,7 +363,7 @@ mod tests {
         Ok(u32::from_le_bytes(r.body[at..at + 4].try_into().unwrap()))
     }
 
-    /// ★ The VFIO sequence under the stub (owner ruling §S): GET reports ENABLED whatever the
+    /// In the VFIO sequence, GET reports ENABLED whatever the
     /// guest's uninitialised input word was (vfio-10 sent 0x4da066c8), SET(ENABLED) is recorded,
     /// SET(DISABLED) is recorded and read back, and the power source is AC.
     #[test]

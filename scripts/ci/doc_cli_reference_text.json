@@ -1,0 +1,122 @@
+{
+ "gpu-minor": {
+  "status": "Used in recorded runs",
+  "meaning": "Which host GPU to use: the number in `/dev/nvidia<minor>`. One device per host GPU."
+ },
+ "fb-mb": {
+  "status": "Used in recorded runs",
+  "meaning": "Guest video memory in MiB. It is a real allocation of host VRAM and must fit the card; a value that does not fit is refused at start."
+ },
+ "bar1-size": {
+  "status": "Used in recorded runs",
+  "meaning": "Size of the guest's BAR1 in bytes. The recorded runs pass 134217728 (128 MiB), because 256 MiB plus headroom does not fit a 256 MiB host aperture; the device refuses a size that does not fit and names the largest that does."
+ },
+ "bar1-overlays": {
+  "status": "Not yet run on hardware",
+  "meaning": "Hopper and newer only: how many BAR1 doorbell views can be trapped at once. No Hopper hardware run exists."
+ },
+ "bar2-size": {
+  "status": "Used in recorded runs",
+  "meaning": "Size of the guest's BAR2 in bytes. The recorded runs pass 33554432 (32 MiB)."
+ },
+ "msix-vectors": {
+  "status": "Used in recorded runs",
+  "meaning": "Number of MSI-X vectors the device offers."
+ },
+ "guest-driver": {
+  "status": "Used in recorded runs",
+  "meaning": "The guest's NVIDIA driver version, as `major.minor[.patch]`. Unset means the host driver's own version, and the version the guest driver announces is checked against it. A guest on another driver branch than the host needs this property; the refusal names the value to give (see Troubleshooting).",
+  "default_note": "the host driver's version is used"
+ },
+ "dummy-bar": {
+  "status": "Diagnostic",
+  "meaning": "Adds synthetic MMIO test pages for trap-cost measurements. It submits no work to the GPU. Leave it off."
+ },
+ "display": {
+  "status": "Used in recorded runs",
+  "meaning": "Gives the guest a virtual NVIDIA display that its own driver drives. Off means a headless GPU. See Display and the broker."
+ },
+ "gop": {
+  "status": "Used in recorded runs",
+  "meaning": "Boot display: a UEFI driver in the card's expansion ROM shows the firmware and boot screens. The recorded desktop runs set it together with `display=on`."
+ },
+ "x11-dispsw": {
+  "status": "Experimental",
+  "meaning": "A display class that X11 desktops need. Needs `display=on`."
+ },
+ "gop-efi": {
+  "status": "Used in recorded runs",
+  "meaning": "Path of the boot display driver, signed, for a Secure Boot guest. Refused with `gop=off`.",
+  "default_note": "the built-in driver is used"
+ },
+ "gpu-uuid": {
+  "status": "Default in use; other values not verified",
+  "meaning": "The GPU UUID the guest sees: `auto` (derived from the VM id, the host GPU's UUID and the PCI slot, so each VM differs), `random`, `host`, or an explicit `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.",
+  "default_note": "behaves as `auto`"
+ },
+ "vm-id": {
+  "status": "Default in use; other values not verified",
+  "meaning": "The VM identity text that `gpu-uuid=auto` derives from.",
+  "default_note": "QEMU's `-uuid` is used"
+ },
+ "channel-budget": {
+  "status": "Used in recorded runs",
+  "meaning": "GPU channels per runlist that the guest is told. Refused below 256 and above what the host can give (at most 2048). Leave it at `0`.",
+  "default_note": "derived from the host"
+ },
+ "user-view-keep": {
+  "status": "Used in recorded runs",
+  "meaning": "Windows tuning: CPU views of video memory that each channel keeps armed, up to 256.",
+  "default_note": "behaves as 16"
+ },
+ "windows-support": {
+  "status": "Default in use for Windows; `off` not measured",
+  "meaning": "The Windows profile (the behaviours a Windows driver needs and Linux does not). It is chosen by what the guest announces about itself, so it is not a security boundary. `off` makes the VM Linux-only; set it on hosts that run only Linux guests or several tenants."
+ },
+ "report-utilization": {
+  "status": "Not yet run on a GPU",
+  "meaning": "Shows the guest the physical GPU's utilisation in `nvidia-smi` and NVML. On a GPU shared by several VMs every guest sees the whole GPU's load, including the other VMs'; set `off` for tenants that must not see each other's load."
+ },
+ "unmapped-reads-zero": {
+  "status": "Linux guest measured with `on` (Vulkan sparse residency, RTX 4090); Windows boots measured with it on and off; `auto` itself not yet run on a GPU",
+  "meaning": "Where it is on, a GPU read of an unmapped guest address returns zero and a write is dropped, with no fault. `auto` turns it on for a Linux guest and off for a Windows guest (a guest that announces the Windows driver while `windows-support` is on); `on` and `off` apply to every guest. The guest's own announcement decides, so `auto` is a compatibility default and not a protection: any guest that does not announce Windows gets it on, with the cost below. Only `off` removes that cost. Vulkan sparse residency needs it on; with it off those cases hang the guest's GPU channel (host `Xid 109`) and the application loses the device. The cost of on: every fault the guest expects becomes a silent zero, including application bugs that read freed memory and CUDA managed memory or HMM pages that need demand paging (kayfabe does not serve them: with it off they fail with an error, with it on they read zero and the result can be wrong), and while a VM with it on runs the host driver holds about 2 GiB of video memory for page tables (one RTX 4090 run). Set `off` for a Linux VM that uses managed memory and no sparse resources. On a Windows guest `on` made the host refuse a large mapping of the guest's driver in every boot that was run (RTX 4070 and RTX 4090), and the device then refuses that mapping by name instead of leaving it silently absent, so leave Windows on `auto`."
+ },
+ "doorbell-ioeventfd": {
+  "status": "Experimental",
+  "meaning": "Doorbell fast path that avoids a VM exit per doorbell write. Off until measured."
+ },
+ "doorbell-ioeventfd-max": {
+  "status": "Experimental",
+  "meaning": "Cap on the number of doorbell fast-path event files."
+ },
+ "display-broker": {
+  "status": "Used in recorded runs",
+  "meaning": "Absolute path of the display broker's unix socket. Unset means no broker. See Display and the broker.",
+  "default_note": "no broker"
+ },
+ "display-broker-uid": {
+  "status": "Used in recorded runs",
+  "meaning": "One more user id accepted as the broker. Needed only when the broker runs as another user than QEMU; root and QEMU's own user are always accepted. Any value outside 0..4294967294 is refused.",
+  "default_note": "none"
+ },
+ "display-broker-vram": {
+  "status": "Used in recorded runs",
+  "meaning": "GPU-copy path for frames to the broker: `auto`, `on` or `off`.",
+  "default_note": "behaves as `auto`"
+ },
+ "display-max-fps": {
+  "status": "Default in use; other values not verified",
+  "meaning": "Cap on the emulated monitor's refresh rate in Hz, 24 to 75. Refused outside that range and without `display=on`.",
+  "default_note": "a cap of 75 Hz"
+ },
+ "x-gsp-observer": {
+  "status": "Diagnostic",
+  "meaning": "Records the guest driver's GSP traffic to a new file at this path (it must not exist). For bug reports from the maintainers' tooling; not needed for normal use.",
+  "default_note": "off"
+ },
+ "x-gsp-observer-seconds": {
+  "status": "Diagnostic",
+  "meaning": "How long the recording runs, from 1 to 7200 seconds.",
+  "new": true
+ }
+}

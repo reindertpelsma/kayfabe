@@ -1,0 +1,43 @@
+﻿{
+    "app":  "aeadv3d",
+    "started":  1794789819.041,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "f_00000.tif",
+                        "bytes":  33195956,
+                        "modified":  1794790076.43
+                    },
+                    {
+                        "file":  "f_00009.tif",
+                        "bytes":  33195956,
+                        "modified":  1794790082.022
+                    },
+                    {
+                        "file":  "aerender.log",
+                        "bytes":  1862,
+                        "modified":  1794790082.103
+                    },
+                    {
+                        "file":  "ae_make.txt",
+                        "bytes":  133,
+                        "modified":  1794789888.98
+                    }
+                ],
+    "ae_file_scripts":  "already on",
+    "startup_attempts":  [
+                             "1:marker:80s"
+                         ],
+    "make_quit":  "clean",
+    "make_log":  "16bpc,renderers=ADBE Advanced 3d|ADBE Calder|ADBE Ernst,renderer=ADBE Advanced 3d,dof,light,layers3d=24,om:TIFF Sequence with Alpha\r\n",
+    "aerender_attempts":  [
+                              "1:ran:51s"
+                          ],
+    "aerender_exit":  -1,
+    "frame_count":  10,
+    "quit":  "process",
+    "ended":  1794790085.08,
+    "dismissed":  [
+
+                  ]
+}

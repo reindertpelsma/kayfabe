@@ -36,7 +36,7 @@ import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 // prettier-ignore
 import {readReportBody,parseReport} from './reports.js';
 // prettier-ignore
-import {routePath,notFound,endpointSecrets,routeKind,secretFormatError} from './routes.js';
+import {routePath,notFound,endpointSecrets,routeKind,secretFormatError,harden} from './routes.js';
 // prettier-ignore
 import {OidcVerifier} from './oidc.js';
 // prettier-ignore
@@ -47,6 +47,12 @@ import {allowedWorkflowRef} from './workflow-authority.js';
 import {mintBlob,checkBlobBudget} from './blobs.js';
 // prettier-ignore
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
+// prettier-ignore
+import {PRIVATE_PATH,PRIVATE_REFUSALS,privateAccess,privateCount,privateExists,privateExpiry,privateKey} from './privatedata.js';
+// prettier-ignore
+import {trustDecision} from './trust.js';
+// prettier-ignore
+import {releaseSeqFor,familyDiesOf,legInstruction,legStages} from './legs.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import {
   BOOT_FAILURE_STATES,
@@ -56,6 +62,7 @@ import {
   providerLossVerdict,
   retryEligible,
   attemptReceipt,
+  replacementExtension,
 } from './provider-policy.js';
 import { ipPrefix, rentalLine, redactEndpoints } from './rental.js';
 import { mergeEndpointValues, redactEndpointValues } from './endpoint-values.js';
@@ -380,6 +387,14 @@ export function createService({
     const cached = await ledger.get('sha:' + record.sha);
     if (cached?.key === record.key) await ledger.storage.delete('sha:' + record.sha);
   }
+  // The commit marker blocks a second rental of the same commit for SHA_GAP_HOURS (a cost guard). A rental that
+  // never became usable and cannot be replaced (provider-policy.js unusedRental) did not test the commit, so a
+  // re-run of the same commit may rent again. The spend rows stay, so the daily and rolling caps still apply.
+  // Only the run's current leg may release it: a request that still holds an earlier leg must not drop the marker of the leg
+  // a concurrent request has reserved since (same run key, so clearFailedSha alone would delete it).
+  async function releaseUnusedSha(record) {
+    await ledger.releaseUnusedMarker(record);
+  }
   async function recover(record, vast) {
     if (!record.id && record.ended === null) {
       record.id = await vast.reconcile(record);
@@ -432,6 +447,7 @@ export function createService({
       await exhaust(record, { reportBytes: lastReportBytes }, 'ATTEMPT_OR_TIME_LIMIT');
     }
     await ledger.settle(record, now());
+    await releaseUnusedSha(record);
     console.log(JSON.stringify({ event: 'destroyed' }));
   }
   async function close(record, vast, reason, verdict = 'FAIL') {
@@ -980,7 +996,9 @@ export function createService({
         };
         r.hardware = payload.result.hardware;
         if (['PROVIDER_FAULT', 'UNAVAILABLE'].includes(r.result.verdict)) r.result.verdict = 'FAIL';
-        if (r.result.verdict === 'PASS') await ledger.markProviderSuccess(r, cfg.provider);
+        // Review F10 (2026-11-13): the verdict is the box's own word, so it no longer decays the host's
+        // fault history (a forged PASS would have cleared it). The owner clears it through
+        // /admin/provider-success; faults still decay by their half-life.
         if (r.profile === 'sweep' && payload.result.verdict === 'PASS')
           await ledger.put('passed:' + r.die, now());
         r.resultAt = now();
@@ -1033,6 +1051,8 @@ export function createService({
       );
     const bench =
       /^\/bench-data\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,100})$/.exec(path);
+    const benchPrivate = PRIVATE_PATH.exec(path);
+    const instructionRoute = /^\/instruction\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
     const match =
       /^\/(report|kill|status|stop|logs|run-report)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
         path,
@@ -1040,6 +1060,8 @@ export function createService({
     if (
       !(blob && request.method === 'GET') &&
       !(bench && request.method === 'GET') &&
+      !(benchPrivate && request.method === 'GET') &&
+      !(instructionRoute && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
@@ -1051,6 +1073,76 @@ export function createService({
     if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);
     const bearer = authorization.slice(7),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    if (instructionRoute) {
+      // The leg's instruction (src/legs.js): the box fetches it with its run token and the hash is the provenance record. A run
+      // without one (every run today, PROPIMAGES_ENABLED is off) answers 404 NO_INSTRUCTION. Nothing here is a secret or a URL.
+      const r = await ledger.get('record:' + instructionRoute[1]);
+      if (
+        !r ||
+        r.key !== instructionRoute[1] ||
+        !(await tokens.verify(bearer, r)) ||
+        r.ended !== null ||
+        r.closed ||
+        now() >= r.reportExpiry * 1000
+      )
+        refuse('UNAUTHORIZED', 401);
+      clocks(r, cfg);
+      await readBounded(request, 0);
+      await rate(r, cfg);
+      if (typeof r.instruction !== 'string') refuse('NOT_FOUND', 404, 'NO_INSTRUCTION');
+      return new Response(r.instruction, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-KF-Instruction-Sha256': r.instructionSha256,
+        },
+      });
+    }
+    if (benchPrivate) {
+      // Private (licence-restricted) objects: the scope was decided at lease time (src/trust.js) and is read here, with liveness, the
+      // profile or source, the per-run URL limit and the object's existence. Named refusals; no URL and no other object name leaves.
+      try {
+        const r = await ledger.get('record:' + benchPrivate[1]);
+        const verified = !!r && r.key === benchPrivate[1] && (await tokens.verify(bearer, r));
+        const fields = verified ? await tokens.verifyStateless(bearer) : null;
+        const used = privateAccess(verified ? r : null, fields, { nowMs: now() });
+        clocks(r, cfg);
+        await rejectExpiredCallback(r, cfg, vast);
+        await readBounded(request, 0);
+        const objectKey = privateKey(benchPrivate[2], benchPrivate[3]);
+        await rate(r, cfg);
+        const instance = await vast.inspect(r);
+        if (!instance || instance.actual_status !== 'running')
+          refuse('UNAUTHORIZED', 401, 'TOKEN_EXPIRED');
+        await privateExists(fetcher, env, objectKey, now());
+        const at = now(),
+          expires = privateExpiry(at, r.hardDeadline),
+          location = await benchUrl(env, objectKey, expires, at);
+        privateCount(r, used);
+        await ledger.save(r);
+        console.log(
+          JSON.stringify({
+            event: 'private_data_url',
+            run: benchPrivate[1],
+            object: objectKey,
+            expires: Math.floor(at / 1000) + expires,
+          }),
+        );
+        return benchRedirect(location);
+      } catch (e) {
+        if (e instanceof BrokerError && PRIVATE_REFUSALS.includes(e.reason))
+          console.log(
+            JSON.stringify({
+              event: 'private_data_refused',
+              run: benchPrivate[1],
+              prefix: benchPrivate[2],
+              reason: e.reason,
+            }),
+          );
+        throw e;
+      }
+    }
     if (bench) {
       const r = await ledger.get('record:' + bench[1]);
       if (
@@ -1300,7 +1392,7 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     const target = await github.authorize(c, rentRequest.tested_sha);
     const prior = await ledger.granted(key);
-    let retrySource;
+    let retrySource, retryExtension;
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
       clocks(prior, cfg);
@@ -1322,7 +1414,16 @@ export function createService({
         retryEligible(prior, now(), cfg.provider)
       ) {
         retrySource = prior;
-        cfg.hard = prior.hardDeadline - now();
+        retryExtension = replacementExtension(
+          prior,
+          now(),
+          cfg.provider,
+          Number.isFinite(rentRequest.remaining_seconds)
+            ? rentRequest.remaining_seconds * 1000
+            : undefined,
+          DEFAULTS.admissionMarginMinutes * 60000,
+        );
+        cfg.hard = prior.hardDeadline - (prior.deadlineExtension ?? 0) + retryExtension - now();
         cfg.boot = Math.min(cfg.boot, cfg.hard);
       } else {
         if (prior.id && prior.ended === null)
@@ -1347,6 +1448,7 @@ export function createService({
         runnerSeconds: rentRequest.remaining_seconds,
         force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
         retrySource,
+        retryExtension,
       });
     } catch (e) {
       if (!retrySource) throw e;
@@ -1401,7 +1503,10 @@ export function createService({
         cfg,
       );
     await ledger.save(r);
-    if (r.ended !== null) await ledger.settle(r, r.ended);
+    if (r.ended !== null) {
+      await ledger.settle(r, r.ended);
+      await releaseUnusedSha(r);
+    }
   }
   // One admission path for every rental: the GitHub-triggered check and sweep, the owner's admin
   // start and each leg of a release. Every check below applies to all of them; the only
@@ -1432,6 +1537,7 @@ export function createService({
     runnerSeconds,
     force = false,
     retrySource,
+    retryExtension = 0,
     leg,
     market,
     costGuard,
@@ -1479,6 +1585,25 @@ export function createService({
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
       await github.boxProtocol(target.sha, rehearsal ? { rehearsal: true } : { matrix: true });
     }
+    // The instruction of a release leg (src/legs.js, behind PROPIMAGES_ENABLED, default off): built from the leg, its estimate prices
+    // the leg (policy.js resourceCaps takes it as the number, capped at the profile's maximum), the record keeps it for GET /instruction.
+    let legDoc;
+    if (cfg.propimagesEnabled && profile === 'release' && leg) {
+      try {
+        legDoc = legInstruction({
+          profile,
+          tierName: middleLeg ? 'middle' : tierName,
+          leg,
+          cfg,
+          releaseSeq: leg.releaseSeq,
+          familyDies: leg.familyDies,
+        });
+      } catch {
+        refuse('NOT_ELIGIBLE', 409, 'INSTRUCTION_UNAVAILABLE');
+      }
+      cfg = { ...cfg, bandwidthEstimate: legDoc.pricing };
+      applyResourceProfile(cfg, profile, tierName);
+    }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -1523,9 +1648,13 @@ export function createService({
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
     const book = retrySource || market !== undefined ? new OfferBook(now) : offers;
+    // The leg this rental is for: its tier and the stages it will run (bandwidth.js legStages), so a stage's own offer rule
+    // (policy.js: the kfml row managed_oversub's RAM-by-VRAM floor) binds exactly the legs that run that stage.
+    const legTier = middleLeg ? 'middle' : tierName;
     const evaluation = await book.evaluate(vast, cfg, ledger, profile, {
       market,
       vramFloorMb: tierName === 'middle' ? cfg.middleVramFloorMb : 0,
+      leg: { tier: legTier, stages: legStages(legTier) },
     });
     if (retrySource) {
       const remaining =
@@ -1604,9 +1733,15 @@ export function createService({
       : Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) =>
           x.toString(16).padStart(2, '0'),
         ).join('');
+    // The scope of this run's token is decided HERE, once, from provenance the Worker verified itself (github.authorize, or the
+    // owner's admin start stored on the batch); the record keeps the decision, the token carries it (src/trust.js).
+    const { provenance, ...targetFields } = target,
+      trust = trustDecision(provenance, { repository: cfg.repo });
     const started = now(),
       r = {
-        ...target,
+        ...targetFields,
+        scopes: trust.scopes,
+        scopeWhy: trust.why,
         ...spendClass({ profile }),
         tier: tierName,
         middleAppsRequested:
@@ -1698,6 +1833,10 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
+    if (legDoc) {
+      r.instruction = legDoc.text;
+      r.instructionSha256 = await sha256Hex(legDoc.text);
+    }
     r.runBudgetUsd =
       retrySource?.runBudgetUsd ??
       Math.min(
@@ -1710,8 +1849,11 @@ export function createService({
       r.sessionDeadline =
         retrySource.sessionDeadline ?? r.originalStarted + cfg.provider.sessionMinutes * 60000;
       r.rentalAttempts = structuredClone(retrySource.rentalAttempts ?? []);
-      r.hardDeadline = retrySource.hardDeadline;
-      r.softDeadline = retrySource.softDeadline;
+      // A replacement keeps the run's deadlines, moved by the time the unusable legs before it took.
+      r.deadlineExtension = retryExtension;
+      const shift = retryExtension - (retrySource.deadlineExtension ?? 0);
+      r.hardDeadline = retrySource.hardDeadline + shift;
+      r.softDeadline = retrySource.softDeadline + shift;
       r.bootDeadline = Math.min(r.bootDeadline, r.softDeadline);
       r.ttl = r.hardDeadline - r.started;
       r.billingTtl = r.ttl + cfg.cronPeriod;
@@ -1722,6 +1864,12 @@ export function createService({
         32,
       );
       r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];
+      // An earlier leg's token expires with that leg's deadline, which a replacement may move: keep each one, parallel
+      // to priorNonces, so the published log redacts every earlier token byte for byte (src/publish.js).
+      r.priorReportExpiries = [
+        ...(retrySource.priorReportExpiries ?? []),
+        retrySource.reportExpiry,
+      ];
       r.known = [...new Set([...(retrySource.known ?? []), ...(r.known ?? [])])];
       // Keep one authenticated log chain and the run-wide byte/report limits across legs.
       for (const field of [
@@ -1830,6 +1978,21 @@ export function createService({
       r.id = await vast.create(offer, r, script, environment);
       r.idSource = 'create';
       await ledger.save(r);
+      if (legDoc) {
+        // what the leg's number is made of, one data-file entry per line (the id names the entry to edit), and the image plan
+        for (const line of [
+          ...legDoc.plan.lines.map((x) => 'instruction ' + x),
+          ...legDoc.estimate.lines.map((x) => x.trim()),
+          'bandwidth priced from the estimate: down ' +
+            cfg.bandwidthDown +
+            ' GB up ' +
+            cfg.bandwidthUp +
+            ' GB (profile row replaced, capped at the profile maximum)',
+          'instruction sha256 ' + r.instructionSha256,
+        ].slice(0, 80))
+          await workerLine(r, line.slice(0, 300), cfg);
+        await ledger.save(r);
+      }
       const createdInstance = await vast.inspect(r);
       r.contractVerified = true;
       await recordRental(r, createdInstance, cfg);
@@ -1876,7 +2039,7 @@ export function createService({
   // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
   // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
   // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
-  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal'];
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal', 'release_seq'];
   function batchRequest(body) {
     if (
       !body ||
@@ -1892,7 +2055,13 @@ export function createService({
       (body.die !== undefined &&
         ((body.tier === 'large' && body.rehearsal !== true) ||
           typeof body.die !== 'string' ||
-          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
+          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die))) ||
+      // the ordinal of the release (the number in its tag), large tier only; otherwise the Worker assigns it (src/legs.js)
+      (body.release_seq !== undefined &&
+        (body.tier !== 'large' ||
+          !Number.isSafeInteger(body.release_seq) ||
+          body.release_seq < 0 ||
+          body.release_seq > 1000000))
     )
       refuse('BAD_REQUEST', 400);
     return body;
@@ -2010,6 +2179,15 @@ export function createService({
       error.plan = plan;
       throw error;
     }
+    let releaseSeq;
+    if (request.tier === 'large') {
+      try {
+        releaseSeq = (await releaseSeqFor(ledger, request.commit_sha, request.release_seq)).seq;
+      } catch (e) {
+        if (e.conflict) refuse('BAD_REQUEST', 400, 'RELEASE_SEQ_CONFLICT');
+        throw e;
+      }
+    }
     const seq = ((await ledger.get('batch-seq')) ?? 0) + 1;
     await ledger.put('batch-seq', seq);
     const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
@@ -2059,6 +2237,15 @@ export function createService({
       state: 'RUNNING',
       created: now(),
       updated: now(),
+      // verified at the start: the owner's token, a commit reachable from master or next (github.reachable above)
+      provenance: {
+        source: 'admin',
+        repository: cfg.repo,
+        headRepository: cfg.repo,
+        event: 'admin_start',
+        reachable: true,
+        actorIsOwner: true,
+      },
       runnerNonce: await sha256Hex(
         'kf-batch:' + id + ':' + (random ? random() : crypto.randomUUID()),
       ),
@@ -2066,6 +2253,7 @@ export function createService({
       estimateUsd: plan.estimate_usd,
       ...(request.rehearsal === true ? { rehearsal: true, rehearsalDie: request.die } : {}),
       windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
+      ...(releaseSeq === undefined ? {} : { releaseSeq }),
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
       stages: request.tier === 'large' ? cfg.releaseStages : [],
@@ -2240,6 +2428,8 @@ export function createService({
             branch: 'batch:' + batch.id,
             run: batch.id,
             attempt: String(l.seq),
+            // recorded by the owner's authenticated admin start; a batch stored before the field existed is untrusted
+            provenance: batch.provenance,
           },
           profile: batch.profile,
           tierName: batch.tier,
@@ -2258,6 +2448,9 @@ export function createService({
             ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
             ...(l.apps === false ? { apps: false } : {}),
             ...(batch.rehearsal === true ? { rehearsal: true } : {}),
+            ...(batch.releaseSeq === undefined
+              ? {}
+              : { releaseSeq: batch.releaseSeq, familyDies: familyDiesOf(batch, l.family) }),
             stages: l.legTier === 'middle' ? [] : batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,
@@ -2463,14 +2656,23 @@ export function createService({
       /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
         path,
       ) ??
-      /^\/(bench-data)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,100}$/.exec(path);
+      /^\/(instruction)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
+      /^\/(bench-data)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,100}$/.exec(path) ??
+      (PRIVATE_PATH.exec(path) ? ['', 'bench-data', PRIVATE_PATH.exec(path)[1]] : null);
     if (box) {
+      // the private-object route names its refusals (src/privatedata.js)
+      const named = PRIVATE_PATH.test(path) ? (reason) => reason : () => undefined;
       const record = await ledger.get('record:' + box[2]);
-      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
+      if (!record || !(await tokens.verify(bearer, record)))
+        refuse(
+          'UNAUTHORIZED',
+          401,
+          named((await tokens.expired(bearer)) ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'),
+        );
       if (record.ended !== null || record.closed) {
         if (box[1] === 'kill' && record.boxKilled && record.ended !== null)
           return json({ state: 'NONE' });
-        refuse('UNAUTHORIZED', 401);
+        refuse('UNAUTHORIZED', 401, named('TOKEN_EXPIRED'));
       }
       if (box[1] === 'report' && record.resultAt !== undefined) refuse('UNAUTHORIZED', 401);
       return;
@@ -2725,6 +2927,16 @@ export function createService({
     adminStart: (body) => serial(2, () => adminStart(body), '@admin-start'),
     adminStopBatch: (id) =>
       serial(0, () => stopBatches([id], new Vast(fetcher, configuration(env), env.VAST_API_KEY))),
+    adminProviderSuccess: (machineId, hostId) =>
+      serial(
+        0,
+        () =>
+          ledger.markProviderSuccess(
+            { machineId, hostId, nonce: 'admin-' + now() },
+            configuration(env).provider,
+          ),
+        '@admin-provider-success',
+      ),
     adminBatches: async () => {
       const entries = await ledger.storage.list({ prefix: 'batch:', limit: 1000 });
       return [...entries.values()]
@@ -2888,6 +3100,27 @@ export class BrokerLedger {
           );
         }
       }
+      // Review F10 (2026-11-13): the only way to decay a machine's and a host's fault history by
+      // hand (a box-reported PASS no longer does). Internal origin only, like every /admin/ route.
+      if (url.pathname === '/admin/provider-success' && request.method === 'POST') {
+        let body;
+        try {
+          body = JSON.parse(new TextDecoder().decode(await readBounded(request, 256)));
+          if (
+            !body ||
+            Object.keys(body).length !== 2 ||
+            !Number.isSafeInteger(body.machine_id) ||
+            body.machine_id <= 0 ||
+            !Number.isSafeInteger(body.host_id) ||
+            body.host_id <= 0
+          )
+            throw Error();
+        } catch {
+          return json({ error: 'Invalid selection' }, 400);
+        }
+        await this.service.adminProviderSuccess(body.machine_id, body.host_id);
+        return json({ state: 'DECAYED' });
+      }
       if (url.pathname === '/admin/stop' && request.method === 'POST') {
         let selection;
         try {
@@ -3013,6 +3246,25 @@ function placedLedger(env) {
     locationHint: 'enam',
   });
 }
+// The rate-limit key of a client address: IPv4 as is, IPv6 as its /64 (first four groups).
+export function ipRateKey(ip) {
+  if (typeof ip !== 'string' || !ip.includes(':') || ip.includes('.')) return String(ip);
+  const [head, tail, extra] = ip.split('::');
+  if (extra !== undefined) return ip;
+  const front = head ? head.split(':') : [];
+  const back = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? front
+      : [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill('0'), ...back];
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) return ip;
+  return (
+    groups
+      .slice(0, 4)
+      .map((g) => g.toLowerCase().padStart(4, '0'))
+      .join(':') + '::/64'
+  );
+}
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
     local = new Map();
@@ -3115,14 +3367,23 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|run-report|kill|blob-url|bench-data|evidence)\//.test(path)) {
+    if (/^\/(?:report|run-report|kill|blob-url|bench-data|instruction|evidence)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);
       }
       const fields = await boxVerifier.verifyStateless(bearer);
       const key = /^\/[^/]+\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1];
-      if (!fields || fields.key !== key) refuse('UNAUTHORIZED', 401);
+      if (!fields || fields.key !== key)
+        refuse(
+          'UNAUTHORIZED',
+          401,
+          PRIVATE_PATH.test(path)
+            ? (await boxVerifier.expired(bearer))
+              ? 'TOKEN_EXPIRED'
+              : 'TOKEN_INVALID'
+            : undefined,
+        );
       const window = Math.floor(now() / 60000);
       if (boxWindow !== window) {
         boxWindow = window;
@@ -3156,88 +3417,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   }
   return {
     async fetch(request, env) {
-      let path;
-      try {
-        if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
-          const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
-          const cfg = configuration(env);
-          const c = verifiedIdentity(await verifier.verify(bearer, env.WORKER_URL), cfg);
-          if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
-        }
-      } catch (error) {
-        return Response.json(
-          { state: error instanceof BrokerError ? error.state : 'UNAVAILABLE' },
-          { status: error instanceof BrokerError ? error.status : 503 },
-        );
-      }
-      try {
-        path = await routePath(request, env);
-      } catch (error) {
-        return Response.json(
-          { state: error.state ?? 'UNAVAILABLE' },
-          { status: error.status ?? 503 },
-        );
-      }
-      // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
-      // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
-      const hostId =
-        path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
-      if (hostId) {
-        if (!env.HOSTS || request.method !== 'GET') return notFound();
-        // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
-        // well-formed box token, and a flood from one address, never reach DO storage. Whether the
-        // box exists is the DO's answer (the Worker has no box list outside its DOs).
-        const window = Math.floor(now() / 60000);
-        if (hostUpgradeWindow !== window) {
-          hostUpgradeWindow = window;
-          hostUpgrades.clear();
-        }
-        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
-        const seen = hostUpgrades.get(ip) ?? 0;
-        if (seen >= 30 || (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024))
-          return new Response('Too many requests', { status: 429 });
-        hostUpgrades.set(ip, seen + 1);
-        if (
-          request.headers.get('Upgrade') !== 'websocket' ||
-          !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
-        )
-          return new Response('Unauthorized', { status: 401 });
-        return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
-          new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
-        );
-      }
-      if (path === null || !routeKind(path)) return notFound();
-      let buffered;
-      try {
-        await (authorize ?? frontAuthorize)(request, env, path);
-        await controlLimit(request, env, path);
-        if (/^\/evidence\//.test(path))
-          return Response.json(
-            await evidenceGateway(
-              request,
-              env,
-              path,
-              request.headers.get('Authorization')?.replace(/^Bearer /, ''),
-            ),
-            { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
-          );
-        buffered = await detachedUpload(request, path);
-      } catch (error) {
-        logRefusal(error, path);
-        return Response.json(
-          {
-            state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',
-            verdict: 'UNAVAILABLE',
-            log_tail_sanitised: '',
-            bytes_dropped: 0,
-          },
-          {
-            status: error instanceof BrokerError ? error.status : 503,
-            headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
-          },
-        );
-      }
-      return placedLedger(env).fetch(buffered);
+      return harden(await gatewayFetch(request, env));
     },
     scheduled(_event, env, ctx) {
       ctx.waitUntil(
@@ -3245,5 +3425,97 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       );
     },
   };
+  async function gatewayFetch(request, env) {
+    let path;
+    try {
+      if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
+        const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+        const cfg = configuration(env);
+        const c = verifiedIdentity(await verifier.verify(bearer, env.WORKER_URL), cfg);
+        if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
+      }
+    } catch (error) {
+      return Response.json(
+        { state: error instanceof BrokerError ? error.state : 'UNAVAILABLE' },
+        { status: error instanceof BrokerError ? error.status : 503 },
+      );
+    }
+    try {
+      path = await routePath(request, env);
+    } catch (error) {
+      return Response.json(
+        { state: error.state ?? 'UNAVAILABLE' },
+        { status: error.status ?? 503 },
+      );
+    }
+    // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
+    // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
+    const hostId =
+      path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
+    if (hostId) {
+      if (!env.HOSTS || request.method !== 'GET') return notFound();
+      // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
+      // well-formed box token, and a flood from one address, never reach DO storage. Whether the
+      // box exists is the DO's answer (the Worker has no box list outside its DOs).
+      const window = Math.floor(now() / 60000);
+      if (hostUpgradeWindow !== window) {
+        hostUpgradeWindow = window;
+        hostUpgrades.clear();
+      }
+      // Review F10 (2026-11-13): an IPv6 client holds a whole /64, so the key is the /64; a full
+      // table evicts the oldest entry (a flood of addresses resets counters, it never locks out
+      // a real daemon).
+      const ip = ipRateKey(request.headers.get('CF-Connecting-IP') ?? 'unknown');
+      const seen = hostUpgrades.get(ip) ?? 0;
+      if (seen >= 30) return new Response('Too many requests', { status: 429 });
+      if (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024)
+        hostUpgrades.delete(hostUpgrades.keys().next().value);
+      hostUpgrades.set(ip, seen + 1);
+      if (
+        request.headers.get('Upgrade') !== 'websocket' ||
+        !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
+      )
+        return new Response('Unauthorized', { status: 401 });
+      return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
+        new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
+      );
+    }
+    if (path === null || !routeKind(path)) return notFound();
+    let buffered;
+    try {
+      await (authorize ?? frontAuthorize)(request, env, path);
+      await controlLimit(request, env, path);
+      if (/^\/evidence\//.test(path))
+        return Response.json(
+          await evidenceGateway(
+            request,
+            env,
+            path,
+            request.headers.get('Authorization')?.replace(/^Bearer /, ''),
+          ),
+          { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
+        );
+      buffered = await detachedUpload(request, path);
+    } catch (error) {
+      logRefusal(error, path);
+      return Response.json(
+        {
+          state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',
+          verdict: 'UNAVAILABLE',
+          log_tail_sanitised: '',
+          bytes_dropped: 0,
+          // a named refusal of the private-object route (a bad token is TOKEN_INVALID); no other gateway answer carries a reason
+          ...(PRIVATE_PATH.test(path) && error instanceof BrokerError && error.reason
+            ? { reason: error.reason }
+            : {}),
+        },
+        {
+          status: error instanceof BrokerError ? error.status : 503,
+          headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        },
+      );
+    }
+    return placedLedger(env).fetch(buffered);
+  }
 }
 export default createGateway();

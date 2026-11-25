@@ -1,7 +1,17 @@
 # V3 — GSS-legacy controls carried to the host RM (`KF3_GSS_NATIVE`)
 
-**STATUS: LIVE (default OFF, EXPERIMENT `KF3_GSS_NATIVE=1`), 2026-10-09 — code and GPU-free tests on branch
-`claude/gss-native-20261009`, NOT hardware-verified. The product policy question (section 6) is the owner's.**
+**STATUS: SUPERSEDED, 2026-11-13 — the experiment is REMOVED; successor: [V3_SECURITY_MODEL.md](V3_SECURITY_MODEL.md)
+(section 5, row 1).** Security review 1 (2026-11-13, F-06) found that `KF3_GSS_NATIVE=1` carried a guest's GSS-legacy
+control parameters unchanged to the host RM, a guest-authored host action (owner principle A.2), with no per-command
+allow-list; the owner ruled "fix it". Nothing in the gates, the CI or the docs depended on it (grep of `scripts/`, `docs/`,
+`.github/`, `ci/` on 2026-11-13: only four old Windows runner scripts set the flag), so the forwarding path was deleted
+rather than fenced: `kf_rm::gssnative::enabled()` is always false (the flag is said once as ignored), the object seat
+drops the seat unread, `execute` never calls the host, and `kf_gsp::Deferred`'s reply patch is gone. Tests:
+`crates/kf-rm/tests/gss_native_removed.rs`. The `kf-qemu` glue (`device.rs`, `chan.rs`) is dead code awaiting removal by
+its owner. Everything below is the 2026-10-09 design, kept as history; its "the flag does" sentences no longer hold.
+
+**Former STATUS: LIVE (default OFF, EXPERIMENT `KF3_GSS_NATIVE=1`), 2026-10-09 — code and GPU-free tests on branch
+`claude/gss-native-20261009`, NOT hardware-verified.**
 Branched from `claude/recovery-wall-20261009` (so one binary carries this flag, `KF3_WIN_KERNEL_PID4` and
 `KF3_SCHEDULE_LATE_JOINERS`). Code: `kf_rm::gssnative` (`crates/kf-rm/src/gssnative.rs`), the object seat's
 hook (`kf_rm::rmrpc::ObjectPolicy::with_gss_native`), the act (`kf_qemu::chan::ChanPlane::gss_forward`), the host

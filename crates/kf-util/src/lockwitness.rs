@@ -189,6 +189,7 @@ mod vcpu {
         IS_VCPU.with(|c| c.set(true));
     }
 
+    /// Has the calling thread been marked a vCPU by [`mark`]?
     #[must_use]
     pub fn is_vcpu() -> bool {
         IS_VCPU.with(Cell::get)

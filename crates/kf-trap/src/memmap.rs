@@ -29,6 +29,7 @@ use crate::trappolicy::{DoorbellPlacement, PRAMIN_BASE, PRAMIN_LEN};
 use crate::vmm::Bar;
 use kf_chip::Family;
 
+/// The page size the map is made of.
 pub const PAGE: u64 = 0x1000;
 
 /// A timer-page store is always ignored, including unaligned/wide stores crossing an edge.
@@ -64,7 +65,10 @@ pub enum Disposition {
     /// ⚠ The only disposition that costs a read exit, and it is never chosen for performance — it
     /// is forced, by a register whose **read has a side effect the guest verifies**. `why` names
     /// the register so a reader never has to guess which one dragged the page in.
-    Hole { why: &'static str },
+    Hole {
+        /// The register that forces the read exit.
+        why: &'static str,
+    },
 }
 
 impl Disposition {
@@ -83,18 +87,26 @@ impl Disposition {
 /// One contiguous span of one BAR, and how to serve it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
+    /// The BAR the span is in.
     pub bar: Bar,
+    /// Offset of the span in the BAR.
     pub base: u64,
+    /// Length of the span in bytes.
     pub len: u64,
+    /// How the span is served.
     pub how: Disposition,
 }
 
 /// The complete map for one device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryMap {
+    /// Every span of every BAR.
     pub regions: Vec<Region>,
+    /// Size of BAR0 in bytes.
     pub bar0_bytes: u64,
+    /// Size of BAR1 in bytes.
     pub bar1_bytes: u64,
+    /// Size of BAR2 in bytes.
     pub bar2_bytes: u64,
 }
 
@@ -176,7 +188,7 @@ pub const VF_USERMODE_PAGE: u64 = 0x00BB_0000;
 /// dev_vm.h`, `class/clc361.h:29-30`) — what `kfifoGetUsermodeMapInfo_GV100` hands a user client
 /// (`kernel_fifo_gv100.c:170-171`: `*pSize = DRF_SIZE(NVC361)`), on every family.
 ///
-/// ⊘⊘ 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`, security): the trap classified only the FIRST
+/// (`V3_HW_BOUNDARY_INVENTORY.md`, security): the trap classified only the FIRST
 /// 4 KiB page ([`PAGE`]) as userspace-mappable, so an unprivileged guest process writing
 /// `0xBB1000..0xBBFFFF` through its own usermode mapping reached the PRIVILEGED arm — a shadow
 /// store plus a privileged-ring push per write, i.e. guest userspace could fill the ring reserved
@@ -246,7 +258,7 @@ pub fn memory_map(
     }
 
     // ---- BAR1: plain RAM throughout, on EVERY family — one memslot (`THE_CONSTRAINTS.md` §23). ----
-    // ⊘⊘⊘ 2026-09-26: Hopper+ used to carve a fixed "doorbell page" at 0x9_0000 here. RM places
+    // Hopper+ used to carve a fixed "doorbell page" at 0x9_0000 here. RM places
     // the BAR1 usermode view where ITS BAR1 allocator chooses, per mapping, so a setup-time carve
     // can only be wrong; the view is overlaid at runtime where the guest's BAR1 PTEs put it
     // (`crate::bar1db`, `V3_BAR1_DOORBELL.md`). `doorbell` no longer shapes BAR1 at all.

@@ -1,0 +1,82 @@
+=== nvbandwidth side=host start=2026-11-24T00:30:19+00:00 host=ubuntu cmd: ${KF_GPU_ENV:+env $KF_GPU_ENV }python3 -B -I /opt/apps/bundle/share/open_rows/nvbandwidth_row.py run --out /opt/apps/out/host/nvbandwidth --bundle /opt/apps/bundle --emit
+CASE host_to_device_memcpy_ce class=ce result=PASS reason=ok status=Passed best=26.8769 secs=2.0
+CASE device_to_host_memcpy_ce class=ce result=PASS reason=ok status=Passed best=26.4054 secs=2.0
+CASE host_to_device_bidirectional_memcpy_ce class=ce result=PASS reason=ok status=Passed best=22.9776 secs=4.4
+CASE device_to_host_bidirectional_memcpy_ce class=ce result=PASS reason=ok status=Passed best=22.6788 secs=4.3
+CASE device_to_device_memcpy_read_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_memcpy_write_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_bidirectional_memcpy_read_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_bidirectional_memcpy_write_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_local_copy class=local result=PASS reason=ok status=Passed best=459.822 secs=0.3
+CASE all_to_host_memcpy_ce class=ce result=PASS reason=ok status=Passed best=26.4055 secs=2.0
+CASE all_to_host_bidirectional_memcpy_ce class=ce result=PASS reason=ok status=Passed best=22.685 secs=4.3
+CASE host_to_all_memcpy_ce class=ce result=PASS reason=ok status=Passed best=26.8782 secs=1.9
+CASE host_to_all_bidirectional_memcpy_ce class=ce result=PASS reason=ok status=Passed best=22.9594 secs=4.4
+CASE all_to_one_write_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE all_to_one_read_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE one_to_all_write_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE one_to_all_read_ce class=ce result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE host_to_device_memcpy_sm class=sm result=PASS reason=ok status=Passed best=26.9304 secs=1.9
+CASE device_to_host_memcpy_sm class=sm result=PASS reason=ok status=Passed best=26.4063 secs=2.0
+CASE host_to_device_bidirectional_memcpy_sm class=sm result=PASS reason=ok status=Passed best=22.291 secs=1.5
+CASE device_to_host_bidirectional_memcpy_sm class=sm result=PASS reason=ok status=Passed best=22.4897 secs=1.5
+CASE device_to_device_memcpy_read_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_memcpy_write_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_bidirectional_memcpy_read_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE device_to_device_bidirectional_memcpy_write_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE all_to_host_memcpy_sm class=sm result=PASS reason=ok status=Passed best=26.4065 secs=2.0
+CASE all_to_host_bidirectional_memcpy_sm class=sm result=PASS reason=ok status=Passed best=22.6886 secs=1.5
+CASE host_to_all_memcpy_sm class=sm result=PASS reason=ok status=Passed best=26.9315 secs=1.9
+CASE host_to_all_bidirectional_memcpy_sm class=sm result=PASS reason=ok status=Passed best=22.4168 secs=1.6
+CASE all_to_one_write_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE all_to_one_read_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE one_to_all_write_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE one_to_all_read_sm class=sm result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+CASE host_device_latency_sm class=latency result=PASS reason=ok status=Passed best=568.64 secs=0.8
+CASE device_to_device_latency_sm class=latency result=WAIVED reason=needs_2_gpus_has_1 status=Waived best=- secs=0.2
+@@FILE results.tsv sha256=ded6ebfad5ac97c5 bytes=2333
+id	class	result	reason	status	best	secs
+host_to_device_memcpy_ce	ce	PASS	ok	Passed	26.8769	2.0
+device_to_host_memcpy_ce	ce	PASS	ok	Passed	26.4054	2.0
+host_to_device_bidirectional_memcpy_ce	ce	PASS	ok	Passed	22.9776	4.4
+device_to_host_bidirectional_memcpy_ce	ce	PASS	ok	Passed	22.6788	4.3
+device_to_device_memcpy_read_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_memcpy_write_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_bidirectional_memcpy_read_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_bidirectional_memcpy_write_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_local_copy	local	PASS	ok	Passed	459.822	0.3
+all_to_host_memcpy_ce	ce	PASS	ok	Passed	26.4055	2.0
+all_to_host_bidirectional_memcpy_ce	ce	PASS	ok	Passed	22.685	4.3
+host_to_all_memcpy_ce	ce	PASS	ok	Passed	26.8782	1.9
+host_to_all_bidirectional_memcpy_ce	ce	PASS	ok	Passed	22.9594	4.4
+all_to_one_write_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+all_to_one_read_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+one_to_all_write_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+one_to_all_read_ce	ce	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+host_to_device_memcpy_sm	sm	PASS	ok	Passed	26.9304	1.9
+device_to_host_memcpy_sm	sm	PASS	ok	Passed	26.4063	2.0
+host_to_device_bidirectional_memcpy_sm	sm	PASS	ok	Passed	22.291	1.5
+device_to_host_bidirectional_memcpy_sm	sm	PASS	ok	Passed	22.4897	1.5
+device_to_device_memcpy_read_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_memcpy_write_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_bidirectional_memcpy_read_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+device_to_device_bidirectional_memcpy_write_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+all_to_host_memcpy_sm	sm	PASS	ok	Passed	26.4065	2.0
+all_to_host_bidirectional_memcpy_sm	sm	PASS	ok	Passed	22.6886	1.5
+host_to_all_memcpy_sm	sm	PASS	ok	Passed	26.9315	1.9
+host_to_all_bidirectional_memcpy_sm	sm	PASS	ok	Passed	22.4168	1.6
+all_to_one_write_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+all_to_one_read_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+one_to_all_write_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+one_to_all_read_sm	sm	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+host_device_latency_sm	latency	PASS	ok	Passed	568.64	0.8
+device_to_device_latency_sm	latency	WAIVED	needs_2_gpus_has_1	Waived	-	0.2
+@@END results.tsv
+@@FILE summary.txt sha256=3c90b719c24dbf0d bytes=323
+# gpu_use_why=memory.used rose 1975 MiB
+NVBANDWIDTH_PROOF device=NVIDIA_GeForce_RTX_4090 gpus=1 passed=18 ce=8 sm=8 latency=1 local=1 min_gbps=22.291
+NVBANDWIDTH_SUMMARY status=PASS reason=ok pass=18 waived=17 fail=0 mismatch=0 not_run=0 cases=35 gpus=1 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_4090 buffer_mib=512 secs=45
+@@END summary.txt
+NVBANDWIDTH_PROOF device=NVIDIA_GeForce_RTX_4090 gpus=1 passed=18 ce=8 sm=8 latency=1 local=1 min_gbps=22.291
+NVBANDWIDTH_SUMMARY status=PASS reason=ok pass=18 waived=17 fail=0 mismatch=0 not_run=0 cases=35 gpus=1 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_4090 buffer_mib=512 secs=45
+=== end rc=0 secs=45 2026-11-24T00:31:04+00:00

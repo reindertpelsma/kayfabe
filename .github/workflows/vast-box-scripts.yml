@@ -97,6 +97,8 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/class_mutants.py
       - name: Public-only CI manifest binding requires two named killers each
         run: python3 scripts/bench/windows/appmatrix/ci_class_mutants.py
+      - name: Bundle pin vs checkout inputs - mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/pin_mutants.py --jobs 2
       - name: Bundle licence/source compliance mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/compliance_mutants.py
       - name: Official runtime mutation checks
@@ -105,10 +107,16 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/repro_mutants.py
       - name: Reviewed artifact receiver mutation checks
         run: python3 scripts/bench/windows/appmatrix/receiver_mutants.py
+      - name: Open Windows rows (VK-GL-CTS, DirectX samples) - committed caselists, pins and unit tests
+        run: |
+          python3 scripts/bench/windows/open_rows/kfopen.py check
+          python3 -W ignore -m unittest discover -s scripts/bench/windows/open_rows/tests
+      - name: Open Windows rows mutations require two named killers each
+        run: python3 scripts/bench/windows/open_rows/open_rows_mutants.py --jobs 2
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -126,6 +134,12 @@ jobs:
           python3 scripts/ci/app_policy_mutants.py
       - name: Payload mutations require two named killers each
         run: python3 scripts/ci/payload_mutants.py
+      - name: Native fault names are the pinned open driver's (oracle required), tests and mutations
+        run: |
+          bash scripts/ci/fetch_oracles.sh . ogkm-580
+          python3 scripts/bench/derive_native_fault_names.py --check
+          KF_REQUIRE_ORACLES=1 python3 -m unittest scripts/ci/test_derive_native_fault_names.py
+          python3 scripts/ci/derive_fault_names_mutants.py
       - name: Provider environment mutations require two named killers each
         run: python3 scripts/ci/provider_env_mutants.py
       - name: Diagnostic mutations require two named killers each
@@ -177,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: SPECviewperf stage mutations (verdict rules, time guard, copy, teardown, status-only output) require two killers each

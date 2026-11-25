@@ -1,0 +1,8 @@
+SPEC_STAGE_START lane=lanea
+SPEC_STAGE_LIST lane=lanea n=1
+SPEC_COPY_DELETED removed=archive
+SPEC_ROW name=enscape-01 result=NOT_RUN subtests=8/10 reason=TIME failed=09_RhinoIntWhiteOutlineHigh
+SPEC_COPY_DELETED removed=overlay
+SPEC_STAGE_COUNTS pass=0 fail=0 not_run=1 of=1
+SPECVIEWPERF_STAGE_RETRY class=TIME NARROWED
+SPECVIEWPERF_STAGE_EXIT rc=3

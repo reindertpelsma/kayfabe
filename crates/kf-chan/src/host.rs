@@ -133,6 +133,23 @@ pub fn private_ring_spec(
     })
 }
 
+/// The video engine behind an NV2080 engine type and the class kind its host ring's owned object
+/// has: `(engine index, kind)`, or `None` (not an NVDEC, NVENC or OFA). The ONE place the ring's
+/// video-context routing is decided; `tests/video_class_coverage.rs` enumerates the classes a
+/// guest-kernel video ring can hold from it, so a new video engine kind cannot escape the audit.
+#[must_use]
+pub fn video_kind_of_engine(engine: u32) -> Option<(u32, kf_chip::classes::Kind)> {
+    use kf_chip::classes::Kind;
+    kf_abi::submit::nvdec_index_of_engine_type(engine)
+        .map(|i| (i, Kind::VideoDecoder))
+        .or_else(|| {
+            kf_abi::submit::nvenc_index_of_engine_type(engine).map(|i| (i, Kind::VideoEncoder))
+        })
+        .or_else(|| {
+            kf_abi::submit::ofa_index_of_engine_type(engine).map(|i| (i, Kind::OpticalFlow))
+        })
+}
+
 /// ★ Unmap every map in `maps` — all of them, whatever any one answers — and report the first
 /// refusal (review fix 2026-10-04: a short-circuit left the later maps live).
 ///
@@ -195,7 +212,7 @@ pub struct HostRing {
     /// ring except into [`Gate`], which [`HostRing::release`] revokes BEFORE dropping this one, so
     /// the mapping still goes before its aperture is given back).
     cpu: Option<std::sync::Arc<kf_linux_raw::VolatileRegion>>,
-    /// ★ OWNER_RULINGS §U.2: this ring's gate word — [`GATE_OFF`] into the fence region.
+    /// This ring's gate word at `GATE_OFF` in the fence region.
     gate: Gate,
     _node: kf_linux_raw::CharDevice,
     /// ★ v3-appfix J: what the ring OWNS on the host, so [`HostRing::release`] can give it back —
@@ -229,7 +246,7 @@ pub struct HostRing {
 // Only normalized incrementing streams enter a graphics-runlist host ring.
 // Caller bounds the segment to half its owned PB before reaching this helper.
 //
-// ★ GR tier (owner rulings 2026-10-07): a `SET_OBJECT` of a graphics class this ring holds a host
+// In the GR tier, a `SET_OBJECT` of a graphics class this ring holds a host
 // object of (`gr_classes`, allocated at birth by `HostRing::admit_gr_tier`) on hardware subchannel
 // 0-3 keeps its subchannel, and that subchannel's later methods (at or above 0x100) keep it too;
 // `gr_subch` carries those bindings across pushes (the caller commits it only after a push that
@@ -528,16 +545,7 @@ impl HostRing {
             live: VecDeque::new(),
         };
         let tail = (|| {
-            use kf_chip::classes::Kind;
-            let video = kf_abi::submit::nvdec_index_of_engine_type(engine)
-                .map(|i| (i, Kind::VideoDecoder))
-                .or_else(|| {
-                    kf_abi::submit::nvenc_index_of_engine_type(engine)
-                        .map(|i| (i, Kind::VideoEncoder))
-                })
-                .or_else(|| {
-                    kf_abi::submit::ofa_index_of_engine_type(engine).map(|i| (i, Kind::OpticalFlow))
-                });
+            let video = video_kind_of_engine(engine);
             if let Some((index, kind)) = video {
                 let (arch, imp, _) = rm.arch_info();
                 let family = kf_chip::Family::from_arch(arch, imp)
@@ -692,7 +700,7 @@ impl HostRing {
         self.chan
     }
 
-    /// ★ OWNER_RULINGS §U.2: this ring's gate (a handle the VA-manager thread may hold).
+    /// This ring's gate, which the VA-manager thread may hold.
     #[must_use]
     pub fn gate(&self) -> Gate {
         self.gate.clone()
@@ -704,8 +712,8 @@ impl HostRing {
         self.va + self.layout.fence_off + GATE_OFF
     }
 
-    /// ★★★ **The kernel-GR tier's admission** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S
-    /// items 1-2): on a graphics-runlist ring that owns a real GR context, assert the host channel
+    /// **Admission to the kernel-GR tier.** On a graphics-runlist ring that owns a real GR
+    /// context, assert the host channel
     /// is USER ([`kf_host::Channel::assert_user`]) — refusing otherwise — then allocate one host
     /// object of each family-invariant class ([`crate::grtables::GrClass::FIXED`]) and of the family 3D class that this host family lists AND
     /// host RM reports supported. The classes come from the fixed allowlist, never from guest
@@ -776,7 +784,7 @@ impl HostRing {
         self.gr_context
     }
 
-    /// ★ 2026-10-19: the CE class this ring's host channel holds a real object of — `Some` only
+    /// The CE class this ring's host channel holds a real object of — `Some` only
     /// for a copy-engine ring (`on_engine_layout` allocates it at birth), `None` for a graphics
     /// or video ring. The class a guest-KERNEL CE ring's methods decode against when the guest
     /// sends no `SET_OBJECT` ([`crate::tmode::TState::ce_object`]).
@@ -822,7 +830,7 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when there is no free space until a completion; `Err` for a store failure.
     pub fn push(&mut self, words: &[u32]) -> Result<Result<(), Busy>, String> {
-        // ★ 2026-10-14: a video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
+        // A video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
         // authored semaphore rows and host methods only. No codec or CE execution reaches it —
         // the decoder refuses `EXECUTE`, every codec operand and every CE method by name — and
         // its private fence remains authored here, never supplied by the guest.
@@ -949,12 +957,12 @@ impl HostRing {
     }
 }
 
-/// ★ OWNER_RULINGS §U.2: the gate word's offset into the ring's fence region (the fence word is
+/// The gate word's offset into the ring's fence region (the fence word is
 /// at 0; both regions of [`LEGACY_LAYOUT`] and [`TSPACE_LAYOUT`] are read-write GPU maps of at
 /// least 16 KiB). One aligned word, kayfabe's own memory: never a window address.
 pub const GATE_OFF: u64 = 0x40;
 
-/// ★★ OWNER_RULINGS §U.2 — **a ring's host gate word, as the VA-manager thread holds it.**
+/// A ring's host gate word, as held by the VA-manager thread.
 ///
 /// The runner puts an equality ACQUIRE of a payload on this word into the stream kayfabe writes
 /// ([`crate::tspace_unsafe::gate_acquire_words`]); the VA-manager thread [`Gate::release`]s it —
@@ -1116,7 +1124,7 @@ pub trait Publisher {
     /// A failed walk or a refused publish.
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String>;
 
-    /// ★ OWNER_RULINGS §U: what the channel's own software object makes of `call` — decided when
+    /// The result from the channel's own software object for `call`, decided when
     /// the runner reaches it. Default: no software object serves anything (refused by name).
     ///
     /// # Errors
@@ -1175,7 +1183,7 @@ pub enum ChanError {
     Publish(String),
     /// ★ P1+P2 inc D: T-mode refused an item at bind, by name.
     Bind(crate::translated::Refusal),
-    /// ★ OWNER_RULINGS §U: a software method refused, or its action failed — by name.
+    /// A refused software method or failed action, by name.
     Sw(String),
 }
 
@@ -1244,7 +1252,7 @@ pub struct TranslatedChannel {
     gpu_gp_get: Option<crate::tspace_unsafe::WindowAddr>,
     /// GP_GET releases queued for the engine.
     gpu_gp_get_releases: u64,
-    /// ★ OWNER_RULINGS §U: the software method the channel is stopped at, if any.
+    /// The software method the channel is stopped at, if any.
     sw: Option<crate::swmethod::SwSuspend>,
     /// The last gate payload this ring used ([`crate::swmethod::next_gate`]).
     gate_seq: u32,
@@ -2022,7 +2030,7 @@ mod graphics_route_tests {
     }
 }
 
-/// 2026-10-31 — the wrap contract of the host fence compare, ported from the retired
+/// The wrap contract of the host fence compare, ported from the retired
 /// `kayfabe-completion` `fence_arm_is_wrap_correct` / `fence_arm_fires_at_or_after_target_exactly_once`.
 ///
 /// The fence every compare below reads is the HOST ring's own (`HostRing::completed`: a word in an

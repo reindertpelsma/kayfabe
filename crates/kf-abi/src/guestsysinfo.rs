@@ -411,7 +411,7 @@ pub fn encode_set_guest_system_info_negotiation_reply(
 mod identity_tests {
     use super::*;
 
-    /// ★ 2026-10-04 (v3-windows, runbook C3): fn 1's identity, decoded for the log. The values are
+    /// fn 1's identity, decoded for the log. The values are
     /// nvBldVer.h's Windows block at ogkm 580.65.06 (`NV_BUILD_NAME "580.88"`, `r580_78-7`, CL
     /// 36308443); a guest string cannot break the log line.
     #[test]

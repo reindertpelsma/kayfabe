@@ -25,11 +25,16 @@ use std::collections::HashSet;
 // One token, abstracted to exactly what the invariant needs: the state machine, the stamp, and
 // whether a bitmap bit is outstanding.
 
+/// The modelled token state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum S {
+    /// Nobody holds the token and it was not rung.
     Idle,
+    /// Rung and not held: a worker has work to find.
     Rung,
+    /// Held by a worker.
     Busy,
+    /// Held by a worker and rung again meanwhile.
     BusyRung,
 }
 

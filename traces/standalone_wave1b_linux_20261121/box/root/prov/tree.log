@@ -1,0 +1,59 @@
+== repo: /workspace/kf-ci-src  rev: 9b3d16519 Merge pull request #550 from reindertpelsma/claude/kfroot-payload-20261120
+[2026-11-21T11:10:01+00:00] BENCH_TREE_START
+KF_TRUST name=nvidia-linux-run-580.159.04 anchor=official-checksum-url sha256=c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e size=397162548 mode=trust-git-only gating=yes
+[2026-11-21T11:10:02+00:00] phase 3: host deps
+[2026-11-21T11:10:39+00:00] apt rc=0  (ninja=/usr/bin/ninja meson=/usr/bin/meson cloud-localds=/usr/bin/cloud-localds)
+[2026-11-21T11:10:39+00:00] phase 3: downloads
+KF_TRUST name=qemu-source anchor=upstream-pin sha256=821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746 size=141137724 mode=trust-git-only gating=yes
+[2026-11-21T11:10:42+00:00] qemu tarball (pinned, verified) rc=0
+[2026-11-21T11:10:52+00:00] cloudimg rc=0  621284352
+[2026-11-21T11:10:52+00:00] phase 3: tap
+[2026-11-21T11:10:52+00:00] nvktap0: nvktap0          DOWN           192.168.77.1/24    (DOWN/NO-CARRIER with no QEMU attached is NORMAL)
+[2026-11-21T11:10:52+00:00] guest_key: 399 bytes
+[2026-11-21T11:12:06+00:00] TRACK_A done
+[2026-11-21T11:13:33+00:00] TRACK_B done
+----- TRACK A -----
+[2026-11-21T11:10:53+00:00] A: untar qemu
+[2026-11-21T11:11:01+00:00] A: build_kf3 (the v3 device; this is the long pole)
+A_RC=0
+[2026-11-21T11:12:06+00:00] A: KF3_BUILT /workspace/bench/kf3-bins/9b3d1651/qemu-system-x86_64 rev=9b3d1651 mtime=2026-11-21 11:12:06.280209698 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[2026-11-21T11:12:06+00:00] A: binary = 97088704
+[1681/1684] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_fpu_helper.c.o
+[1682/1684] Compiling C object libcommon.a.p/fpu_softfloat.c.o
+[1683/1684] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_translate.c.o
+[1684/1684] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/9b3d1651/qemu-system-x86_64 rev=9b3d1651 mtime=2026-11-21 11:12:06.280209698 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+----- TRACK B -----
+[2026-11-21T11:10:53+00:00] B1: guest disk
+Image resized.
+[2026-11-21T11:10:57+00:00] B1: seed.iso = 374784 bytes
+[2026-11-21T11:10:57+00:00] B2: booting guest on stock qemu (slirp hostfwd 2222)
+[2026-11-21T11:10:57+00:00] B2: qemu pid=48947
+[2026-11-21T11:11:16+00:00] B2: guest ssh up after 20s
+[2026-11-21T11:11:16+00:00] B2: waiting for cloud-init to finish (it will bounce the network)
+[2026-11-21T11:11:17+00:00] B2: cloud-init done after 10s
+[2026-11-21T11:11:17+00:00] B2: seed marker present
+[2026-11-21T11:11:17+00:00] B2: picking the guest's apt mirror (the host's fix, applied one layer down)
+    MIRROR archive.ubuntu.com/ubuntu 610213
+    MIRROR azure.archive.ubuntu.com/ubuntu 608188
+    MIRROR mirrors.edge.kernel.org/ubuntu 1094226
+[2026-11-21T11:11:19+00:00] B2: guest apt mirror = mirrors.edge.kernel.org/ubuntu
+[2026-11-21T11:11:19+00:00] B2: installing guest driver (kernel-open)
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+[2026-11-21T11:11:59+00:00] B2: guest compiler = CC_PRESENT
+
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+NVRUN_RC=0
+[2026-11-21T11:13:12+00:00] B2: guest cuda.h CUresult x601  ⇒ MUST be >= 500
+[2026-11-21T11:13:13+00:00] B2: guest modinfo = version:        580.159.04 license:        Dual MIT/GPL vermagic:       6.8.0-147-generic SMP preempt mod_unload modversions  
+[2026-11-21T11:13:13+00:00] B2: guest driver VERIFIED on content
+[2026-11-21T11:13:33+00:00] B2: guest powered off (qemu alive? no)
+[2026-11-21T11:13:33+00:00] B4: building the guest-side mean client (musl)
+      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[2026-11-21T11:13:54+00:00] B4: guest ladder built: 5061776 bytes
+[2026-11-21T11:13:54+00:00] BENCH_TREE_DONE

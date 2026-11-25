@@ -1,0 +1,509 @@
+{
+ "label": "BP_b1",
+ "cycle": 4,
+ "boot0": "2026-11-24T01:38:01.5000000+00:00",
+ "explorer_before": "1",
+ "quser_before": "USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME |  kfimage               console             1  Active      none   11/24/2026 1:38 AM",
+ "suspended": true,
+ "suspend_wait_s": 2,
+ "wake_utc": "2026-11-24T01:50:04Z",
+ "rates_wake+4s": {
+  "exits": 83704,
+  "halt_exits": 17615,
+  "io_exits": 0,
+  "mmio_exits": 204,
+  "halt_wakeup": 10680,
+  "irq_injections": 23348
+ },
+ "tsc_page": {},
+ "tsc_page_unchanged": false,
+ "trace": {
+  "events": {
+   "kvm_hv_stimer_set_config": 5115,
+   "tracing_mark_write": 1,
+   "kvm_write_tsc_offset": 8,
+   "kvm_hv_synic_set_msr": 168,
+   "kvm_hv_stimer_cleanup": 27057,
+   "kvm_hv_stimer_set_count": 13023,
+   "kvm_hv_hypercall": 209,
+   "kvm_msr": 8,
+   "kvm_hv_stimer_start_periodic": 2278,
+   "kvm_hv_stimer_callback": 13227,
+   "kvm_hv_stimer_expiration": 13227,
+   "kvm_hv_stimer_start_one_shot": 11972
+  },
+  "hv_writes_after_wake": [
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560195 qemu-system-x86 SINT3=0xd1",
+   "4525.560196 qemu-system-x86 SINT3=0xd1",
+   "4525.560196 qemu-system-x86 SINT3=0xd1"
+  ],
+  "hv_writes_before_wake": [],
+  "stimer_first": [
+   {
+    "ts": 4525.561978,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 7314026501,
+    "count": 7314046470,
+    "count_s64": 7314046470,
+    "delta_u64": 19969,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561978,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314026504,
+    "count": 7314046472,
+    "count_s64": 7314046472,
+    "delta_u64": 19968,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561978,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 7314026506,
+    "count": 7314046477,
+    "count_s64": 7314046477,
+    "delta_u64": 19971,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561979,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 7314026519,
+    "count": 7314046479,
+    "count_s64": 7314046479,
+    "delta_u64": 19960,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561979,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 7314026519,
+    "count": 7314046480,
+    "count_s64": 7314046480,
+    "delta_u64": 19961,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561981,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 7314026536,
+    "count": 7314046508,
+    "count_s64": 7314046508,
+    "delta_u64": 19972,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561982,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314026552,
+    "count": 7314046521,
+    "count_s64": 7314046521,
+    "delta_u64": 19969,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.561983,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314026549,
+    "count": 7314046519,
+    "count_s64": 7314046519,
+    "delta_u64": 19970,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.563983,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 7314046554,
+    "count": 7314066540,
+    "count_s64": 7314066540,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.563986,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 7314046583,
+    "count": 7314066563,
+    "count_s64": 7314066563,
+    "delta_u64": 19980,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.563989,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314046613,
+    "count": 7314066596,
+    "count_s64": 7314066596,
+    "delta_u64": 19983,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.563989,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314046615,
+    "count": 7314066591,
+    "count_s64": 7314066591,
+    "delta_u64": 19976,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.563992,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314046651,
+    "count": 7314066635,
+    "count_s64": 7314066635,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.565737,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 7314064100,
+    "count": 7314084067,
+    "count_s64": 7314084067,
+    "delta_u64": 19967,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.565739,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 7314064113,
+    "count": 7314084080,
+    "count_s64": 7314084080,
+    "delta_u64": 19967,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.565992,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 7314066643,
+    "count": 7314086629,
+    "count_s64": 7314086629,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.565997,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314066692,
+    "count": 7314071674,
+    "count_s64": 7314071674,
+    "delta_u64": 4982,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.566007,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314066792,
+    "count": 7314086766,
+    "count_s64": 7314086766,
+    "delta_u64": 19974,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.566009,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314066821,
+    "count": 7314086803,
+    "count_s64": 7314086803,
+    "delta_u64": 19982,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.566501,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314071736,
+    "count": 7314091721,
+    "count_s64": 7314091721,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.567481,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 7314081536,
+    "count": 7314101508,
+    "count_s64": 7314101508,
+    "delta_u64": 19972,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.567754,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 7314084265,
+    "count": 7314104221,
+    "count_s64": 7314104221,
+    "delta_u64": 19956,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.568008,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 7314086804,
+    "count": 7314106785,
+    "count_s64": 7314106785,
+    "delta_u64": 19981,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.568013,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314086856,
+    "count": 7314106834,
+    "count_s64": 7314106834,
+    "delta_u64": 19978,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.568023,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314086953,
+    "count": 7314106937,
+    "count_s64": 7314106937,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.568507,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314091800,
+    "count": 7314111781,
+    "count_s64": 7314111781,
+    "delta_u64": 19981,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.569483,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 7314101555,
+    "count": 7314121543,
+    "count_s64": 7314121543,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.569499,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 7314101714,
+    "count": 7314121687,
+    "count_s64": 7314121687,
+    "delta_u64": 19973,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.569501,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 7314101733,
+    "count": 7314121697,
+    "count_s64": 7314121697,
+    "delta_u64": 19964,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.569756,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 7314104290,
+    "count": 7314124277,
+    "count_s64": 7314124277,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.570014,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 7314106866,
+    "count": 7314126851,
+    "count_s64": 7314126851,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.570017,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314106901,
+    "count": 7314126888,
+    "count_s64": 7314126888,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.570028,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314107012,
+    "count": 7314126997,
+    "count_s64": 7314126997,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.570535,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314112081,
+    "count": 7314132062,
+    "count_s64": 7314132062,
+    "delta_u64": 19981,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.571496,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 7314121689,
+    "count": 7314141677,
+    "count_s64": 7314141677,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.57177,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 7314124431,
+    "count": 7314144415,
+    "count_s64": 7314144415,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.572036,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 7314127086,
+    "count": 7314147068,
+    "count_s64": 7314147068,
+    "delta_u64": 19982,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.572041,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 7314127140,
+    "count": 7314147126,
+    "count_s64": 7314147126,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.57254,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 7314132131,
+    "count": 7314152115,
+    "count_s64": 7314152115,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 4525.57326,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 7314139330,
+    "count": 7314159305,
+    "count_s64": 7314159305,
+    "delta_u64": 19975,
+    "wraps_x100": false
+   }
+  ],
+  "stimer_distinct": {
+   "5/0/7314046470": 1,
+   "6/0/7314046472": 1,
+   "2/0/7314046477": 1,
+   "4/0/7314046479": 1,
+   "1/0/7314046480": 1,
+   "3/0/7314046508": 1,
+   "0/0/7314046521": 1,
+   "7/0/7314046519": 1,
+   "5/0/7314066540": 1,
+   "1/0/7314066563": 1,
+   "0/0/7314066596": 1,
+   "7/0/7314066591": 1,
+   "6/0/7314066635": 1,
+   "4/0/7314084067": 1,
+   "3/0/7314084080": 1,
+   "1/0/7314086629": 1,
+   "7/0/7314071674": 1,
+   "0/0/7314086766": 1,
+   "6/0/7314086803": 1,
+   "7/0/7314091721": 1
+  },
+  "tsc_offset": [
+   "4524.839360 AFTER vcpu=0 prev=18446727879445543322 next=18446727143388764894",
+   "4524.839415 AFTER vcpu=1 prev=18446727879445543322 next=18446727143388764894",
+   "4524.839461 AFTER vcpu=2 prev=18446727879445543322 next=18446727143388764894",
+   "4524.839498 AFTER vcpu=3 prev=18446727879445543322 next=18446727143388764894",
+   "4524.839541 AFTER vcpu=4 prev=18446727879445543322 next=18446727143388764894",
+   "4524.840625 AFTER vcpu=5 prev=18446727879445543322 next=18446727143388764894",
+   "4524.840684 AFTER vcpu=6 prev=18446727879445543322 next=18446727143388764894",
+   "4524.840731 AFTER vcpu=7 prev=18446727879445543322 next=18446727143388764894"
+  ],
+  "synic_host_writes_at_wake": 160,
+  "expirations_ok": 0,
+  "expirations_fail": 13227
+ },
+ "ssh_back": true,
+ "back_after_s": 9,
+ "rates_late": null,
+ "status_after": "running",
+ "storm": {
+  "top_rearm": 1,
+  "wraps_x100": false,
+  "exits_per_s_late": 0,
+  "signature": false
+ },
+ "boot1": "2026-11-24T01:38:01.5000000+00:00",
+ "explorer_after": "1",
+ "nvidia_smi": "NVIDIA GeForce RTX 4070, 580.88",
+ "events": [
+  "2026-11-24T01:50:02.3798173+00:00 42 Microsoft-Windows-Kernel-Power The system is entering sleep. Sleep Reason: Application API",
+  "2026-11-24T01:50:03.4645053+00:00 107 Microsoft-Windows-Kernel-Power The system has resumed from sleep.",
+  "2026-11-24T01:50:05.5014434+00:00 1 Microsoft-Windows-Kernel-General The system time has changed to ?2026?-?11?-?24T01:50:05.500000000Z from ?2026?-?11?-?24T01:50:03.464176700Z. Time Delta:",
+  "2026-11-24T01:50:07.6696651+00:00 1 Microsoft-Windows-Power-Troubleshooter The system has returned from a low power state. Sleep Time: ?2026?-?11?-?24T01:50:02.034865700Z Wake Time: ?2026?-?11?-?"
+ ],
+ "guest_alive": true,
+ "event153_nvlddmkm": 0,
+ "verdict": "CLEAN",
+ "reasons": [],
+ "arm": "BP",
+ "qemu": "/workspace/bench/vfio_s3_20261124/qemu/build-patched/qemu-system-x86_64"
+}

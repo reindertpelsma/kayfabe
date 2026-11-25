@@ -1,0 +1,5 @@
+WAKEPROBE_DONE variant=K2-stock cycles=3
+K2-stock rc=0
+WAKEPROBE_DONE variant=K2-patch cycles=3
+K2-patch rc=0
+EXIT rc=0

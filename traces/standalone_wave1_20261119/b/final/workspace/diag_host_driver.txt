@@ -1,0 +1,4 @@
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-bu
+ca23c88dd24b07a191644e1e11cfb7bcdd7537305749af40f980018b095e6313
+ca23c88dd24b07a191644e1e11cfb7bcdd7537305749af40f980018b095e6313  NVIDIA-Linux-x86_64-595.91.07.run
+rx_total_bytes 53574666857

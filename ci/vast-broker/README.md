@@ -21,7 +21,7 @@ The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so k
 
 The Vast box and its operator are untrusted. The Vast account key stays in the Worker, outside GitHub secrets and rented machines. A box receives only its run capability and, when configured, a Cloudflare Access service-token pair. GitHub communicates through the broker and accepts no executable or build artifact from the box. A GPU PASS is an unattested tripwire: a dishonest box or Worker can forge a verdict. It supplies no release provenance. See the [trust and release trace](../../docs/design/V3_CI_VAST_RUNNER_TRACE_20261022.md).
 
-The ledger reserves liability before rental and applies daily and rolling budgets, a prepaid credit reserve and limits on concurrent work. The default check policy is $1 effective/hour, $6/day, $30 per rolling 30 days and an $8 credit reserve, with one active rental and a 300-minute hard deadline for the check profile, which runs the Windows stage of the master gate ([howto](../../docs/howto/gpu-vast-windows.md)); the sweep keeps three hours. The separate owner-dispatched sweep profile has its own hourly and daily caps. Transfer allowances are reservations, not provider-enforced usage limits. Missed cron runs or provider failures can leave a box billing beyond its deadline; these controls do not guarantee a hard external bill ceiling.
+The ledger reserves liability before rental and applies daily and rolling budgets, a prepaid credit reserve and limits on concurrent work. The default check policy is $1 effective/hour, $6/day, $30 per rolling 30 days and an $8 credit reserve, with one active rental and a 300-minute hard deadline for the check profile, which runs the Windows stage of the master gate ([howto](../../docs/howto/ops/gpu-vast-windows.md)); the sweep keeps three hours. The separate owner-dispatched sweep profile has its own hourly and daily caps. Transfer allowances are reservations, not provider-enforced usage limits. Missed cron runs or provider failures can leave a box billing beyond its deadline; these controls do not guarantee a hard external bill ceiling.
 
 ## The runner's token fetch (built 2026-11-11, not yet on master)
 
@@ -195,7 +195,9 @@ real R2, D1, Worker or box has run any of it. Contract: `/root/night/REPORT_CONT
   with secrets replaced by `[redacted]` and nothing else changed (one exception: a box line that starts like the Worker's own, `[Worker] ` or `[kayfabe-log] `, gets the prefix `[box] ` so that box text cannot forge the Worker's voice; no character allow-list, no display budget;
   a log that holds a secret is redacted, never refused), at most 16 MiB with a visible cut marker. What it can and
   cannot contain, exactly: [DEPLOY.md](DEPLOY.md), "What the full log can and cannot contain". The runner's
-  display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged.
+  display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged. **NOT APPLIED, 2026-11-24:**
+  the `nosniff` / CSP Transform Rule on `logs.kayfabe.dev` does not exist; the objects carry only a fixed inline
+  filename and `no-transform` ([DEPLOY.md](DEPLOY.md), "Worker hardening", owner checklist step 3).
 - **Off the teardown path.** `publishRuns` runs from the cron AFTER the serialized sweep, outside its queue,
   with a bounded wait per R2 call (20 s) and at most four entries and 40 s per tick; a failure is one log line with
   a fixed word, the entry backs off (1, 2, 4 minutes, then 5) and is retried up to 60 times, then dropped. The verdict, the teardown and the budget
@@ -235,11 +237,11 @@ Renting is enabled by the deployed vars file, which is kept outside the reposito
 
 After deploying the matching Worker bundle, use a fresh GPU-relevant commit to start validation; reruns retain the original trusted BASE pin.
 
-CODE READ (`src/provider-fault.js`, `src/ledger.js`, `runner.py`): provider failures stop and destroy the box before one replacement on a different known host. Two failed machines condemn their shared host; static seed `224600` comes from runs 40425285335 and 40478005010. An exhausted replacement stays a non-passing infrastructure error, with no kayfabe verdict. See [provider-fault handling](../../docs/howto/vast-provider-faults.md).
+CODE READ (`src/provider-fault.js`, `src/ledger.js`, `runner.py`): provider failures stop and destroy the box before one replacement on a different known host. Two failed machines condemn their shared host; static seed `224600` comes from runs 40425285335 and 40478005010. An exhausted replacement stays a non-passing infrastructure error, with no kayfabe verdict. See [provider-fault handling](../../docs/howto/ops/vast-provider-faults.md).
 
-CODE READ 2026-10-27 (`src/github.js`): attempt3 and later have no special authorization ceiling. Admission reads the signed attempt's REST resource and retains strict actor, repository, status and SHA bindings. For a 401, use the fixed field-only observability code; see [rerun authorization](../../docs/howto/vast-rerun-auth.md).
+CODE READ 2026-10-27 (`src/github.js`): attempt3 and later have no special authorization ceiling. Admission reads the signed attempt's REST resource and retains strict actor, repository, status and SHA bindings. For a 401, use the fixed field-only observability code; see [rerun authorization](../../docs/howto/ops/vast-rerun-auth.md).
 
-CODE READ 2026-10-27 (`gate_reuse.py`): proposed master-push reuse preserves the existing GPU job with readable original result logs and summary. It requires identical trees and complete GitHub status/CI/run evidence; uncertainty uses the existing gate. See [reuse behavior](../../docs/howto/gpu-gate-reuse.md).
+CODE READ 2026-10-27 (`gate_reuse.py`): proposed master-push reuse preserves the existing GPU job with readable original result logs and summary. It requires identical trees and complete GitHub status/CI/run evidence; uncertainty uses the existing gate. See [reuse behavior](../../docs/howto/ops/gpu-gate-reuse.md).
 
 ## Result store, tree key and requirements check (built 2026-11-05, NOT DEPLOYED)
 
@@ -368,6 +370,24 @@ test/results-store.test.js test/store-ingest.test.js`, `node --test workerd/stor
 run against the real migrations on `node:sqlite` with a D1-shaped fake (`test/d1.js`); real
 Cloudflare D1, the GitHub trees API and the deployed Worker are not exercised.
 
+## The app lane planner (DESIGN-ONLY for the Worker, 2026-11-18)
+
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BE):** §AZ item 5 is waived for the batch and PR flow, so `appLaneRequired` and the `core_paths` list are no merge condition of any PR; they stay as planner data. The first-release rule (every propimage on every family) is unchanged, and propimages run only in the release run, not per PR.
+
+STATUS: the planner and its offline command are implemented and tested GPU-free (`src/app-lane.js`, `app-lane.json`,
+`test/app-lane.test.js`, synthetic offers). The Worker admin Start kind `app` is **not built**: nothing in `src/` imports the
+planner, nothing is deployed, nothing is rented, and no box has run a plan. Ruling: `docs/OWNER_RULINGS.md` section AZ;
+what it computes and what it lacks: [V3_APP_LANE_PLANNER.md](../../docs/design/V3_APP_LANE_PLANNER.md).
+
+- `node ci/vast-broker/release-plan.mjs --changed-files list.txt` says whether a change touches a core path (the list is the
+  `core_paths` array of `app-lane.json`, edited in one place) and names the matching files.
+- `node ci/vast-broker/release-plan.mjs --app-lane --market offers.json --daily-cap USD (--first-release | --rotation table.json)`
+  prints an app-lane plan: one leg per image and family (every pair on the first release, the oldest pairs on a rotation),
+  the cheapest qualifying offer of any die of the family, bandwidth priced per measured GB (`bandwidth.json`), an estimate in
+  USD, and a hard refusal (exit 2) when the estimate plus `--spent-today` exceeds the daily cap or a leg has no offer.
+- Images are configuration (`app-lane.json` `images`, with `disk_gb`, `vram_gb`, `stages`, `manual_only`); the planner never
+  names one. `vram_gb` is an UNMEASURED placeholder; `disk_gb` and the hard limit are ESTIMATES.
+
 ## Tiers, the admin start and the release run (how to)
 
 CODE READ (`src/tier.js`, `src/release.js`, `src/index.js`, branch `claude/worker-tier-20261105`,
@@ -451,7 +471,9 @@ own-instance labels (`kf-ci-<batch>-<leg>`), teardown by exact id, the cron's de
 lists the batch with its state, verdict, estimate and spend; **Stop** on a row stops one box, the
 batch stop (`{"batch": "<id>"}` to `/api/stop`) or **Stop all** ends the release without
 re-runs. A small or middle start is one box and, like a PR rental, is not rented for a commit that
-already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`).
+already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`). The one exception is a rental
+that never became usable and has no replacement left (DEPLOY.md, "gpu-vast hardening"); its commit is rented again at once,
+under the same daily and rolling caps.
 
 **Die lists, caveat (review F10).** The fallbacks GB202 (Windows gate 1 FAIL in 3 runs at
 `0c515b3b`, `traces/die_coverage_20261104/blackwell/`) and AD103/AD106 (Windows not run there) are in
@@ -469,3 +491,72 @@ results store (`src/ingest.js`, section above) records it like any other rental,
 record carries `tier`, `family`, `source` (`github` or `admin`) and `batch`. The release verdict
 itself lives in the batch (`batch:<id>` in the ledger, shown on the admin page): per (family, die,
 platform) cells with their runs, passes and machines.
+
+## Proprietary Windows images in the instruction, and the bandwidth of a leg (built 2026-11-16, NOT DEPLOYED, wired to nothing)
+
+STATUS: DESIGN-ONLY, 2026-11-16. Design and the decisions behind it: `docs/design/V3_WORKER_PROPIMAGES.md`.
+
+⊘ **Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BG):** the zero-skip text below ("`strict: true` and a configuration that is not strict is refused", "any skip fails it") is replaced where it conflicts by the skip rule: a row may end NOT_RUN or skipped when the cause is outside kayfabe (host RAM or VRAM too small for the test, a hardware feature absent, a row that cannot surely run on bare metal), with a named reason; every other NOT_RUN or skip fails its stage. NOT YET IN CODE: `propimages.js` still refuses a non-strict configuration and the strict instruction is unchanged.
+
+Propimages go into a release-profile leg only (the release run), never into a PR's runs (owner, 2026-11-24, `OWNER_RULINGS.md` §BE).
+
+`propimages.json` is the Worker's list of the private Windows images (image A and image B): per image an opaque label, the private
+object (name, size, sha256 pin; the signed GOP is the third object), its slot (1 or 2), the families it has run on, and its
+applications, each in the `gate` lane (must pass) or the `discovery` lane (may fail; the failure is a listed finding). The
+configuration is `strict: true` and a configuration that is not strict is refused: a strict run must run everything listed, and any
+skip fails it. `src/propimages.js` is pure: `buildInstruction(profile, options, ...)` returns the payload instruction of a leg (the
+same base fields `tierEnvironment` sends) and adds the `propimages` / `propimages_strict` part only for a release-profile leg that
+passes `propimages: true`, its `die` and the release's `releaseSeq` (default off; the check profile's small and middle tiers and the
+sweep are refused by name). A release rents two dies per family: slot 1's box runs image A and slot 2's box image B, exchanged when
+`config.swap` XOR (`releaseSeq` is odd), the same release number always giving the same assignment; a family with one die gets both
+images on that box. An image on a family it has not run on is emitted in the discovery lane, so an unproven family never fails a
+strict release. `propimagePlan(...).lines` is the text for the leg's log. Nothing in `src/index.js` imports the module, `tierEnvironment`
+is unchanged, and the `/bench-data` allow-list (`src/benchdata.js`) does not contain the images: that route is gated by a live run
+token only, not by profile or stage, so adding them is a decision for the owner.
+
+2026-11-17: `propimages.json` also lists the MATLAB Linux image (object `imgc`, role `linux_image`; `linux_images`: label `matlab`, every row in the discovery lane, no per-family list). `matlabPlan` builds the instruction's `matlab` part (a pinned image, the die's pinned guest driver from `release-matrix.json`, the rows with their lanes) for a large-tier release leg; `buildInstruction(..., {matlab: true})` adds it (default off). It has no slot: it is not part of the A/B rotation (docs/design/V3_PROPIMAGE_LINUX.md section 14.6 proposes one run per release box). `test/matlab-instruction.test.js` pins it against the box (`scripts/ci/matlab_stage.py`, `payload_instruction.py`) and a golden file in `test/fixtures/matlab/`. Nothing imports `matlabPlan`; nothing is deployed.
+
+`test/propimages.test.js` pins the shape against the box's own parser, `vast_payload.py --instruction` and `--emit-instruction`, and the
+standalone runner's flag parser (`test/propimages_check.py`, golden files in `test/fixtures/propimages/`); `propimages-mutants.mjs`
+(two named killers per mutant) is run by CI.
+
+**Bandwidth of a leg.** `src/bandwidth.js` `estimateBandwidth(instruction, tier, options)` computes the expected download and upload of
+one leg from its instruction (only the stages and images it runs, one image per box in a split release) and a text breakdown naming
+the table entry of every line. All numbers are in `bandwidth.json`; pinned image sizes come from `propimages.json` and driver sizes
+from `release-matrix.json`. The box records the bytes it actually moved per stage (`net_bytes` in its result file).
+`bandwidthEstimateInput(estimate)` is `cfg.bandwidthEstimate`, which `policy.js` `resourceCaps` takes as the leg's number (see "Private objects" below, 2026-11-17); `bandwidthOverrides()` is the older pair for `cfg.bandwidthDownOverride` / `bandwidthUpOverride`, which only raises (`max(number, override)`).
+
+### Changing the bandwidth numbers
+
+1. Calibrate: `python3 scripts/ci/bandwidth_calibrate.py --instruction instruction.json RUN/kf-result.json [...]` prints a diff of
+   `bandwidth.json` from the runs' actual rx/tx bytes (it never writes the file).
+2. Review the diff and apply it, or edit the one entry by hand (`down_bytes`, `basis`, `date`, `source`, `note`); an image size is
+   edited in `propimages.json`.
+3. Check and commit: `python3 scripts/ci/bandwidth_check.py` must print `bandwidth table: PASS` (it refuses an entry without a class,
+   source or date, an ESTIMATE older than 60 days or without a note, an unknown field, a payload stage missing from the table).
+   Example: the apps stage moved 5.2 GB, so the calibrate diff sets `apps.media` to `"down_bytes": 5200000000` and its basis no longer says ESTIMATE.
+
+## Private objects, the lease-time trust scope, releaseSeq and the estimate as the price (built 2026-11-17, NOT DEPLOYED)
+
+STATUS: DESIGN-ONLY, 2026-11-17. Design: `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`. Private here means licence-restricted for redistribution,
+not sensitive.
+
+- **Route.** `GET /bench-data/<run>-<attempt>/private/<prefix>/<object path>` answers a live run token that carries the `private` scope with a
+  `302` to a presigned GET URL (TTL: `min(max_ttl_seconds, time to the run's hard deadline)`, at most 12 hours; `urls_per_run` URLs per run,
+  default 24). Any object under a prefix listed in `private-objects.json` is served (no object-name list); the public `/bench-data/<run>/<name>`
+  allow-list is unchanged. Refusals are named in the body's `reason`: `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TRUST_SCOPE_MISSING`, `TIER_NOT_ALLOWED`,
+  `PREFIX_NOT_PRIVATE`, `OBJECT_MISSING`, and `RATE_LIMITED` (reason `PRIVATE_URL_LIMIT`). There is no listing and no response names another
+  object. A mint logs `private_data_url` (run, object, expiry), a refusal `private_data_refused` (run, prefix, reason); the URL is never logged or stored.
+  The Worker holds only the read-only key pair (no write, no credential to a box) and sends one presigned HEAD to prove the object exists.
+- **Trust.** The scope is decided when the token is issued (`src/trust.js`, rules in `trust.json`) from provenance the Worker checked: the owner's
+  repository with a head in that repository (a fork or an unknown head is untrusted), a listed event, the owner as actor, a trusted branch
+  (`next`, `master`, `claude/*`, `codex/*`) or a pull request head of this repository; an admin start of a commit reachable from master or next.
+  Untrusted runs get `scopes: ['public']` in the signed token and the record; the private route needs both to say `private`.
+- **Who may fetch.** `private-objects.json` `allow`: profile `release` or an admin-started run; a GitHub check run and the sweep are `TIER_NOT_ALLOWED`.
+- **releaseSeq** comes from the ledger (`release-seq:<sha>` memo and a counter, or the admin start's `release_seq`), so the same sha always gets the
+  same image assignment. With `PROPIMAGES_ENABLED=true` (default off) a release leg builds, stores and logs its instruction (`src/legs.js`), and the
+  box fetches it with its run token from `GET /instruction/<run>-<attempt>` (`404 NO_INSTRUCTION` when there is none).
+- **Estimate as the price.** `resourceCaps` takes `cfg.bandwidthEstimate` as the number when valid (it can lower or raise the profile row), capped at
+  `payloadBandwidthMax` in `defaults.json`; the Worker logs the breakdown (`bandwidth estimate ...` lines) and the priced number.
+- Tests: `test/private-presign.test.js`, `trust.test.js`, `bandwidth-pricing.test.js`, `release-seq.test.js`; mutants `private-presign-mutants.mjs`
+  (two named killers each, in `ci.yml`).

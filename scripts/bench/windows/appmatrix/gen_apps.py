@@ -33,11 +33,14 @@ DEFAULT_FAIL = r"^CHECK .*FAIL"
 
 
 def app(id, cat, ps, rx, timeout, expect, proof, diff, why, linux=(), pkgs=(), session="service", tier=1,
-        fail_rx=DEFAULT_FAIL, kill=(), shot=None, note=None, digest=False, smi=True, nvidia_only=True):
+        fail_rx=DEFAULT_FAIL, kill=(), shot=None, note=None, digest=False, smi=True, nvidia_only=True, proof_all=False):
     assert id not in {a["id"] for a in APPS}, id
-    APPS.append(dict(id=id, category=cat, linux=list(linux), pkgs=list(pkgs), session=session, tier=tier, timeout_s=timeout,
-                     expect_s=expect, rx=rx, fail_rx=fail_rx, proof=list(proof), difficulty=diff, why=why, ps=ps.strip("\n") + "\n",
-                     kill_names=list(kill), screenshot_s=shot, note=note, digest=digest, smi=smi, nvidia_only=nvidia_only))
+    row = dict(id=id, category=cat, linux=list(linux), pkgs=list(pkgs), session=session, tier=tier, timeout_s=timeout,
+               expect_s=expect, rx=rx, fail_rx=fail_rx, proof=list(proof), difficulty=diff, why=why, ps=ps.strip("\n") + "\n",
+               kill_names=list(kill), screenshot_s=shot, note=note, digest=digest, smi=smi, nvidia_only=nvidia_only)
+    if proof_all:                          # every proof must hold (verdict.eval_proof require_all); absent for every older row
+        row["proof_all"] = True
+    APPS.append(row)
 
 
 def py(script, *args):
@@ -192,14 +195,14 @@ Get-Content "$OUT\gen.err" -ErrorAction SilentlyContinue | Select-Object -First 
 Get-Content "$OUT\gen.txt" -ErrorAction SilentlyContinue | ForEach-Object { "GEN $_" }
 $txt = (Get-Content "$OUT\gen.txt" -Raw -ErrorAction SilentlyContinue)
 if ($p.ExitCode -eq 0 -and $txt -and $txt.Trim().Length -gt 20) { "OUTSHA llama_cpp $(Get-KfDigest ($txt -replace '\s+', ' '))" ; exit 0 } else { 'LLAMA_FAIL no output'; exit 1 }""",
-    r"^OUTSHA llama_cpp ", 600, 60, [r"out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0: NVIDIA", GPU_ENG], "high",
+    r"^OUTSHA llama_cpp ", 600, 60, [r"out:offloaded ([1-9][0-9]*)/\1 layers to GPU", GPU_ENG], "high",
     "greedy generation: ~1 GiB of weights, thousands of small kernel launches per second through the relay; Linux row passes with identical digests",
     linux=["llama_cpp_gen"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"), digest=True,
     note="digest is compared across Windows runs and informationally with Linux (different llama.cpp build)")
 app("llama_cuda_bench", "llm", MODEL + r"""Invoke-KfExe -Exe "$K\llama_cuda\llama-bench.exe" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')
-exit $global:KfRc""", r"tg64", 900, 90, [r"out:CUDA|NVIDIA", GPU_ENG], *W_LONG, linux=["llama_bench"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"))
+exit $global:KfRc""", r"tg64", 900, 90, [r"out:\| CUDA +\| +[1-9][0-9]* \|", GPU_ENG], *W_LONG, linux=["llama_bench"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"))
 app("llama_vulkan_bench", "llm", MODEL + r"""Invoke-KfExe -Exe "$K\llama_vulkan\llama-bench.exe" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')
-exit $global:KfRc""", r"tg64", 900, 90, [r"out:Vulkan|NVIDIA", GPU_ENG], "high",
+exit $global:KfRc""", r"tg64", 900, 90, [r"out:ggml_vulkan: [0-9]+ = NVIDIA", GPU_ENG], "high",
     "Vulkan compute (not CUDA) with 1.5 GiB device-local buffers and many dispatches: the Vulkan queue family/ICD path of the Windows driver",
     pkgs=("llama_vulkan", "qwen_gguf", "vc_redist"))
 
@@ -490,9 +493,61 @@ for api in ("webgl", "webgpu"):
         pkgs=(), session="interactive", tier=3, shot=8)
 
 
+# ---------------------------------------------------------------------------------------------- open source-built rows (2026-11-17)
+# VK-GL-CTS and the DirectX-Graphics-Samples extras. Built from pinned upstream sources inside a Windows guest by scripts/bench/windows/open_rows/
+# (docs/design/V3_WINDOWS_OPEN_ROWS.md): no private object, account, secret or licence. Class `online_source` in gate_profiles.json: never in
+# small/mid/full (the gate guest is offline); NOT_RUN there unless a tree was prepared. Nothing here ran on hardware.
+OPEN_PKGS = ("python_embed", "vc_redist")
+OPEN_PS = r"""$kfopen = 'C:\kf\open_rows\kfopen.py'
+$a = @('run', '@@ID@@', '--root', 'C:\kfopen', '--out', $OUT)
+$ctl = 'C:\kfopen\control\@@ID@@.@@CTL@@'
+if (Test-Path -LiteralPath $ctl) { $a += @('--control', $ctl) }
+if (-not (Test-Path -LiteralPath $kfopen)) { 'OPENROW_NOTFOUND @@ID@@ (open_rows files were not pushed to the guest)'; exit 3 }
+Invoke-KfExe -Exe $PY -ArgList (@('-X', 'utf8', $kfopen) + $a)
+exit $global:KfRc"""
+OPEN_WHY_CTS = ("Conformance breadth through the user-mode GL/Vulkan driver, per-case results compared with the same binary on native Windows on the same die; "
+                "unverified: built in the guest from pinned upstream sources, never run")
+OPEN_WHY_DX = ("Unverified: pinned Microsoft sample built in the guest (MSVC, NuGet with required signatures), driven by a harness; the GPU engine census is the "
+               "supervisor's; never run")
+
+
+def open_row(id, cat, ctl, rx_tail, timeout, expect, proof, session, why, note, proof_all=False, smi=True):
+    app(id, cat, OPEN_PS.replace("@@CTL@@", ctl), r"^KFOPEN VERDICT PASS row=" + id + rx_tail, timeout, expect, proof, "high", why,
+        pkgs=OPEN_PKGS, session=session, tier=3, note=note, proof_all=proof_all, smi=smi)
+
+
+open_row("vkglcts_gl46", "opengl", "tsv", r" cases=\d+ equal-to-control$", 14400, 5400, ["pdh:3D|Compute"], "interactive", OPEN_WHY_CTS,
+         "glcts.exe from VK-GL-CTS vulkan-cts-1.4.7.1, 494 committed KHR-GL46 cases (compute, tessellation, FBO and texture formats, SPIR-V, sparse); "
+         "PASS needs the native control; without it the row is NOT_RUN (discovery) and keeps the per-case results")
+open_row("vkglcts_vk", "vulkan", "tsv", r" cases=\d+ equal-to-control$", 14400, 5400, ["pdh:3D|Compute"], "service", OPEN_WHY_CTS,
+         "deqp-vk.exe from the same pin, 375 committed dEQP-VK cases (ray query and pipeline, mesh shaders, sparse, synchronization2, DGC, shader objects, ...); "
+         "video excluded (DEQP_DISABLE_VK_VIDEO_TESTS=ON)")
+open_row("vkglcts_gl_dual_soak", "opengl", "none", r" seconds=\d+ share=\d+$", 3600, 900, ["pdh:3D|Compute"], "interactive",
+         "One process, two OpenGL 4.6 contexts and threads (compute, tessellation, FBO, fences) for 10 minutes, then the event log is searched for the "
+         "nvoglv64.dll crash signature of the Resolve runs; unverified",
+         "kf_gldual.c, built with the MSVC of the lane; targets the DaVinci Resolve crash class (nvoglv64.dll 3 of 3, 3-4 min after load)")
+open_row("dxsamples_nbody_async", "d3d", "json", r" keys=\d+$", 7200, 600, ["pdh:3D", "pdh:Compute"], "interactive", OPEN_WHY_DX,
+         "D3D12nBodyGravity: a compute queue runs the simulation while the direct queue draws it; both engines are required (proof_all)",
+         proof_all=True)
+open_row("dxsamples_execute_indirect", "d3d", "json", r" keys=\d+$", 7200, 600, ["pdh:3D", "pdh:Compute"], "interactive", OPEN_WHY_DX,
+         "D3D12ExecuteIndirect: a compute shader culls and fills indirect arguments, ExecuteIndirect draws them; SPACE toggles culling twice",
+         proof_all=True)
+open_row("dxsamples_reserved_resources", "d3d", "json", r" keys=\d+$", 7200, 600, ["pdh:3D"], "interactive", OPEN_WHY_DX,
+         "D3D12ReservedResources: 24 UpdateTileMappings steps (UP/DOWN keys) over a 9-mip reserved texture, a VA-mapping stress; the title 'Mip Level: N' is checked")
+open_row("dxsamples_hdr", "d3d", "json", r" keys=\d+$", 7200, 600, ["pdh:3D"], "interactive", OPEN_WHY_DX,
+         "D3D12HDR (optional): swap-chain format switches (Page Up/Down) on a display without HDR; HDR output itself needs a real display and is not asserted")
+open_row("dxsamples_work_graphs", "d3d", "json", r" uav=\d+$", 7200, 400, ["pdh:3D|Compute"], "service", OPEN_WHY_DX,
+         "D3D12 HelloWorkGraphs (console): dispatches a three-node work graph and prints 8 UAV values; NOT_RUN when the adapter reports no work graph tier")
+app("dxsamples_multiadapter", "d3d", OPEN_PS.replace("@@CTL@@", "none"), r"^KFOPEN VERDICT PASS row=dxsamples_multiadapter$", 120, 3, ["out:needs-two-gpus"], "high",
+    "NOT_RUN by design: D3D12HeterogeneousMultiadapter and D3D12LinkedGpus are in the pinned tree and need two GPUs or two adapters; a kayfabe guest has one",
+    pkgs=OPEN_PKGS, session="service", tier=3, smi=False, note="always prints KFNOTRUN needs-two-gpus; the row exists so that reports name the reason")
+
+
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
+    "nvcodec_matrix": "Linux ffmpeg capability matrix (open Linux row, 2026-11-17); the Windows NVENC/NVDEC rows are the existing ffmpeg and gate rows, a Windows matrix is not built yet",
+    "nvml_dcgm": "DCGM is a Linux data-centre tool and the NVML field sweep is the Linux guest's nvidia-smi surface; the Windows NVAPI/NVML readers are a separate candidate (hardware monitors), not this row",
 }
 
 
@@ -509,6 +564,15 @@ CMD_OVERRIDES = {
     "d3d12_mesh_shaders": "release/directx/mesh/D3D12MeshletRender.exe (30 s survival and NVIDIA engine proof)",
     "d3d12_vrs": "release/directx/vrs/D3D12VariableRateShading.exe (pinned VRS gate patch, 30 s survival and NVIDIA engine proof)",
     "d3d12_sampler_feedback": "release/directx/sampler_feedback/D3D12SamplerFeedback.exe (SOURCE-SAMPLE-NEEDED; cannot pass while absent)",
+    "vkglcts_gl46": "kfopen.py run vkglcts_gl46 (glcts.exe, 494 KHR-GL46 cases in chunks, per-case results equal to the native control)",
+    "vkglcts_vk": "kfopen.py run vkglcts_vk (deqp-vk.exe, 375 dEQP-VK cases in chunks, per-case results equal to the native control)",
+    "vkglcts_gl_dual_soak": "kfopen.py run vkglcts_gl_dual_soak (kf_gldual.exe: two GL 4.6 contexts in one process, 600 s, event-log crash check)",
+    "dxsamples_nbody_async": "kfopen.py run dxsamples_nbody_async (D3D12nBodyGravity.exe driven 40 s: window captures, close, exit code)",
+    "dxsamples_execute_indirect": "kfopen.py run dxsamples_execute_indirect (D3D12ExecuteIndirect.exe driven 40 s)",
+    "dxsamples_reserved_resources": "kfopen.py run dxsamples_reserved_resources (D3D12ReservedResources.exe, 24 posted UP/DOWN keys, title check)",
+    "dxsamples_hdr": "kfopen.py run dxsamples_hdr (D3D12HDR.exe, Page Up/Down format switches)",
+    "dxsamples_work_graphs": "kfopen.py run dxsamples_work_graphs (D3D12HelloWorkGraphs.exe, console)",
+    "dxsamples_multiadapter": "kfopen.py run dxsamples_multiadapter (NOT_RUN: needs two GPUs)",
     "blender_cycles": "blender.exe -b --factory-startup --python-exit-code 1 --python blender_release.py -- CUDA|OPTIX out.png offline-reference-dir (both compared)",
     "nvenc_h264": "ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4; ffprobe -count_frames",
     "nvenc_hevc": "ffmpeg -f lavfi -i testsrc=... -c:v hevc_nvenc -preset p4; ffprobe -count_frames",

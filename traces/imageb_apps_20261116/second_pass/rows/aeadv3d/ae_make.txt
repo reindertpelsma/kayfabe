@@ -1,0 +1,1 @@
+16bpc,renderers=ADBE Advanced 3d|ADBE Calder|ADBE Ernst,renderer=ADBE Advanced 3d,dof,light,layers3d=24,om:TIFF Sequence with Alpha

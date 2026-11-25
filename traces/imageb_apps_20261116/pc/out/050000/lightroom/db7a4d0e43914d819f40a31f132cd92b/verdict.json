@@ -1,0 +1,32 @@
+{
+  "app": "lightroom",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "plugin did not report (not loaded or no catalog)",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "develop pipeline GPU processing on 12/24 MP raws",
+  "platform": "kf3",
+  "secs": 465,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 93.0,
+      "mem_mb": 5370.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 89.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 570
+    },
+    "baseline": {
+      "mem_mb": 5200.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 978
+  }
+}

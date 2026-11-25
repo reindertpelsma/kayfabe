@@ -126,7 +126,7 @@ impl Slot {
 /// The `msgqTxHeader` a queue's producer publishes, decoded.
 ///
 /// Not a `#[repr(C)]` mirror — decoding is `from_le_bytes` over a byte slice, per the
-/// same discipline `kayfabe-abi` states for its own generated layouts.
+/// same discipline `kf-abi` states for its own generated layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TxHeader {
     /// `version` — must equal [`MsgqAbi::version`] or the peer refuses with `-9`.

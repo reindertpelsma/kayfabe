@@ -1,0 +1,25 @@
+    auto_features                   : disabled
+    curses                          : disabled
+    docs                            : disabled
+    gdb                             : /usr/bin/gdb
+    gtk                             : disabled
+    guest_agent                     : disabled
+    kvm                             : enabled
+    libssh                          : disabled
+    pixman                          : enabled
+    sdl                             : disabled
+    slirp                           : enabled
+    tools                           : disabled
+    tpm                             : enabled
+    vde                             : disabled
+    vnc                             : enabled
+    werror                          : false
+    zstd                            : enabled
+
+Found ninja-1.13.2 at /usr/bin/ninja
+Running postconf script '/workspace/bench/qemu-build-kf3/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'
+[1/6] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/4] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/63e46069/qemu-system-x86_64 rev=63e46069 mtime=2026-11-24 19:17:06.236584096 +0100 (shared build dir /workspace/bench/qemu-build-kf3)
+BUILD_EXIT_OK

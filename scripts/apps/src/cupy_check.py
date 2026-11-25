@@ -12,4 +12,6 @@ chk("cupy_nvrtc_kernel", np.allclose(cp.asnumpy(k(cp.asarray(x))), x * x + 1.0))
 chk("cupy_fft", np.allclose(cp.asnumpy(cp.fft.fft(cp.asarray(x[:4096]))), np.fft.fft(x[:4096])))
 r = cp.random.default_rng(1).standard_normal(1 << 20)
 chk("cupy_random", abs(float(r.mean())) < 0.01 and abs(float(r.std()) - 1) < 0.01)
+print("GPU_USE_PROOF cupy device=cuda:%d name=%s peak_mib=%d" % (cp.cuda.runtime.getDevice(), cp.cuda.runtime.getDeviceProperties(0)["name"].decode(),
+                                                          cp.get_default_memory_pool().total_bytes() >> 20), flush=True)
 print("CUPY_DONE")

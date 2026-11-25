@@ -362,10 +362,20 @@ class SpecStageInThePayload(unittest.TestCase):
         self.assertEqual(cmd[i + 3], "KF_SPEC_LANE=laneb")
         deadline = int(cmd[i + 4].split("=", 1)[1])
         self.assertTrue(cmd[i + 4].startswith("KF_SPEC_DEADLINE_EPOCH="))
+        self.assertEqual(cmd[i + 5], "KF_SPEC_NET=online")  # 2026-11-17: the lane's guest has the network and the real clock
         # the soft deadline minus the margin: 300 minutes ahead, minus two minutes
         self.assertAlmostEqual(deadline, before + 300 * 60 - 120, delta=30)
-        self.assertEqual(Path(cmd[i + 6]).name, "vast_stage_specviewperf.sh")
+        self.assertEqual(Path(cmd[i + 7]).name, "vast_stage_specviewperf.sh")
         self.assertEqual(cmd[-1], "/root/prov")
+
+    def test_the_command_gives_the_lane_guest_the_network_for_every_lane(self):
+        # 2026-11-17 (owner): the open LTSC guest has the network and the real clock; no inherited setting may turn it off
+        for lane in ("lanea", "laneb", "both"):
+            with self.subTest(lane):
+                self.release(spec=lane, logs={"specviewperf": (log(lane), 0)})
+                cmd = self.commands[-1]
+                self.assertEqual([c for c in cmd if c.startswith("KF_SPEC_NET=")], ["KF_SPEC_NET=online"])
+                self.assertLess(cmd.index("KF_SPEC_NET=online"), cmd.index("bash"))
 
     def test_the_command_names_the_lane_for_every_lane(self):
         for lane in ("lanea", "laneb", "both"):
@@ -498,7 +508,7 @@ class SpecIsGatedLikeTheWorker(unittest.TestCase):
         defaults = json.loads((ROOT / "ci/vast-broker/defaults.json").read_text())
         self.assertEqual(defaults["releaseStages"], [])
         self.assertEqual(defaults["stageSlots"]["specviewperf"], {
-            "tiers": ["large"], "state": "PLUMBING",
+            "tiers": ["large"], "state": "PLUMBING", "required": False,
             "requiredRowsPerDie": ["specviewperf_lanea", "specviewperf_laneb"],
             "lanes": ["lanea", "laneb"], "requiresSeparateRentals": True,
         })

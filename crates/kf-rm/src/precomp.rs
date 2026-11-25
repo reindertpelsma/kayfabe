@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! 2026-10-23: approved T3 PRECOMP serving after H1 failed on lease 57310491.
+//! Approved T3 PRECOMP serving after H1 failed on lease 57310491.
 //! Physical rows use consttab's exact host-branch scope; inheritance is explicit.
 use crate::consttab::{self, BranchScope, DieScope, Row, SourceTag};
 use kf_chip::DieId;
@@ -27,7 +27,7 @@ pub struct Inheritance {
 }
 
 /// Owner-approved scope, 2026-10-23; an exact future row always takes precedence.
-/// 2026-11-03: GB203 now has its own exact rows (lease 58957600, equal to GB202 on all 48 words and
+/// GB203 now has its own exact rows (lease 58957600, equal to GB202 on all 48 words and
 /// 328 decoded fields), so its entry below is only the fallback when those rows are absent.
 pub const INHERITANCE: &[Inheritance] = &[
     Inheritance {

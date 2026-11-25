@@ -1,0 +1,8 @@
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = NVIDIA GeForce RTX 4090 (NVIDIA) | uma: 0 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: NV_coopmat2
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |   0 |           pp512 |      5364.52 ± 32.03 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | Vulkan     |   0 |            tg64 |         12.38 ± 9.24 |
+
+build: 4b1a27f (1)

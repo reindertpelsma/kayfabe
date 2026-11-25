@@ -1,4 +1,4 @@
-//! ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`) — the FSP regime's boot sequence over the packets
+//! (`V3_FAMILY_PORT_BLACKWELL.md`) — the FSP regime's boot sequence over the packets
 //! RM actually sends on a GB20x, in order: the clock-boost `CAPS_QUERY` and `CLOCK_BOOST`
 //! (`kfspCheckForClockBoostCapability_GB100`, `kfspSendClockBoostRpc_GB100`) and then the COT
 //! (`kfspSendBootCommands_GH100`). Only the COT boots the GSP, and the boot-args address it carries
@@ -78,7 +78,7 @@ fn a_cot_too_short_to_carry_the_field_publishes_nothing() {
     assert!(send(&*m, &mut st, &packet(0x14, 100, None)).is_empty());
 }
 
-// ★ 2026-10-14 (die sweep, GB206 + Windows 580.88; `docs/design/V3_DIE_SWEEP_20261014.md` §3.1, HB3) — the boot route
+// The boot route
 // with NO FSP command: `kgspBootstrap_GH100` -> `_kgspBootstrapGspFmc_GH100` (`ogkm-580: kernel_gsp_gh100.c:716-776`)
 // puts the `GSP_FMC_BOOT_PARAMS` address in `MAILBOX0/1`, programs the BootROM's BCR registers and starts the RISC-V
 // core with `NV_PRISCV_RISCV_CPUCTL.STARTCPU`. The Windows RM took it after its FSP capability query.

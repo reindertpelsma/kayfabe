@@ -1,0 +1,4 @@
+MLROWS_PYTHON exe=/workspace/apps/mlrows/python312/bin/python3.12 version=3.12.10 private=1
+MLROWS_SETUP row=vllm status=ok reason=flavour_cu13,_266_s,_9.63_GB
+MLROWS_SETUP row=tensorrt status=ok reason=flavour_cu13,_141_s,_7.33_GB
+MLROWS_SETUP row=jax status=ok reason=flavour_cu13,_97_s,_4.38_GB

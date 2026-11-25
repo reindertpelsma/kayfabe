@@ -1,0 +1,26 @@
+{
+	"nvbandwidth" : 
+	{
+		"CUDA Runtime Version" : 12090,
+		"Driver Version" : "575.51.03",
+		"GPU Device list" : null,
+		"git_version" : "4a49bda",
+		"testcases" : 
+		[
+			{
+				"bandwidth_description" : "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)",
+				"bandwidth_matrix" : 
+				[
+					[
+						"22.9805"
+					]
+				],
+				"name" : "host_to_device_bidirectional_memcpy_ce",
+				"status" : "Passed",
+				"sum" : 22.980458681000002
+			}
+		],
+		"version" : "v0.9"
+	}
+}
+

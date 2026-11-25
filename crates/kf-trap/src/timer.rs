@@ -23,20 +23,17 @@
 //! the part that was never about reads: the per-family timer facts, which govern a **write**
 //! refusal.
 
-/// (`kernel-open/common/inc/nv-ioctl.h:63`, filled from `nv->regs->size` at `nv.c:2384`, dispatched
-/// at `nv.c:2593` under `NV_CTL_DEVICE_ONLY` — no admin check), an unprivileged host ioctl. Until
-/// the host binding exists, [`ReadTrapSet::with_bar0_bytes`] takes the value and this is what
-/// [`ReadTrapSet::new`] passes it.
+/// The GA106's BAR0 size in bytes (16 MiB): the named default of [`kf_core`-level] test planes.
+/// The real size of a device comes from `NV_ESC_CARD_INFO.reg_size` (`reg_size` is filled from
+/// `nv->regs->size`: `kernel-open/common/inc/nv-ioctl.h:63`, `nv.c:2384`, dispatched at `nv.c:2593`
+/// under `NV_CTL_DEVICE_ONLY` — no admin check), an unprivileged host ioctl.
 pub const GA106_BAR0_BYTES: u32 = 16 << 20;
-pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;
-/// ⊘ Kept as the GA106 default under its old name so existing bounds tests still say what they
-/// said; new code should name the die or take the value from `CARD_INFO`.
-pub const BAR0_PAGES: u32 = GA106_BAR0_PAGES;
 
 /// Where Turing+ kernel RM actually READS time from: `NV_VIRTUAL_FUNCTION_TIME_0/1`.
 /// §50 level 2: `turing/tu102/dev_vm.h:224,226` (`R--4R`), read at `timer_tu102.c:142,159`; the
 /// same offsets in `ampere/ga100/dev_vm.h:127,129` and `blackwell/gb100/dev_vm.h:616,618`.
 pub const VF_TIME_0: u32 = 0x30080;
+/// `NV_VIRTUAL_FUNCTION_TIME_1`, the high word beside [`VF_TIME_0`].
 pub const VF_TIME_1: u32 = 0x30084;
 
 /// The three ways ogkm sets GPU time, grouped exactly as `g_objtmr_nvoc.c:420-445` dispatches
@@ -89,6 +86,7 @@ pub enum TimerHal {
 /// the same reason as the GV100 pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimerRegs {
+    /// The timer HAL these registers belong to.
     pub hal: TimerHal,
     /// BAR0 offsets whose WRITE would move the GPU's timebase. Refused by name.
     pub refused_writes: &'static [u32],

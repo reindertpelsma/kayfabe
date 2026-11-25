@@ -182,7 +182,7 @@ impl Cell {
     }
 }
 
-/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the identity of ANY SYSTEM MemoryList
+/// (`docs/design/V3_S3_RESUME.md`) — the identity of ANY SYSTEM MemoryList
 /// registration (`ALLOC_MEMORY`), whatever its page count: what `memdescSendMemDescToGSP` sends
 /// for the suspend buffer GSP-RM saves its heap into (`ogkm-580: fbsr_gm107.c:104-138`,
 /// `mem_desc.c:4786-4870`, `mem.c:515-570`). No page is read or kept.
@@ -199,7 +199,7 @@ pub struct Registration {
 }
 
 impl Cell {
-    /// ★ 2026-10-14: the whole `ALLOC_MEMORY` payload length a HEAD declares — the fixed struct
+    /// The whole `ALLOC_MEMORY` payload length a HEAD declares — the fixed struct
     /// up to the PTE array plus `pageCount` PTEs (`_issuePteDescRpc`, `ogkm-580: rpc.c:2252-2300`:
     /// `recordSize = offsetToPTE + pteCount * 8`). `None` for a body too short to carry the count.
     #[must_use]
@@ -210,7 +210,7 @@ impl Cell {
             .checked_add(usize::try_from(count).ok()?.checked_mul(8)?)
     }
 
-    /// ★ 2026-10-14: a SYSTEM MemoryList registration of any page count, whole (the joined
+    /// A SYSTEM MemoryList registration of any page count, whole (the joined
     /// payload is exactly [`Self::declared_len`] long), with non-null, distinct handles. `None`
     /// for anything else — an FBMEM list, a malformed or short body.
     #[must_use]
@@ -260,7 +260,7 @@ mod tests {
         b[56..64].copy_from_slice(&2u64.to_le_bytes());
         b
     }
-    /// ★ 2026-10-14: the suspend buffer's registration — noncontiguous, many PTEs — is
+    /// The suspend buffer's registration — noncontiguous, many PTEs — is
     /// identified at every contract, and its whole length is what the head declares.
     #[test]
     fn a_many_page_system_registration_is_identified_with_its_declared_length() {

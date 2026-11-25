@@ -1,0 +1,26 @@
+{
+ "ae_progress.txt": {
+  "bytes": 405,
+  "sha256": "b541ceb5fac5baa201d79020c4066d1a400531e6522d9b7d583174c12bc3976f"
+ },
+ "ae_stub.log": {
+  "bytes": 276,
+  "sha256": "18aafb389a2ebf3954e20457257aad488a74d6dd3ac6885c5f1e3d06c5f07fbc"
+ },
+ "app_events.txt": {
+  "bytes": 564,
+  "sha256": "9c1efa3a0b95d0d65ebc1b78b9ebc669b44e9b02d376dcbb71d87989ea4c410b"
+ },
+ "f_00000.tif": {
+  "bytes": 33204340,
+  "sha256": "debce99f5f48576ea42cdb9b210e79e04205426e8f2d56047cdc42138ce0c10b"
+ },
+ "f_00059.tif": {
+  "bytes": 33204248,
+  "sha256": "5f7d6fb46b60f007ebcd155a2be653992e32c59ac7f6bb4f7f24b06f3d218fe9"
+ },
+ "result.json": {
+  "bytes": 996,
+  "sha256": "704f8e9abbdbed11e33b3dcfd033812dccf89039b3b79dfe24567fb5da598f70"
+ }
+}

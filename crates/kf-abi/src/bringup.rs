@@ -237,8 +237,10 @@ pub const NV01_MEMORY_SYSTEM: u32 = 0x003e;
 /// - The `pMemory` address must be routed through
 ///   [`kayfabe_linux_raw::Indirect::describing`]; nothing in this crate may fill the field
 ///   in, and [`Nvos02ParametersWithFd::p_memory`] says so.
-/// - ★ **This class is on [`crate::capability::DENIED_CLASSES`]**, refused by name with
-///   [`crate::capability::DeniedBecause::CallerMemoryDescriptor`]. That refusal is about
+/// - ★ **The guest-ingress gate refuses this class by name**: a row of
+///   [`crate::ingress_generated`] with
+///   [`crate::capability::Judgement::CallerMemory`] (`tools/api_boundaries/ingress_rules.tsv`,
+///   class `0x0071`). That refusal is about
 ///   the **guest** asking for it — honouring a guest-issued `OS_DESCRIPTOR` would hand the
 ///   host driver a guest-chosen pointer. The isolate issuing one over a range **it** owns
 ///   is the opposite direction and is not what that row denies. The two must not be

@@ -1,0 +1,19 @@
+[ 8314.866629] NVRM:unknown NVRM ioctl command: 0xf0
+[ 8973.960802] VFIO - User Level meta-driver version: 0.3
+[ 8973.980611] vfio-pci 0000:01:00.0: vgaarb: deactivate vga console
+[ 8973.980617] vfio-pci 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=io+mem:owns=none
+[ 8980.205582] vfio-pci 0000:01:00.0: resetting
+[ 8980.312123] vfio-pci 0000:01:00.0: reset done
+[ 8980.352155] vfio-pci 0000:01:00.0: resetting
+[ 8980.352229] vfio-pci 0000:01:00.1: resetting
+[ 8980.592297] vfio-pci 0000:01:00.0: reset done
+[ 8980.592327] vfio-pci 0000:01:00.1: reset done
+[ 8980.592906] vfio-pci 0000:01:00.0: resetting
+[ 8980.696302] vfio-pci 0000:01:00.0: reset done
+[ 9427.541002] vfio-pci 0000:01:00.0: resetting
+[ 9427.541079] vfio-pci 0000:01:00.1: resetting
+[ 9427.780527] vfio-pci 0000:01:00.0: reset done
+[ 9427.780557] vfio-pci 0000:01:00.1: reset done
+[ 9430.296450] vfio-pci 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=io+mem:owns=none
+[ 9440.561514] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[ 9544.040431] NVRM:unknown NVRM ioctl command: 0xf0

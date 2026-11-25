@@ -147,7 +147,14 @@ try {
       !p.includes('/node_modules') && !p.includes('/.wrangler') && !p.includes('/dist'),
   });
   symlinkSync(join(broker, 'node_modules'), join(scratch, 'ci/vast-broker/node_modules'), 'dir');
-  for (const path of ['scripts/ci/vast_report.py', 'scripts/ci/vast_payload.py']) {
+  for (const path of [
+    'scripts/ci/vast_report.py',
+    'scripts/ci/vast_payload.py',
+    'scripts/ci/payload_instruction.py',
+    'scripts/ci/box_downloader.py',
+    'scripts/ci/propimage_apps.py',
+    'scripts/ci/kf_fetch.py',
+  ]) {
     mkdirSync(dirname(join(scratch, path)), { recursive: true });
     cpSync(join(repo, path), join(scratch, path));
   }

@@ -1,3 +1,5 @@
+//! The synthetic-origin cases of `kf_cuda::synth`.
+
 use kf_cuda::synth::*;
 
 #[test]

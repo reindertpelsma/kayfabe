@@ -1,0 +1,13 @@
+=== cudaTensorCoreGemm side=guest start=2026-11-20T22:52:51+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/cudaTensorCoreGemm
+Initializing...
+GPU Device 0: "Ada" with compute capability 8.9
+
+M: 4096 (16 x 256)
+N: 4096 (16 x 256)
+K: 4096 (16 x 256)
+Preparing data for GPU...
+Required shared memory size: 64 Kb
+Computing... using high performance kernel compute_gemm 
+Time: 10.389504 ms
+TFLOPS: 13.23
+=== end rc=0 secs=10 2026-11-20T22:53:01+00:00

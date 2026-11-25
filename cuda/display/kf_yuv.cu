@@ -19,7 +19,8 @@
  * Scaling (`filter`): 0 = nearest (the source pixel x*sw/dw), 1 = bilinear on pixel centres, luma and
  * chroma (chroma sited at the centre of its luma block), clamped to the source rectangle.
  *
- * Bounds are the HOST's job (kf_disp::scanout::plan_yuv, kf_cuda::display::DisplayGpu::compose_yuv):
+ * Bounds are the HOST's job (kf_disp::scanout::plan_yuv, kf_cuda::display::DisplayGpu::compose_yuv),
+ * and since 2026-11-13 no read here leaves the bytes that host formula checks (kf_chroma, F-6):
  * every address formed here lies inside the extents the plan checked against the context DMAs and
  * the store - every sample, nearest or bilinear, is inside the source rectangle - and every write
  * inside the fw x fh frame. The CPU reference is kf_disp::scanout::yuv_reference; kf-disp's
@@ -85,6 +86,23 @@ KF_DEVICE unsigned int kf_luma(const kf_yuv_args *a, unsigned long long x, unsig
 KF_DEVICE void kf_chroma(const kf_yuv_args *a, unsigned long long cx, unsigned long long cy,
 			 unsigned int *c0, unsigned int *c1)
 {
+	/* 2026-11-13 (security review 3 F-6): a packed 4:2:2 macropixel is 4 bytes, but the host checks
+	 * a row only up to byte 2 * (sx0 + sw). With an odd sx0 + sw the last luma pixel's macropixel
+	 * straddles that end and its second chroma byte lay 1-2 bytes past the checked extent. The
+	 * kernel now takes chroma only from macropixels wholly inside the window's bytes: the straddling
+	 * one uses the previous macropixel's chroma (edge replication), and a window of one pixel at
+	 * column 0 (no whole macropixel) uses neutral chroma. Output is unchanged whenever sx0 + sw is
+	 * even. */
+	if (a->layout >= 2u) {
+		unsigned long long whole = ((unsigned long long)a->sx0 + a->sw) >> 1;
+		if (whole == 0ull) {
+			*c0 = 32768u;
+			*c1 = 32768u;
+			return;
+		}
+		if (cx >= whole)
+			cx = whole - 1ull;
+	}
 	switch (a->layout) {
 	case 1u:
 		*c0 = kf_s(a->cs, a, cx * 4ull, cy, a->cp, 1u);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ **The one path a channel-class object reaches host RM by, and the bound that keeps it the
-//! only one** (`docs/design/THE_CONSTRAINTS.md` §30; OWNER_RULINGS §P).
+//! only one**.
 //!
 //! Host RM stamps a channel's privilege once, at the channel-alloc ioctl, from the calling
 //! thread's `capable(CAP_SYS_ADMIN)` (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`).
@@ -121,7 +121,7 @@ pub(crate) fn admit_alloc_class(
     birth: Option<&InsideBirthPath>,
 ) -> Result<(), RmError> {
     if birth.is_none() && is_channel_class(class) {
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-host: ⊘ CHANNEL CLASS REFUSED class={class:#06x}: a channel may only be allocated \
              by the birth path (CAP_SYS_ADMIN cleared for the call, RM's reply checked); nothing \
              was sent to host RM"
@@ -159,7 +159,7 @@ pub(crate) fn born_user<O: ThreadCapOps + ?Sized>(
     } else {
         let (alloc, done) =
             with_effective_cap_cleared_on(ops, CAP_SYS_ADMIN, call).map_err(|refused| {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf-host: ⊘ CHANNEL BIRTH REFUSED engine={engine_type:#x}: CAP_SYS_ADMIN \
                      could not be cleared for the channel-alloc call ({refused}); no channel \
                      was created"
@@ -170,7 +170,7 @@ pub(crate) fn born_user<O: ThreadCapOps + ?Sized>(
     };
     let handle = alloc?;
     if let CapNote::Bracket(EffectiveBracket::ClearedNotRestored { errno }) = cap {
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-host: CAP_SYS_ADMIN was cleared for a channel birth and could not be restored on \
              this thread (errno {errno}); the thread continues without it in effect"
         );
@@ -183,7 +183,7 @@ pub(crate) fn born_user<O: ThreadCapOps + ?Sized>(
             cap,
         }),
         Err(why) => {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-host: ⊘ PRIVILEGED CHANNEL REFUSED h={handle:#x} engine={engine_type:#x}: \
                  {why} (cap_sys_admin={cap}); the channel is freed. Guest-authored work must \
                  never run on an ADMIN or KERNEL host channel."

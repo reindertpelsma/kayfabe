@@ -92,7 +92,7 @@ sitting, have no dependencies but `kf-chip`, and be the most heavily tested crat
 > if (!bql_locked() && !mr->lockless_io) { bql_lock(); release_lock = true; }
 > ```
 >
-> ★ **And the existing C device already opts in** — `qemu/hw/misc/nvkvm/nvkvm.c:1118-1119`,
+> ★ **And the existing C device already opts in** — `archive/qemu/hw/misc/nvkvm/nvkvm.c:1118-1119` (the pre-v3 device; `qemu/hw/misc/kf3/kf3.c` does the same and refuses a QEMU older than 10.2),
 > `memory_region_enable_lockless_io(mr)` under `NVKVM_HAVE_LOCKLESS_IO` (≥10.2), with `:393`
 > recording that *every* region of the device is registered that way.
 >

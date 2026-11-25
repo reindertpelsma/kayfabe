@@ -3,7 +3,7 @@
 //!
 //! ## ⊘ What this file is for, beyond "the control is served"
 //!
-//! Three things `kayfabe-abi`'s own unit tests structurally cannot say:
+//! Three things `kf-abi`'s own unit tests structurally cannot say:
 //!
 //! 1. That `InitTablePolicy` puts a **constructed** `[OUT]` body at the right offset inside
 //!    the right envelope with the right inner status. This is the first arm that ignores the

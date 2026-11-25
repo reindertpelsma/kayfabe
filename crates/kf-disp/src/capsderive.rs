@@ -2,7 +2,7 @@
 //! ★ The DERIVED display capabilities page (`NV_PDISP_FE_SW`, BAR0 `0x640000`), by tier —
 //! `docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md`.
 //!
-//! 2026-10-23: this module builds the lower-tier page and legacy unnamed rows.
+//! This module builds the lower-tier page and legacy unnamed rows.
 //! Production GB20x construction then applies the approved complete PRECOMP table
 //! through `kf_rm::precomp`; see V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md.
 //!
@@ -25,7 +25,7 @@
 //! - **T3, a privileged per-die measurement** (`data/caps_measured.tsv`, `tools/read_display_caps_page.py`):
 //!   only for words no class header names and the Windows display driver needs (bisected on hardware).
 //!   A die with no row gets the clean authored page and [`Derived::unmeasured`] says so — never a
-//!   neighbouring die's row (OWNER_RULINGS §AH).
+//!   neighbouring die's row.
 //!
 //! Nothing here is served from a captured page; the captured AD104 page is a test oracle only
 //! (`tests/fixtures/`).

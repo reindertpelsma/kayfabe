@@ -33,6 +33,8 @@ These are recorded results at named revisions, not qualification of the current 
 | AD102, AD104: PASS | `0c515b3b3`, 2026-11-04 | [Ada](traces/die_coverage_20261104/ada/README.md) |
 | GB205, GB206: PASS; GB202: intermittent (FAIL, then two PASS on the same box) | `0c515b3b3`, 2026-11-04 | [Blackwell](traces/die_coverage_20261104/blackwell/README.md) |
 
+Every Blackwell row here predates the 2026-11-14 fix to the walker for the newest page-table format and has not been re-run since; the fix is tested without a GPU only, and consumer Blackwell stays among the supported GPUs only after one post-fix run on a Blackwell box. Hopper and the data-centre Blackwell dies (GB100, GB102, GB110, GB112) are not in the first release claims and have never run on hardware ([requirements](docs/howto/requirements.md)).
+
 The Windows gate checks the stock 580.88 driver, CUDA and D3D11 probes before and after an idle period, reset counters and a same-box host reference. LiveKernelEvent 193 is reported as `known_live_dumps_193`; distinct reports and raw event entries are recorded separately, and the per-die ratchet remains report-only by default. `KF_WINGATE_LKE_RATCHET=gate` enforces the recorded maximum, and `KF_WINGATE_STRICT_LKE=1` gates on any 193 ([gate contract](docs/design/V3_WINDOWS_GATE.md), [setup](docs/WINDOWS_GUEST_SETUP.md)).
 
 **Linux applications, RTX 4090:** 70/70 runnable apps passed on the host and 66/70 in the guest, revision `144557e43`, 2026-11-07. Passing apps met their own correctness predicates; only the three digest-producing apps have matching host/guest digests in that run ([matrix and limits](traces/apps_linux_20261107/README.md)).
@@ -47,7 +49,7 @@ Per-die evidence and its historical limits: [family coverage](docs/design/V3_FAM
 
 ## Trying it
 
-For development, start with [the handoff](docs/STATUS_AND_HANDOFF.md), [build instructions](docs/howto/building.md) and [Windows bench instructions](scripts/bench/windows/README.md). The stock path uses vendor drivers; optional bring-up patches and UVM research do not establish supported UVM ([requirements](docs/howto/requirements.md)).
+Kayfabe assumes a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 ([requirements](docs/howto/requirements.md)). To try it, follow [Install](docs/howto/installing.md) and [building from source](docs/howto/building.md); the Windows test harness is described in the [Windows bench instructions](scripts/bench/windows/README.md). The stock path uses vendor drivers; optional bring-up patches and UVM research do not establish supported UVM.
 
 Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 cargo test --workspace --locked --no-fail-fast -j2`. A [cold-clone run](traces/release_checks_20261107/README.md) at `fe0cd47e3` built successfully but recorded 14 test failures.
 
@@ -55,6 +57,6 @@ Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 c
 
 [Architecture](ARCHITECTURE.md) | [design](docs/design/THE_ARCHITECTURE_v3.md) | [owner rulings](docs/OWNER_RULINGS.md) | [documentation map](docs/README.md) | [contributor rules](AGENTS.md) | [release claims and manual evidence templates](docs/RELEASE_CLAIMS.md)
 
-Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists exceptions, including the restriction on distributing a QEMU binary from this tree under the GPL.
+Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists the exceptions. The device's guest-ingress allowlist was re-derived from NVIDIA's open-gpu-kernel-modules on 2026-11-20 ([ruling §BF](docs/OWNER_RULINGS.md)), which closes the GPL-exception item: a binary may ship once the other gates pass. A counsel check before the first public binary is recommended, not blocking. The gVisor-derived Apache-2.0-only files are outside the device's link closure, and `scripts/ci/qemu_license_closure.py` checks that in CI. Whether and when a binary is published is the owner's decision, after the security gate.
 
 [Provenance policy](docs/design/V3_PROVENANCE.md) | [Security and private reporting](docs/howto/security.md)

@@ -1,0 +1,7 @@
+ggml_vulkan: No devices found.
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CPU        |  99 |           pp512 |        88.10 +- 1.50 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CPU        |  99 |            tg64 |        12.30 +- 0.10 |
+
+build: 4b1a27fa0 (1)

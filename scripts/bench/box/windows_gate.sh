@@ -31,24 +31,36 @@
 #                                                                                 OPERATOR (our script or configuration), HOSTREF (the
 #                                                                                 same-box host GPU reference was red), BAR1_EXCEPTION
 #                                                                                 (the Vast BAR1 limit, as documented; never new excuses)
-#   WINDOWS_GATE_REFUSED why=<w>                                          exit 2  a precondition (not root, no /dev/kvm, little disk)
+#   WINDOWS_GATE_REFUSED why=<w>                                          exit 2  a precondition (no /dev/kvm access, little disk, a directory it cannot write)
 #   WINDOWS_GATE_EXIT rc=<n> <utc>                                        always last (an EXIT trap)
 # The host reference (nvidia-smi plus a CUDA matmul on the Linux host, before and after) and the KAYFABE/OPERATOR
 # classes are DIAGNOSTICS in the log. They decide the label of a non-zero exit (FAIL or RETRY); they never make an
 # exit zero.
 #
+# ROOTLESS (OWNER_RULINGS section AR item 6; scripts/ci/kfroot.py, docs/design/V3_KFROOT_ROOTLESS.md, 2026-11-15, NOT RUN ON A
+# BOX): the gate has no blanket "must be root" refusal. It runs as an unprivileged uid in group kvm and checks what it needs
+# as capabilities (/dev/kvm and /dev/nvidiactl access, writable directories, disk, RAM, a readable kernel log). The few
+# operations that truly need root are `kfroot <cmd>` lines with a comment saying why; the whole gate is started dropped
+# (`python3 scripts/ci/kfroot.py run --user ci -- bash windows_gate.sh <tag>`: NoNewPrivs=1, every capability set empty), so
+# `windows_gate.sh --prepare` does the root steps BEFORE that. KF_ROOTLESS=require|record|off (default record; `kfroot.py run`
+# sets require): the gate reads uid, CapPrm/CapEff/CapBnd and NoNewPrivs of its own process tree and of QEMU and swtpm from
+# /proc, and the sudo log of the run window, and records them (rootless_*.json, KFROOT_ASSERT lines, rootless=<state> in the
+# PASS line). In require mode a root or capable tree, or any sudo entry other than the kfroot wrapper, is never a pass.
+#
 # Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes any LiveKernelEvent 193 gate),
 # KF_WINGATE_LKE_RATCHET (report: warn above the per-die maximum; gate: fail above it),
 # KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
-# install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (the kf3 env file,
-# scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
+# install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (a MEASUREMENT-only kf3 env file; default: none,
+# the product defaults are the Windows profile: scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
 # Windows 580.88 driver), KF_WINGATE_ARM (B), WINVM_ROOT (/workspace/winvm), BENCH (/workspace/bench).
 # Secrets: the Windows password and the ssh key stay in $WINVM_ROOT/kfwin/secrets; nothing from there, from tpm/
 # or from firmware/ is copied to the evidence directory, and the evidence is scanned for the password.
 set -uo pipefail
 # --selftest: the verdict classification, with stubs and no box (GPU-free; scripts/ci/test_vast_windows_gate.py)
 SELFTEST=0
+PREPARE=0   # --prepare: only the root steps of the Windows lane (packages, the swtpm AppArmor rule), BEFORE the drop
 if [ "${1:-}" = --selftest ]; then SELFTEST=1; set -- selftest "$(mktemp -d)"; fi
+if [ "${1:-}" = --prepare ]; then PREPARE=1; set -- "prepare$(date +%s)" "${2:-}"; fi
 T=${1:?usage: windows_gate.sh <tag> [<prov-dir>]}
 [[ "$T" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || { echo "WINDOWS_GATE_REFUSED why=invalid-tag"; exit 2; }
 PROV=${2:-${KF_PROV_DIR:-/root/prov}}
@@ -63,6 +75,9 @@ mkdir -p "$PROV"
 say() { echo "$*" | tee -a "$LOG"; }
 
 export PATH="$PATH:$HOME/.cargo/bin"
+# shellcheck source=../../lib/kfroot.sh
+. "$SOURCE/scripts/lib/kfroot.sh"
+export KF_ROOTLESS=${KF_ROOTLESS:-record}
 export BENCH=${BENCH:-/workspace/bench}
 export WINVM_ROOT=${WINVM_ROOT:-/workspace/winvm}
 export WINVM_VM_IDENTITY=${WINVM_VM_IDENTITY:-1}
@@ -72,7 +87,12 @@ export WINVM_LOCK_WAIT_S=${WINVM_LOCK_WAIT_S:-120}
 export KF_GUEST_USER=${KF_GUEST_USER:-kf}
 IDLE_S=${KF_WINGATE_IDLE_S:-300}
 BUDGET_S=${KF_WINGATE_BUDGET_S:-9000}
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): NO env file by default. The Windows profile is the device's default for a
+# declared Windows guest (OWNER_RULINGS section AT), so the gate boots with the flags the product has. KF_WINGATE_FLAGS
+# names a MEASUREMENT-only file (e.g. KF3_RPC_TRACE=1) and is the only way an env file reaches win_vm.sh.
+FLAGS=${KF_WINGATE_FLAGS:-}
+ENVFILE_ARGS=()
+[ -z "$FLAGS" ] || ENVFILE_ARGS=(--env-file "$FLAGS")
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
 VM=$WINVM_ROOT/${WINVM_NAME:-kfwin}
@@ -159,6 +179,10 @@ collect_evidence() {
         echo "unloading_guest_driver=$(grep -ac 'UNLOADING_GUEST_DRIVER' "${lastq:-/dev/null}" || true)"
         echo "running_to_suspending=$(grep -ac 'Running -> Suspending' "${lastq:-/dev/null}" || true)"
         echo "host_xid_in_boots=$(cat "$VM"/logs/${TAG}_b*_host_dmesg.txt 2> /dev/null | grep -ac 'NVRM: Xid' || true)"
+        # a guest mapping that is absent on the host twin: kf3 acknowledged it as held, or refused it inside a reservation
+        # of its own (the Windows kernel's framebuffer alias with unmapped-reads-zero on), or host RM failed the map
+        echo "guest_map_missing=$(cat "$VM"/logs/${TAG}_b*_qemu.log 2> /dev/null | grep -acE 'HELD BY HOST|HELD-BY-HOST|HELD-BY-OURSELVES|through our reservation .*REFUSED' || true)"
+        echo "host_map_failed=$(cat "$VM"/logs/${TAG}_b*_host_dmesg.txt 2> /dev/null | grep -ac 'mmuWalkMap: Failed to map' || true)"
         grep -aE 'Cold ->|ProtectedRegionUp|Booted|GSP_SET_SYSTEM_INFO|bGspNocatEnabled|REFUSED' "${lastq:-/dev/null}" | head -60
     } > "$EV/gsp_signals.txt" 2>&1
 }
@@ -236,6 +260,7 @@ conclude() {
         fi
     fi
     teardown_guest
+    rootless_final
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_AFTER" = unrun ]; then
         STAGE=hostref_after
         hostref after
@@ -264,9 +289,15 @@ conclude() {
             elif [ "$(sed -n 's/^refused_0x2080121f=//p' "$EV/gsp_signals.txt")" != 0 ]; then
                 STAGE=gsp_signals
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
+            elif [ "$(sed -n 's/^guest_map_missing=//p' "$EV/gsp_signals.txt")" != 0 ] || [ "$(sed -n 's/^host_map_failed=//p' "$EV/gsp_signals.txt")" != 0 ]; then
+                STAGE=guest_map
+                verdict FAIL KAYFABE "a guest mapping is absent on the host although the guest passed (kf3 held or refused lines: $(sed -n 's/^guest_map_missing=//p' "$EV/gsp_signals.txt"), host mmuWalkMap failures: $(sed -n 's/^host_map_failed=//p' "$EV/gsp_signals.txt"); gsp_signals.txt)"
+            elif [ "${ROOTLESS_FINAL_RC:-0}" != 0 ]; then
+                STAGE=rootless
+                verdict RETRY OPERATOR "KF_ROOTLESS=require: this run was not rootless (a root or capable process, or a sudo entry other than the kfroot wrapper; rootless_*.json)"
             else
                 STAGE="done"
-                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} live_dumps_193_entries=${LKE193_ENTRIES:-?} live_dumps_193_ratchet=$LKE_RATCHET live_dumps_193_die=$LKE_DIE stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
+                verdict PASS NONE "rootless=$ROOTLESS_STATE install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} live_dumps_193_entries=${LKE193_ENTRIES:-?} live_dumps_193_ratchet=$LKE_RATCHET live_dumps_193_die=$LKE_DIE stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
             fi ;;
     esac
     finish
@@ -453,7 +484,7 @@ hostref() { # before|after
         nvidia-smi --query-gpu=name,driver_version,memory.total,pstate --format=csv,noheader 2>&1 || ok=0
         nvidia-smi -q 2> /dev/null | grep -A2 -E 'BAR1 Memory Usage' | tr -s ' '
     } > "$f" 2>&1
-    xid=$(dmesg 2> /dev/null | grep -c 'NVRM: Xid' || true)
+    xid=$(kf_dmesg 2> /dev/null | grep -c 'NVRM: Xid' || true)
     echo "HOSTREF_XID_COUNT $xid" >> "$f"
     if [ -x "$EV/cup8_host" ]; then
         if timeout 180 "$EV/cup8_host" > "$EV/hostref_${when}_cup8.txt" 2>&1 && grep -q 'CUP8 VERDICT: PASS' "$EV/hostref_${when}_cup8.txt"; then
@@ -488,15 +519,17 @@ selftest() {
     collect_evidence() { :; }
     hostref() { :; }
     finish() { return 0; }
-    sc() { # NAME WANT_RC WANT_TEXT MODE BEFORE AFTER [BAR1 [XID [REFUSED]]]
-        local name=$1 wrc=$2 wtext=$3 mode=$4 before=$5 after=$6 bar1=${7:-0} xid=${8:-0} refused=${9:-0}
+    # the rootless assertion is a separate concern (scripts/ci/test_kfroot.py): here its outcome is a variable
+    rootless_final() { ROOTLESS_FINAL_RC=${SELFTEST_ROOTLESS_RC:-0}; }
+    sc() { # NAME WANT_RC WANT_TEXT MODE BEFORE AFTER [BAR1 [XID [REFUSED [MAP_MISSING [HOST_MAP_FAILED]]]]]
+        local name=$1 wrc=$2 wtext=$3 mode=$4 before=$5 after=$6 bar1=${7:-0} xid=${8:-0} refused=${9:-0} missing=${10:-0} hostmap=${11:-0}
         n=$((n + 1))
         out=$(
             EV=$(mktemp -d)
             LOG=$EV/log
             GUEST_STARTED=1
             HOSTREF_BEFORE=$before HOSTREF_AFTER=$after FAILMODE=$mode FAILWHY=why STAGE=probe
-            printf 'refused_0x2080121f=%s\nhost_xid_in_boots=%s\n' "$refused" "$xid" > "$EV/gsp_signals.txt"
+            printf 'refused_0x2080121f=%s\nhost_xid_in_boots=%s\nguest_map_missing=%s\nhost_map_failed=%s\n' "$refused" "$xid" "$missing" "$hostmap" > "$EV/gsp_signals.txt"
             printf 'HOSTREF_XID_DELTA 0\n' > "$EV/hostref_after.txt"
             if [ "$bar1" = 1 ]; then bar1_refusal() { return 0; }; fi
             conclude
@@ -519,6 +552,16 @@ selftest() {
     sc pass-after-red 3 'class=HOSTREF' none green RED
     sc pass-with-xid 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 2
     sc pass-with-flag-refusal 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 0 1
+    sc pass-with-missing-map 1 'a guest mapping is absent on the host' none green green 0 0 0 4
+    sc pass-with-host-map-failure 1 'a guest mapping is absent on the host' none green green 0 0 0 0 1
+    sc guest-fail-with-missing-map 1 'WINDOWS_GATE_FAIL diag=KAYFABE stage=probe why="why"' guest green green 0 0 0 4
+    # KF_ROOTLESS=require and the run was not rootless (a root or capable process, or a stray sudo entry): never a pass,
+    # but a real guest failure stays the verdict of the guest
+    SELFTEST_ROOTLESS_RC=1
+    sc pass-not-rootless 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR' none green green
+    sc guest-fail-not-rootless 1 'WINDOWS_GATE_FAIL diag=KAYFABE' guest green green
+    SELFTEST_ROOTLESS_RC=0
+    sc pass-records-rootless 0 'rootless=unchecked install=once' none green green
     # teardown: a stubbed `win_vm.sh run` loop that, whenever its QEMU is gone, ends if stop-requested exists (HONOUR=1)
     # or starts the next QEMU (a guest that rebooted on its own). Nothing may be left running after the teardown.
     td() { # NAME WANT_TEXT HONOUR QEMU_UP_AT_START
@@ -624,23 +667,74 @@ selftest() {
 }
 if [ "$SELFTEST" = 1 ]; then selftest; fi
 
+# The Windows prerequisites (packages). Root: dpkg and apt own /var/lib/dpkg, so installing is a `kfroot` step. Returns 0 when
+# nothing is missing or the install worked, 126 when a package is missing and this tree is NoNewPrivs (run --prepare first).
+install_prereqs() {
+    local missing=0 c apt_run
+    [ -e /usr/share/OVMF/OVMF_CODE_4M.secboot.fd ] || missing=1
+    for c in swtpm swtpm_setup sbsign xorriso pnmtopng 7z virt-fw-vars x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-dlltool; do
+        command -v "$c" > /dev/null || missing=1
+    done
+    [ "$missing" = 1 ] || return 0
+    # Inside the Vast payload apt-get is the cache-only shim (a bash function from scripts/ci/vast_payload_hooks.sh whose
+    # body is `python3 -I vast_setup.py apt`; the packages are its `windows` policy, provision_box.sh). A shell function
+    # cannot run as root through kfroot (it execs a program), so the shim's own command is what kfroot runs.
+    apt_run=(timeout 900 apt-get)
+    if [ -n "${KF_APT_CACHE_ROOT:-}" ] && [ "$(type -t apt-get)" = function ] && [ -n "${KF_PAYLOAD_ROOT:-}" ]; then
+        apt_run=(python3 -I "$KF_PAYLOAD_ROOT/scripts/ci/vast_setup.py" apt)
+    fi
+    # root: installing packages writes /var/lib/dpkg and /usr
+    DEBIAN_FRONTEND=noninteractive kfroot "${apt_run[@]}" -o DPkg::Lock::Timeout=300 install -y -qq \
+        ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
+        gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 > "$EV/apt.txt" 2>&1
+}
+
+# --prepare: the root steps of the Windows lane, to run BEFORE the drop (this process may use kfroot; the dropped tree may not).
+# What is left for the run itself is checked, never installed: a missing package is a refusal there.
+prepare_root() {
+    install_prereqs || { say "WINDOWS_GATE_PREPARE_FAILED packages (apt.txt)"; return 1; }
+    # root: the swtpm AppArmor profile lives in /etc/apparmor.d (win_vm.sh prepare writes it through kfroot)
+    bash "$WV" prepare || { say "WINDOWS_GATE_PREPARE_FAILED apparmor"; return 1; }
+    say "WINDOWS_GATE_PREPARED"
+}
+
 # ------------------------------------------------------------------------------------------------
 # start
 # ------------------------------------------------------------------------------------------------
 mkdir -p "$EV"
 chmod 0700 "$EV"
-say "WINDOWS_GATE_START tag=$T rev=$REV source=$SOURCE $(date -u -Is) idle_s=$IDLE_S flags=$(basename "$FLAGS") guest_driver=$GDRV arm=$ARM"
+say "WINDOWS_GATE_START tag=$T rev=$REV source=$SOURCE $(date -u -Is) idle_s=$IDLE_S flags=${FLAGS:+$(basename "$FLAGS")}${FLAGS:-none} guest_driver=$GDRV arm=$ARM"
 say "WINDOWS_GATE_REQUESTED=1"
+if [ "$PREPARE" = 1 ]; then
+    VERDICT=PREPARED
+    prepare_root || rc_final=1
+    exit "$rc_final"
+fi
 
 stage_begin preflight
-[ "$(id -u)" = 0 ] || refuse not-root
-[ -c /dev/kvm ] || refuse no-/dev/kvm
+# No blanket root refusal (it was `[ "$(id -u)" = 0 ] || refuse not-root`): the gate needs access, not root. What it needs is
+# checked as a capability, so an unprivileged uid in group kvm passes and a missing permission is refused BY NAME.
+# The rootless assertion first: uid, capability sets and NoNewPrivs of this process tree, recorded (and enforced when
+# KF_ROOTLESS=require, the mode `kfroot.py run` sets).
+rootless_check preflight --pid $$ || refuse rootless-violated
+[ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ] || refuse no-/dev/kvm-access
+# the GPU nodes: pre-created and permitted by the box bootstrap (nvidia-modprobe cannot run once NoNewPrivs is set)
+if [ -e /dev/nvidiactl ]; then [ -r /dev/nvidiactl ] && [ -w /dev/nvidiactl ] || refuse no-/dev/nvidiactl-access; fi
+for d in "$PROV" "$EV" "$WINVM_ROOT" "$BENCH" "$SOURCE"; do
+    # (a directory that does not exist yet is created by its owner stage: its parent must be writable)
+    t=$d
+    while [ ! -e "$t" ] && [ "$t" != / ]; do t=$(dirname "$t"); done
+    [ -d "$t" ] && [ -w "$t" ] || refuse "not-writable-$d"
+done
+command -v cargo > /dev/null || refuse "no-cargo-for-uid-$(id -u)"
+# the host Xid checks read the kernel log; an unreadable one was a silent zero (a vacuous check), now a refusal
+kf_dmesg > /dev/null 2>&1 || refuse dmesg-unreadable
 avail_gb=$(df -BG --output=avail "$(dirname "$WINVM_ROOT")" 2> /dev/null | tail -1 | tr -dc 0-9)
 if [ -e "$VM/installed" ]; then need_gb=20; else need_gb=45; fi
 [ "${avail_gb:-0}" -ge "$need_gb" ] || refuse "disk-${avail_gb:-0}G-free-need-${need_gb}G"
 mem_gb=$(free -g | awk '/^Mem:/{print $2}')
 [ "${mem_gb:-0}" -ge 20 ] || refuse "ram-${mem_gb:-0}G-need-20G"
-[ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
+[ -z "$FLAGS" ] || [ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
 if ! nvidia-smi -L > "$EV/nvidia_smi_L.txt" 2>&1; then
     verdict RETRY PROVIDER "nvidia-smi -L failed on the host: $(head -c 200 "$EV/nvidia_smi_L.txt")"
     finish
@@ -655,7 +749,7 @@ if [ -z "${WINVM_KF3_FB_MB:-}" ]; then
         say "GATE_NOTE host VRAM ${vram_mb} MiB: WINVM_KF3_FB_MB=$WINVM_KF3_FB_MB"
     fi
 fi
-say "GATE_NOTE host: gpu=\"$GPU_NAME\" driver=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1) cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb"
+say "GATE_NOTE host: gpu=\"$GPU_NAME\" driver=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1) cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb uid=$(id -u) memlock_kb=$(ulimit -l)"
 stage_end
 
 # the host's CUDA matmul (cup8), built natively against the host driver: the same-box reference
@@ -676,23 +770,14 @@ stage_end
 # media, install (once per box), kf3 binary, probes
 # ------------------------------------------------------------------------------------------------
 stage_begin prereqs
-missing=0
-[ -e /usr/share/OVMF/OVMF_CODE_4M.secboot.fd ] || missing=1
-for c in swtpm swtpm_setup sbsign xorriso pnmtopng 7z virt-fw-vars x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-dlltool; do
-    command -v "$c" > /dev/null || missing=1
-done
-if [ "$missing" = 1 ]; then
-    # Inside the Vast payload apt-get is the cache-only shim (a bash function from
-    # scripts/ci/vast_payload_hooks.sh; the packages are its `windows` policy, provision_box.sh).
-    # `timeout` would exec the real binary past the shim, so the shim runs unwrapped.
-    apt_run=(timeout 900 apt-get)
-    if [ -n "${KF_APT_CACHE_ROOT:-}" ] && [ "$(type -t apt-get)" = function ]; then apt_run=(apt-get); fi
-    if ! DEBIAN_FRONTEND=noninteractive "${apt_run[@]}" -o DPkg::Lock::Timeout=300 install -y -qq \
-        ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
-        gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 > "$EV/apt.txt" 2>&1; then
-        verdict RETRY PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"
-        finish
-    fi
+install_prereqs
+prc=$?
+if [ "$prc" = 126 ]; then
+    verdict RETRY OPERATOR "Windows prerequisites are missing and this process tree is NoNewPrivs (the dropped kayfabe tree cannot use kfroot): run 'windows_gate.sh --prepare' before the drop"
+    finish
+elif [ "$prc" != 0 ]; then
+    verdict RETRY PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"
+    finish
 fi
 stage_end
 
@@ -780,11 +865,14 @@ GUEST_STARTED=1
 vmuuid=$(sed -n 's/^VM_UUID=//p' "$VM/identity.env" 2> /dev/null | head -1)
 [[ "$vmuuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail_op "no per-VM identity (VM_UUID) in $VM/identity.env"
 if ! bash "$WV" run --detach --overlay "$TAG" --arm "$ARM" --guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$vmuuid" \
-    --env-file "$FLAGS" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
+    "${ENVFILE_ARGS[@]}" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
     fail_op "win_vm.sh run did not start: $(tail -2 "$EV/run_launch.txt" | tr '\n' ' ')"
 fi
 wait_qemu_start "$TAG" 1 "$(cap 300)" || fail_op "the run loop never started QEMU for boot 1; run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"
 wait_ssh "$(cap 900)" || fail_guest "the guest never answered ssh after boot 1 (waited ${SSH_WAITED}s of at most 900 s); run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"
+# the kayfabe tree is up: QEMU is a descendant of this process, swtpm daemonizes (its pid file names it); both are read from /proc
+rootless_check boot1 --pid $$ --pid-file "$VM/run/qemu.pid" --pid-file "$VM/run/swtpm.pid" \
+    || fail_op "the rootless assertion failed with QEMU running (KF_ROOTLESS=require; KFROOT_ASSERT_VIOLATION lines, rootless_boot1.json)"
 stage_end
 
 stage_begin check_kf3

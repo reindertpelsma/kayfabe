@@ -1,4 +1,4 @@
-//! ★★ Lane C 2026-10-14 — Windows-only GSS-legacy queries answered by the HOST (tier 2), for the
+//! Windows-only GSS-legacy queries answered by the HOST (tier 2), for the
 //! controls whose real-driver request is measured all-zero (`kf_abi::gssreplay` `exact` rows:
 //! `0x2080852a`, `0x20808524`, `0x2080a70a`, `0x2080a088`, `0x2080852e`, `0x2080853a`,
 //! `0x2080a618`). Pinned here, through `query_gss_replay` and `InitTablePolicy`:

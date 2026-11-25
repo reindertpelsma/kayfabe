@@ -1,4 +1,4 @@
-//! ★ 2026-10-16 (PHASE 1b) — **unit tests of the production per-entry turn** (`kf_chan::user_turn::Relay`) with a
+//! **Unit tests of the production per-entry turn** (`kf_chan::user_turn::Relay`) with a
 //! small programmable [`Io`]: the order of the loads, what is read and what is not, what is published, and what each
 //! refusal does. A second angle on the invariants the interleaving model, the property tests and the thread stress
 //! check by exploration (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md` sections 0a and 3): every test here is
@@ -879,7 +879,7 @@ fn the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_st
     );
 }
 
-/// ★ 2026-10-24 (GB205 round B1n, lease 57472433, arm `on_urt`, B1 binary cb80cbd29) — a CHARACTERIZATION of the
+/// A CHARACTERIZATION of the
 /// relay on a family whose engine writes no USERD words back (`kf_chip::Family::engine_writes_userd_gp_get`): the
 /// private `GP_GET` and `REFERENCE` the observe phase reads stay 0, as the trace read them on the GR ring
 /// `0xc1d00126:0xff04000b` (`STALL_USERD ... gp_get=0 gp_put=0 ref=0x0`). The first SYNC_WAIT gate's marker can then
@@ -932,6 +932,48 @@ fn without_engine_written_userd_words_the_first_gate_never_opens() {
     assert!(io.calls.contains(&Call::ReadPb(gated.raw())));
     assert_eq!(r.cursor, 2);
 }
+/// Stage 1 of `V3_BLACKWELL_USER_RING_ROUTE.md` §2 (O1), the twin of the characterization above:
+/// on the same family, with the SEMAPHORE progress source the same gate opens. The simulated engine releases the
+/// value the Blackwell marker cell carries (its `SEM_PAYLOAD_LO` word) into the private semaphore word, and the
+/// relay reads the words `SemaphoreProgress` derives from it: the tagged reference, and the private `GP_GET` just
+/// after the marker (entry 0 + the gate's barrier + its marker = 3, the value the Ada engine writes back).
+#[test]
+fn with_the_semaphore_source_the_first_gate_opens_on_blackwell() {
+    use kf_chan::user_semaphore::{ProgressSource, SemaphoreProgress, marker_cell};
+    let source = ProgressSource::for_family(kf_chip::Family::Blackwell);
+    assert_eq!(source, ProgressSource::SemaphoreMarker);
+    let gated = ge(1, Kind::Plain).sync();
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    io.put_entry(0, &ge(0, Kind::Plain));
+    io.put_entry(1, &gated);
+    io.put = 2;
+    for _ in 0..8 {
+        if io.gates() > 0 {
+            break;
+        }
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(r.need, Need::Marker { target: 1 });
+    // The ledger records what the relay published: entry 0 and the barrier, then the marker.
+    let mut progress = SemaphoreProgress::new(512).unwrap();
+    progress.publish_entries(2).unwrap();
+    let (count, value) = progress.publish_marker().unwrap();
+    assert_eq!((count, value), (1, Marks::value(1)));
+    let cell = marker_cell(source, value, 0x0000_7fff_0000_0100).unwrap();
+    let released = cell[3];
+    let words = progress.observe(released).unwrap();
+    io.hw_reference = words.reference;
+    io.hw_get = words.get;
+    assert_eq!((io.hw_get, io.hw_reference), (3, Marks::value(1)));
+    turn(&mut r, &mut io).unwrap();
+    assert!(
+        io.calls.contains(&Call::ReadPb(gated.raw())),
+        "the gate opened"
+    );
+    assert_eq!(r.cursor, 2);
+}
+
 // Decision Phase 1: hardware format bounds Pointer; copies alone use the scan budget.
 #[test]
 fn pointer_forwards_each_run3440_descriptor_unchanged_without_reading_its_pushbuffer() {

@@ -1,0 +1,2 @@
+[Wed Nov 18 05:30:57 2026] NVRM:unknown NVRM ioctl command: 0xf0
+[Wed Nov 18 05:30:57 2026] NVRM: Xid (PCI:0000:00:07): 32, pid=118554, name=kf-semmarker-pr, channel 0x00000002 intr 00200000
