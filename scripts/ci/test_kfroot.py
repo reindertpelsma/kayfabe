@@ -1067,7 +1067,7 @@ class GateSelftest(unittest.TestCase):
         p = subprocess.run(["bash", str(GATE), "--selftest"], capture_output=True, text=True, timeout=300,
                            env={k: v for k, v in os.environ.items() if k not in ("KF_ROOTLESS", "KF_SUDO_LOG_MARK")})
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=27$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=30$")
         text = code(GATE)
         for case in ("pass-not-rootless", "guest-fail-not-rootless", "pass-records-rootless"):
             self.assertIn(case, text)
