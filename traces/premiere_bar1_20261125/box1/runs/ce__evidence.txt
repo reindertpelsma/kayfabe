@@ -1,0 +1,19 @@
+== now 2026-11-22T05:11:22Z, since 2026-11-22T04:50:00Z
+== Application 1000/1001/1002
+== System display/TDR events
+== LiveKernelReports
+== WER reports (Report.wer header lines)
+== LocalDumps (C:\kfapps\dumps)
+== Premiere SentryIO
+-- 2026-11-22T04:57:00Z          0 metadata
+-- 2026-11-22T05:01:17Z        391 b07d52ef-7d99-4b28-7cd7-50d89dddaf32.envelope
+-- 2026-11-22T05:02:32Z        347 1795323752365-00-b93be3ce-3497-4680-41fe-9046eccc1238.envelope
+-- 2026-11-22T05:04:41Z        392 f88c1d4e-37cb-4dc8-d0e1-4bb7a1c22270.envelope
+-- 2026-11-22T05:06:50Z          0 __sentry-breadcrumb2
+-- 2026-11-22T05:06:50Z         40 settings.dat
+-- 2026-11-22T05:06:50Z          0 7526d5a7-50ee-42ef-aa8a-69936d67d3f8.run.lock
+-- 2026-11-22T05:06:50Z        347 1795324010756-00-a55ac478-3d81-4dfc-4eed-2ce480cc3603.envelope
+-- 2026-11-22T05:07:01Z        225 session.json
+-- 2026-11-22T05:08:25Z       1614 __sentry-breadcrumb1
+-- 2026-11-22T05:09:06Z       2127 __sentry-event
+-- 2026-11-22T05:09:06Z        392 f0673b02-7ee2-44a0-458b-27e49806180b.envelope

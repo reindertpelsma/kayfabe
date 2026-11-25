@@ -1,0 +1,40 @@
+---
+/dev/root       291G  8.0G  283G   3% /
+30
+Mem:              48           0          46           0           1          47
+kvm-clock
+GPU 0: NVIDIA GeForce RTX 4090 (
+
+==============NVSMI LOG==============
+
+Timestamp                                 : Wed Nov 25 03:30:36 2026
+Driver Version                            : 575.51.03
+CUDA Version                              : 12.9
+
+Attached GPUs                             : 1
+GPU 00000000:00:07.0
+    FB Memory Usage
+        Total                             : 24564 MiB
+        Reserved                          : 483 MiB
+        Used                              : 1 MiB
+        Free                              : 24081 MiB
+    BAR1 Memory Usage
+        Total                             : 256 MiB
+        Used                              : 2 MiB
+        Free                              : 254 MiB
+    Conf Compute Protected Memory Usage
+        Total                             : 0 MiB
+        Used                              : 0 MiB
+        Free                              : 0 MiB
+
+00:07.0 VGA compatible controller: NVIDIA Corporation Device 2684 (rev a1)
+00:08.0 Audio device: NVIDIA Corporation Device 22ba (rev a1)
+00:07.0 VGA compatible controller: NVIDIA Corporation Device 2684 (rev a1) (prog-if 00 [VGA controller])
+	Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+	Region 1: Memory at 1000000000 (64-bit, prefetchable) [size=256M]
+	Region 3: Memory at 1010000000 (64-bit, prefetchable) [size=32M]
+	Region 5: I/O ports at c000 [size=128]
+575.51.03
+Model name:                           AMD Ryzen 9 7950X 16-Core Processor
+/dev/kvm
