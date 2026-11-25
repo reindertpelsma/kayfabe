@@ -447,7 +447,7 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
   size and sha256 pinned in `scripts/bench/qemu.pin`; this holds for the downloaded tarball (also checked by `kf_trust.py`) and for the tarball inside a source tarball, whose
   signature is required. The signature file is fetched through `kf_trust.py` (manifest entry `qemu-source-signature`). A tarball or tree the user supplies is
   recorded as such (anchor `user`).
-- **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check `release-build.yml` uses), `build` (source tarball, reproducibility check,
+- **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check the release workflow relies on), `build` (source tarball, reproducibility check,
   `SHA256SUMS`, one run artifact; it runs the third-party build code and holds `contents: read` only, no OIDC), `attest` (master only, needs `gate` and `build` to have
   succeeded; no checkout and no build code: it downloads the artifact, checks every file against the `SHA256SUMS` whose digest the `build` job published as a job output
   and refuses a file the list does not name, then attests the three files and the list) and `draft` (master only: refuses an existing tag or release, runs
@@ -462,8 +462,8 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
 - **Permissions.** Top level `permissions: {}`. `attest` has `id-token: write` and `attestations: write` and nothing else (the attestation is made in the run that builds and
   uploads, which is what the Worker verifies by the OIDC identity); `draft` has `contents: write` and `attestations: read`; `build` and `gate` have read permissions only. No
   secret but the default token. Every action is pinned by commit. The release is created with `--draft`; nothing in the workflow publishes it.
-  `ci/vast-broker/workflow-guard.js` lists the `build` job of `release-build.yml` and the `attest` job of `release-qemu.yml` (exact file and job names) as the places
-  `id-token: write` may appear; `ci/vast-broker/test/release-qemu-workflow.test.js` refuses it in every other job and file.
+  `ci/vast-broker/workflow-guard.js` lists the `attest` job of `release-qemu.yml` (exact file and job names) as the only place
+  `id-token: write` may appear among the release workflows (the retired `release-build.yml` was removed from this list; Tentative, RC1, 2026-11-25, pending the owner's ruling on decision A5 (option B: retire release-build.yml when release-qemu.yml is on master).); `ci/vast-broker/test/release-qemu-workflow.test.js` refuses it in every other job and file.
 - **Verifying.** Every `gh attestation verify` of this workflow and of the manual pins `--signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml`,
   `--source-ref refs/heads/master` and `--deny-self-hosted-runners`: `--repo` alone accepts an attestation from any workflow on any branch.
 - ⊘ *Correction 2026-11-24 (owner, `OWNER_RULINGS.md` §BF): the licence-review half of the next bullet is closed: the 2026-11-20 ogkm re-derivation (§BD, task I7) closes the GPL-exception item and a binary may ship once the other gates pass; a counsel check stays recommended, not blocking. The security gate and the owner's decision to publish remain.*

@@ -70,7 +70,6 @@ test('an attest job in another file, or a differently named file, is refused OID
   const gpu = await read('gpu-vast.yml');
   assert.ok(refused(checkWorkflows({ 'gpu-vast.yml': gpu, 'release-qemu.yaml': text })));
   assert.ok(refused(checkWorkflows({ 'gpu-vast.yml': gpu, 'other.yml': text })));
-  assert.ok(refused(checkWorkflows({ 'gpu-vast.yml': gpu, 'release-build.yml': text })));
 });
 test('the attest job is matched by its exact name', async () => {
   const { checkWorkflows } = await guard();

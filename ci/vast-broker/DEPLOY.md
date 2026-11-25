@@ -529,7 +529,7 @@ start_date/labels can still prevent deletion. Keep the prepaid balance small.
 
 ## Release gate
 
-[CODE READ: release_gate.py, release-build.yml; final review W4] `release-build.yml` (owner
+[CODE READ: release_gate.py, release-qemu.yml; final review W4] `release-qemu.yml` (owner
 dispatch on master) runs `release_gate.py`, which accepts only when the latest `gpu-vast` commit
 status of that exact master sha is `success` from `github-actions[bot]` with description
 `GPU broker GRACE` or `GPU broker NONE` (a GPU result), and its run is a completed, successful
@@ -537,6 +537,7 @@ status of that exact master sha is `success` from `github-actions[bot]` with des
 other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only master commit cannot
 be released on its own. TODO (owner): the planned tag-only release CI will replace this
 dispatch workflow; the gate then needs its trigger rule restated.
+Tentative, RC1, 2026-11-25, pending the owner's ruling on decision A5 (option B: retire release-build.yml when release-qemu.yml is on master). `release-build.yml` (the pre-v3 provenance workflow) is retired by that change; this gate is shared and stays.
 
 ## Tiers and the release run (wtier, 2026-11-05)
 

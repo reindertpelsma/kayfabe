@@ -114,7 +114,7 @@ Master pushes check out their exact SHA; publication events use master tooling.
 Only the separate master/tag deploy job has `pages: write` and `id-token: write`, in `github-pages`.
 Concurrency uses `pages` without cancellation. All actions are SHA pinned.
 
-CODE READ (2026-10-26): `release-build.yml` builds and attests artifacts; it has no release publishing
+CODE READ (2026-10-26; `release-build.yml` was retired 2026-11-25, tentative, RC1, pending the owner's ruling on A5, so read this as `release-qemu.yml`): the release workflow builds and attests artifacts; it has no release publishing
 step. The `release: published` trigger covers manual/PAT publication. If a future job
 publishes with `GITHUB_TOKEN`, append `gh workflow run site.yml` after its final asset upload and grant
 `actions: write` only to that publishing job: token-generated release events do not start workflows.
