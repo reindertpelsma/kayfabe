@@ -376,3 +376,12 @@ page's source comment and are not repeated.
 - **Step 7 application results, 2026-11-14** (same page). Original: 3DMark Time Spy pass with a score of 7400, Superposition
   pass, Edge pass, Black Myth Wukong fail in two of five runs, measured on the maintainers' PC. Evidence: partly
   `traces/hwrun_20261113/README.md`.
+
+## RC1 note: Blackwell and Hopper scope (2026-11-25)
+
+Tentative, RC1, pending the owner's ruling on decision A4 (default option B). Row `blackwell-predates-walker-fix`
+records that every Blackwell result in the README was measured before the 2026-11-14 walker fix for the newest
+page-table format (PR #386) and has not been repeated; the fix is verified without a GPU only. Hopper and the
+data-centre Blackwell dies (GB100, GB102, GB110, GB112) are not in the first release claims. Consumer Blackwell (GB20x)
+is claimed only after one post-fix box run (walker tests, gates 9 of 9, suite 30 of 30). To flip: option A removes the
+Blackwell rows from the README table and this ledger; option C keeps the claim on GPU-free evidence with the caveat.

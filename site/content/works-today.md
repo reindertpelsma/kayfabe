@@ -36,7 +36,7 @@ These are recorded stages, not a promise that every card or application works. A
 | Ada AD104 (RTX 4000 Ada) | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Ada AD106, AD103 | Passed on AD106; AD103 not documented | Desktops with a borrowed display page |
 | Ada AD102 | yes; 30/30 at `0c515b3b3` (580.159.04 guest), 2026-11-04 | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
-| Blackwell GB205 | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Blackwell GB205 | Guest tests passed (before the 2026-11-14 walker fix) | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Blackwell GB202 | On a branch: guest tests and CUDA passed | MEASURED: Windows gate intermittent: FAIL, then two PASS on one box, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Blackwell GB206 | Passed on earlier revisions | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 
@@ -45,7 +45,9 @@ Rows marked "On a branch" come from records on branches that are not merged. Eac
 The GB205 Windows pass used two fixes that are not merged yet. Without them, the driver crashes the guest. GB202 is still open; the different outcomes do not explain the crash.
 
 <!-- src: docs/howto/requirements.md GPU notes; docs/STATUS_DETAIL.md sections 0 and 1 -->
-Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. Cards older than Turing cannot use this design. Hopper and data-centre Blackwell have not been run on hardware. GA100 and GB10B are refused by name.
+Earlier Linux runs also passed on GA102, GB203 and an RTX 3060 Ti. GB203 (RTX 5070 Ti) was tested on 2026-11-03, before the walker fix of 2026-11-14, and has not been re-run since. Every Blackwell row above predates that fix; consumer Blackwell stays among the supported GPUs only after one run on a Blackwell box with the fix, which has not happened yet. Cards older than Turing cannot use this design. Hopper and the data-centre Blackwell dies (GB100, GB102, GB110, GB112) are not in the first release claims and have not been run on hardware. GA100 and GB10B are refused by name.
+
+<!-- src: docs/howto/requirements.md GPU notes; tentative, RC1, 2026-11-25, pending the owner's ruling on decision A4 (option B) -->
 
 ## What is rough
 
