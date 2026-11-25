@@ -125,7 +125,10 @@ impl DisplaySlot {
 }
 /// The kernel refused the cache attribute asked for.
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
-/// A FIXED map at a VA that is already mapped.
+/// A FIXED map that host RM answered `0x51`: the VA is already mapped, or RM could not allocate a
+/// page-table level for the map (RM gives both the same status). Only a map in a space's own range
+/// keeps this name, because host RM places its own objects there. A map routed through a
+/// reservation of ours is renamed [`channel::VA_RESERVED_MAP_REFUSED`].
 pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// ★ The host driver's measured layout cannot carry this request (`kf_abi::hostabi`): a field the
 /// host's version does not have, a control with no row, a struct absent at that version. The
@@ -532,11 +535,13 @@ pub struct HostRm {
     /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
     /// bring-up; read by no behaviour yet.
     tier: tier::HostTier,
-    /// What an unmapped VA of the static guest ranges reads as in every mirror space allocated after
-    /// it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property). `false` =
-    /// [`channel::GuestVaFill::Fault`], the value of a host nobody configures; the kf3 device sets it
-    /// to the property, which is on by default.
+    /// What an unmapped VA of the static guest ranges reads as in every default-start mirror space
+    /// allocated after it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property).
+    /// `false` = [`channel::GuestVaFill::Fault`], the value of a host nobody configures; the kf3
+    /// device sets it from the property.
     guest_va_zero: std::sync::atomic::AtomicBool,
+    /// The same for a floor-started mirror space ([`channel::MirrorVaStart::GuestFloor`]).
+    guest_va_zero_floor: std::sync::atomic::AtomicBool,
 }
 
 impl HostRm {
@@ -633,6 +638,7 @@ impl HostRm {
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             guest_va_zero: std::sync::atomic::AtomicBool::new(false),
+            guest_va_zero_floor: std::sync::atomic::AtomicBool::new(false),
             views: Default::default(),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
@@ -1399,7 +1405,10 @@ impl HostRm {
             .map_err(|e| abi_refused("NVOS46 map reply", &e))?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. `0x51` on a FIXED map is ADDRESS
-        // OCCUPANCY, not capacity, and `status_check` would report it as `NoMemory`.
+        // OCCUPANCY in a space's own range, and `status_check` would report it as `NoMemory`.
+        // RM answers the same status when it cannot allocate a page-table level, and this
+        // function cannot tell the two apart: a caller that maps through a reservation of ours
+        // renames the answer (`channel::own_reservation_answer`).
         if at.is_some() && out.status == 0x0000_0051 {
             return Err(RmError::Other(VA_ALREADY_MAPPED));
         }

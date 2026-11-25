@@ -117,29 +117,69 @@ pub struct Config {
     /// environment variable, never inferred from the guest.
     pub report_utilization: bool,
     /// The `unmapped-reads-zero` property (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B), default
-    /// ON ([`UNMAPPED_READS_ZERO_DEFAULT`]) for every guest and profile. On, an unmapped VA of the static
-    /// guest ranges reads ZERO on the host twin instead of faulting
-    /// ([`kf_host::channel::GuestVaFill::Zero`]): the guest's sparse pages (Vulkan sparse residency, DX12
-    /// reserved resources) work, and every other unmapped VA the guest's GPU touches silently reads zero, so
-    /// an expected fault (CUDA managed memory or HMM demand paging, an application bug) is a wrong answer
-    /// instead of an error. It changes only what the guest's OWN unmapped reads return: no host memory
-    /// becomes reachable either way. Off restores the fault. Never an environment variable; never inferred
-    /// from the guest.
-    pub unmapped_reads_zero: bool,
+    /// `auto` ([`UNMAPPED_READS_ZERO_DEFAULT`]). Where it is on, an unmapped VA of the static guest ranges
+    /// reads ZERO on the host twin instead of faulting ([`kf_host::channel::GuestVaFill::Zero`]): the guest's
+    /// sparse pages (Vulkan sparse residency, DX12 reserved resources) work, and every other unmapped VA the
+    /// guest's GPU touches silently reads zero, so an expected fault (CUDA managed memory or HMM demand
+    /// paging, an application bug) is a wrong answer instead of an error. It changes only what the guest's
+    /// OWN unmapped reads return: no host memory becomes reachable either way. Never an environment
+    /// variable. `auto` reads the guest's declared profile only to pick between these two fills.
+    pub unmapped_reads_zero: UnmappedReadsZero,
+}
+
+/// The three values of the `unmapped-reads-zero` property. The numbers are QEMU's `OnOffAuto`, which is
+/// what `kf3.c` passes to `kf3_realize`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnmappedReadsZero {
+    /// On for a default-start mirror space (every Linux guest), off for a floor-started one (a guest
+    /// under the Windows support profile).
+    Auto,
+    /// On for every mirror space.
+    On,
+    /// Off for every mirror space: an unmapped guest VA faults.
+    Off,
+}
+
+impl UnmappedReadsZero {
+    /// The value `kf3.c` passed (`ON_OFF_AUTO_AUTO` 0, `ON_OFF_AUTO_ON` 1, `ON_OFF_AUTO_OFF` 2); any
+    /// other word is `None` and refuses realize by name.
+    #[must_use]
+    pub const fn from_abi(word: u32) -> Option<Self> {
+        match word {
+            0 => Some(Self::Auto),
+            1 => Some(Self::On),
+            2 => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    /// The property value as the user writes it.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::On => "on",
+            Self::Off => "off",
+        }
+    }
 }
 
 /// What `kf3.c` declares as the default of the `unmapped-reads-zero` property. The C text is the one
 /// source of the default; `tests/unmapped_reads_zero_use_sites.rs` fails if the two disagree.
-pub const UNMAPPED_READS_ZERO_DEFAULT: bool = true;
+pub const UNMAPPED_READS_ZERO_DEFAULT: UnmappedReadsZero = UnmappedReadsZero::Auto;
 
 impl Config {
-    /// The host fill of the static guest ranges this configuration asks for.
+    /// The host fill of the static guest ranges this configuration asks for, per mirror start.
     #[must_use]
-    pub const fn guest_va_fill(&self) -> kf_host::channel::GuestVaFill {
-        if self.unmapped_reads_zero {
-            kf_host::channel::GuestVaFill::Zero
-        } else {
-            kf_host::channel::GuestVaFill::Fault
+    pub const fn guest_va_fill_by_start(&self) -> kf_host::channel::GuestVaFillByStart {
+        use kf_host::channel::{GuestVaFill, GuestVaFillByStart};
+        match self.unmapped_reads_zero {
+            UnmappedReadsZero::Auto => GuestVaFillByStart {
+                host_default: GuestVaFill::Zero,
+                guest_floor: GuestVaFill::Fault,
+            },
+            UnmappedReadsZero::On => GuestVaFillByStart::uniform(GuestVaFill::Zero),
+            UnmappedReadsZero::Off => GuestVaFillByStart::uniform(GuestVaFill::Fault),
         }
     }
 
@@ -440,11 +480,15 @@ impl Device {
             .map_err(|e| e.to_string())?,
         ));
         // Before any mirror space exists, so every space's static guest ranges take it.
-        rm.set_guest_va_fill(cfg.guest_va_fill());
-        if cfg.unmapped_reads_zero {
-            eprintln!(
+        rm.set_guest_va_fill_by_start(cfg.guest_va_fill_by_start());
+        match cfg.unmapped_reads_zero {
+            UnmappedReadsZero::On => kf_arch::rate_eprintln!(
                 "kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)"
-            );
+            ),
+            UnmappedReadsZero::Auto => kf_arch::rate_eprintln!(
+                "kf3: unmapped-reads-zero=auto: ZERO (no fault) for a Linux guest's spaces, FAULT for the spaces of a guest under the Windows support profile (V3_SPARSE_RESIDENCY_RCA.md)"
+            ),
+            UnmappedReadsZero::Off => {}
         }
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
@@ -4564,7 +4608,7 @@ fn on_cuda_thread<T: Send>(
 
 #[cfg(test)]
 mod config_tests {
-    use super::Config;
+    use super::{Config, UnmappedReadsZero};
 
     fn cfg(display: bool, x11_dispsw: bool) -> Config {
         Config {
@@ -4590,47 +4634,78 @@ mod config_tests {
         }
     }
 
-    /// `unmapped-reads-zero`: on by default, for every guest and profile (a Linux guest's
-    /// host-default-start space and a Windows-profile guest's floor-start space alike), so the planned
-    /// static guest ranges of the default configuration are all `_SPARSE`; `off` is the only way to the
-    /// fault, and nothing else changes.
+    /// `unmapped-reads-zero`: `auto` by default. The planned static guest ranges of a default-start
+    /// space (a Linux guest) are all `_SPARSE`; those of a floor-started space (a guest under the Windows
+    /// support profile) have none.
     #[test]
-    fn unmapped_reads_zero_is_on_by_default_for_every_profile() {
+    fn unmapped_reads_zero_is_auto_by_default_zero_for_linux_fault_for_windows() {
         use kf_host::channel::{
             GuestVaFill, MirrorVaStart, NVOS32_ALLOC_FLAGS_SPARSE, guest_range_plan,
         };
         let d = cfg(false, false);
-        assert!(d.unmapped_reads_zero, "default on");
-        assert_eq!(d.guest_va_fill(), GuestVaFill::Zero);
-        for windows in [false, true] {
-            let plan: Vec<_> =
-                guest_range_plan(MirrorVaStart::select(windows), d.guest_va_fill()).collect();
+        assert_eq!(
+            d.unmapped_reads_zero,
+            UnmappedReadsZero::Auto,
+            "default auto"
+        );
+        assert_eq!(super::UNMAPPED_READS_ZERO_DEFAULT, UnmappedReadsZero::Auto);
+        let by = d.guest_va_fill_by_start();
+        assert_eq!(
+            by.for_start(MirrorVaStart::select(false)),
+            GuestVaFill::Zero
+        );
+        assert_eq!(
+            by.for_start(MirrorVaStart::select(true)),
+            GuestVaFill::Fault
+        );
+        for (windows, sparse) in [(false, true), (true, false)] {
+            let start = MirrorVaStart::select(windows);
+            let plan: Vec<_> = guest_range_plan(start, by.for_start(start)).collect();
             assert!(!plan.is_empty());
             assert!(
                 plan.iter()
-                    .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE != 0),
-                "windows={windows}: every static guest range of the default is SPARSE"
+                    .all(|&(.., f)| (f & NVOS32_ALLOC_FLAGS_SPARSE != 0) == sparse),
+                "windows={windows}: every static guest range SPARSE = {sparse}"
             );
         }
-        let off = Config {
-            unmapped_reads_zero: false,
-            ..cfg(false, false)
+        assert!(d.check().is_ok(), "the property needs no other property");
+    }
+
+    /// `on` and `off` override `auto` for both starts: `on` plans every static guest range `_SPARSE`
+    /// (a Windows-profile guest included), `off` plans none.
+    #[test]
+    fn on_and_off_override_auto_for_every_profile() {
+        use kf_host::channel::{
+            GuestVaFill, MirrorVaStart, NVOS32_ALLOC_FLAGS_SPARSE, guest_range_plan,
         };
-        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
-        for windows in [false, true] {
-            assert!(
-                guest_range_plan(MirrorVaStart::select(windows), off.guest_va_fill())
-                    .all(|(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0),
-                "windows={windows}: off plans no SPARSE range"
-            );
+        for (value, fill, sparse) in [
+            (UnmappedReadsZero::On, GuestVaFill::Zero, true),
+            (UnmappedReadsZero::Off, GuestVaFill::Fault, false),
+        ] {
+            let c = Config {
+                unmapped_reads_zero: value,
+                ..cfg(false, false)
+            };
+            for windows in [false, true] {
+                let start = MirrorVaStart::select(windows);
+                let got = c.guest_va_fill_by_start().for_start(start);
+                assert_eq!(got, fill, "{value:?} windows={windows}");
+                assert!(
+                    guest_range_plan(start, got)
+                        .all(|(.., f)| (f & NVOS32_ALLOC_FLAGS_SPARSE != 0) == sparse),
+                    "{value:?} windows={windows}"
+                );
+            }
+            assert!(c.check().is_ok(), "{value:?}");
         }
-        assert!(off.check().is_ok(), "the property needs no other property");
     }
 
     /// The default holds with every other property at its default and under both values of the
-    /// switches that select a profile (`windows-support`).
+    /// switches that select a profile (`windows-support`): the fill is chosen by the property and the
+    /// space's start, never by another property.
     #[test]
     fn the_default_does_not_depend_on_the_other_properties() {
+        use kf_host::channel::{GuestVaFill, GuestVaFillByStart};
         for (display, x11, windows) in [
             (false, false, true),
             (true, false, false),
@@ -4641,24 +4716,39 @@ mod config_tests {
                 ..cfg(display, x11)
             };
             assert_eq!(
-                c.guest_va_fill(),
-                kf_host::channel::GuestVaFill::Zero,
+                c.guest_va_fill_by_start(),
+                GuestVaFillByStart {
+                    host_default: GuestVaFill::Zero,
+                    guest_floor: GuestVaFill::Fault,
+                },
                 "display={display} x11={x11} windows_support={windows}"
             );
         }
     }
 
-    /// The property and the fill agree for both values (the ZERO fill exactly when on).
+    /// The word `kf3.c` passes is QEMU's `OnOffAuto`: 0 auto, 1 on, 2 off. Any other word is refused,
+    /// never read as one of the three.
     #[test]
-    fn the_property_and_the_fill_round_trip() {
-        use kf_host::channel::GuestVaFill;
-        for on in [false, true] {
-            let c = Config {
-                unmapped_reads_zero: on,
-                ..cfg(true, false)
-            };
-            assert_eq!(c.guest_va_fill() == GuestVaFill::Zero, on, "on={on}");
+    fn the_abi_word_is_on_off_auto_and_anything_else_is_refused() {
+        assert_eq!(
+            UnmappedReadsZero::from_abi(0),
+            Some(UnmappedReadsZero::Auto)
+        );
+        assert_eq!(UnmappedReadsZero::from_abi(1), Some(UnmappedReadsZero::On));
+        assert_eq!(UnmappedReadsZero::from_abi(2), Some(UnmappedReadsZero::Off));
+        for bad in [3, 4, 0xff, u32::MAX] {
+            assert_eq!(UnmappedReadsZero::from_abi(bad), None, "{bad}");
         }
+        for v in [
+            UnmappedReadsZero::Auto,
+            UnmappedReadsZero::On,
+            UnmappedReadsZero::Off,
+        ] {
+            assert!(["auto", "on", "off"].contains(&v.name()));
+        }
+        assert_eq!(UnmappedReadsZero::Auto.name(), "auto");
+        assert_eq!(UnmappedReadsZero::On.name(), "on");
+        assert_eq!(UnmappedReadsZero::Off.name(), "off");
     }
 
     /// ★ EXPERIMENT `x11-dispsw`: refused by name before anything is opened when the virtual

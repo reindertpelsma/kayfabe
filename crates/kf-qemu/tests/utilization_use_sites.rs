@@ -72,7 +72,7 @@ fn the_use_sites_read_the_property() {
         (
             "the C device passes the property",
             &c,
-            "s->report_utilization ? 1 : 0, s->unmapped_reads_zero ? 1 : 0, &s->h, err, sizeof(err));",
+            "s->report_utilization ? 1 : 0, (uint32_t)s->unmapped_reads_zero, &s->h, err, sizeof(err));",
         ),
         (
             "the C property is declared and defaults to ON",

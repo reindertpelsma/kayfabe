@@ -74,7 +74,7 @@ Labels. **OWNER DECISION (2026-11-20)**: stated by the owner in the discussion, 
 | `user-view-keep` | 0 = 16 (max 256) | |
 | `windows-support` | **on** | the one opt-out of the Windows profile (`OWNER_RULINGS.md` §AT) |
 | `report-utilization` | **on** | the guest may read the physical GPU's utilisation (§AV) |
-| `unmapped-reads-zero` | **on** | sparse-residency reads: an unmapped guest VA reads zero instead of faulting, for every guest (owner ruling 2026-11-24; `V3_SPARSE_RESIDENCY_RCA.md` §5) |
+| `unmapped-reads-zero` | **on** (TENTATIVE 2026-11-25, release-candidate branch only, pending the owner's ruling on decision B1: **auto**, on for a Linux guest and off for a Windows-profile guest; `V3_SPARSE_RESIDENCY_RCA.md` §9) | sparse-residency reads: an unmapped guest VA reads zero instead of faulting, for every guest (owner ruling 2026-11-24; `V3_SPARSE_RESIDENCY_RCA.md` §5) |
 | `doorbell-ioeventfd`, `doorbell-ioeventfd-max` | off, 256 | doorbell fast path |
 | `display-broker`, `display-broker-uid`, `display-broker-vram` | unset, -1, auto | the broker socket (absolute path; unset = off), one more accepted uid, GPU-copy rung |
 | `display-max-fps` | 0 = a cap of 75 | 24..75; refused below, above, or without `display=on` |
