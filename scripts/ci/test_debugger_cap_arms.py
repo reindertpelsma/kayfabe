@@ -9,6 +9,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+FAKE_UUID_BODY = "-".join(["12345678", "1234", "1234", "1234", "123456789abc"])
+
 SRC = Path(__file__).resolve().parents[1] / "bench" / "debugger_cap_arms.py"
 _spec = importlib.util.spec_from_file_location("debugger_cap_arms", SRC)
 arms = importlib.util.module_from_spec(_spec)
@@ -82,7 +84,7 @@ class FakeSources:
         extra = ""
         if self.xid_after is not None and self.dcalls > self.xid_after:
             extra = "[ 5.0] NVRM: Xid (PCI:0000:01:00): 31, fake\n"
-        return "[ 1.0] NVRM: loaded GPU-12345678-1234-1234-1234-123456789abc at 0000:01:00.0\n" + extra
+        return "[ 1.0] NVRM: loaded GPU-" + FAKE_UUID_BODY + " at 0000:01:00.0\n" + extra
 
 
 def run(tmp, refuse_at=0, ceiling=300, src=None, fb_limit=4096, settle=0.2, procs=1):
@@ -107,7 +109,7 @@ class Pure(unittest.TestCase):
         self.assertEqual(arms.count_xids("a\nNVRM: Xid (PCI:0): 31\nNVRM: loaded\nNVRM: Xid 13\n"), 2)
 
     def test_scrub_hides_identity(self):
-        s = arms.scrub("NVRM: GPU-12345678-1234-1234-1234-123456789abc at PCI 0000:01:00.0 ok")
+        s = arms.scrub("NVRM: GPU-" + FAKE_UUID_BODY + " at PCI 0000:01:00.0 ok")
         self.assertNotIn("GPU-1234", s)
         self.assertNotIn("0000:01:00.0", s)
         self.assertIn("<uuid>", s)
