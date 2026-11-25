@@ -1,0 +1,1 @@
+2026-11-25T04:14:54.862291Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04: kf3: realize refused: RM bring-up failed at R0 openat(nvidiactl): Syscall { call: "openat", errno: Some(13) }

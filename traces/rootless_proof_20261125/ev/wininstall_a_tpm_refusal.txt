@@ -1,0 +1,15 @@
+# First wininstall (tree ae1ebd74, 2026-11-25 04:16Z-04:18:47Z, Vast 62458518, as kfrun dropped). Its stage log was overwritten
+# by the second wininstall (tree f00cf99f); these lines were copied from the operator's terminal before that.
+[2026-11-25T04:18:47Z] EXIT ovmf-vars rc=0
+[2026-11-25T04:18:47Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-11-25T04:18:47Z] EXIT tpm-manufacture rc=1
+ROOTLESS_STAGE_EXIT stage=wininstall rc=1
+# /workspace/winvm/kfwin/logs/swtpm_setup.log (EK modulus elided):
+Starting vTPM manufacturing as kfrun:kfrun @ Wed 25 Nov 2026 04:18:47 AM UTC
+Successfully created RSA 2048 EK with handle 0x81010001.
+  Invoking /usr/lib/x86_64-linux-gnu/swtpm/swtpm-localca --type ek --ek <modulus> --dir /workspace/winvm/kfwin/tpm --logfile /workspace/winvm/kfwin/logs/swtpm_setup.log --tpm-spec-family 2.0 --tpm-spec-level 0 --tpm-spec-revision 164 --tpm-manufacturer id:00001014 --tpm-model swtpm --tpm-version id:20191023 --tpm2 --configfile /etc/swtpm-localca.conf --optsfile /etc/swtpm-localca.options
+Need read/write rights on statedir /var/lib/swtpm-localca for user kfrun.
+swtpm-localca exit with status 1:
+An error occurred. Authoring the TPM state failed.
+# box: swtpm_setup 0.6.3; `ls -ld /var/lib/swtpm-localca` -> drwxr-x--- swtpm root

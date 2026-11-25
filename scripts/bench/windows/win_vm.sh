@@ -346,8 +346,22 @@ tpm_manufacture() {
     return 2
   fi
   install -d -m 0700 "$VM/tpm"
+  # The distribution's certificate tool writes its CA under /var/lib/swtpm-localca, which only
+  # root and the swtpm user may write (swtpm-localca: "Need read/write rights on statedir"). When
+  # this uid cannot write it, the EK and platform certificates come from a CA kept with this VM.
+  local cfg=()
+  if [ ! -w /var/lib/swtpm-localca ]; then
+    local ca=$VM/tpm-ca
+    install -d -m 0700 "$ca"
+    printf 'statedir = %s\nsigningkey = %s/signkey.pem\nissuercert = %s/issuercert.pem\ncertserial = %s/certserial\n' \
+      "$ca" "$ca" "$ca" "$ca" > "$ca/localca.conf"
+    printf 'create_certs_tool = %s\ncreate_certs_tool_config = %s/localca.conf\ncreate_certs_tool_options = /etc/swtpm-localca.options\n' \
+      "$(sed -n 's/^create_certs_tool *= *//p' /etc/swtpm_setup.conf)" "$ca" > "$ca/swtpm_setup.conf"
+    cfg=(--config "$ca/swtpm_setup.conf")
+    log "TPM certificates from the per-VM CA $ca (/var/lib/swtpm-localca is not writable by uid $(id -u))"
+  fi
   swtpm_setup --tpm2 --tpmstate "$VM/tpm" --create-ek-cert --create-platform-cert --lock-nvram \
-    --pcr-banks sha256 --not-overwrite --logfile "$VM/logs/swtpm_setup.log"
+    --pcr-banks sha256 --not-overwrite --logfile "$VM/logs/swtpm_setup.log" "${cfg[@]}"
   tpm_manufactured || { log "swtpm_setup wrote no tpm2-00.permall (logs/swtpm_setup.log)"; return 1; }
   chmod 0600 "$VM/tpm"/*
   log "TPM_MANUFACTURED $VM/tpm ($(stat -c %s "$VM/tpm/tpm2-00.permall") bytes of state)"

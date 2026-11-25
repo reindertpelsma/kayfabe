@@ -1,0 +1,24 @@
+RUN_PROOF_START label=toolchain t=2026-11-25T04:12:55Z argv=['prlimit', '--memlock=8388608:8388608', 'python3', '-I', '/workspace/kf-src/scripts/ci/kfroot.py', 'run', '--user', 'kfrun', '--no-memlock', '--', 'bash', '/workspace/kf-src/traces/rootless_proof_20261125/stage.sh', 'toolchain']
+ROOTLESS_PROC stage=toolchain id=uid=1002(kfrun) gid=1002(kfrun) groups=1002(kfrun),109(kvm) memlock_kb=8192
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	109 
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	0
+KF_TRUST name=rustup-init-1.29.3 anchor=official-checksum-url sha256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55 size=21347088 mode=trust-git-only gating=yes
+
+info: default toolchain set to 1.99.0-x86_64-unknown-linux-gnu
+info: checking for self-update (current version: 1.29.3)
+info: syncing channel updates for 1.99.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+info: component rust-std for target x86_64-unknown-linux-musl is up to date
+info: component rust-std for target x86_64-unknown-uefi is up to date
+info: downloading 2 components
+cargo 1.99.0 (5f94df478 2026-08-27)
+ROOTLESS_STAGE_EXIT stage=toolchain rc=0
+RUN_PROOF_EXIT label=toolchain rc=0 t=2026-11-25T04:13:17Z

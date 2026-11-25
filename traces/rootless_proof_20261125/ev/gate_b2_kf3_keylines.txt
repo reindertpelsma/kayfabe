@@ -1,0 +1,13 @@
+      4 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.95 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=2466 ondemand=24 over=0]
+      4 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=2586 ondemand=25 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.95 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=2073 ondemand=20 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=2946 ondemand=28 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1713 ondemand=17 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=3186 ondemand=30 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=3066 ondemand=29 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=2346 ondemand=23 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.96 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1833 ondemand=18 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1953 ondemand=19 over=0]
+      3 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1473 ondemand=15 over=0]
+      2 kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.96 clamped=0 late_max_us=14158 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1593 ondemand=16 over=0]
+    151 PRIVILEGED_CHANNEL=0 privilege=USER

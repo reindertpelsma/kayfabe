@@ -1,0 +1,17 @@
+START 2026-11-25T03:59:20+00:00
+BOX_RC=0
+ae1ebd743 traces/rootless_proof_20261125: preregistration wording (claim ledger), before the run
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       146G   15G  131G  11% /
+TREE_RC=0
+[2026-11-25T04:10:49+00:00] B4: guest ladder built: 5061768 bytes
+[2026-11-25T04:10:49+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/ae1ebd74/qemu-system-x86_64 rev=ae1ebd74 mtime=2026-11-25 04:11:59.306770352 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-25T04:12:00+00:00

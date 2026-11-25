@@ -1,0 +1,17 @@
+RUN_PROOF_START label=build t=2026-11-25T04:33:11Z argv=['prlimit', '--memlock=8388608:8388608', 'python3', '-I', '/workspace/kf-src/scripts/ci/kfroot.py', 'run', '--user', 'kfrun', '--no-memlock', '--', 'bash', '/workspace/kf-src/traces/rootless_proof_20261125/stage.sh', 'build']
+ROOTLESS_PROC stage=build id=uid=1002(kfrun) gid=1002(kfrun) groups=1002(kfrun),109(kvm) memlock_kb=8192
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	109 
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	0
+[2/3] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o
+[3/3] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/f00cf99f/qemu-system-x86_64 rev=f00cf99f mtime=2026-11-25 04:33:37.569773273 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+ROOTLESS_STAGE_EXIT stage=build rc=0
+RUN_PROOF_EXIT label=build rc=0 t=2026-11-25T04:33:40Z

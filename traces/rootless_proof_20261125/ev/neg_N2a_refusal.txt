@@ -1,0 +1,7 @@
+# Control N2, first run (kf3 ae1ebd74, 2026-11-25 04:14:58Z-04:15:05Z, Vast 62458518). Its stage and QEMU logs were overwritten
+# by the second N2 run (ec079dca code, files *N2b*); these lines were copied from the operator's terminal before that.
+=== FAST GUEST rlneg_N2 — 2s of a 180s budget, qemu rc=1 ===
+FAST_VERDICT=CRASH (the serial log is EMPTY — QEMU wrote nothing at all)
+ROOTLESS_STAGE_EXIT stage=arm rc=1
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=not-held (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+2026-11-25T04:15:02.797169Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04: kf3: realize refused: GPU walker bring-up on 0000:00:07.0: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)

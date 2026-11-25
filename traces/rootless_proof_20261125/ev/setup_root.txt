@@ -1,0 +1,31 @@
+SETUP_START 2026-11-25T04:12:44+00:00
+Sudo version 1.9.9
+== before any change
+crw-rw---- 1 root kvm   10, 232 Nov 25 04:10 /dev/kvm
+crw-rw-rw- 1 root root 236,   0 Nov 25 03:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 236,   1 Nov 25 03:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 25 03:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 25 03:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+cr-------- 1 root root 239, 1 Nov 25 03:59 nvidia-cap1
+cr--r--r-- 1 root root 239, 2 Nov 25 03:59 nvidia-cap2
+dmesg_restrict=1 protected_regular=2 root_memlock_kb=17283352
+NVIDIA GeForce RTX 4090, 580.159.04, 24564 MiB
+uid=1002(kfrun) gid=1002(kfrun) groups=1002(kfrun),109(kvm)
+User kfrun is not allowed to run sudo on ubuntu.
+rev=ae1ebd74
+kernel.dmesg_restrict = 0
+== after
+crw-rw---- 1 root kvm   10, 232 Nov 25 04:10 /dev/kvm
+crw-rw-rw- 1 root root 236,   0 Nov 25 03:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 236,   1 Nov 25 03:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 25 03:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 25 03:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+cr-------- 1 root root 239, 1 Nov 25 03:59 nvidia-cap1
+cr--r--r-- 1 root root 239, 2 Nov 25 03:59 nvidia-cap2
+SETUP_EXIT rc=0 2026-11-25T04:12:51+00:00
