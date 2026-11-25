@@ -47,11 +47,13 @@ MUTANTS = [
     M("kayfabe-path-not-mapped", "kit", '(str(kroot), MAP_KAYFABE), (os.path.relpath', '(os.path.relpath'),
     M("pkgversion-fixed", "kit", '"--with-pkgversion=" + pkgversion', '"--with-pkgversion=kayfabe"'),
     M("recorded-line-keeps-real-paths", "kit", '    for real, name in sorted(((str(src), "<qemu-src>"), (str(build), "<qemu-build>"), (str(kroot), "<kayfabe-src>")), key=lambda p: -len(p[0])):\n        text = text.replace(real, name)\n', ""),
-    # the release binary has no KF3_NEGCTL_* switch (the feature stays off in the kit; the bench script turns it on)
+    # the release binary has no KF3_NEGCTL_* switch (the feature stays off in the kit and in a plain build_kf3.sh; only --negctl turns it on)
     M("kit-cargo-enables-negctl", "kit", '"--locked", "-p", "kf-qemu")', '"--locked", "-p", "kf-qemu", "--features", "negctl")'),
     M("kit-cargo-enables-all-features", "kit", '"--locked", "-p", "kf-qemu")', '"--locked", "-p", "kf-qemu", "--all-features")'),
-    M("bench-build-without-the-negctl-feature", "sh", "FEATURES=(--features negctl)\nif", "FEATURES=()\nif"),
-    M("no-negctl-option-still-builds-the-feature", "sh", 'then FEATURES=(); shift; fi', 'then shift; fi'),
+    M("plain-build-compiles-the-negctl-feature-in", "sh", "FEATURES=()\nARGS=()", "FEATURES=(--features negctl)\nARGS=()"),
+    M("negctl-option-does-not-build-the-feature", "sh", "--negctl) FEATURES=(--features negctl) ;;", "--negctl) ;;"),
+    M("unknown-build-option-accepted", "sh", '-*) echo "⊘ unknown option $a (usage: build_kf3.sh [--negctl] <qemu-source-tree> [<build-dir>])" >&2; exit 2 ;;', '-*) ARGS+=("$a") ;;'),
+    M("patched-build-asks-for-the-negctl-feature", "wrap", '"build_kf3.sh"), str(copy), str(build)]', '"build_kf3.sh"), "--negctl", str(copy), str(build)]'),
     # versions and inputs
     M("version-check-dropped", "kit", "    if version not in SUPPORTED_QEMU:", "    if False:"),
     M("version-check-by-prefix", "kit", "    if version not in SUPPORTED_QEMU:", "    if not any(version.startswith(v) for v in SUPPORTED_QEMU):"),

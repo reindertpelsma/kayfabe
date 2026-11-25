@@ -522,27 +522,59 @@ class BuildKf3Script(Tmp):
     ORIGINAL = PC_HEAD + PC_WAKE_OLD + PC_TAIL
     COPY = "bench/patched-hyperv-wake/qemu-10.2.4"
 
-    def test_the_bench_build_compiles_the_negctl_switches_in(self):
+    def cargo_args(self):
+        return (self.tmp / "target/cargo-args").read_text()
+
+    def test_the_plain_build_has_no_negctl_feature_and_says_so(self):
         r = self.plain()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("-p kf-qemu --features negctl", (self.tmp / "target/cargo-args").read_text())
+        self.assertIn("build --release -p kf-qemu", self.cargo_args())
+        self.assertNotIn("negctl", self.cargo_args())
+        self.assertRegex(r.stdout, r"KF3_BUILT \S+ rev=abcd1234 negctl=off ")
 
-    def test_the_bench_build_script_names_the_negctl_feature(self):
+    def test_the_plain_build_script_has_an_empty_default_feature_list(self):
         sh = (ROOT / "scripts/bench/build_kf3.sh").read_text()
-        self.assertIn("FEATURES=(--features negctl)", sh)
+        self.assertIn("FEATURES=()\nARGS=()", sh)
+        self.assertNotIn("--no-negctl", sh)
 
-    def test_the_no_negctl_option_clears_the_feature_list_before_cargo_runs(self):
-        sh = (ROOT / "scripts/bench/build_kf3.sh").read_text()
-        self.assertIn('if [ "${1:-}" = "--no-negctl" ]; then FEATURES=(); shift; fi', sh)
-        self.assertLess(sh.index("--no-negctl\" ]"), sh.index("cargo build --release"))
-
-    def test_the_no_negctl_option_builds_without_the_feature(self):
-        r = self.launch(["bash", str(ROOT / "scripts/bench/build_kf3.sh"), "--no-negctl", str(self.q)], self.q)
+    def negctl_build(self, *argv):
+        r = self.launch(["bash", str(ROOT / "scripts/bench/build_kf3.sh"), *argv], self.q)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("-p kf-qemu --features negctl", self.cargo_args())
+        self.assertRegex(r.stdout, r"KF3_BUILT \S+ rev=abcd1234 negctl=on ")
+
+    def test_the_negctl_option_before_the_tree_builds_the_feature_in(self):
+        self.negctl_build("--negctl", str(self.q))
+
+    def test_the_negctl_option_after_the_tree_builds_the_feature_in(self):
+        self.negctl_build(str(self.q), "--negctl")
+
+    def test_the_negctl_option_after_the_build_directory_builds_the_feature_in(self):
+        self.negctl_build(str(self.q), str(self.tmp / "bench/b"), "--negctl")
+
+    def refused(self, flag):
+        r = self.launch(["bash", str(ROOT / "scripts/bench/build_kf3.sh"), str(self.q), flag], self.q)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("unknown option " + flag, r.stderr)
+        self.assertFalse((self.tmp / "target/cargo-args").exists())
+        self.assertFalse((self.q / "hw/misc/kf3").exists())
+
+    def test_the_removed_no_negctl_option_is_refused_before_anything_is_copied(self):
+        self.refused("--no-negctl")
+
+    def test_an_unknown_option_is_refused_before_anything_is_copied(self):
+        self.refused("--nope")
+
+    def test_the_patched_user_build_has_no_negctl_feature(self):
+        r = self.patched("--with-patch", "hyperv-wake", str(self.q))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("build --release -p kf-qemu", self.cargo_args())
+        self.assertNotIn("negctl", self.cargo_args())
         self.assertIn("negctl=off", r.stdout)
-        args = (self.tmp / "target/cargo-args").read_text()
-        self.assertIn("build --release -p kf-qemu", args)
-        self.assertNotIn("negctl", args)
+
+    def test_the_patched_build_wrapper_never_names_the_negctl_option(self):
+        py = (ROOT / "scripts/bench/build_kf3_patched.py").read_text()
+        self.assertNotIn("negctl", py)
 
     def test_the_plain_build_script_never_changes_qemus_text(self):
         r = self.plain()

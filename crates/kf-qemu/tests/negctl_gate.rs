@@ -1,14 +1,15 @@
 //! The `KF3_NEGCTL_*` control switches exist only in a `negctl` build (`STATUS: LIVE, 2026-11-25`).
 //!
-//! Policy: the release binary has no switch that undoes a boundary. Each switch is an environment read in a small
+//! Policy: the release binary has no `KF3_NEGCTL_*` control switch. Each switch is an environment read in a small
 //! function that comes in two forms, `#[cfg(feature = "negctl")]` (the read) and `#[cfg(not(feature = "negctl"))]`
 //! (a constant). This test reads the product crates' source and fails when a `KF3_NEGCTL_` name appears in code (a
 //! string literal) outside an item or statement that carries the `negctl` gate, so a new switch added without the gate
 //! cannot reach the release binary. Names in comments are not code and are allowed.
 //!
 //! It is a source scan: it says no read is un-gated, not that the gate is spelled right. The compiled form is checked
-//! beside each function (`negctl_seam_tests`, which const-evaluates every control to its safe value in a default
-//! build) and in `kf-qemu`'s lib tests (the test binary of a default build holds no `KF3_NEGCTL_` string).
+//! in two other places: beside each function (`negctl_seam_tests`, which const-evaluates every control to its safe
+//! value in a default build), and on the built staticlib by `scripts/ci/negctl_artifact.py` (a scan of a test
+//! binary cannot work, because other tests embed source text).
 
 use std::path::{Path, PathBuf};
 

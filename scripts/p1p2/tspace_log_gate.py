@@ -9,6 +9,7 @@ whether the properties a box step owes held on that run.
   tspace_log_gate.py LOG --windows                  # the KF3_TSPACE=0 arm: the KNOWN POSITIVE -
                                                     # mirrors DO carry windows (the gate can see them)
   tspace_log_gate.py LOG --negctl NAME              # a positive-control run: NAME's counter MUST move
+                                                    # (the QEMU must come from `build_kf3.sh --negctl`)
       NAME: stale (KF3_NEGCTL_STALE_BIND), shadow (KF3_NEGCTL_SHADOW), heap (KF3_NEGCTL_HEAP),
             carve (KF3_NEGCTL_CARVE), twin (KF3_NEGCTL_TWIN), oversize (KF3_NEGCTL_TSPACE_OVERSIZE),
             window (KF3_NEGCTL_TWIN_WINDOW: WINDOWS=NONE must FAIL on it)
@@ -172,7 +173,7 @@ def gate(lines: list[str], windows: bool = False, negctl: str | None = None, use
         if not any(NEGCTL_BUILD_LINE in ln for ln in lines):
             return [("NEGCTL-BUILD", False,
                      "the log has no `" + NEGCTL_BUILD_LINE + "` line: the binary was built without the `negctl` "
-                     "feature (build it with scripts/bench/build_kf3.sh), so the switch did nothing")]
+                     "feature (build it with scripts/bench/build_kf3.sh --negctl), so the switch did nothing")]
         return [negctl_check(lines, negctl)]
     if windows:
         # The KF3_TSPACE=0 arm: the known positive. The gate must SEE windows here.

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The release archive holds no control-switch name; the bench archive holds them. STATUS: LIVE, 2026-11-25.
 
-Policy: the release binary has no switch that undoes a boundary. The `KF3_NEGCTL_*` environment reads are compiled in
+Policy: the release binary has no `KF3_NEGCTL_*` control switch (other environment switches remain; see the S2-02 note
+in docs/audits/2026-11-23-v3-stage2.md). The `KF3_NEGCTL_*` environment reads are compiled in
 only by the cargo feature `negctl` (crates/kf-qemu, forwarded to crates/kf-host); the release kit never sets it. This
 builds the Rust staticlib of kf-qemu twice, with default features and with `--features negctl`, and scans each archive
 for the name prefix: a default archive that holds it is a failure, and so is a bench archive that does not (the scan
@@ -51,7 +52,7 @@ def main():
     for features, want in ((None, False), ("negctl", True)):
         archive = build_archive(features)
         got = holds_name(archive)
-        label = "bench (--features negctl)" if features else "default (the release configuration)"
+        label = "control (--features negctl)" if features else "default (the release configuration)"
         print("%s: archive %s the control-switch name" % (label, "holds" if got else "does not hold"))
         if got != want:
             bad.append(label)
