@@ -1,0 +1,538 @@
+{
+ "label": "H1x_b1",
+ "cycle": 3,
+ "boot0": "2026-11-25T00:46:38.5000000+00:00",
+ "explorer_before": "1",
+ "quser_before": "USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME |  kfimage               console             1  Active      none   11/25/2026 12:46 AM",
+ "suspended": true,
+ "suspend_wait_s": 2,
+ "wake_utc": "2026-11-25T00:55:28Z",
+ "rates_wake+4s": {
+  "exits": 19706,
+  "halt_exits": 4472,
+  "io_exits": 0,
+  "mmio_exits": 805,
+  "halt_wakeup": 4386,
+  "irq_injections": 4739
+ },
+ "tsc_page": {},
+ "tsc_page_unchanged": false,
+ "trace": {
+  "events": {
+   "kvm_hv_stimer_set_config": 8018,
+   "tracing_mark_write": 1,
+   "kvm_write_tsc_offset": 8,
+   "kvm_hv_synic_set_msr": 168,
+   "kvm_hv_stimer_cleanup": 29503,
+   "kvm_hv_stimer_set_count": 13880,
+   "kvm_hv_hypercall": 872,
+   "kvm_msr": 8,
+   "kvm_hv_stimer_start_periodic": 4570,
+   "kvm_hv_stimer_callback": 14916,
+   "kvm_hv_stimer_expiration": 14916,
+   "kvm_hv_stimer_start_one_shot": 12101
+  },
+  "hv_writes_after_wake": [
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615900 qemu-system-x86 SINT3=0xd1",
+   "87648.615901 qemu-system-x86 SINT3=0xd1"
+  ],
+  "hv_writes_before_wake": [],
+  "stimer_first": [
+   {
+    "ts": 87648.617685,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 5355949144,
+    "count": 5355969114,
+    "count_s64": 5355969114,
+    "delta_u64": 19970,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617685,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 5355949145,
+    "count": 5355969115,
+    "count_s64": 5355969115,
+    "delta_u64": 19970,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617685,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 5355949144,
+    "count": 5355969114,
+    "count_s64": 5355969114,
+    "delta_u64": 19970,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617686,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 5355949162,
+    "count": 5355969124,
+    "count_s64": 5355969124,
+    "delta_u64": 19962,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617687,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 5355949163,
+    "count": 5355969132,
+    "count_s64": 5355969132,
+    "delta_u64": 19969,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617687,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 5355949170,
+    "count": 5355969134,
+    "count_s64": 5355969134,
+    "delta_u64": 19964,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.61769,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5355949197,
+    "count": 5355969163,
+    "count_s64": 5355969163,
+    "delta_u64": 19966,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.617711,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 5355949407,
+    "count": 5355969368,
+    "count_s64": 5355969368,
+    "delta_u64": 19961,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619689,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 5355969189,
+    "count": 5355989177,
+    "count_s64": 5355989177,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.61969,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 5355969195,
+    "count": 5355989182,
+    "count_s64": 5355989182,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619691,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 5355969205,
+    "count": 5355989183,
+    "count_s64": 5355989183,
+    "delta_u64": 19978,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619691,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 5355969208,
+    "count": 5355989192,
+    "count_s64": 5355989192,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619692,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 5355969214,
+    "count": 5355989200,
+    "count_s64": 5355989200,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619692,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 5355969217,
+    "count": 5355989203,
+    "count_s64": 5355989203,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619693,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5355969224,
+    "count": 5355974210,
+    "count_s64": 5355974210,
+    "delta_u64": 4986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.619717,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 5355969465,
+    "count": 5355989450,
+    "count_s64": 5355989450,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.6202,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5355974299,
+    "count": 5355994285,
+    "count_s64": 5355994285,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621696,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 5355989258,
+    "count": 5356009244,
+    "count_s64": 5356009244,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621696,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 5355989258,
+    "count": 5356009243,
+    "count_s64": 5356009243,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621696,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 5355989260,
+    "count": 5356009246,
+    "count_s64": 5356009246,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621698,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 5355989282,
+    "count": 5356009270,
+    "count_s64": 5356009270,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621699,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 5355989286,
+    "count": 5356009269,
+    "count_s64": 5356009269,
+    "delta_u64": 19983,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.621723,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 5355989531,
+    "count": 5356009515,
+    "count_s64": 5356009515,
+    "delta_u64": 19984,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.62224,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5355994699,
+    "count": 5356014686,
+    "count_s64": 5356014686,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623457,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 5356006873,
+    "count": 5356026836,
+    "count_s64": 5356026836,
+    "delta_u64": 19963,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623699,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 5356009284,
+    "count": 5356029273,
+    "count_s64": 5356029273,
+    "delta_u64": 19989,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.6237,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 5356009295,
+    "count": 5356029283,
+    "count_s64": 5356029283,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623701,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 5356009314,
+    "count": 5356029300,
+    "count_s64": 5356029300,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623708,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 5356009379,
+    "count": 5356029367,
+    "count_s64": 5356029367,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623711,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 5356009411,
+    "count": 5356029397,
+    "count_s64": 5356029397,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.623736,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 5356009662,
+    "count": 5356029647,
+    "count_s64": 5356029647,
+    "delta_u64": 19985,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.624244,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5356014739,
+    "count": 5356034726,
+    "count_s64": 5356034726,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.625467,
+    "vcpu": 4,
+    "timer": 0,
+    "time_now": 5356026972,
+    "count": 5356046960,
+    "count_s64": 5356046960,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.625711,
+    "vcpu": 2,
+    "timer": 0,
+    "time_now": 5356029409,
+    "count": 5356049397,
+    "count_s64": 5356049397,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.625714,
+    "vcpu": 7,
+    "timer": 0,
+    "time_now": 5356029439,
+    "count": 5356049427,
+    "count_s64": 5356049427,
+    "delta_u64": 19988,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.625715,
+    "vcpu": 0,
+    "timer": 0,
+    "time_now": 5356029451,
+    "count": 5356049437,
+    "count_s64": 5356049437,
+    "delta_u64": 19986,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.62572,
+    "vcpu": 3,
+    "timer": 0,
+    "time_now": 5356029499,
+    "count": 5356049488,
+    "count_s64": 5356049488,
+    "delta_u64": 19989,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.625739,
+    "vcpu": 5,
+    "timer": 0,
+    "time_now": 5356029684,
+    "count": 5356049673,
+    "count_s64": 5356049673,
+    "delta_u64": 19989,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.626248,
+    "vcpu": 1,
+    "timer": 0,
+    "time_now": 5356034780,
+    "count": 5356054767,
+    "count_s64": 5356054767,
+    "delta_u64": 19987,
+    "wraps_x100": false
+   },
+   {
+    "ts": 87648.627461,
+    "vcpu": 6,
+    "timer": 0,
+    "time_now": 5356046904,
+    "count": 5356066875,
+    "count_s64": 5356066875,
+    "delta_u64": 19971,
+    "wraps_x100": false
+   }
+  ],
+  "stimer_distinct": {
+   "2/0/5355969114": 1,
+   "3/0/5355969115": 1,
+   "4/0/5355969114": 1,
+   "0/0/5355969124": 1,
+   "7/0/5355969132": 1,
+   "6/0/5355969134": 1,
+   "1/0/5355969163": 1,
+   "5/0/5355969368": 1,
+   "3/0/5355989177": 1,
+   "6/0/5355989182": 1,
+   "2/0/5355989183": 1,
+   "0/0/5355989192": 1,
+   "4/0/5355989200": 1,
+   "7/0/5355989203": 1,
+   "1/0/5355974210": 1,
+   "5/0/5355989450": 1,
+   "1/0/5355994285": 1,
+   "6/0/5356009244": 1,
+   "3/0/5356009243": 1,
+   "2/0/5356009246": 1
+  },
+  "tsc_offset": [
+   "87648.282141 AFTER vcpu=0 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282184 AFTER vcpu=1 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282221 AFTER vcpu=2 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282262 AFTER vcpu=3 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282302 AFTER vcpu=4 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282340 AFTER vcpu=5 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282378 AFTER vcpu=6 prev=18446420322717760660 next=18446419586068664550",
+   "87648.282418 AFTER vcpu=7 prev=18446420322717760660 next=18446419586068664550"
+  ],
+  "synic_host_writes_at_wake": 160,
+  "expirations_ok": 0,
+  "expirations_fail": 14916
+ },
+ "ssh_back": true,
+ "back_after_s": 8,
+ "rates_late": null,
+ "status_after": "running",
+ "storm": {
+  "top_rearm": 1,
+  "wraps_x100": false,
+  "exits_per_s_late": 0,
+  "signature": false
+ },
+ "boot1": "2026-11-25T00:46:38.5000000+00:00",
+ "explorer_after": "1",
+ "nvidia_smi": "NVIDIA GeForce RTX 4070, 580.88",
+ "events": [
+  "2026-11-25T00:55:24.3658436+00:00 42 Microsoft-Windows-Kernel-Power The system is entering sleep. Sleep Reason: Application API",
+  "2026-11-25T00:55:25.2687675+00:00 107 Microsoft-Windows-Kernel-Power The system has resumed from sleep.",
+  "2026-11-25T00:55:26.5012219+00:00 1 Microsoft-Windows-Kernel-General The system time has changed to ?2026?-?11?-?25T00:55:26.500000000Z from ?2026?-?11?-?25T00:55:25.268533400Z. Time Delta:",
+  "2026-11-25T00:55:28.8126177+00:00 1 Microsoft-Windows-Power-Troubleshooter The system has returned from a low power state. Sleep Time: ?2026?-?11?-?25T00:55:24.093516500Z Wake Time: ?2026?-?11?-?"
+ ],
+ "guest_alive": true,
+ "event153_nvlddmkm": 0,
+ "verdict": "CLEAN",
+ "reasons": [],
+ "cycle_start_utc": "00:55:22Z",
+ "kf3_delta": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 1,
+  "cold": 0,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "rm_unload": 0,
+  "ram_changed": 0,
+  "user_ring_topology": 0,
+  "unserviced": 42,
+  "status_0x51": 0
+ },
+ "qmp_events": [
+  {
+   "event": "SUSPEND",
+   "t_host": 1795568127.3,
+   "data": {}
+  },
+  {
+   "event": "WAKEUP",
+   "t_host": 1795568128.1,
+   "data": {}
+  }
+ ],
+ "cycle_end_utc": "00:58:10Z",
+ "item": "H1x",
+ "arm": "B",
+ "zero": "off",
+ "qemu": "/workspace/bench/pcs3_20261125/patched-hyperv-wake/kf3-bins/7bd968c2/qemu-system-x86_64"
+}

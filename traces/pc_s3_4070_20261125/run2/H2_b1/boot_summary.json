@@ -1,0 +1,27 @@
+{
+ "host_mmuWalkMap_lines": 1,
+ "host_no_memory_lines": 18,
+ "qemu_log": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 0,
+  "cold": 1,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "rm_unload": 0,
+  "ram_changed": 0,
+  "user_ring_topology": 0,
+  "unserviced": 336,
+  "status_0x51": 0,
+  "lines": 5499
+ },
+ "qmp_all": [
+  "RTC_CHANGE",
+  "RESET",
+  "RTC_CHANGE",
+  "NIC_RX_FILTER_CHANGED",
+  "SUSPEND",
+  "WAKEUP",
+  "SHUTDOWN"
+ ]
+}

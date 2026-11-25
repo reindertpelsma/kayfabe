@@ -1,0 +1,18 @@
+[    32.5s] H1_b1 guest up=True
+[   127.2s] H1_b1 c1 boot0=2026-11-24T23:53:59.5000000+00:00 explorer=1 hv_writes_before=37 tsc_page_gpa=0xe000
+[   128.4s] H1_b1 c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   134.4s] H1_b1 c1 status=suspended after 6s
+[   140.9s] H1_b1 c1 woke; status=running rates={'exits': 60606, 'halt_exits': 9842, 'io_exits': 0, 'mmio_exits': 991, 'halt_wakeup': 8228, 'irq_injections': 11970} stimer_first=[{'ts': 84088.0386, 'vcpu': 5, 'timer': 0, 'time_now': 1340337752, 'count': 1340357722, 'count_s64': 1340357722, 'delta_u64': 19970, 'wraps_x100': False}, {'ts': 84088.0386, 'vcpu': 1, 'timer': 0, 'time_now': 1340337755, 'count': 1340357723, 'count_s64': 1340357723, 'delta_u64': 19968, 'wraps_x100': False}]
+[   142.1s] H1_b1 c1 ssh back after 8s; waiting 150 s for a post-wake TDR
+[   296.3s] S3_CYCLE item=H1 boot=H1_b1 n=1 verdict=CLEAN 153=0 reasons=[]
+[   337.4s] H1_b1 c2 boot0= explorer=None hv_writes_before=8 tsc_page_gpa=None
+[   347.5s] H1_b1 c2 suspend requested rc=255 
+[   347.5s] H1_b1 c2 status=suspended after 0s
+[   353.8s] H1_b1 c2 woke; status=running rates={'exits': 85622, 'halt_exits': 5983, 'io_exits': 0, 'mmio_exits': 824, 'halt_wakeup': 5356, 'irq_injections': 6648} stimer_first=[{'ts': 84301.132646, 'vcpu': 3, 'timer': 0, 'time_now': 3471278159, 'count': 3471298129, 'count_s64': 3471298129, 'delta_u64': 19970, 'wraps_x100': False}, {'ts': 84301.132646, 'vcpu': 2, 'timer': 0, 'time_now': 3471278158, 'count': 3471298129, 'count_s64': 3471298129, 'delta_u64': 19971, 'wraps_x100': False}]
+[   355.0s] H1_b1 c2 ssh back after 8s; waiting 150 s for a post-wake TDR
+[   509.2s] S3_CYCLE item=H1 boot=H1_b1 n=2 verdict=FAIL-OTHER 153=0 reasons=['new boot (LastBootUpTime changed)']
+[   511.0s] H1_b1 stop: qmp quit; exited 0
+[   512.0s] H1_b1 boot summary {'host_mmuWalkMap_lines': 1, 'host_no_memory_lines': 20, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[   544.5s] H1_b2 guest up=True
+[   566.3s] SESSION_EXIT

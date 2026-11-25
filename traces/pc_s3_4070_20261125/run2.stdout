@@ -1,0 +1,107 @@
+[    32.5s] H1_b1 guest up=True
+[   128.6s] H1_b1 c1 boot0=2026-11-25T00:03:50.5000000+00:00 explorer=1 hv_writes_before=37 tsc_page_gpa=0xe000
+[   129.8s] H1_b1 c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   135.8s] H1_b1 c1 status=suspended after 6s
+[   142.3s] H1_b1 c1 woke; status=running rates={'exits': 72940, 'halt_exits': 12178, 'io_exits': 0, 'mmio_exits': 1317, 'halt_wakeup': 9120, 'irq_injections': 14946} stimer_first=[{'ts': 84680.398479, 'vcpu': 5, 'timer': 0, 'time_now': 1354890838, 'count': 1354910805, 'count_s64': 1354910805, 'delta_u64': 19967, 'wraps_x100': False}, {'ts': 84680.398479, 'vcpu': 4, 'timer': 0, 'time_now': 1354890838, 'count': 1354910809, 'count_s64': 1354910809, 'delta_u64': 19971, 'wraps_x100': False}]
+[   143.5s] H1_b1 c1 ssh back after 8s; waiting 150 s for a post-wake TDR
+[   297.8s] S3_CYCLE item=H1 boot=H1_b1 n=1 verdict=CLEAN 153=0 reasons=[]
+[   332.2s] H1_b1 c2 boot0=2026-11-25T00:03:50.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[   333.6s] H1_b1 c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   339.6s] H1_b1 c2 status=suspended after 6s
+[   346.0s] H1_b1 c2 woke; status=running rates={'exits': 24020, 'halt_exits': 5647, 'io_exits': 0, 'mmio_exits': 1220, 'halt_wakeup': 4998, 'irq_injections': 6392} stimer_first=[{'ts': 84884.140581, 'vcpu': 6, 'timer': 0, 'time_now': 3392311801, 'count': 3392331771, 'count_s64': 3392331771, 'delta_u64': 19970, 'wraps_x100': False}, {'ts': 84884.140581, 'vcpu': 2, 'timer': 0, 'time_now': 3392311801, 'count': 3392331771, 'count_s64': 3392331771, 'delta_u64': 19970, 'wraps_x100': False}]
+[   347.1s] H1_b1 c2 ssh back after 8s; waiting 150 s for a post-wake TDR
+[   501.3s] S3_CYCLE item=H1 boot=H1_b1 n=2 verdict=CLEAN 153=0 reasons=[]
+[   535.7s] H1_b1 c3 boot0=2026-11-25T00:03:50.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[   536.9s] H1_b1 c3 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   538.9s] H1_b1 c3 status=suspended after 2s
+[   545.3s] H1_b1 c3 woke; status=running rates={'exits': 19984, 'halt_exits': 4496, 'io_exits': 0, 'mmio_exits': 787, 'halt_wakeup': 4405, 'irq_injections': 4858} stimer_first=[{'ts': 85083.46765, 'vcpu': 2, 'timer': 0, 'time_now': 5385582442, 'count': 5385602413, 'count_s64': 5385602413, 'delta_u64': 19971, 'wraps_x100': False}, {'ts': 85083.467652, 'vcpu': 4, 'timer': 0, 'time_now': 5385582457, 'count': 5385602422, 'count_s64': 5385602422, 'delta_u64': 19965, 'wraps_x100': False}]
+[   553.8s] H1_b1 c3 ssh back after 15s; waiting 150 s for a post-wake TDR
+[   708.6s] S3_CYCLE item=H1 boot=H1_b1 n=3 verdict=CLEAN 153=0 reasons=[]
+[   743.3s] H1_b1 c4 boot0=2026-11-25T00:03:50.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[   745.1s] H1_b1 c4 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   748.1s] H1_b1 c4 status=suspended after 3s
+[   754.6s] H1_b1 c4 woke; status=running rates={'exits': 94235, 'halt_exits': 17718, 'io_exits': 0, 'mmio_exits': 778, 'halt_wakeup': 10338, 'irq_injections': 25270} stimer_first=[{'ts': 85292.733575, 'vcpu': 2, 'timer': 0, 'time_now': 7478241634, 'count': 7478261602, 'count_s64': 7478261602, 'delta_u64': 19968, 'wraps_x100': False}, {'ts': 85292.733575, 'vcpu': 1, 'timer': 0, 'time_now': 7478241634, 'count': 7478261602, 'count_s64': 7478261602, 'delta_u64': 19968, 'wraps_x100': False}]
+[   756.2s] H1_b1 c4 ssh back after 8s; waiting 150 s for a post-wake TDR
+[   908.9s] S3_CYCLE item=H1 boot=H1_b1 n=4 verdict=CLEAN 153=0 reasons=[]
+[   941.2s] H1_b1 c5 boot0=2026-11-25T00:03:50.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[   942.1s] H1_b1 c5 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   944.1s] H1_b1 c5 status=suspended after 2s
+[   950.6s] H1_b1 c5 woke; status=running rates={'exits': 55981, 'halt_exits': 13830, 'io_exits': 0, 'mmio_exits': 784, 'halt_wakeup': 9464, 'irq_injections': 16433} stimer_first=[{'ts': 85488.708142, 'vcpu': 1, 'timer': 0, 'time_now': 9437987250, 'count': 9438007218, 'count_s64': 9438007218, 'delta_u64': 19968, 'wraps_x100': False}, {'ts': 85488.708143, 'vcpu': 7, 'timer': 0, 'time_now': 9437987257, 'count': 9438007225, 'count_s64': 9438007225, 'delta_u64': 19968, 'wraps_x100': False}]
+[   951.2s] H1_b1 c5 ssh back after 7s; waiting 150 s for a post-wake TDR
+[  1103.1s] S3_CYCLE item=H1 boot=H1_b1 n=5 verdict=CLEAN 153=0 reasons=[]
+[  1163.0s] H1_b1 stop: guest Stop-Computer rc=0; exited 0
+[  1164.0s] H1_b1 boot summary {'host_mmuWalkMap_lines': 1, 'host_no_memory_lines': 20, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[  1196.5s] H2_b1 guest up=True
+[  1292.7s] H2_b1 c1 boot0=2026-11-25T00:23:14.5000000+00:00 explorer=1 hv_writes_before=37 tsc_page_gpa=0xe000
+[  1293.9s] H2_b1 c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  1301.0s] H2_b1 c1 status=suspended after 7s
+[  1320.2s] H2_b1 c1 woke; status=running rates={'exits': 3733788, 'halt_exits': 2240, 'io_exits': 0, 'mmio_exits': 0, 'halt_wakeup': 2232, 'irq_injections': 379966} stimer_first=[]
+[  1388.4s] WEDGE c1 rates={'exits': 3718588, 'halt_exits': 2151, 'io_exits': 0, 'mmio_exits': 0, 'halt_wakeup': 2152, 'irq_injections': 385842} reasons={'write_cr8': 1087369, 'msr': 571848, 'vintr': 195183, 'hlt': 2170, 'interrupt': 1189, 'npf': 19} pio=[]
+[  1454.1s] S3_CYCLE item=H2 boot=H2_b1 n=1 verdict=STORM 153=None reasons=['no ssh within 150 s']
+[  1456.3s] H2_b1 stop: qmp quit; exited 0
+[  1457.4s] H2_b1 boot summary {'host_mmuWalkMap_lines': 1, 'host_no_memory_lines': 18, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[  1489.8s] H2_b2 guest up=True
+[  1584.9s] H2_b2 c2 boot0=2026-11-25T00:28:07.5000000+00:00 explorer=1 hv_writes_before=37 tsc_page_gpa=0xe000
+[  1586.2s] H2_b2 c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  1593.2s] H2_b2 c2 status=suspended after 7s
+[  1608.1s] H2_b2 c2 woke; status=running rates={'exits': 3704672, 'halt_exits': 2222, 'io_exits': 0, 'mmio_exits': 0, 'halt_wakeup': 2218, 'irq_injections': 380768} stimer_first=[]
+[  1681.7s] WEDGE c2 rates={'exits': 6047708, 'halt_exits': 552, 'io_exits': 0, 'mmio_exits': 0, 'halt_wakeup': 552, 'irq_injections': 579393} reasons={'write_cr8': 1883977, 'msr': 884260, 'vintr': 294792, 'interrupt': 2013, 'hlt': 552} pio=[]
+[  1747.3s] S3_CYCLE item=H2 boot=H2_b2 n=2 verdict=STORM 153=None reasons=['no ssh within 150 s']
+[  1749.5s] H2_b2 stop: qmp quit; exited 0
+[  1750.5s] H2_b2 boot summary {'host_mmuWalkMap_lines': 1, 'host_no_memory_lines': 18, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[  1783.6s] H3_b1 guest up=True
+[  1881.6s] H3_b1 c1 boot0=2026-11-25T00:33:00.5000000+00:00 explorer=1 hv_writes_before=0 tsc_page_gpa=None
+[  1883.3s] H3_b1 c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  1890.3s] H3_b1 c1 status=suspended after 7s
+[  1896.3s] H3_b1 c1 woke; status=running rates={'exits': 150141, 'halt_exits': 6592, 'io_exits': 0, 'mmio_exits': 103064, 'halt_wakeup': 5812, 'irq_injections': 8182} stimer_first=[]
+[  1898.0s] H3_b1 c1 ssh back after 8s; waiting 150 s for a post-wake TDR
+[  2054.0s] S3_CYCLE item=H3 boot=H3_b1 n=1 verdict=CLEAN 153=0 reasons=[]
+[  2088.6s] H3_b1 c2 boot0=2026-11-25T00:33:00.5000000+00:00 explorer=1 hv_writes_before=0 tsc_page_gpa=None
+[  2090.5s] H3_b1 c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  2096.5s] H3_b1 c2 status=suspended after 6s
+[  2102.5s] H3_b1 c2 woke; status=running rates={'exits': 62221, 'halt_exits': 2225, 'io_exits': 0, 'mmio_exits': 44752, 'halt_wakeup': 2174, 'irq_injections': 2573} stimer_first=[]
+[  2110.0s] H3_b1 c2 ssh back after 14s; waiting 150 s for a post-wake TDR
+[  2265.8s] S3_CYCLE item=H3 boot=H3_b1 n=2 verdict=CLEAN 153=0 reasons=[]
+[  2300.1s] H3_b1 c3 boot0=2026-11-25T00:33:00.5000000+00:00 explorer=1 hv_writes_before=0 tsc_page_gpa=None
+[  2301.8s] H3_b1 c3 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  2304.8s] H3_b1 c3 status=suspended after 3s
+[  2310.9s] H3_b1 c3 woke; status=running rates={'exits': 60520, 'halt_exits': 2230, 'io_exits': 0, 'mmio_exits': 43134, 'halt_wakeup': 2174, 'irq_injections': 2526} stimer_first=[]
+[  2312.5s] H3_b1 c3 ssh back after 8s; waiting 150 s for a post-wake TDR
+[  2469.1s] S3_CYCLE item=H3 boot=H3_b1 n=3 verdict=CLEAN 153=0 reasons=[]
+[  2567.1s] H3_b1 stop: guest Stop-Computer rc=0; exited 0
+[  2568.2s] H3_b1 boot summary {'host_mmuWalkMap_lines': 1, 'host_no_memory_lines': 20, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[  2600.6s] H1x_b1 guest up=True
+[  2696.8s] H1x_b1 c1 boot0=2026-11-25T00:46:38.5000000+00:00 explorer=1 hv_writes_before=37 tsc_page_gpa=0xe000
+[  2698.1s] H1x_b1 c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  2703.1s] H1x_b1 c1 status=suspended after 5s
+[  2709.5s] H1x_b1 c1 woke; status=running rates={'exits': 66680, 'halt_exits': 9776, 'io_exits': 0, 'mmio_exits': 1055, 'halt_wakeup': 8085, 'irq_injections': 12416} stimer_first=[{'ts': 87247.67653, 'vcpu': 0, 'timer': 0, 'time_now': 1346537705, 'count': 1346542688, 'count_s64': 1346542688, 'delta_u64': 4983, 'wraps_x100': False}, {'ts': 87247.677058, 'vcpu': 0, 'timer': 0, 'time_now': 1346542983, 'count': 1346562970, 'count_s64': 1346562970, 'delta_u64': 19987, 'wraps_x100': False}]
+[  2710.8s] H1x_b1 c1 ssh back after 8s; waiting 150 s for a post-wake TDR
+[  2865.2s] S3_CYCLE item=H1x boot=H1x_b1 n=1 verdict=CLEAN 153=0 reasons=[]
+[  2899.5s] H1x_b1 c2 boot0=2026-11-25T00:46:38.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[  2900.9s] H1x_b1 c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  2904.9s] H1x_b1 c2 status=suspended after 4s
+[  2911.4s] H1x_b1 c2 woke; status=running rates={'exits': 22812, 'halt_exits': 5659, 'io_exits': 0, 'mmio_exits': 790, 'halt_wakeup': 5012, 'irq_injections': 6300} stimer_first=[{'ts': 87449.524133, 'vcpu': 5, 'timer': 0, 'time_now': 3365013682, 'count': 3365033650, 'count_s64': 3365033650, 'delta_u64': 19968, 'wraps_x100': False}, {'ts': 87449.524133, 'vcpu': 4, 'timer': 0, 'time_now': 3365013685, 'count': 3365033653, 'count_s64': 3365033653, 'delta_u64': 19968, 'wraps_x100': False}]
+[  2912.5s] H1x_b1 c2 ssh back after 8s; waiting 150 s for a post-wake TDR
+[  3066.7s] S3_CYCLE item=H1x boot=H1x_b1 n=2 verdict=CLEAN 153=0 reasons=[]
+[  3100.8s] H1x_b1 c3 boot0=2026-11-25T00:46:38.5000000+00:00 explorer=1 hv_writes_before=8 tsc_page_gpa=None
+[  3102.0s] H1x_b1 c3 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[  3104.0s] H1x_b1 c3 status=suspended after 2s
+[  3110.4s] H1x_b1 c3 woke; status=running rates={'exits': 19706, 'halt_exits': 4472, 'io_exits': 0, 'mmio_exits': 805, 'halt_wakeup': 4386, 'irq_injections': 4739} stimer_first=[{'ts': 87648.617685, 'vcpu': 2, 'timer': 0, 'time_now': 5355949144, 'count': 5355969114, 'count_s64': 5355969114, 'delta_u64': 19970, 'wraps_x100': False}, {'ts': 87648.617685, 'vcpu': 3, 'timer': 0, 'time_now': 5355949145, 'count': 5355969115, 'count_s64': 5355969115, 'delta_u64': 19970, 'wraps_x100': False}]
+[  3111.6s] H1x_b1 c3 ssh back after 8s; waiting 150 s for a post-wake TDR
+[  3266.6s] S3_CYCLE item=H1x boot=H1x_b1 n=3 verdict=CLEAN 153=0 reasons=[]
+[  3352.1s] H1x_b1 stop: guest Stop-Computer rc=0; exited 0
+[  3353.1s] H1x_b1 boot summary {'host_mmuWalkMap_lines': 0, 'host_no_memory_lines': 0, 'qmp_all': ['RTC_CHANGE', 'RESET', 'RTC_CHANGE', 'NIC_RX_FILTER_CHANGED', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SUSPEND', 'WAKEUP', 'SHUTDOWN']}
+[  3353.2s] SESSION_EXIT

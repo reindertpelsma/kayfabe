@@ -1,0 +1,13 @@
+{"recorder": "connected", "t": 1795566774.887594}
+{"timestamp": {"seconds": 1795566778, "microseconds": 593596}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}, "t_host": 1795566778.5936928}
+{"timestamp": {"seconds": 1795566779, "microseconds": 629238}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}, "t_host": 1795566779.6293204}
+{"timestamp": {"seconds": 1795566780, "microseconds": 145667}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}, "t_host": 1795566780.145746}
+{"timestamp": {"seconds": 1795566785, "microseconds": 668645}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[2]/virtio-backend"}, "t_host": 1795566785.6687303}
+{"timestamp": {"seconds": 1795566913, "microseconds": 591006}, "event": "SUSPEND", "t_host": 1795566913.5910628}
+{"timestamp": {"seconds": 1795566914, "microseconds": 390088}, "event": "WAKEUP", "t_host": 1795566914.3901486}
+{"timestamp": {"seconds": 1795567120, "microseconds": 38337}, "event": "SUSPEND", "t_host": 1795567120.0384114}
+{"timestamp": {"seconds": 1795567120, "microseconds": 538465}, "event": "WAKEUP", "t_host": 1795567120.5385115}
+{"timestamp": {"seconds": 1795567327, "microseconds": 910988}, "event": "SUSPEND", "t_host": 1795567327.911039}
+{"timestamp": {"seconds": 1795567328, "microseconds": 908991}, "event": "WAKEUP", "t_host": 1795567328.9090438}
+{"timestamp": {"seconds": 1795567589, "microseconds": 546977}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}, "t_host": 1795567589.547085}
+{"recorder": "socket closed", "t": 1795567589.5546653}
