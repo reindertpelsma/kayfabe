@@ -90,3 +90,15 @@ counted (finding B1 of 2026-11-24, `traces/pc_hwgates_20261124/README.md`; not t
 Text only: `prov.log` heads, `setup_root.txt`, per-stage logs with the wrapper's `/proc/self/status` lines and the
 `ROOTLESS_STAGE_EXIT` line, the `procsample` JSONL (compressed) and summaries, the suite output, the gate log and its
 `rootless_*.json`, kf3 key lines. Scrubbed: GPU and VM UUIDs, PARTUUIDs, serials, IP addresses.
+
+## Addendum 1 (2026-11-25, 04:25Z, written before the runs it governs)
+
+The first `wininstall` (tree `ae1ebd74`) stopped at the TPM manufacture: `swtpm-localca` refused with "Need read/write
+rights on statedir /var/lib/swtpm-localca for user kfrun" (`swtpm_setup` 0.6.3; the directory is `swtpm:root` 0750). That
+is the Windows harness, not QEMU. Control N2 failed with `cuInit refused: 999 (CUDA_ERROR_UNKNOWN)`, which names the
+CUDA init error (the expectation written above) but not the node. Commit `ec079dca` changes both: `win_vm.sh` uses a
+per-VM CA when the system one is not writable, and kf3's walker refusal names `/dev/nvidia-uvm` when `cuInit` refused
+and the node does not open read-write. Procedure from here: the suite already running at `ae1ebd74` finishes unchanged;
+then `/workspace/kf-src` moves to `ec079dca` (as `kfrun`), `build` runs again as `kfrun`, N2 is run again, and
+`wininstall` and `wingate` run at `ec079dca` one after the other (no concurrent suite). The hypotheses and falsifiers are
+unchanged; H1(b) is judged at `ec079dca`, H1(a) at `ae1ebd74`, and the README names both.
