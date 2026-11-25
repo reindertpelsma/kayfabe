@@ -11,5 +11,10 @@ kf-arch.workspace = true
 kf-abi.workspace = true
 kf-linux-raw.workspace = true
 
+[features]
+# Control builds only: compiles in the `KF3_NEGCTL_*` control switches (kf-host: the capability-bracket
+# negative control). Off by default and never set by the release kit.
+negctl = []
+
 [lints]
 workspace = true

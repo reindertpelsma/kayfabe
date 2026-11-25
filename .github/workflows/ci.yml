@@ -2453,6 +2453,13 @@ jobs:
             sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
           fi
           exit "$rc"
+      # The `KF3_NEGCTL_*` control switches are compiled in only by the cargo feature `negctl` (control builds only; the release kit
+      # and a plain build_kf3.sh never set it). The default-feature test above covers the release configuration; this runs the two crates that read the
+      # switches with the feature on, then builds the staticlib both ways and scans each archive for the switch names.
+      - name: Control switches (negctl feature on; default archive holds no switch name)
+        run: |
+          KF_REQUIRE_ORACLES=1 KAYFABE_NO_KVM=1 cargo test -p kf-host -p kf-qemu --features kf-qemu/negctl --no-fail-fast
+          python3 -B -I scripts/ci/negctl_artifact.py
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove

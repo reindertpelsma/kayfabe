@@ -46,3 +46,5 @@ pub mod utilhost;
 pub mod vblankgate;
 
 mod heartbeat;
+#[cfg(test)]
+mod negctl_tests;

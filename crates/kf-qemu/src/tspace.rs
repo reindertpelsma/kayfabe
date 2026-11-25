@@ -81,9 +81,17 @@ pub const UNPRIVILEGED_TRANSLATED: &str = "an UNPRIVILEGED Translated channel ha
 /// every vidmem leaf is counted (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` must move on any
 /// boot), and refusal is forced OFF (a control may never refuse). Default OFF; read once.
 #[must_use]
+#[cfg(feature = "negctl")]
 pub fn negctl_carve() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_CARVE").is_some_and(|v| v != "0"))
+}
+
+/// Without the `negctl` feature (the release build) the carve-out bound is never lowered to 0.
+#[must_use]
+#[cfg(not(feature = "negctl"))]
+pub const fn negctl_carve() -> bool {
+    false
 }
 
 /// ★ P1+P2 inc A2 (review fix 2026-10-04, HIGH): the walker's carve-out bound `(base, refuse)` for
@@ -102,9 +110,17 @@ pub const fn carve_cfg(carve: u64, negctl: bool) -> (u64, bool) {
 /// every Translated birth is then refused (`tspace_refused=` moves). Destructive by design (the
 /// guest driver cannot load): a dedicated control run only. Default OFF; read once.
 #[must_use]
+#[cfg(feature = "negctl")]
 pub fn negctl_oversize() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TSPACE_OVERSIZE").is_some_and(|v| v != "0"))
+}
+
+/// Without the `negctl` feature (the release build) the ring-region bound check is never forced to fail.
+#[must_use]
+#[cfg(not(feature = "negctl"))]
+pub const fn negctl_oversize() -> bool {
+    false
 }
 
 /// The host verbs a T-space build needs — [`HostRm`] in kf3, a recorder in the tests.
@@ -677,5 +693,34 @@ mod tests {
             windows_below_ring_region((RING_REGION_BASE - 0x1000, 0x1000), (0, 0x1000)),
             Ok(())
         );
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(!super::negctl_carve());
+            assert!(!super::negctl_oversize());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(!super::negctl_carve());
+        assert!(!super::negctl_oversize());
+    }
+
+    /// The carve bound a default build uses: the firmware carve-out, refusing (the control's `(0, false)` is
+    /// the only other value, and a default build cannot reach it).
+    #[test]
+    fn the_carve_bound_refuses_unless_the_control_is_on() {
+        assert_eq!(super::carve_cfg(0x1000, false), (0x1000, true));
+        assert_eq!(super::carve_cfg(0x1000, true), (0, false));
     }
 }

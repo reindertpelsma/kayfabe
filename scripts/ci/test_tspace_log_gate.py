@@ -36,6 +36,9 @@ CLEAN = [
 ]
 
 
+BENCH = "kf3: NEGCTL feature compiled in (bench build): KF3_NEGCTL_* switches are live"
+
+
 def failed(lines, **kw):
     return {name for name, ok, _ in gate_mod.gate(lines, **kw) if not ok}
 
@@ -133,13 +136,15 @@ class TspaceLogGate(unittest.TestCase):
         }
         self.assertEqual(set(moved), set(gate_mod.NEGCTLS))
         for name, lines in moved.items():
-            self.assertEqual(failed(lines, negctl=name), set(), name)
-            self.assertNotEqual(failed(CLEAN, negctl=name), set(), f"{name} must fail when nothing moved")
-        self.assertNotEqual(failed(CLEAN, negctl="nonsense"), set())
+            self.assertEqual(failed([BENCH, *lines], negctl=name), set(), name)
+            self.assertNotEqual(failed([BENCH, *CLEAN], negctl=name), set(), f"{name} must fail when nothing moved")
+            # A log of a binary built without the feature is refused by name, even where the counter moved.
+            self.assertEqual(failed(lines, negctl=name), {"NEGCTL-BUILD"}, name)
+        self.assertNotEqual(failed([BENCH, *CLEAN], negctl="nonsense"), set())
         # A TSHADOW line whose counters did not move is not the shadow control moving.
         still = CLEAN + ["kf3: TSHADOW tok=0x1 host=0x5 key=VasKey(1) segments=3 items=3 launches=0 "
                          "max_pieces=0 would_refuse=[] resolve_miss=0 unknown_field=0 unclassified=0"]
-        self.assertEqual(failed(still, negctl="shadow"), {"SHADOW-NEGCTL"})
+        self.assertEqual(failed([BENCH, *still], negctl="shadow"), {"SHADOW-NEGCTL"})
 
     def test_the_default_and_census_arms(self):
         default = [
