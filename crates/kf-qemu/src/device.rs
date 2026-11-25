@@ -576,7 +576,7 @@ impl Device {
                 fmt,
                 kf_cuda::walk::WalkDevice::PciBusId(&bdf),
             )
-            .map_err(|e| format!("GPU walker bring-up on {bdf}: {e}"))
+            .map_err(|e| walker_refusal(&bdf, &e, open_uvm_rw))
         })?;
         let store = rm.reserve_gpga(fb_length).map_err(|e| {
             format!(
@@ -4560,6 +4560,81 @@ fn on_cuda_thread<T: Send>(
             .join()
             .map_err(|_| format!("{name}: the CUDA thread panicked"))?
     })
+}
+
+/// The realize refusal for a walker bring-up that failed. libcuda answers `cuInit` with
+/// `CUDA_ERROR_UNKNOWN` when it cannot open `/dev/nvidia-uvm`, which names neither the node nor
+/// the permission; when `cuInit` refused and the node does not open read-write for this process,
+/// the refusal says so.
+fn walker_refusal(
+    bdf: &str,
+    e: &kf_cuda::CudaError,
+    uvm: impl FnOnce() -> std::io::Result<()>,
+) -> String {
+    let mut s = format!("GPU walker bring-up on {bdf}: {e}");
+    if matches!(e, kf_cuda::CudaError::Refused { what: "cuInit", .. })
+        && let Err(io) = uvm()
+    {
+        s.push_str(&format!(
+            "; /dev/nvidia-uvm does not open read-write for this process ({io}): QEMU needs it \
+             (docs/howto/installing.md, Permissions)"
+        ));
+    }
+    s
+}
+
+/// Opens and closes `/dev/nvidia-uvm` read-write: the check behind [`walker_refusal`].
+fn open_uvm_rw() -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/nvidia-uvm")
+        .map(drop)
+}
+
+#[cfg(test)]
+mod walker_refusal_tests {
+    use super::walker_refusal;
+    use std::io::{Error, ErrorKind};
+
+    fn refused(what: &'static str) -> kf_cuda::CudaError {
+        kf_cuda::CudaError::Refused {
+            what,
+            code: 999,
+            name: "CUDA_ERROR_UNKNOWN".into(),
+        }
+    }
+
+    #[test]
+    fn a_denied_uvm_node_is_named_in_a_cuinit_refusal() {
+        let s = walker_refusal("0000:01:00.0", &refused("cuInit"), || {
+            Err(Error::from(ErrorKind::PermissionDenied))
+        });
+        assert!(
+            s.starts_with("GPU walker bring-up on 0000:01:00.0: "),
+            "{s}"
+        );
+        assert!(s.contains("CUDA_ERROR_UNKNOWN"), "{s}");
+        assert!(
+            s.contains("/dev/nvidia-uvm does not open read-write"),
+            "{s}"
+        );
+        assert!(s.contains("ermission denied"), "{s}");
+    }
+
+    #[test]
+    fn an_openable_uvm_node_adds_nothing() {
+        let s = walker_refusal("b", &refused("cuInit"), || Ok(()));
+        assert!(!s.contains("nvidia-uvm"), "{s}");
+    }
+
+    #[test]
+    fn other_refusals_never_probe_the_node() {
+        let s = walker_refusal("b", &refused("cuCtxCreate"), || {
+            panic!("the node is probed only after a cuInit refusal")
+        });
+        assert!(!s.contains("nvidia-uvm"), "{s}");
+    }
 }
 
 #[cfg(test)]
