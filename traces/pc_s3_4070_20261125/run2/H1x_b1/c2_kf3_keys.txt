@@ -1,0 +1,18 @@
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00071:0xff040025 BORN USER private-read-only-ring token 0x27 host 0x51; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1838 us, off the GSP lock)
+kf3: act engine object: 0xc1d00071:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x51 -> host object 0xcafe0b1a (205 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00071:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lo
+kf3: act engine object: 0xc1d00071:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x51 -> host object 0xcafe0b1b (1070 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00071:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (3 us, off the GSP loc
+kf3: act engine object: 0xc1d00071:0xff1fe02c class 0x902d (TwoD) on twin host 0x51 -> host object 0xcafe0b1c (576 us, off the GSP lock)
+kf3: act engine object: 0xc1d00071:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x51 -> host object 0xcafe0b1d (464 us, off the GSP lock)
+kf3: act engine object: 0xc1d00071:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x51 -> host object 0xcafe0b1e (478 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00071:0xff040025->host 0x51] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #4 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: device reset #4 (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): [(0, "0x620", "0x620", "0x620", "0x620"), (1, "0x7f0", "0x7f0", "0x7f0", "0x7f0"), (2, "0xe50", "0xe50", "0xe50", "0xe50"), (3, "0xe50", "0xe50", "0xe50", "0xe50"), (4, "0xe50
+kf3: w#251 bar0 @0x84011c = 0x5100 phase=Cold
+kf3: w#253 bar0 @0x840114 = 0x5100 phase=Cold
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=3084 cmd_seq=2967 cmd_read_ptr=31 peer_stat_read=24 [#2, rate-limited]
+kf3: display: after the S3 wake, chn 4 PUT 0xee0: engine decoded 0xe50, published GET 0xe50, GET word the guest reads 0xe50 [#16, rate-limited]
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00071:0xff040025->host 0x51] + 0 Translated ring(s); relays before after (248 us, off the GSP lock)

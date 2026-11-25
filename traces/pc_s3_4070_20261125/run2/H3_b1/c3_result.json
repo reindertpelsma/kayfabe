@@ -1,0 +1,116 @@
+{
+ "label": "H3_b1",
+ "cycle": 3,
+ "boot0": "2026-11-25T00:33:00.5000000+00:00",
+ "explorer_before": "1",
+ "quser_before": "USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME |  kfimage               console             1  Active      none   11/25/2026 12:33 AM",
+ "suspended": true,
+ "suspend_wait_s": 3,
+ "wake_utc": "2026-11-25T00:42:08Z",
+ "rates_wake+4s": {
+  "exits": 60520,
+  "halt_exits": 2230,
+  "io_exits": 0,
+  "mmio_exits": 43134,
+  "halt_wakeup": 2174,
+  "irq_injections": 2526
+ },
+ "tsc_page": {},
+ "tsc_page_unchanged": false,
+ "trace": {
+  "events": {
+   "tracing_mark_write": 1,
+   "kvm_write_tsc_offset": 24,
+   "kvm_hv_stimer_set_config": 32,
+   "kvm_hv_stimer_cleanup": 64,
+   "kvm_hv_stimer_set_count": 32
+  },
+  "hv_writes_after_wake": [],
+  "hv_writes_before_wake": [],
+  "stimer_first": [],
+  "stimer_distinct": {},
+  "tsc_offset": [
+   "86849.074294 AFTER vcpu=0 prev=18446424566563766116 next=18446422543143296957",
+   "86849.074348 AFTER vcpu=1 prev=18446424566563766005 next=18446422543143296957",
+   "86849.074400 AFTER vcpu=2 prev=18446424566563765265 next=18446422543143296957",
+   "86849.074450 AFTER vcpu=3 prev=18446424566563766005 next=18446422543143296957",
+   "86849.074488 AFTER vcpu=4 prev=18446424566563765931 next=18446422543143296957",
+   "86849.074520 AFTER vcpu=5 prev=18446424566563766116 next=18446422543143296957",
+   "86849.074569 AFTER vcpu=6 prev=18446424566563765931 next=18446422543143296957",
+   "86849.074605 AFTER vcpu=7 prev=18446424566563766375 next=18446422543143296957",
+   "86849.410145 AFTER vcpu=3 prev=18446422543143296957 next=18446424560803082344",
+   "86849.410145 AFTER vcpu=2 prev=18446422543143296957 next=18446424560803080272",
+   "86849.410146 AFTER vcpu=7 prev=18446422543143296957 next=18446424560803080494",
+   "86849.410146 AFTER vcpu=5 prev=18446422543143296957 next=18446424560803079643",
+   "86849.410146 AFTER vcpu=1 prev=18446422543143296957 next=18446424560803078977",
+   "86849.410146 AFTER vcpu=4 prev=18446422543143296957 next=18446424560803081234",
+   "86849.410146 AFTER vcpu=0 prev=18446422543143296957 next=18446424560803079347",
+   "86849.410146 AFTER vcpu=6 prev=18446422543143296957 next=18446424560803077682",
+   "86849.410356 AFTER vcpu=7 prev=18446424560803080494 next=18446424560803070726",
+   "86849.410356 AFTER vcpu=4 prev=18446424560803081234 next=18446424560803070652",
+   "86849.410356 AFTER vcpu=1 prev=18446424560803078977 next=18446424560803070578",
+   "86849.410356 AFTER vcpu=6 prev=18446424560803077682 next=18446424560803070467",
+   "86849.410356 AFTER vcpu=5 prev=18446424560803079643 next=18446424560803070467",
+   "86849.410356 AFTER vcpu=0 prev=18446424560803079347 next=18446424560803070430",
+   "86849.410356 AFTER vcpu=2 prev=18446424560803080272 next=18446424560803070393",
+   "86849.410356 AFTER vcpu=3 prev=18446424560803082344 next=18446424560803070319"
+  ],
+  "synic_host_writes_at_wake": 0,
+  "expirations_ok": 0,
+  "expirations_fail": 0
+ },
+ "ssh_back": true,
+ "back_after_s": 8,
+ "rates_late": null,
+ "status_after": "running",
+ "storm": {
+  "top_rearm": 0,
+  "wraps_x100": false,
+  "exits_per_s_late": 0,
+  "signature": false
+ },
+ "boot1": "2026-11-25T00:33:00.5000000+00:00",
+ "explorer_after": "1",
+ "nvidia_smi": "NVIDIA GeForce RTX 4070, 580.88",
+ "events": [
+  "2026-11-25T00:42:02.7793774+00:00 42 Microsoft-Windows-Kernel-Power The system is entering sleep. Sleep Reason: Application API",
+  "2026-11-25T00:42:04.4044642+00:00 107 Microsoft-Windows-Kernel-Power The system has resumed from sleep.",
+  "2026-11-25T00:42:07.5013313+00:00 1 Microsoft-Windows-Kernel-General The system time has changed to ?2026?-?11?-?25T00:42:07.500000000Z from ?2026?-?11?-?25T00:42:04.404037100Z. Time Delta:",
+  "2026-11-25T00:42:10.2424007+00:00 1 Microsoft-Windows-Power-Troubleshooter The system has returned from a low power state. Sleep Time: ?2026?-?11?-?25T00:42:02.469032700Z Wake Time: ?2026?-?11?-?"
+ ],
+ "guest_alive": true,
+ "event153_nvlddmkm": 0,
+ "verdict": "CLEAN",
+ "reasons": [],
+ "cycle_start_utc": "00:42:02Z",
+ "kf3_delta": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 1,
+  "cold": 0,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "rm_unload": 0,
+  "ram_changed": 0,
+  "user_ring_topology": 0,
+  "unserviced": 42,
+  "status_0x51": 0
+ },
+ "qmp_events": [
+  {
+   "event": "SUSPEND",
+   "t_host": 1795567327.9,
+   "data": {}
+  },
+  {
+   "event": "WAKEUP",
+   "t_host": 1795567328.9,
+   "data": {}
+  }
+ ],
+ "cycle_end_utc": "00:44:53Z",
+ "item": "H3",
+ "arm": "A",
+ "zero": "default",
+ "qemu": "/workspace/bench/pcs3_20261125/kf3-bins/7bd968c2/qemu-system-x86_64"
+}

@@ -1,0 +1,37 @@
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #3 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: device reset #3 (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): [(0, "0x860", "0x860", "0x860", "0x860"), (1, "0xa50", "0xa50", "0xa50", "0xa50"), (2, "0xed0", "0xed0", "0xed0", "0xed0"), (3, "0x7f0", "0x7f0", "0x7f0", "0x7f0"), (4, "0xed0
+kf3: RAM del gpa=0x0 [#32, rate-limited]
+kf3: w#251 bar0 @0x84011c = 0x5100 phase=Cold
+kf3: w#253 bar0 @0x840114 = 0x5100 phase=Cold
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=2093 cmd_seq=2045 cmd_read_ptr=47 peer_stat_read=62 [#1, rate-limited]
+kf3: family=Ada phase=Running trapped=203248 applied=3854 refused=0 serviced=2103 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110c00 mem[inval=4146 walks=8443/8443 cleared=4146 superseded=0 named_missed=0 unreconciled=0 absent_cleared=12 mapped=56815 unmapped=46430 clipped=0x0 held=1 v
+kf3: display: after the S3 wake, chn 0 PUT 0x870: engine decoded 0x860, published GET 0x860, GET word the guest reads 0x860 [#1, rate-limited]
+kf3: display: after the S3 wake, chn 1 PUT 0xd60: engine decoded 0xa50, published GET 0xa50, GET word the guest reads 0xa50 [#2, rate-limited]
+kf3: display: after the S3 wake, chn 3 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x7f0 [#3, rate-limited]
+kf3: display: after the S3 wake, chn 5 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x7f0 [#4, rate-limited]
+kf3: display: after the S3 wake, chn 7 PUT 0xb00: engine decoded 0x7f0, published GET 0x7f0, GET word the guest reads 0x7f0 [#5, rate-limited]
+kf3: display: after the S3 wake, chn 2 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0xed0 [#6, rate-limited]
+kf3: display: after the S3 wake, chn 4 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0xed0 [#7, rate-limited]
+kf3: display: after the S3 wake, chn 6 PUT 0xf60: engine decoded 0xed0, published GET 0xed0, GET word the guest reads 0xed0 [#8, rate-limited]
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00060:0xff040025 BORN USER private-read-only-ring token 0x27 host 0x51; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1817 us, off the GSP lock)
+kf3: act engine object: 0xc1d00060:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x51 -> host object 0xcafe08cd (197 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00060:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (2 us, off the GSP lo
+kf3: act engine object: 0xc1d00060:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x51 -> host object 0xcafe08ce (1088 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00060:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (1 us, off the GSP loc
+kf3: act engine object: 0xc1d00060:0xff1fe02c class 0x902d (TwoD) on twin host 0x51 -> host object 0xcafe08cf (555 us, off the GSP lock)
+kf3: act engine object: 0xc1d00060:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x51 -> host object 0xcafe08d0 (443 us, off the GSP lock)
+kf3: act engine object: 0xc1d00060:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x51 -> host object 0xcafe08d1 (455 us, off the GSP lock)
+kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0
+kf3: act free: 0xc1d00060:0xff040025: passthrough 0xc1d00060:0xff040025 token 0x27 host 0x51 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (1726 us, off the GSP lock)
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00062:0xff040025 BORN USER private-read-only-ring token 0x27 host 0x51; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1684 us, off the GSP lock)
+kf3: act engine object: 0xc1d00062:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x51 -> host object 0xcafe0902 (198 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00062:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (1 us, off the GSP lo
+kf3: act engine object: 0xc1d00062:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x51 -> host object 0xcafe0903 (982 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00062:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x51 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (1 us, off the GSP loc
+kf3: act engine object: 0xc1d00062:0xff1fe02c class 0x902d (TwoD) on twin host 0x51 -> host object 0xcafe0904 (555 us, off the GSP lock)
+kf3: act engine object: 0xc1d00062:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x51 -> host object 0xcafe0905 (439 us, off the GSP lock)
+kf3: act engine object: 0xc1d00062:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x51 -> host object 0xcafe0906 (467 us, off the GSP lock)
+kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0
+kf3: act free: 0xc1d00062:0xff040025: passthrough 0xc1d00062:0xff040025 token 0x27 host 0x51 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (1323 us, off the GSP lock)

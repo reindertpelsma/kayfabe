@@ -1,0 +1,17 @@
+{"recorder": "connected", "t": 1795565024.4473777}
+{"timestamp": {"seconds": 1795565028, "microseconds": 149634}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}, "t_host": 1795565028.1497254}
+{"timestamp": {"seconds": 1795565029, "microseconds": 168234}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}, "t_host": 1795565029.1683166}
+{"timestamp": {"seconds": 1795565029, "microseconds": 680680}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}, "t_host": 1795565029.6807578}
+{"timestamp": {"seconds": 1795565034, "microseconds": 878692}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[2]/virtio-backend"}, "t_host": 1795565034.8787978}
+{"timestamp": {"seconds": 1795565159, "microseconds": 458677}, "event": "SUSPEND", "t_host": 1795565159.4587507}
+{"timestamp": {"seconds": 1795565159, "microseconds": 910973}, "event": "WAKEUP", "t_host": 1795565159.9110038}
+{"timestamp": {"seconds": 1795565362, "microseconds": 824318}, "event": "SUSPEND", "t_host": 1795565362.8243792}
+{"timestamp": {"seconds": 1795565363, "microseconds": 648071}, "event": "WAKEUP", "t_host": 1795565363.6481028}
+{"timestamp": {"seconds": 1795565562, "microseconds": 720174}, "event": "SUSPEND", "t_host": 1795565562.7202575}
+{"timestamp": {"seconds": 1795565562, "microseconds": 976408}, "event": "WAKEUP", "t_host": 1795565562.9764585}
+{"timestamp": {"seconds": 1795565771, "microseconds": 784939}, "event": "SUSPEND", "t_host": 1795565771.7850227}
+{"timestamp": {"seconds": 1795565772, "microseconds": 241014}, "event": "WAKEUP", "t_host": 1795565772.241041}
+{"timestamp": {"seconds": 1795565968, "microseconds": 128918}, "event": "SUSPEND", "t_host": 1795565968.1290004}
+{"timestamp": {"seconds": 1795565968, "microseconds": 213624}, "event": "WAKEUP", "t_host": 1795565968.2136946}
+{"timestamp": {"seconds": 1795566185, "microseconds": 420940}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}, "t_host": 1795566185.4210293}
+{"recorder": "socket closed", "t": 1795566185.4289672}

@@ -1,0 +1,47 @@
+# host state before 2026-11-24T23:53:53Z
+$ date -u
+Tue Nov 24 11:53:53 PM UTC 2026
+$ cat /sys/devices/system/clocksource/clocksource0/current_clocksource
+tsc
+$ dmesg | grep -iE 'tsc.*unstable|clocksource.*(unstable|switched)' | tail -5
+
+$ nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+NVIDIA GeForce RTX 4070, 595.91.07
+$ lspci -nnk -s 01:00
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD104 [GeForce RTX 4070] [10de:2786] (rev a1)
+	Subsystem: Gigabyte Technology Co., Ltd Device [1458:40ee]
+	Kernel driver in use: nvidia
+	Kernel modules: nvidiafb, nouveau, nvidia_drm, nvidia
+01:00.1 Audio device [0403]: NVIDIA Corporation AD104 High Definition Audio Controller [10de:22bc] (rev a1)
+	Subsystem: Gigabyte Technology Co., Ltd Device [1458:40ee]
+	Kernel driver in use: snd_hda_intel
+	Kernel modules: snd_hda_intel
+$ for c in /sys/class/drm/card*-*; do echo "$c $(cat $c/status)"; done
+/sys/class/drm/card0-DP-4 disconnected
+/sys/class/drm/card0-DP-5 disconnected
+/sys/class/drm/card0-DP-6 disconnected
+/sys/class/drm/card0-HDMI-A-2 disconnected
+/sys/class/drm/card0-Writeback-1 unknown
+/sys/class/drm/card1-DP-1 disconnected
+/sys/class/drm/card1-DP-2 disconnected
+/sys/class/drm/card1-DP-3 connected
+/sys/class/drm/card1-HDMI-A-1 disconnected
+$ for c in /sys/class/drm/card[0-9]; do echo "$c -> $(readlink -f $c/device)"; done
+/sys/class/drm/card0 -> /sys/devices/pci0000:00/0000:00:08.1/0000:0f:00.0
+/sys/class/drm/card1 -> /sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0
+$ systemctl is-active gdm nvidia-persistenced
+active
+active
+$ lsmod | grep -E '^(nvidia|vfio)'
+nvidia_uvm           2088960  0
+nvidia_drm            147456  8
+nvidia_modeset       1789952  3 nvidia_drm
+nvidia              15114240  48 nvidia_uvm,nvidia_modeset
+$ cat /sys/module/nvidia_uvm/initstate 2>/dev/null; cat /sys/module/nvidia_uvm/refcnt 2>/dev/null
+live
+0
+$ loginctl list-sessions --no-legend
+2765    0 root   -     602931 manager-early -    no -
+2772    0 root   -     603562 user          -    no -
+ 913 1000 ubuntu seat0 515528 user          tty2 no -
+ 914 1000 ubuntu -     515561 manager       -    no -

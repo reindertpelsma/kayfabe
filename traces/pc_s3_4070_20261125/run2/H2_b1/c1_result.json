@@ -1,0 +1,125 @@
+{
+ "label": "H2_b1",
+ "cycle": 1,
+ "boot0": "2026-11-25T00:23:14.5000000+00:00",
+ "explorer_before": "1",
+ "quser_before": "USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME |  kfimage               console             1  Active      none   11/25/2026 12:23 AM",
+ "suspended": true,
+ "suspend_wait_s": 7,
+ "wake_utc": "2026-11-25T00:25:25Z",
+ "rates_wake+4s": {
+  "exits": 3733788,
+  "halt_exits": 2240,
+  "io_exits": 0,
+  "mmio_exits": 0,
+  "halt_wakeup": 2232,
+  "irq_injections": 379966
+ },
+ "tsc_page": {
+  "before_suspend": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000002a57df9 0x0000000000000000\r\n",
+  "while_suspended": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000002a57df9 0x0000000000000000\r\n",
+  "after_wake": "000000000000e000: 0x0000000000000001 0x00b11fbdc147ae14\r\n000000000000e010: 0x0000000002a57df9 0x0000000000000000\r\n"
+ },
+ "tsc_page_unchanged": true,
+ "trace": {
+  "events": {
+   "kvm_hv_stimer_set_config": 57896,
+   "tracing_mark_write": 1,
+   "kvm_write_tsc_offset": 8,
+   "kvm_hv_synic_set_msr": 176,
+   "kvm_hv_stimer_cleanup": 1643924,
+   "kvm_hv_stimer_set_count": 817723,
+   "kvm_msr": 16,
+   "kvm_hv_stimer_start_periodic": 19744,
+   "kvm_hv_stimer_callback": 11320,
+   "kvm_hv_stimer_expiration": 820534
+  },
+  "hv_writes_after_wake": [
+   "85845.546696 qemu-system-x86 SIMP=0x91001",
+   "85845.546696 qemu-system-x86 SIMP=0x90001",
+   "85845.546697 qemu-system-x86 SIMP=0x95001",
+   "85845.546697 qemu-system-x86 SIMP=0x92001",
+   "85845.546697 qemu-system-x86 SIMP=0x96001",
+   "85845.546697 qemu-system-x86 SIMP=0x97001",
+   "85845.546697 qemu-system-x86 SIMP=0x94001",
+   "85845.546697 qemu-system-x86 SIMP=0x93001",
+   "85845.549759 qemu-system-x86 SINT3=0xd1",
+   "85845.549759 qemu-system-x86 SINT3=0xd1",
+   "85845.549760 qemu-system-x86 SINT3=0xd1",
+   "85845.550209 qemu-system-x86 SINT3=0xd1",
+   "85845.550210 qemu-system-x86 SINT3=0xd1",
+   "85845.550210 qemu-system-x86 SINT3=0xd1",
+   "85845.550220 qemu-system-x86 SINT3=0xd1",
+   "85845.550220 qemu-system-x86 SINT3=0xd1"
+  ],
+  "hv_writes_before_wake": [],
+  "stimer_first": [],
+  "stimer_distinct": {},
+  "tsc_offset": [
+   "85845.206346 AFTER vcpu=0 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206393 AFTER vcpu=1 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206446 AFTER vcpu=2 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206492 AFTER vcpu=3 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206534 AFTER vcpu=4 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206572 AFTER vcpu=5 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206631 AFTER vcpu=6 prev=18446426745058351707 next=18446426257461727749",
+   "85845.206699 AFTER vcpu=7 prev=18446426745058351707 next=18446426257461727749"
+  ],
+  "synic_host_writes_at_wake": 160,
+  "expirations_ok": 0,
+  "expirations_fail": 820534
+ },
+ "ssh_back": false,
+ "back_after_s": null,
+ "rates_late": {
+  "exits": 3684296,
+  "halt_exits": 2196,
+  "io_exits": 0,
+  "mmio_exits": 0,
+  "halt_wakeup": 2196,
+  "irq_injections": 378512
+ },
+ "status_after": "running",
+ "storm": {
+  "top_rearm": 0,
+  "wraps_x100": false,
+  "exits_per_s_late": 3684296,
+  "signature": true
+ },
+ "guest_alive": false,
+ "verdict": "STORM",
+ "reasons": [
+  "no ssh within 150 s"
+ ],
+ "cycle_start_utc": "00:25:14Z",
+ "kf3_delta": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 0,
+  "cold": 0,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "rm_unload": 0,
+  "ram_changed": 0,
+  "user_ring_topology": 0,
+  "unserviced": 25,
+  "status_0x51": 0
+ },
+ "qmp_events": [
+  {
+   "event": "SUSPEND",
+   "t_host": 1795566324.0,
+   "data": {}
+  },
+  {
+   "event": "WAKEUP",
+   "t_host": 1795566325.0,
+   "data": {}
+  }
+ ],
+ "cycle_end_utc": "00:27:58Z",
+ "item": "H2",
+ "arm": "B",
+ "zero": "default",
+ "qemu": "/workspace/bench/pcs3_20261125/kf3-bins/7bd968c2/qemu-system-x86_64"
+}

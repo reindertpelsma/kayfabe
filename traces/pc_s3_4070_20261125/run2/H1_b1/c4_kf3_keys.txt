@@ -1,0 +1,11 @@
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00071:0xff040025->host 0x51] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: device reset #6 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: RAM add gpa=0x100000 len=0x7ff00000 fd_off=0x100000: translation kept (generation 1) [#64, rate-limited]
+kf3: device reset #6 (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): [(0, "0x620", "0x620", "0x620", "0x620"), (1, "0x7f0", "0x7f0", "0x7f0", "0x7f0"), (2, "0xe50", "0xe50", "0xe50", "0xe50"), (3, "0xe50", "0xe50", "0xe50", "0xe50"), (4, "0xe50
+kf3: RAM del gpa=0x100000 [#64, rate-limited]
+kf3: w#251 bar0 @0x84011c = 0x5100 phase=Cold
+kf3: w#253 bar0 @0x840114 = 0x5100 phase=Cold
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=3902 cmd_seq=3765 cmd_read_ptr=24 peer_stat_read=44 [#4, rate-limited]
+kf3: display: after the S3 wake, chn 7 PUT 0x0: engine decoded 0xe50, published GET 0xe50, GET word the guest reads 0xe50 [#32, rate-limited]

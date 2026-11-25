@@ -1,0 +1,33 @@
+{
+ "rates": {
+  "exits": 6047708,
+  "halt_exits": 552,
+  "io_exits": 0,
+  "mmio_exits": 0,
+  "halt_wakeup": 552,
+  "irq_injections": 579393
+ },
+ "exit_reasons": {
+  "write_cr8": 1883977,
+  "msr": 884260,
+  "vintr": 294792,
+  "interrupt": 2013,
+  "hlt": 552
+ },
+ "rips": {
+  "0xfffff803d54a620c": 295345,
+  "0xfffff803d51d6c88": 295338,
+  "0xfffff803d54ad688": 294792,
+  "0xfffff803d5232f6b": 292487,
+  "0xfffff803d509c0b5": 292486,
+  "0xfffff803d54ace0c": 292485,
+  "0xfffff803d509c14a": 292484,
+  "0xfffff803d513aa4a": 263677,
+  "0xfffff803d513aa06": 261370,
+  "0xfffff803d500d5e2": 118243,
+  "0xfffff803d54b2212": 87134,
+  "0xfffff803d500d5ef": 43564
+ },
+ "pio": {},
+ "mmio": {}
+}

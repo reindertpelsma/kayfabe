@@ -1,0 +1,29 @@
+[83953.672404] NVRM:unknown NVRM ioctl command: 0xf0
+[83953.872875] NVRM:unknown NVRM ioctl command: 0xf0
+[83957.141683] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83957.339460] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83957.541029] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83968.221165] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83968.379384] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[83968.379391] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[83968.379394] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[83968.379398] NVRM: mmuWalkMap: Failed to map VA Range 0x120000000 to 0x20f9fffff. Status = 0x00000051
+[83968.379400] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ mmu_walk_map.c:75
+[83968.379582] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:2036
+[83968.379585] NVRM: nvCheckFailedNoLog: Check failed: NV_OK == status @ virt_mem_allocator_gm107.c:2554
+[83968.379587] NVRM: dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x120000000
+[83968.464001] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83968.737979] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83968.965482] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83969.943077] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83970.795800] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83972.323031] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83973.942118] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83974.417941] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83974.780511] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83974.945143] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83975.276991] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[83977.207365] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[84081.727412] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[84096.254564] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
+[84358.050046] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605
