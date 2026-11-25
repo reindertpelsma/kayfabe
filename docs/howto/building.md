@@ -79,14 +79,16 @@ The tarball is pinned by sha256 and size in `scripts/bench/qemu.pin`. Fetch it w
 ```sh
 python3 -I scripts/ci/qemu_source.py fetch .          # prints ./qemu-10.2.4.tar.xz
 tar -xf qemu-10.2.4.tar.xz
-bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4"
+bash scripts/bench/build_kf3.sh --no-negctl "$PWD/qemu-10.2.4"
 ```
 
 To use a tarball you already have, add `--from-file <path>`; it is checked against the same pin, and a copy that does not match is refused. There is no way to turn the check off. The pin file says how the hash was obtained and that the QEMU release signature was verified once, by hand, when it was recorded; the scripts check the hash and do not run `gpg`. `build_kf3.sh` takes an already extracted tree and does not re-check it. <!-- src: scripts/ci/qemu_source.py, scripts/bench/qemu.pin, scripts/bench/build_kf3.sh (usage) -->
 
+`--no-negctl` leaves out the `KF3_NEGCTL_*` debug switches. They are environment variables that deliberately re-create a fixed defect, so that a test on a GPU box can show its check catches it; a binary that has them compiled in reads them. The release kit below never compiles them in, and neither does a build with `--no-negctl`. Without the option, `build_kf3.sh` is the bench build and compiles them in (a bench build prints `NEGCTL feature compiled in (bench build)` when the device starts). Use `--no-negctl` for any binary you run for real work. <!-- src: scripts/bench/build_kf3.sh, crates/kf-qemu/Cargo.toml (feature negctl) -->
+
 `cargo` must be on `PATH`. `build_kf3.sh` takes an optional second argument, the build directory. It defaults to `qemu-build-kf3` beside the QEMU source directory. What the script does, in order: <!-- src: scripts/bench/build_kf3.sh -->
 
-1. Runs `cargo build --release -p kf-qemu` and requires the resulting `target/release/libkf_qemu.a`. A failed cargo step stops the script, so a stale archive is never used.
+1. Runs `cargo build --release -p kf-qemu` (with `--features negctl` unless you gave `--no-negctl`) and requires the resulting `target/release/libkf_qemu.a`. A failed cargo step stops the script, so a stale archive is never used.
 2. Copies every `qemu/hw/misc/kf3/*.c`, `*.h` and `meson.build` into `<qemu>/hw/misc/kf3/`, and the archive beside them.
 3. Appends `subdir('kf3')` to `hw/misc/meson.build` and a `config KF3` stanza (`bool`, `default y if TEST_DEVICES`, `depends on PCI`) to `hw/misc/Kconfig`, unless they are already there. QEMU's own source is not changed by anything else unless you ask for an optional patch (see [Optional QEMU patch: sleep and wake of a Windows guest](#optional-qemu-patch-sleep-and-wake-of-a-windows-guest)). <!-- src: scripts/bench/build_kf3.sh -->
 4. Takes a lock on the build directory, then configures QEMU, only if the directory is new or was configured with different flags (a stale configuration is removed whole and rebuilt):

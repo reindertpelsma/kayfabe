@@ -49,6 +49,10 @@ for cfg in "${CONFIGS[@]}"; do
         bash "$SRC/scripts/fastguest/run_fast_guest.sh" "${TAG}_${cfg}" 180 2>&1 | grep -aE 'FAST_VERDICT|qemu rc=' | head -3
     qlog="$BENCH/fast_${TAG}_${cfg}_qemu.log"
     echo "--- qemu process: $(grep -ac . "$qlog" 2>/dev/null || echo 0) log lines in $qlog"
+    if [ "$cfg" = negctl ] && ! grep -aq 'NEGCTL feature compiled in (bench build)' "$qlog" 2>/dev/null; then
+        echo "CHANOBS_SUMMARY config=$cfg — NEGCTL CONTROL BROKEN: no 'NEGCTL feature compiled in' line in $qlog; this binary was built without the negctl feature (build it with scripts/bench/build_kf3.sh), so the switch did nothing: not a measurement"
+        fails=$((fails+1)); continue
+    fi
     grep -a 'kf-cuda: cuda thread posture\|CUDA THREAD REFUSED' "$qlog" | sed 's/^/    /'
     grep -a 'kf-host: channel birth\|PRIVILEGED CHANNEL REFUSED\|CHANNEL BIRTH REFUSED\|CHANNEL CLASS REFUSED' "$qlog" | sed 's/^/    /'
     if [ ! -s "$log" ]; then

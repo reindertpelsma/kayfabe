@@ -5,7 +5,7 @@
 | Directory | What it is |
 |---|---|
 | [`ci/`](ci/README.md) | The CI gates and ratchets (doc freshness, claim ledger, clippy debt, GPU UUIDs, private references, the ignore ladder), the Vast box payload (`vast_payload.py`), the propimage and apps stages, and the `test_*.py` and `*_mutants.py` that guard them. About 400 files. |
-| `bench/` | Provisioning, gates and lanes for hardware boxes: `build_kf3.sh`, `v3_gates.sh`, the Windows guest (`windows/`), display, graphics and per-die sweeps. The top level holds the single-purpose lane scripts and their `*_hook.sh` helpers; `box/README.md` is how to rent, use and retire a Vast box. |
+| `bench/` | Provisioning, gates and lanes for hardware boxes: `build_kf3.sh` (a bench build: compiles in the `KF3_NEGCTL_*` control switches via the cargo feature `negctl`; `--no-negctl` and the release kit leave them out), `v3_gates.sh`, the Windows guest (`windows/`), display, graphics and per-die sweeps. The top level holds the single-purpose lane scripts and their `*_hook.sh` helpers; `box/README.md` is how to rent, use and retire a Vast box. |
 | `apps/` | The Linux application matrix (`apps_matrix.sh`, `run_apps.sh`, pins, expected rows). |
 | `fastguest/` | The thin-guest suite (`fast_suite.sh`, 30 arms). |
 | `kfci/` | The GPU-free execution core of a CI assignment (runner, catalog, steps). |

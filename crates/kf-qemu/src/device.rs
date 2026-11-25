@@ -413,6 +413,19 @@ impl Drop for Up<'_> {
     }
 }
 
+/// `KF3_NEGCTL_NO_BAR1_DOORBELL` (set, any value): run a Hopper+ family WITHOUT the BAR1
+/// usermode-view classification (`V3_BAR1_DOORBELL.md` §7 T1's negative control).
+#[cfg(feature = "negctl")]
+fn negctl_no_bar1_doorbell() -> bool {
+    std::env::var_os("KF3_NEGCTL_NO_BAR1_DOORBELL").is_some()
+}
+
+/// Without the `negctl` feature (the release build) the BAR1 usermode views are always classified.
+#[cfg(not(feature = "negctl"))]
+const fn negctl_no_bar1_doorbell() -> bool {
+    false
+}
+
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
     ///
@@ -420,6 +433,12 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
+        // A bench build says so in the log: a run of a binary with the control switches live must be
+        // recognisable as one. A release build prints nothing here.
+        #[cfg(feature = "negctl")]
+        kf_arch::rate_eprintln!(
+            "kf3: NEGCTL feature compiled in (bench build): KF3_NEGCTL_* switches are live"
+        );
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
         // reads it is then skipped, and the device is today's. ★ The same monitor the display
@@ -1127,7 +1146,8 @@ impl Device {
         // classification — the pre-`v3-bar1db` behaviour, where the view's leaf maps guest RAM at
         // `0x30000` and every BAR1 doorbell is a silent store. A detector that cannot fail under
         // this switch measures nothing. ⚠ Never for a real run; it is announced on every realize.
-        let usermode_mmio = if std::env::var_os("KF3_NEGCTL_NO_BAR1_DOORBELL").is_some() {
+        let usermode_mmio = if negctl_no_bar1_doorbell() {
+            #[cfg(feature = "negctl")]
             eprintln!(
                 "kf3: ⚠ NEGATIVE CONTROL KF3_NEGCTL_NO_BAR1_DOORBELL: BAR1 usermode views are NOT classified (family {family:?})"
             );
@@ -1149,10 +1169,13 @@ impl Device {
         // ★ P6b (b): coverage at the family's smallest GMMU page.
         let (carve_base, carve_refuse) =
             crate::tspace::carve_cfg(layout.carve(), crate::tspace::negctl_carve());
-        if crate::tspace::negctl_carve() {
-            eprintln!(
-                "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
-            );
+        #[cfg(feature = "negctl")]
+        {
+            if crate::tspace::negctl_carve() {
+                eprintln!(
+                    "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
+                );
+            }
         }
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
@@ -4895,5 +4918,24 @@ mod wake_shadow_tests {
                 base + i
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod negctl_seam_tests {
+    /// A build without the `negctl` feature: every control is its safe value as a constant.
+    #[cfg(not(feature = "negctl"))]
+    #[test]
+    fn without_the_feature_every_control_is_its_safe_constant() {
+        const {
+            assert!(!super::negctl_no_bar1_doorbell());
+        }
+    }
+
+    /// A bench build with no variable set: every control is still off.
+    #[cfg(feature = "negctl")]
+    #[test]
+    fn with_the_feature_and_no_variable_every_control_is_off() {
+        assert!(!super::negctl_no_bar1_doorbell());
     }
 }

@@ -47,6 +47,11 @@ MUTANTS = [
     M("kayfabe-path-not-mapped", "kit", '(str(kroot), MAP_KAYFABE), (os.path.relpath', '(os.path.relpath'),
     M("pkgversion-fixed", "kit", '"--with-pkgversion=" + pkgversion', '"--with-pkgversion=kayfabe"'),
     M("recorded-line-keeps-real-paths", "kit", '    for real, name in sorted(((str(src), "<qemu-src>"), (str(build), "<qemu-build>"), (str(kroot), "<kayfabe-src>")), key=lambda p: -len(p[0])):\n        text = text.replace(real, name)\n', ""),
+    # the release binary has no KF3_NEGCTL_* switch (the feature stays off in the kit; the bench script turns it on)
+    M("kit-cargo-enables-negctl", "kit", '"--locked", "-p", "kf-qemu")', '"--locked", "-p", "kf-qemu", "--features", "negctl")'),
+    M("kit-cargo-enables-all-features", "kit", '"--locked", "-p", "kf-qemu")', '"--locked", "-p", "kf-qemu", "--all-features")'),
+    M("bench-build-without-the-negctl-feature", "sh", "FEATURES=(--features negctl)\nif", "FEATURES=()\nif"),
+    M("no-negctl-option-still-builds-the-feature", "sh", 'then FEATURES=(); shift; fi', 'then shift; fi'),
     # versions and inputs
     M("version-check-dropped", "kit", "    if version not in SUPPORTED_QEMU:", "    if False:"),
     M("version-check-by-prefix", "kit", "    if version not in SUPPORTED_QEMU:", "    if not any(version.startswith(v) for v in SUPPORTED_QEMU):"),

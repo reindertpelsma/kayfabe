@@ -74,6 +74,10 @@ TSHADOW_RE = re.compile(r"TSHADOW .*max_pieces=(\d+) would_refuse=\[([^\]]*)\] r
                         r"unknown_field=(\d+) unclassified=(\d+)")
 NOT_BUILT_RE = re.compile(r"tspace: not built \((.*)\)")
 
+# The line `Device::realize` prints in a `negctl` (bench) build only. A control run whose log lacks it ran a
+# binary that has no switch to turn on: that run controls nothing and must not be read as a result.
+NEGCTL_BUILD_LINE = "NEGCTL feature compiled in (bench build)"
+
 NEGCTLS = ("stale", "shadow", "heap", "carve", "twin", "oversize", "window")
 
 
@@ -165,6 +169,10 @@ def gate(lines: list[str], windows: bool = False, negctl: str | None = None, use
     if not lines:
         return [("LOG", False, "empty log: nothing was recorded, which is not a pass")]
     if negctl is not None:
+        if not any(NEGCTL_BUILD_LINE in ln for ln in lines):
+            return [("NEGCTL-BUILD", False,
+                     "the log has no `" + NEGCTL_BUILD_LINE + "` line: the binary was built without the `negctl` "
+                     "feature (build it with scripts/bench/build_kf3.sh), so the switch did nothing")]
         return [negctl_check(lines, negctl)]
     if windows:
         # The KF3_TSPACE=0 arm: the known positive. The gate must SEE windows here.

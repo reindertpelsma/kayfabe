@@ -3,7 +3,10 @@
 # overlay (qemu/hw/misc/kf3) laid into a QEMU source tree with two one-line hunks, built in its OWN
 # build dir (the old nvkvm build is untouched).
 #
-#   usage: bash scripts/bench/build_kf3.sh <qemu-source-tree> [<build-dir>]
+#   usage: bash scripts/bench/build_kf3.sh [--no-negctl] <qemu-source-tree> [<build-dir>]
+#
+# Default (a bench build): the KF3_NEGCTL_* control switches are compiled in, because the box controls set them.
+# `--no-negctl` builds without them, as the release kit does (the manual's source build uses it).
 #
 # QEMU's own source is not changed: nothing but the device and its two hunks is built in. The one optional QEMU patch is built
 # by scripts/bench/build_kf3_patched.py, into a copy of the tree, never through this script's tree.
@@ -18,13 +21,17 @@
 # silently measured on another branch's device. The shared build dir stays (incremental builds are
 # minutes); builds into it are serialized by a lock.
 set -euo pipefail
+FEATURES=(--features negctl)
+if [ "${1:-}" = "--no-negctl" ]; then FEATURES=(); shift; fi
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QEMU="$(cd "${1:?usage: build_kf3.sh <qemu-source-tree> [<build-dir>]}" && pwd)"
 BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 [ -f "$QEMU/VERSION" ] || { echo "⊘ $QEMU is not a QEMU source tree"; exit 1; }
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
-echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
-( cd "$REPO" && cargo build --release -p kf-qemu )
+echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD) negctl=$([ ${#FEATURES[@]} -gt 0 ] && echo on || echo off)"
+# A bench build: `--features negctl` compiles in the KF3_NEGCTL_* control switches (the box controls set them). The
+# release kit (scripts/release/build_qemu.py) never passes it, so a release binary has no switch that undoes a boundary.
+( cd "$REPO" && cargo build --release -p kf-qemu ${FEATURES[@]+"${FEATURES[@]}"} )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
 ARCHIVE="$TARGET/release/libkf_qemu.a"

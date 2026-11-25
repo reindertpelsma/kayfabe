@@ -20,7 +20,7 @@ What the host needs is KVM and permission to open the NVIDIA device nodes. Kayfa
 ```sh
 python3 -I scripts/ci/qemu_source.py fetch .          # QEMU 10.2.4, checked against a pinned hash
 tar -xf qemu-10.2.4.tar.xz
-bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4"
+bash scripts/bench/build_kf3.sh --no-negctl "$PWD/qemu-10.2.4"
 ```
 
 The last command prints a line `KF3_BUILT <path> rev=<revision> ...`. The path is your binary. Keep its `pc-bios` folder beside it; the build puts it there.
