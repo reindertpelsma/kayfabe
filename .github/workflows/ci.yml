@@ -2163,7 +2163,7 @@ jobs:
   mutants-b:
     name: script mutants B — kfroot, box downloader, runner stages, doc steps, fault names, self-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # 42 to 44 min on 2026-11-21 (runs 44951806047, 44950228562, 44961898696); at 45 a slower runner cancelled it on three PRs (2026-11-22). A hang is still bounded.
+    timeout-minutes: 90   # 42 to 44 min on 2026-11-21 (runs 44951806047, 44950228562, 44961898696); 53 min on 2026-11-25 (run 45579994101) and cancelled at 60 twice (run 45609913305) once the Windows gate self-test had three more cases, which every kfroot mutant runs. A hang is still bounded.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Script mutants and the evidence and bench self-tests
