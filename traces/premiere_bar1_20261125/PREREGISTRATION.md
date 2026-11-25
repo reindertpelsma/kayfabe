@@ -35,7 +35,7 @@ If nothing crashes anywhere (every attempt passes, including the Photoshop-then-
 Read from Windows Application event 1000 if WER saw the crash, and otherwise from the minidump in the Premiere SentryIO folder (exception stream: code, address; module list: the module containing the address). INFERRED rule: a code of 0x80000003 is a breakpoint (an `int 3` or a debug assert); 0xc0000005 is an access violation; the result states what was read, not what it means.
 
 # Stop and report rules
-- Cap 3 USD and 3 box-hours in total for all boxes of this experiment (label prefix `kf-prembar-` in the cost guard). One more box is rented only for a second BAR1 class and only if the first box's measured hours and cost leave room; if the first box is destroyed first, that is fine.
+- Cap 3 USD and 3 box-hours in total for all boxes of this experiment (label prefix `kf-prembar-` in the cost guard). One more box is rented only for a second BAR1 class and only if the first box's hours and cost (read from the cost guard) leave room; if the first box is destroyed first, that is fine.
 - Boxes are destroyed by their own instance ids and their absence is verified. `vast_guard.py --enforce` runs before and after.
 - A kayfabe defect, if one shows up, gets the smallest GPU-free test that fails before the fix and passes after it. None is expected from this design.
 
