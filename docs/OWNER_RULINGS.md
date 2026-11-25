@@ -88,7 +88,7 @@ citation: ask whether its reason still holds before relying on it.
 
 ## §BE. CI composition: what a PR runs, one middle run, propimages only at release, §AZ item 5 waived, 2026-11-24
 
-**STATUS: LIVE as a ruling, 2026-11-24; owner decision. The documents describing the tiers carry dated notes. NOT YET IN CODE: `ci/vast-broker/src/tier.js` (`additionalStages`) and `ci/vast-broker/release-matrix.json` still encode the earlier tiers; a separate code change (which alters the Worker bundle pin) follows.**
+**STATUS: LIVE as a ruling, 2026-11-24; owner decision. The documents describing the tiers carry dated notes. ⊘ Update 2026-11-25: the RC1 branch (`claude/rc1-worker-tiers-pin-20261125`) implements it in `ci/vast-broker/src/tier.js` and `defaults.json` (details: `docs/CI_V3.md`, "What a PR runs"); pending the batch merge and a Worker deploy, so it is NOT DEPLOYED. Until then, in the older text: NOT YET IN CODE: `ci/vast-broker/src/tier.js` (`additionalStages`) and `ci/vast-broker/release-matrix.json` still encode the earlier tiers; a separate code change (which alters the Worker bundle pin) follows.**
 
 <!-- src: owner, 2026-11-24 -->
 
