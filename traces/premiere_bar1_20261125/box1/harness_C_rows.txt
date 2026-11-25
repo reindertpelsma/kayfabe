@@ -1,0 +1,24 @@
+[xid-watch] tag=C  host=ubuntu  utc=2026-11-25T04:18:55Z
+[xid-watch] command: python3 -B -I /workspace/p2/adobe_part2/hold_run.py --dir /workspace/img/unpacked --work /workspace/img/work/C --out /workspace/img/out/C --qemu /workspace/bench/kf3-bins/03d2a126/qemu-system-x86_64 --flags scripts/bench/windows/
+[xid-watch] host_dmesg_lines=727  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+gpu PASS NONE post-fix seed UUID exact match after 16s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True
+verify PASS NONE identity, clock, TPM and seed GPU checked
+START C 2026-11-25T04:18:53Z apps=gpudiag rev=03d2a1267 driver=580.159.04
+580.159.04
+0
+A1 start 2026-11-25T06:32:13Z
+A1 end 2026-11-25T06:37:15Z
+A2 start 2026-11-25T06:37:15Z
+A2 end 2026-11-25T06:42:11Z
+A3 start 2026-11-25T06:42:11Z
+A3 end 2026-11-25T06:46:34Z
+ALLDONE

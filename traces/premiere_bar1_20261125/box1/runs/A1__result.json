@@ -1,0 +1,27 @@
+﻿{
+    "app":  "pp_action",
+    "started":  1795323408.748,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "tag":  "A1",
+    "start_utc":  "2026-11-22T04:56:54Z",
+    "hold_step_utc":  "2026-11-22T04:58:11Z",
+    "alive_after":  true,
+    "responding_after":  true,
+    "outcome":  "PASS",
+    "progress":  [
+                     "1795323453118 begin 27.0.0",
+                     "1795323459371 imported sintel_trailer_1080p.mp4",
+                     "1795323467167 selected; running scene edit detection",
+                     "1795323467174 no scene edit detection: holding the sequence open 45 s",
+                     "1795323514170 done clips_before=1 held=45s sed_ms=47001 clips_after=1"
+                 ],
+    "shot":  "1920x1080-\u003e1280x720",
+    "quit":  "forced",
+    "ended":  1795323694.474,
+    "dismissed":  [
+
+                  ]
+}

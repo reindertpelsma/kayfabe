@@ -1,0 +1,5 @@
+1795323772908 begin 27.0.0
+1795323778529 imported sintel_trailer_1080p.mp4
+1795323786325 selected; running scene edit detection
+1795323786332 no scene edit detection: holding the sequence open 45 s
+1795323832202 done clips_before=1 held=45s sed_ms=45875 clips_after=1
