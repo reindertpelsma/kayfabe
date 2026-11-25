@@ -17,6 +17,10 @@ use kf_rm::winprofile::WindowsProfile;
 const NV_OK: u32 = 0;
 
 fn chain(windows_support: bool, display_plane: bool) -> Box<dyn CommandPolicy> {
+    chain_with(WindowsProfile::new(windows_support), display_plane)
+}
+
+fn chain_with(profile: WindowsProfile, display_plane: bool) -> Box<dyn CommandPolicy> {
     kf_rm::served_policy(
         ga106::board(),
         ga106::host(),
@@ -25,7 +29,7 @@ fn chain(windows_support: bool, display_plane: bool) -> Box<dyn CommandPolicy> {
         Default::default(),
         kf_rm::ObjectLinks {
             display: display_plane.then(|| (&kf_chip::display::AMPERE).into()),
-            windows: WindowsProfile::new(windows_support),
+            windows: profile,
             ..Default::default()
         },
     )
@@ -90,4 +94,40 @@ fn a_windows_support_off_vm_keeps_its_old_answer() {
         .respond(&support::windows(&abi))
         .expect("fn 1 is always answered");
     assert_eq!(r.rpc_result, NV_OK, "no profile, no refusal");
+}
+
+/// The refused fn 1 is never recorded: the profile the display and memory planes share stays
+/// inactive on a device without the display plane, however often the guest declares Windows. With
+/// the display plane the same fn 1 activates it.
+#[test]
+fn a_refused_fn1_never_activates_the_windows_profile() {
+    let abi = support::abi();
+    let profile = WindowsProfile::on();
+    let mut policy = chain_with(profile.clone(), false);
+    for _ in 0..2 {
+        policy.respond(&support::windows(&abi));
+        assert!(!profile.active(), "refused: the profile stays inactive");
+    }
+    let shown = WindowsProfile::on();
+    chain_with(shown.clone(), true).respond(&support::windows(&abi));
+    assert!(
+        shown.active(),
+        "with the display plane the declaration is recorded"
+    );
+}
+
+/// A refused Windows guest leaves the shared profile in the state a Linux guest leaves it in:
+/// inactive. Every Windows-only link and plane asks that state, so a guest that ignores the refusal
+/// is treated as a Linux guest from then on.
+#[test]
+fn a_refused_guest_has_the_profile_state_of_a_linux_guest() {
+    let abi = support::abi();
+    let refused_profile = WindowsProfile::on();
+    let mut refused = chain_with(refused_profile.clone(), false);
+    refused.respond(&support::windows(&abi));
+    let linux_profile = WindowsProfile::on();
+    let mut linux = chain_with(linux_profile.clone(), false);
+    linux.respond(&support::linux(&abi));
+    assert_eq!(refused_profile.active(), linux_profile.active());
+    assert!(!refused_profile.active());
 }

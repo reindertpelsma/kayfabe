@@ -558,11 +558,10 @@ pub fn served_chain(
     // reaches it (a `CommandObserver` cannot answer: seating it first changes no reply). With the
     // `windows-support` property off it never records anything, and every gated link below is
     // either not built or answers nothing.
-    chain.push(Box::new(kf_gsp::Observing(Box::new(
-        winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
-    ))));
-    // A Windows guest on a device without the display plane is refused at its fn 1, by name, ahead of
-    // every link that answers fn 1 (`winprofile::WindowsNeedsDisplay`).
+    // A Windows guest on a device without the display plane is refused at its fn 1, by name
+    // (`winprofile::WindowsNeedsDisplay`). It is seated AHEAD of the identity observer: the chain stops
+    // at the first link that answers, so the refused fn 1 never reaches the observer and the profile
+    // is never active on such a device, for this chain and for the planes that share the profile.
     if let Some(link) = winprofile::WindowsNeedsDisplay::seat(
         driver.driver_version(),
         windows.support(),
@@ -570,6 +569,9 @@ pub fn served_chain(
     ) {
         chain.push(Box::new(link));
     }
+    chain.push(Box::new(kf_gsp::Observing(Box::new(
+        winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
+    ))));
     // ★ 2026-11-15: software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
     // identity observer refuses every allocation until the guest declares the measured Windows build.
     if windows.support()

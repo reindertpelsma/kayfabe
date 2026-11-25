@@ -130,7 +130,8 @@ pub const WINDOWS_NEEDS_DISPLAY: &str = "kf3: WINDOWS GUEST REFUSED: the guest d
 /// start in the guest, instead of the driver starting and then resetting itself.
 ///
 /// It is seated only when `windows-support` is on and the device was realized with `display=off`
-/// ([`WindowsNeedsDisplay::seat`]); it answers fn 1 only when the payload declares the
+/// ([`WindowsNeedsDisplay::seat`]), ahead of [`IdentityObserver`], so the refused fn 1 is never
+/// recorded and [`WindowsProfile::active`] stays `false` on such a device; it answers fn 1 only when the payload declares the
 /// Windows build of the guest driver ([`declares_windows`]) and nothing else, so a Linux guest's fn 1 falls through to
 /// the next link unchanged. The declaration is not a security boundary: a guest that declares
 /// Windows falsely is refused its own driver start and nothing else.
