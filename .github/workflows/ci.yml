@@ -2264,6 +2264,10 @@ jobs:
       # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
       - name: Windows support profile mutations require two named killers each
         run: python3 scripts/ci/windows_profile_mutants.py
+      # The walk cut at a per-space limit (2026-11-25: kf-mem vasmgr cut branch, walk_cut_line and entry need, kf-cuda KF_ENTRY_CUT;
+      # a cut space fails its split and holds its invalidate): each mutant needs two named killers.
+      - name: Walk-cut mutations require two named killers each
+        run: python3 scripts/ci/walk_cut_mutants.py
 
   rust-mutants-b:
     name: rust mutants B — oracle gate, video classes, offer filter, unmap cap, VA profiling

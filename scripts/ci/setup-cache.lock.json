@@ -8,7 +8,7 @@
   },
   "package_policy_sha256": "be0e311b65927842eced256ddd312372ef6fa57586ecc6a3f15cc21a2f4a7311",
   "locks": {
-    "Cargo.lock": "b03a6c5816caa161d42aed8d4ecef8014e3703f3002cf490fdd371a2d6e11f85",
+    "Cargo.lock": "88004f88b363c28b4575544d9df099dbceb86cda5499a8ce748862a8e4815657",
     "firmware/kf-gop/Cargo.lock": "2b19472557f3f4fcaf2f35f2814e985dc2192435a0dd90cb5055c05cceceba93"
   },
   "tag": "setup-cache-jammy-amd64-20261110-v2",
