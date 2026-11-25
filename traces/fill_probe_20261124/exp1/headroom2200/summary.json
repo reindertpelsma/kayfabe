@@ -1,0 +1,32 @@
+[
+ {
+  "arm": "P1",
+  "args": [
+   "zero",
+   "floor",
+   "efa00000",
+   "131072",
+   "2",
+   "0",
+   "low"
+  ],
+  "leave_free_mib": "2200",
+  "rc": 0,
+  "secs": 19.2,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=131072x2 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 23799",
+   "after_churn_round_0 pairs=131072 23799",
+   "after_churn_round_1 pairs=262144 23799",
+   "after_alias_map 22790",
+   "after_alias_unmap 22790",
+   "after_free_spaces 21761",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ }
+]

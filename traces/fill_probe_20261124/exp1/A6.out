@@ -1,0 +1,27 @@
+MEASURE session driver 595.84
+MEASURE fb_used_mib start 1
+MEASURE store 0x100000000 contiguous_aligned=true
+MEASURE fb_used_mib after_store 4097
+MEASURE guest_range [0x120000000, 0xf000000000) reserved=true
+MEASURE guest_range [0x0, 0x0) reserved=false
+MEASURE guest_range [0x10000, 0x100000) reserved=true
+MEASURE fb_used_mib after_spaces 6136
+MEASURE alias_map 0x120000000+0xefa00000: OK va=0x120000000
+MEASURE fb_used_mib after_alias_map 6136
+MEASURE fb_used_mib after_alias_unmap 6136
+MEASURE fb_used_mib after_free_spaces 4097
+MEASURE fb_used_mib after_free_store 1
+FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=0x0 extra_spaces=32 alias_map=OK va=0x120000000
+
+--- stderr ---
+kf-host: host tier: stock
+kf-host: space 0xcafe0005: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#1, rate-limited]
+kf-host: space 0xcafe000a: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#2, rate-limited]
+kf-host: space 0xcafe000f: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#3, rate-limited]
+kf-host: space 0xcafe0014: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#4, rate-limited]
+kf-host: space 0xcafe0019: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#5, rate-limited]
+kf-host: space 0xcafe001e: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#6, rate-limited]
+kf-host: space 0xcafe0023: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#7, rate-limited]
+kf-host: space 0xcafe0028: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#8, rate-limited]
+kf-host: space 0xcafe0050: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#16, rate-limited]
+kf-host: space 0xcafe00a0: guest VA range [0x10000000000, 0x800000000000) NOT reserved: NoMemory — host RM may place its own objects there [#32, rate-limited]

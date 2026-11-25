@@ -1,0 +1,18 @@
+[2026-11-24T19:44:48Z] OVERLAY_CREATED disk/fp_don.qcow2 over base.qcow2
+[2026-11-24T19:44:48Z] KF_CLOCK image=kfwin net=offline using=recorded base=2026-11-24T19:44:11Z recorded=2026-11-24T19:44:11Z floor_input=- inputs=0
+[2026-11-24T19:44:48Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 7200s)
+[2026-11-24T19:44:48Z] WINVM_RUN_START tag=fp_don repo_rev=48c8434e kf3=on qemu=/workspace/bench/kf3-bins/731c88b5/qemu-system-x86_64 host_driver=595.84 overlay=fp_don arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.48c8434e.signed.efi sha256(gop_efi)=bce7f94970fac46e
+[2026-11-24T19:44:48Z] kf3 device: kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.48c8434e.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+[2026-11-24T19:44:48Z] VM_IDENTITY uuid=<vm-uuid> serial=<serial> mac=<mac>
+[2026-11-24T19:44:48Z] KF3_ENV KF3_RPC_TRACE=1 
+[2026-11-24T19:44:48Z] QEMU_START tag=fp_don boot=1 pid=79737 log=logs/fp_don_b1_qemu.log
+[2026-11-24T19:45:43Z] WINVM_BOOT_END boot=1 rc=0 reason=host-qmp-quit kf3_lines=146 host_xid=0
+[2026-11-24T19:45:43Z] WINVM_RUN_END tag=fp_don boots=1 reason=host-qmp-quit
+[2026-11-24T19:59:16Z] OVERLAY_CREATED disk/fp_don.qcow2 over gate_fp2.qcow2
+[2026-11-24T19:59:16Z] KF_CLOCK image=kfwin net=offline using=recorded base=2026-11-24T19:44:11Z recorded=2026-11-24T19:44:11Z floor_input=- inputs=0
+[2026-11-24T19:59:16Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 7200s)
+[2026-11-24T19:59:16Z] WINVM_RUN_START tag=fp_don repo_rev=46b1baf0 kf3=on qemu=/workspace/bench/kf3-bins/731c88b5/qemu-system-x86_64 host_driver=595.84 overlay=fp_don arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.46b1baf0.signed.efi sha256(gop_efi)=5ce3a6aa6921c624
+[2026-11-24T19:59:16Z] kf3 device: kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.46b1baf0.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<vm-uuid>
+[2026-11-24T19:59:16Z] VM_IDENTITY uuid=<vm-uuid> serial=<serial> mac=<mac>
+[2026-11-24T19:59:16Z] KF3_ENV KF3_RPC_TRACE=1 
+[2026-11-24T19:59:17Z] QEMU_START tag=fp_don boot=1 pid=84317 log=logs/fp_don_b1_qemu.log

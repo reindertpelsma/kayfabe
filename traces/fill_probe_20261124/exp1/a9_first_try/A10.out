@@ -1,0 +1,15 @@
+MEASURE session driver 595.84
+MEASURE fb_used_mib start 1
+MEASURE store 0x100000000 contiguous_aligned=true
+MEASURE fb_used_mib after_store 4097
+MEASURE guest_range [0x120000000, 0xf000000000) reserved=true
+MEASURE guest_range [0x10000000000, 0x800000000000) reserved=true
+MEASURE guest_range [0x10000, 0x100000) reserved=true
+MEASURE fb_used_mib after_spaces 4097
+MEASURE fb_used_mib after_churn_round_0 pairs=131072 4098
+MEASURE fb_used_mib after_churn_round_1 pairs=262144 4098
+MEASURE fb_used_mib after_churn_round_2 pairs=393216 4098
+FILL_PROBE_ERROR churn region 3/96000 beyond the first range
+
+--- stderr ---
+kf-host: host tier: stock

@@ -121,6 +121,9 @@ class Identity(unittest.TestCase):
     def test_ada_uses_the_derived_table(self): self.assertEqual(L.identify(self.probe(0x190,2),ROOT),'AD102')
     def test_turing_uses_the_derived_table(self): self.assertEqual(L.identify(self.probe(0x160,6),ROOT),'TU106')
     def test_ampere_uses_the_derived_table(self): self.assertEqual(L.identify(self.probe(0x170,2),ROOT),'GA102')
+    def test_a_two_part_host_driver_version_is_an_identity(self):
+        probe=self.probe(0x190,2).replace('580.159.04','595.84')
+        self.assertEqual(L.identify(probe,ROOT),'AD102')
     def test_unknown_tuple_has_no_guessed_die(self): self.assertEqual(L.identify(self.probe(0x999,2),ROOT),'unknown')
     def test_unknown_impl_has_no_guessed_die(self): self.assertEqual(L.identify(self.probe(0x190,99),ROOT),'unknown')
     def test_marketing_name_is_not_identity(self):

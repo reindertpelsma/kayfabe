@@ -1,0 +1,14 @@
+[    0.0s] WINBOOT_START label=doff display=off kf3_extra=- launch_rc=0 [2026-11-24T20:06:04Z] detached: tag=fp_doff, log logs/fp_doff_run.log (stdout logs/fp_doff_run.out) 
+[   81.5s] guest up=True after 81s
+[   85.5s] GPU ADAPTER NVIDIA GeForce RTX 4090 code=0 ; NVSMI NVIDIA GeForce RTX 4090, 580.88
+[  121.4s] POLL t=40s status=running guest_rc=0 events=19 153=10
+[  154.9s] POLL t=73s status=running guest_rc=0 events=19 153=10
+[  188.3s] POLL t=107s status=running guest_rc=0 events=19 153=10
+[  221.8s] POLL t=140s status=running guest_rc=0 events=19 153=10
+[  255.2s] POLL t=174s status=running guest_rc=0 events=19 153=10
+[  288.8s] POLL t=207s status=running guest_rc=0 events=19 153=10
+[  322.2s] POLL t=241s status=running guest_rc=0 events=19 153=10
+[  355.6s] POLL t=274s status=running guest_rc=0 events=19 153=10
+[  389.1s] POLL t=308s status=running guest_rc=0 events=19 153=10
+[  389.2s] WINBOOT_RESULT label=doff display=off up=True n153=10 died=False final=running panicked=0 mmuwalk=2 xid=0
+[  692.0s] WINBOOT_EXIT

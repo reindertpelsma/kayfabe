@@ -1,0 +1,64 @@
+[
+ {
+  "arm": "A10",
+  "args": [
+   "fault",
+   "floor",
+   "efa00000",
+   "160000",
+   "3",
+   "0",
+   "low"
+  ],
+  "leave_free_mib": null,
+  "rc": 0,
+  "secs": 28.8,
+  "result": "FILL_PROBE_RESULT fill=Fault start=GuestFloor alias_len=0xefa00000 churn=160000x3 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 4097",
+   "after_churn_round_0 pairs=160000 4098",
+   "after_churn_round_1 pairs=320000 4098",
+   "after_churn_round_2 pairs=480000 4098",
+   "after_alias_map 4105",
+   "after_alias_unmap 4098",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 1
+ },
+ {
+  "arm": "A9",
+  "args": [
+   "zero",
+   "floor",
+   "efa00000",
+   "160000",
+   "3",
+   "0",
+   "low"
+  ],
+  "leave_free_mib": null,
+  "rc": 0,
+  "secs": 28.6,
+  "result": "FILL_PROBE_RESULT fill=Zero start=GuestFloor alias_len=0xefa00000 churn=160000x3 extra_spaces=0 alias_map=OK va=0x120000000",
+  "fb_used_mib": [
+   "start 1",
+   "after_store 4097",
+   "after_spaces 6135",
+   "after_churn_round_0 pairs=160000 6135",
+   "after_churn_round_1 pairs=320000 6135",
+   "after_churn_round_2 pairs=480000 6135",
+   "after_alias_map 5980",
+   "after_alias_unmap 5980",
+   "after_free_spaces 4097",
+   "after_free_store 1"
+  ],
+  "dmesg_mmuwalk": 0,
+  "dmesg_xid": 0,
+  "dmesg_kept": 2
+ }
+]

@@ -1,0 +1,2 @@
+[ 1049.965441] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1052.175842] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || ((status == NV_ERR_NO_MEMORY) && (flags & VASPACE_FLAGS_RETRY_PTE_ALLOC_IN_SYS)) @ pool_alloc.c:605

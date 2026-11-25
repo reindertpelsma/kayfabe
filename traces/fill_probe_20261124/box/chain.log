@@ -1,0 +1,35 @@
+CHAIN_START 2026-11-24T19:46:29+00:00
+WINLANE_EXIT rc=0 2026-11-24T19:44:26+00:00
+GATE rc=0 WINDOWS_GATE_PASS rev=46b1baf0 gpu="NVIDIA GeForce RTX 4090" idle_s=120 hostref=green/green secs=766 rootless=violated install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=0 live_dumps_193_entries=0 live_dumps_193_ratchet=PASS live_dumps_193_die=AD102 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-24T19:45:43Z
+GATE_OVERLAY gate_fp2
+[    0.0s] WINBOOT_START label=don display=on launch_rc=0 [2026-11-24T19:59:16Z] detached: tag=fp_don, log logs/fp_don_run.log (stdout logs/fp_don_run.out) 
+[   70.7s] guest up=True after 71s
+[   77.5s] GPU ADAPTER NVIDIA GeForce RTX 4090 code=0 ; NVSMI NVIDIA GeForce RTX 4090, 580.88
+[  111.8s] POLL t=41s status=running guest_rc=0 events=13 153=4
+[  147.2s] POLL t=77s status=running guest_rc=0 events=13 153=4
+[  180.7s] POLL t=110s status=running guest_rc=0 events=13 153=4
+[  214.1s] POLL t=143s status=running guest_rc=0 events=13 153=4
+[  247.5s] POLL t=177s status=running guest_rc=0 events=13 153=4
+[  280.8s] POLL t=210s status=running guest_rc=0 events=13 153=4
+[  314.2s] POLL t=244s status=running guest_rc=0 events=13 153=4
+[  347.5s] POLL t=277s status=running guest_rc=0 events=13 153=4
+[  380.9s] POLL t=310s status=running guest_rc=0 events=13 153=4
+[  380.9s] WINBOOT_RESULT label=don display=on up=True n153=4 died=False final=running panicked=0 mmuwalk=2 xid=0
+[  398.1s] WINBOOT_EXIT
+WINBOOT_DONE on rc=0 2026-11-24T20:05:54+00:00
+[    0.0s] WINBOOT_START label=doff display=off kf3_extra=- launch_rc=0 [2026-11-24T20:06:04Z] detached: tag=fp_doff, log logs/fp_doff_run.log (stdout logs/fp_doff_run.out) 
+[   81.5s] guest up=True after 81s
+[   85.5s] GPU ADAPTER NVIDIA GeForce RTX 4090 code=0 ; NVSMI NVIDIA GeForce RTX 4090, 580.88
+[  121.4s] POLL t=40s status=running guest_rc=0 events=19 153=10
+[  154.9s] POLL t=73s status=running guest_rc=0 events=19 153=10
+[  188.3s] POLL t=107s status=running guest_rc=0 events=19 153=10
+[  221.8s] POLL t=140s status=running guest_rc=0 events=19 153=10
+[  255.2s] POLL t=174s status=running guest_rc=0 events=19 153=10
+[  288.8s] POLL t=207s status=running guest_rc=0 events=19 153=10
+[  322.2s] POLL t=241s status=running guest_rc=0 events=19 153=10
+[  355.6s] POLL t=274s status=running guest_rc=0 events=19 153=10
+[  389.1s] POLL t=308s status=running guest_rc=0 events=19 153=10
+[  389.2s] WINBOOT_RESULT label=doff display=off up=True n153=10 died=False final=running panicked=0 mmuwalk=2 xid=0
+[  692.0s] WINBOOT_EXIT
+WINBOOT_DONE off rc=0 2026-11-24T20:17:36+00:00
+CHAIN_EXIT ok 2026-11-24T20:17:46+00:00
